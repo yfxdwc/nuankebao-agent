@@ -62,9 +62,9 @@ interface SystemdTimerConfig {
 }
 
 async function getSystemdTimerConfig(timerName: string): Promise<SystemdTimerConfig> {
-  const path = path.join(process.cwd(), "deploy/systemd", `${timerName}.timer`);
+  const filePath = path.join(process.cwd(), "deploy/systemd", `${timerName}.timer`);
   try {
-    const content = await readFile(path, "utf-8");
+    const content = await readFile(filePath, "utf-8");
     const schedule = content.match(/OnCalendar=(.+)/)?.[1].trim() ?? "";
     const persistent = content.includes("Persistent=true");
     const delayMatch = content.match(/RandomizedDelaySec=(\d+)/);
@@ -80,9 +80,9 @@ async function getSystemdTimerConfig(timerName: string): Promise<SystemdTimerCon
 }
 
 async function getSystemdTimerDescription(serviceName: string): Promise<string> {
-  const path = path.join(process.cwd(), "deploy/systemd", `${serviceName}.service`);
+  const filePath = path.join(process.cwd(), "deploy/systemd", `${serviceName}.service`);
   try {
-    const content = await readFile(path, "utf-8");
+    const content = await readFile(filePath, "utf-8");
     // 提取 Description=
     const desc = content.match(/^#\s*Description:\s*(.+)/m)?.[1].trim() ?? "";
     return desc;
