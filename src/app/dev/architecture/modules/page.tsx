@@ -130,13 +130,14 @@ async function scanReverseDeps(modules: ModuleInfo[]): Promise<Map<string, strin
       ...(await readDirSafe(path.join(MODULES_DIR, m.name, "lib"))),
     ]) {
       if (!file.endsWith(".dart")) continue;
-    const content = await readFile(path.join(MODULES_DIR, m.name, file), "utf-8");
-    // 找 ../../presentation/X/Y 模式
-    const matches = content.matchAll(/import\s+['"]\.\.\/\.\.\/presentation\/([^'"]+)['"]/g);
-    for (const match of matches) {
-      const key = "presentation/" + match[1];
-      if (!reverseDeps.has(key)) reverseDeps.set(key, []);
-      reverseDeps.get(key)!.push(m.name);
+      const content = await readFile(path.join(MODULES_DIR, m.name, file), "utf-8");
+      // 找 ../../presentation/X/Y 模式
+      const matches = content.matchAll(/import\s+['"]\.\.\/\.\.\/presentation\/([^'"]+)['"]/g);
+      for (const match of matches) {
+        const key = "presentation/" + match[1];
+        if (!reverseDeps.has(key)) reverseDeps.set(key, []);
+        reverseDeps.get(key)!.push(m.name);
+      }
     }
   }
   return reverseDeps;
