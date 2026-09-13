@@ -73,6 +73,7 @@
   - **拍板来源**: 主人 2026-09-07 ask_user 三项决定: (1) web 命运 = freeze-keep (2) 解冻条件 = master-decide (3) backend 同步 = flutter-only-sync. 详见 CHARTER §4.4 + ADR-0005
   - **活跃目录** (v0.1.2 起): `flutter_app/lib/**` + `src/app/api/**` + `src/lib/**` + `src/middleware.ts` + `src/app/(auth)/login/**`
   - **冻结目录** (仅 P0 bug fix): `src/app/admin/**` + `src/components/business/**` (web admin 业务组件) + `src/components/admin/**`
+- ✅ **任务开始前必打 task-snapshot** → `bash scripts/task-snapshot.sh start <task-name>` (或依赖 `.pi/extensions/auto-task-snapshot.ts` 在第一条 user 消息自动打). 完整 SOP 见 §8.1. 改 / 加 ≥ 3 文件 或 跨域时**强制**先 snapshot.
 
 ### 不该做
 - ❌ **不要 sudo 改系统配置** — 这是 暖客宝 项目级别,跨用户操作要找主人拍
@@ -261,3 +262,104 @@ nuankebao-agent/                              ← v0.1.2 mobile-only 阶段
   - ⏰ 解冻后回头修订 `docs/CHARTER.md` §4 域边界 (AI 域细化 + 实际边界图),见 CHARTER §10.3.1
 - [ ] Phase 2: AI Copilot (MiniMax API) — Flutter 优先
 - [ ] Phase 3: SaaS 化 (多租户) — web admin 解冻后并行
+
+## §8. 任务级快照 SOP (CHARTER §7 治本 + 借鉴 sales-ai W8)
+
+> **设计源**: `~/.muse/skills/scaffold-task-snapshot/SKILL.md` (canonical 文档, 2026-09-05 v1.0)
+> **借鉴实现源**: `sales-ai/scripts/task-snapshot.sh` + `sales-ai/.pi/extensions/auto-task-snapshot.ts`
+> **装入时间**: 2026-09-13 (commit f58964d / 757b7fa / f444bc9)
+
+### §8.1 task-snapshot 使用 SOP
+
+#### 8.1.1 何时打 snapshot (强制 / 建议 / 不需要)
+
+| 场景 | 行为 | 备注 |
+|---|---|---|
+| **改动 ≥ 3 文件 或 跨域** | **强制**先 `task-snapshot.sh start <name>` | agent 自动任务也算 |
+| **数据库 migration 改 / 加** | **强制** (CHARTER §3.5 红线) | 配合 `pnpm db:compat` |
+| **配置 / 部署文件改 (deploy/ + docker/ + .env.example)** | **强制** | deploy 一改 backup 脚本就受影响 |
+| **AGENTS.md / CHARTER.md / ADR 改** | **建议** | 历史治理变更可回滚 |
+| 单文件 typo / 注释 / lint fix | 不需要 | 粒度太粗 |
+| agent 已经在跑 (turn_start hook 已自动打) | 不需要手动 | extension 自动挡 |
+
+#### 8.1.2 5 subcommand 速查
+
+```bash
+# 任务开始前
+bash scripts/task-snapshot.sh start <task-name>     # git tag pre-<name>-<sha> + dirty diff 兜底
+
+# 任务中查询
+bash scripts/task-snapshot.sh list                  # 最近 10 个 snapshot
+bash scripts/task-snapshot.sh find "2 days ago"     # 按时间筛选
+bash scripts/task-snapshot.sh diff <tag-or-prefix>  # 预览会改什么
+
+# 错了回滚 (主人拍)
+bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached + restart nuankebao-* service
+```
+
+**约束** (scaffold-task-snapshot SKILL.md §7):
+- task-name 仅允许 `[a-zA-Z0-9._-]`
+- snapshot commit 用 `--no-verify` (元提交, 不该被 pre-commit CHARTER 阻拦)
+- rollback 前**必看** `cat .git/snapshots/<tag>.diff` 确认 dirty 真正被备份
+- 同一任务内连续改动不需要重复 snapshot (粒度是任务, 不是 commit)
+
+#### 8.1.3 auto-snapshot extension (pi hook 自动挡)
+
+`.pi/extensions/auto-task-snapshot.ts` 已注册到 `.pi/settings.json`, 启动 pi 时自动加载。两个 hook 协作:
+
+| Hook | 触发时机 | 行为 |
+|---|---|---|
+| `turn_start` | session 第一条 user 消息 | 自动打 `pre-auto-<task-slug>-<sha>`, 5 分钟内去重 |
+| `agent_end` | agent 说完话 | 自动 commit working tree 改动 (`[pi] <agent 最后一句话前 50 字符>`) |
+
+**前提**: cwd 必须在 git 仓库里, 否则 console.error 警告 (UI notify 提示 `git init`).
+**依赖**: `@earendil-works/pi-coding-agent` (pi-coding-agent 全局自带, 不入 nuankebao/package.json, 跟 sales-ai 一致).
+
+#### 8.1.4 与每日全量快照的分工
+
+| 机制 | 触发 | 范围 | 用途 | 脚本 |
+|---|---|---|---|---|
+| **每日全量备份** (PG + Media) | systemd timer 03:00 | tar 整个项目 | 灾难恢复 (硬盘挂/系统炸) | `deploy/backup.sh` |
+| **每日代码快照** (整仓 tar) | systemd timer 04:00 | tar .git + dirty | 每日异地盘 | `deploy/code_snapshot.sh` |
+| **任务级快照** (本机制) | 任务开始 (agent 自动 / 手动) | git tag + diff dump | 开发回滚 (agent 改错/想撤销任务) | `scripts/task-snapshot.sh` + `.pi/extensions/auto-task-snapshot.ts` |
+| **月度 PG 演练** | systemd timer 月第一周日 04:00 | decrypt → temp PG → 行数比对 | 验证备份可恢复 | `deploy/restore_verify.sh` |
+
+#### 8.1.5 与 nuankebao 现有规范的红线对齐
+
+- ✅ **不改 sales-ai 借鉴策略** — AGENTS §3 原则 8: 借鉴思路不复制代码; 但 `task-snapshot.sh` / `auto-task-snapshot.ts` 是机械化 SDK 包装, 不重写 (重写风险大 + 价值低)
+- ✅ **rollback 是 L3 决策** — 必须主人拍, agent 不能擅自 rollback (HEAD detached 危险, 跟 muse-snapshot SKILL.md 一致)
+- ✅ **rollback 后需重启 nuankebao-* service** — 当前 dev 机器 systemd --user 实际有 `nuankebao-nextjs.service`; 部署栈启后还会多 `nuankebao-stack.service` 等
+- ⚠ **pre-commit hook 与 snapshot 互不干扰** — snapshot commit 用 `--no-verify` 跳过 hook (元提交); 后续 commit (含 feature commit) 走正常 hook 路径 (AGENTS §3 该做项"改了端口必须经过 hook")
+- ⚠ **代码快照 vs 任务快照不重叠** — `deploy/code_snapshot.sh` 每日 04:00 全量 tar; `scripts/task-snapshot.sh` 任务粒度 git tag. 两者职责互补 (见 deploy/README.md §10.10)
+
+#### 8.1.6 故障排查
+
+| 症状 | 根因 | 修复 |
+|---|---|---|
+| `bash scripts/task-snapshot.sh list` exit 1 + "不在 git 仓库内" | cwd 没在 git 仓库 | `git status` 验证; 不在仓库就 `cd <nuankebao-agent>` |
+| `auto-snapshot extension` 不触发 | cwd 没在 git 仓库 或 pi 没读 `.pi/settings.json` | `git rev-parse --git-dir` 验证; `ls .pi/settings.json` 验证 |
+| `rollback` 后 systemd service 没重启 | SERVICES 数组为空 (systemctl --user 找不到 nuankebao-* + 没 git config 兜底) | `git config task-snapshot.services "nuankebao-nextjs.service"` 显式配置 |
+| `.git/snapshots/<tag>.diff` 没生成 | 工作树在打 snapshot 时已干净 (无 dirty 改动) | 正常, 不需要 diff 兜底 |
+| `git apply` 失败 (rollback 时) | diff 与 working tree 冲突 | 手动 `less .git/snapshots/<tag>.diff` 看具体冲突; 或 `git checkout HEAD -- .` 强覆盖 |
+
+#### 8.1.7 维护说明
+
+- **canonical 文档**: `~/.muse/skills/scaffold-task-snapshot/SKILL.md` (改这里前先读)
+- **sales-ai 实现源**: 同步反映到本项目 (mechanical 镜像, 改 systemd glob + 顶部注释即可)
+- **muse-snapshot 替代**: 如果未来想用 Python 封装 (smolagents style), 见 `~/.muse/skills/muse-snapshot/SKILL.md`, 但需加 Python venv 依赖
+- **后续 ticket (待补)**:
+  - `docs/login-failure-triage.md` 同步加一行引用 §8.1 (login 循环 w14 复盘文档, 现在缺 task-snapshot 引用)
+  - `deploy/install-systemd.sh` 是否要追加 task-snapshot 钩子? (systemd 不调 git, 应该是 hooks / 守护进程范畴, 暂不)
+  - CHANGELOG.md [unreleased] 段: "v0.1.3 — 加任务级快照机制 (commit f58964d + 757b7fa + f444bc9)"
+
+### §8.2 验收清单 (新装 / 改 / 排错后必看)
+
+- [ ] `bash scripts/task-snapshot.sh list` exit 0
+- [ ] `bash scripts/task-snapshot.sh start test-001` 退出 0 + 输出 `✅ 任务快照: pre-test-001-<sha>`
+- [ ] `bash scripts/task-snapshot.sh diff test-001` 显示 diff stat
+- [ ] `bash scripts/task-snapshot.sh rollback test-001` 干净回滚 (无 dirty 残留)
+- [ ] `git tag -l 'pre-*'` 看到 tag 列表
+- [ ] `ls .git/snapshots/` 看到对应 .diff 兜底文件 (如有 dirty)
+- [ ] `cat .pi/settings.json` 看到 `extensions: ["./extensions/auto-task-snapshot.ts"]`
+- [ ] 在 nuankebao-agent cwd 启动 pi, 发第一条 user 消息, 看到 `🔖 Auto-snapshot: auto-...` notify
+- [ ] agent 说完话后 `git status` 显示 `nothing to commit, working tree clean`
