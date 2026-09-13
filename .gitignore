@@ -47,7 +47,7 @@ drizzle/*.json
 # .muse-station-state/
 
 # Backups (不进 git) — 旧版 tools/backup.sh 用的根目录 backups/, 已 deprecated
-backups/
+/backups/
 *.sql
 *.sql.gz
 *.sql.gpg
