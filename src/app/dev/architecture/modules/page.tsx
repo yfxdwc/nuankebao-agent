@@ -212,7 +212,7 @@ function generateMermaid(modules: ModuleInfo[]): string {
     const libPart = m.libs > 0 ? `${m.libs} lib` : "";
     const parts = [screenPart, widgetPart, libPart].filter(Boolean).join(" / ");
     lines.push(
-      `  M_${m.name.toUpperCase()}["${m.name}<br/>${parts || "(占位)"}"]`
+      `  M_${m.name.toUpperCase()}["${m.name}#60;br/#62;${parts || "(占位)"}"]`
     );
   });
   // 节点: core 8 类
@@ -225,7 +225,7 @@ function generateMermaid(modules: ModuleInfo[]): string {
     { key: "router", label: "router/" },
     { key: "widgets", label: "widgets/ (共享)" },
   ];
-  lines.push("  subgraph CORE[\"APK 底座 (flutter_app/lib/core/)\"]");
+  lines.push(`  subgraph CORE[\"APK 底座 (flutter_app/lib/core/)\"]`);
   coreCategories.forEach((c) => {
     lines.push(`    C_${c.key.toUpperCase()}["${c.label}"]`);
   });
