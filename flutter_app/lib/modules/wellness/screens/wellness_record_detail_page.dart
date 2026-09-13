@@ -8,10 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../core/models/wellness_record.dart';
-import '../core/providers/service_providers.dart';
-import '../core/theme/app_theme.dart';
-import '../core/widgets/empty_state.dart';
+import '../../../core/models/wellness_record.dart';
+import '../../../core/providers/service_providers.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/empty_state.dart';
 
 class WellnessRecordDetailPage extends ConsumerWidget {
   final String recordId;

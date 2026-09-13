@@ -4,7 +4,7 @@
 // ============================================
 
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import '../../../core/theme/app_theme.dart';
 
 class RatingSlider extends StatelessWidget {
   final String label;

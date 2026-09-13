@@ -8,7 +8,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../theme/app_theme.dart';
+import '../../../core/theme/app_theme.dart';
 
 class WellnessPhotoUploader extends StatefulWidget {
   /// 已上传的 URL 列表（来自 model）

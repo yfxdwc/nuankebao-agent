@@ -17,8 +17,8 @@ import '../../screens/franchise_tree_page.dart';
 import '../../screens/franchisee_detail_page.dart';
 import '../../screens/add_franchisee_page.dart';
 import '../../screens/profile_page.dart';
-import '../../screens/wellness_record_form_page.dart';
-import '../../screens/wellness_record_detail_page.dart';
+import '../../modules/wellness/screens/wellness_record_form_page.dart';
+import '../../modules/wellness/screens/wellness_record_detail_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);

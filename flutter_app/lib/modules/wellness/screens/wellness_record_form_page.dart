@@ -9,12 +9,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/models/dictionaries.dart';
-import '../core/providers/service_providers.dart';
-import '../core/theme/app_theme.dart';
-import '../core/widgets/big_button.dart';
-import '../core/widgets/rating_slider.dart';
-import '../core/widgets/wellness_photo_uploader.dart';
+import '../../../core/models/dictionaries.dart';
+import '../../../core/providers/service_providers.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/big_button.dart';
+import '../widgets/rating_slider.dart';
+import '../widgets/wellness_photo_uploader.dart';
 
 class WellnessRecordFormPage extends ConsumerStatefulWidget {
   final String? recordId;
