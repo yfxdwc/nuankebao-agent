@@ -12,7 +12,7 @@ import 'package:go_router/go_router.dart';
 
 import '../providers/auth_provider.dart';
 import '../../modules/auth/screens/login_screen.dart';
-import '../../screens/customers_page.dart';
+import '../../modules/customer/screens/customers_page.dart';
 import '../../screens/franchise_tree_page.dart';
 import '../../screens/franchisee_detail_page.dart';
 import '../../screens/add_franchisee_page.dart';

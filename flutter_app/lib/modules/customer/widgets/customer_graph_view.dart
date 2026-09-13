@@ -17,8 +17,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
-import '../models/customer.dart';
-import '../theme/app_theme.dart';
+import '../../../core/models/customer.dart';
+import '../../../core/theme/app_theme.dart';
 
 // ============================================
 // 树节点 (从 CustomerGraphNode 派生, 兼容任意子树数)

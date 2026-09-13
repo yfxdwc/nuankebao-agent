@@ -9,16 +9,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../core/models/customer.dart';
-import '../core/models/wellness_record.dart';
-import '../core/providers/service_providers.dart';
-import '../core/theme/app_theme.dart';
-import '../core/widgets/big_button.dart';
-import '../core/widgets/big_fab.dart';
-import '../core/widgets/customer_graph_view.dart';
-import '../core/widgets/customer_row.dart';
-import '../core/widgets/empty_state.dart';
-import '../core/widgets/franchise_chip.dart';
+import '../../../core/models/customer.dart';
+import '../../../core/models/wellness_record.dart';
+import '../../../core/providers/service_providers.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/big_button.dart';
+import '../widgets/big_fab.dart';
+import '../widgets/customer_graph_view.dart';
+import '../widgets/customer_row.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/franchise_chip.dart';
 import 'add_record_sheet.dart';
 
 // 复用 search query 类型

@@ -1,8 +1,8 @@
 // 客户列表行 (中老年版, 80pt 行高 + 大头像 + 待办点)
 import 'package:flutter/material.dart';
-import '../models/customer.dart';
-import '../theme/app_theme.dart';
-import 'franchise_chip.dart';
+import '../../../core/models/customer.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/franchise_chip.dart'';
 
 class CustomerRow extends StatelessWidget {
   final Customer customer;
