@@ -8,6 +8,9 @@
 // ============================================
 
 import Link from "next/link";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import path from "node:path";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,12 +40,12 @@ interface SnapshotTag {
   headSha: string;
 }
 
+// 同步 import (不用 dynamic import, Next.js dev mode dynamic import 在 server component
+// 里偶尔卡住导致 30s+ 超时, per 2026-09-13 主人反馈 /dev/snapshot 没渲染)
+const execFileAsync = promisify(execFile);
+
 async function fetchSnapshots(): Promise<SnapshotTag[]> {
   try {
-    // 服务端内部调 API (避免 fetch localhost 性能损失)
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const execFileAsync = promisify(execFile);
     const { stdout } = await execFileAsync(
       "git",
       [
@@ -51,7 +54,11 @@ async function fetchSnapshots(): Promise<SnapshotTag[]> {
         "--format=%(refname:short)|%(creatordate:format:%Y-%m-%d %H:%M)|%(creatordate:relative)|%(subject)|%(objectname:short)",
         "refs/tags/",
       ],
-      { maxBuffer: 1024 * 1024 }
+      {
+        cwd: process.cwd(),
+        maxBuffer: 1024 * 1024,
+        timeout: 10000, // 10s timeout (git 在大仓库可能慢)
+      }
     );
     return stdout
       .trim()

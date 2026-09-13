@@ -16,7 +16,7 @@
 // 不在 docker / web 容器内运行, 直接读主机的 databackups 目录.
 // ============================================
 
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import Link from "next/link";
@@ -132,7 +132,6 @@ async function listPgBackups(): Promise<{ name: string; size: number; mtime: str
         .filter((f) => f.startsWith("pg-") && f.endsWith(".dump.gpg"))
         .map(async (f) => {
           const fp = path.join(dir, f);
-          const { stat } = await import("node:fs/promises");
           const s = await stat(fp);
           return { name: f, size: s.size, mtime: s.mtime.toISOString() };
         })
