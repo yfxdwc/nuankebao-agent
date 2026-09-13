@@ -333,6 +333,22 @@
 | 「API 改了, web 那边类型不匹配编译挂了」 | ⚠️ **这个要修**. 算 schema-driven UI 改动, 不算新功能 |
 | 主人明确说「这个 web 也要」 | ✅ 听主人的. 但 commit message 标注「override §4.4 freeze」 |
 
+### 4.5 双域功能清单与协作关系 (v0.1.4 细化, ADR-0008)
+
+> v0.1.3 §4.1-§4.4 写的是抽象双域定位 (主产品 vs 脚手架). 主人 2026-09-13 ask 澄清: **两域共存同时, 不是 dev/prod 切换**. 本节细化:
+>
+> - **APK 域 = 生产域**: 销售员 Flutter app, 独立 native dev cycle (Android Studio + flutter run USB)
+> - **WEB 域 = 开发域**: 主人自用脚手架 (admin / dev / app-preview), 跑 production mode 永久
+> - **共享后端 API**: Next.js Route Handlers + Drizzle schema, 两域都通过 /api/* 拿数据 (真理源)
+>
+> **详细功能清单 / 协作流程 / 边界规则 / 冻结 vs 活跃**: 见 [ADR-0008](adr/0008-apk-web-domain-spec.md) (11 节, 400 行)
+>
+> **关键不变量**:
+> - ❌ 不是 dev↔prod 切换 (两域永远共存)
+> - ❌ WEB 域不需要 hot reload (脚手架稳定, production 永久)
+> - ❌ APK 域不在主人 web server 跑 (Flutter native dev, 独立 .apk 安装)
+> - ✅ 共享后端 API (Drizzle schema 是真理源)
+
 ---
 
 ## §5. 决策权与拍板 (Decision Authority)
@@ -504,6 +520,7 @@
 | v0.1.1 | 2026-09-05 | 已废 | 去除 sales-ai 过度借鉴 (8 项),见 §10.2 |
 | v0.1.2 | 2026-09-07 | 已废 | Mobile-only 阶段: web admin freeze-keep + flutter-only-sync + master-decide 解冻,见 §4.4 + ADR-0005 |
 | v0.1.3 | 2026-09-13 | **生效** | 底座 + 模块化插件架构: APK 域分 `core/` 底座 + `modules/` 业务模块 / WEB 域分 WEB 底座 + `dev-modules/` 文档化视图 / 客户/加盟关系抽 `RelationSystem` 接口 / 9 阶段渐进迁移,见 §4 + ADR-0007 |
+| v0.1.4 | 2026-09-13 | 生效中 | 双域功能清单与协作关系细化: §4.5 加双域细化节 (主人 ask 澄清: 两域共存, 不是切换) + 引用 ADR-0008 (11 节, 400 行) |
 
 ### 10.2 变更记录
 
@@ -513,6 +530,7 @@
 | 2026-09-05 | v0.1.1 | 修订 | mm7 主人拍板 | 8 项去过度借鉴: §5.1 决策 5→3 层 / §5.2 ask 7→3 条 / §5.3 Plan 5→3 段(软建议) / §6.1 法规 5→3 条 / §7 反模式三大根因删除 / §8 Phase 2/3 列表删除 / §9 文档审查频率删除 / §10.3 代码引用删除 |
 | 2026-09-07 | v0.1.2 | 修订 | mm7 主人拍板 | Mobile-only 阶段: §4.3 后端同步 auto-both → flutter-only-sync / 新增 §4.4 freeze-keep + master-decide 解冻 / §7 W2-3 / W4 重点调整; 配套 ADR-0005 |
 | 2026-09-13 | v0.1.3 | 修订 | mm7 主人拍板 | 底座 + 模块化插件架构: §4 重写 (五大业务域 → 双域 + 底座 + 模块化插件) / §4.1 加架构图 (APK 域 vs WEB 域) / §4.2 业务域横向贯穿说明 / §4.3 模块化规则 (★ 客户/加盟关系 RelationSystem 接口) / §4.4 保留 v0.1.2 Mobile-Only / §10.3 加 ADR-0007 触发项; 配套 ADR-0007 |
+| 2026-09-13 | v0.1.4 | 修订 | mm7 主人拍板 | 双域功能清单与协作关系细化: §4.5 新加 (APK 域 7 业务模块功能 + WEB 域按路径分组 + 两域关系 + 协作场景 4 个 + 冻结 vs 活跃对照表) + 引用 ADR-0008 (11 节, 400 行); 配套 ADR-0008 |
 
 ### 10.3 待办
 

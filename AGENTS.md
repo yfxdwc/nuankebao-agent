@@ -86,6 +86,8 @@
 
 ## §4. 文件组织约定 (v0.1.3 底座 + 模块化插件) (CHARTER §4 域划分)
 
+> **双域共存架构** (v0.1.4 细化): **APK 域 = 生产域** (销售员 Flutter app, 独立 native dev cycle) + **WEB 域 = 开发域** (主人自用脚手架, 跑 production mode 永久). 两域**共存**, 不是 dev↔prod 切换. 详细功能清单 / 协作流程 / 边界规则: 见 [ADR-0008](docs/adr/0008-apk-web-domain-spec.md) (11 节, 400 行). 元宪法落地: [CHARTER §4.5](docs/CHARTER.md).
+
 > **架构定位 (v0.1.3)**: 项目按"**双域 + 底座 + 模块化插件**"组织。
 > - **APK 域** = 主产品 (销售员日常用的移动端), 物理位置 `flutter_app/lib/`
 > - **WEB 域** = 开发项目 APK 用的脚手架 (开发 / 预览 / 部署 / 文档), 物理位置 `src/` + 周边
