@@ -22,6 +22,8 @@ set -uo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DEV_PORT="${DEV_PORT:-3003}"
 HOSTNAME="${HOSTNAME:-nuankebao.tooyang.top}"
+HOSTNAME="${HOSTNAME#https://}"
+HOSTNAME="${HOSTNAME#http://}"
 SERVICE="nuankebao-nextjs.service"
 TUNNEL_DIR="$HOME/.cloudflared-nuankebao"
 
@@ -132,16 +134,57 @@ auto_fix() {
   verify
 }
 
+# ============ 5. 一键切换到 production mode ============
+switch_to_production() {
+  step "一键切换到 production mode (杀 dev + build + start)"
+  echo "  ⚠️  pnpm build 会需 5-10 分钟, 不要 Ctrl+C"
+  echo ""
+  # 杀 next dev
+  kill_old_dev || return 1
+  # build
+  echo ""
+  step "pnpm build (5-10 分钟)"
+  cd "$PROJECT_DIR"
+  if ! pnpm build 2>&1 | tail -20; then
+    fail "pnpm build 失败"
+    return 1
+  fi
+  ok "build 完成"
+  # start (后台 nohup)
+  echo ""
+  step "pnpm start (后台 nohup)"
+  nohup pnpm start > /tmp/nuankebao-prod.log 2>&1 &
+  PID=$!
+  echo "  PID: $PID"
+  sleep 10
+  # 健康检查
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:${DEV_PORT}/api/health" 2>/dev/null || echo "000")
+  if [ "$CODE" = "200" ]; then
+    ok "production mode 启动成功! localhost:${DEV_PORT}/api/health → HTTP 200"
+    echo ""
+    echo "=========================================="
+    echo " ✓ 主人可访问 (秒开, 无 dev 模式编译延迟):"
+    echo "   http://${HOSTNAME#https://}/dev"
+    echo "   http://${HOSTNAME#https://}/admin"
+    echo "=========================================="
+  else
+    fail "production mode 启动失败 (HTTP $CODE)"
+    echo "  看日志: tail -50 /tmp/nuankebao-prod.log"
+    return 1
+  fi
+}
+
 # ============ help ============
 help_msg() {
   cat <<EOF
 暖客宝部署修复脚本
 
 用法:
-  bash tools/fix-nuankebao-deploy.sh kill-old-dev   # Step 1: 杀老 next dev
-  bash tools/fix-nuankebao-deploy.sh start-systemd   # Step 2: 让 systemd 接管
-  bash tools/fix-nuankebao-deploy.sh verify          # Step 3: 状态总览
-  bash tools/fix-nuankebao-deploy.sh auto-fix        # Step 1+2 一键
+  bash tools/fix-nuankebao-deploy.sh kill-old-dev           # Step 1: 杀老 next dev
+  bash tools/fix-nuankebao-deploy.sh start-systemd           # Step 2: 让 systemd 接管
+  bash tools/fix-nuankebao-deploy.sh verify                  # Step 3: 状态总览
+  bash tools/fix-nuankebao-deploy.sh auto-fix                # Step 1+2 一键
+  bash tools/fix-nuankebao-deploy.sh switch-to-production    # 切换 production mode (一键)
   bash tools/fix-nuankebao-deploy.sh help
 
 环境变量:
@@ -154,6 +197,11 @@ help_msg() {
 ⚠️ AGENTS §3: "不要 sudo 改系统配置"
    agent 不直接执行本脚本.
    主人手工跑, 或确认后让 agent 协助.
+
+何时用 switch-to-production:
+  dev mode (/admin / /dev 打开极慢) → production mode
+  原因: dev mode 按需编译 + 单线程 (首次访问 5-180 秒)
+  修复: pnpm build (5-10 分钟一次性编译) + pnpm start
 EOF
 }
 
@@ -162,6 +210,7 @@ case "${1:-help}" in
   start-systemd) start_systemd ;;
   verify) verify ;;
   auto-fix) auto_fix ;;
+  switch-to-production) switch_to_production ;;
   help|--help|-h|"") help_msg ;;
   *) echo "❌ 未知 action: $1"; help_msg; exit 1 ;;
 esac
