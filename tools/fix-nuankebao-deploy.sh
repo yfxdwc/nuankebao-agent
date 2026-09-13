@@ -152,7 +152,7 @@ switch_to_production() {
   ok "build 完成"
   # start (后台 nohup)
   echo ""
-  step "pnpm start (后台 nohup)"
+  step "pnpm start (后台 nohup, WEB 域永久 production mode)"
   nohup pnpm start > /tmp/nuankebao-prod.log 2>&1 &
   PID=$!
   echo "  PID: $PID"
@@ -160,12 +160,17 @@ switch_to_production() {
   # 健康检查
   CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:${DEV_PORT}/api/health" 2>/dev/null || echo "000")
   if [ "$CODE" = "200" ]; then
-    ok "production mode 启动成功! localhost:${DEV_PORT}/api/health → HTTP 200"
+    ok "WEB 域 production mode 启动成功! localhost:${DEV_PORT}/api/health → HTTP 200"
     echo ""
     echo "=========================================="
-    echo " ✓ 主人可访问 (秒开, 无 dev 模式编译延迟):"
-    echo "   http://${HOSTNAME#https://}/dev"
+    echo " ✓ WEB 域 (脚手架) 永久跑 production:"
     echo "   http://${HOSTNAME#https://}/admin"
+    echo "   http://${HOSTNAME#https://}/dev"
+    echo "   http://${HOSTNAME#https://}/app-preview"
+    echo ""
+    echo " ⚠️  APK 域 (Flutter app) 独立 native dev, 不受本 server 影响"
+    echo "    主人改 WEB 代码时: 临时 pnpm dev (hot reload)"
+    echo "    改完再跑: pnpm build && pnpm start (production)"
     echo "=========================================="
   else
     fail "production mode 启动失败 (HTTP $CODE)"
@@ -199,9 +204,10 @@ help_msg() {
    主人手工跑, 或确认后让 agent 协助.
 
 何时用 switch-to-production:
-  dev mode (/admin / /dev 打开极慢) → production mode
-  原因: dev mode 按需编译 + 单线程 (首次访问 5-180 秒)
-  修复: pnpm build (5-10 分钟一次性编译) + pnpm start
+  WEB 域打开极慢 (/admin / /dev 5-180s 首次编译) → production mode
+  原因: 当前是 next dev (按需编译 + 单线程), WEB 域 (脚手架) 应该一直 production 跑
+  修复: pnpm build (5-10 分钟一次性编译) + pnpm start (permanent)
+  APK 域 (Flutter) 不受影响 (独立 native dev cycle)
 EOF
 }
 
