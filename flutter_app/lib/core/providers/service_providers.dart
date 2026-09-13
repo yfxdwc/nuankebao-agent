@@ -4,7 +4,7 @@
 // ============================================
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/api_client.dart';
+import '../http/api_client.dart';
 import '../services/api.dart';
 import '../models/customer.dart';
 import '../models/dashboard.dart';

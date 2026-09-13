@@ -8,13 +8,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../providers/auth_provider.dart';
-import '../providers/service_providers.dart';
-import '../theme/app_theme.dart';
-import '../widgets/big_button.dart';
-import '../widgets/empty_state.dart';
-import '../widgets/franchise_chip.dart';
-import '../models/dashboard.dart';
+import '../core/providers/auth_provider.dart';
+import '../core/providers/service_providers.dart';
+import '../core/theme/app_theme.dart';
+import '../core/widgets/big_button.dart';
+import '../core/widgets/empty_state.dart';
+import '../core/widgets/franchise_chip.dart';
+import '../core/models/dashboard.dart';
 
 final _dashboardStatsProvider = dashboardStatsProvider;
 

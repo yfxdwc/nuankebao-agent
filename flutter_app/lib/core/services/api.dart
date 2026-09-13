@@ -11,7 +11,7 @@ import '../models/dictionaries.dart';
 import '../models/follow_up.dart';
 import '../models/dashboard.dart';
 import '../models/franchisee.dart';
-import 'api_client.dart';
+import '../http/api_client.dart';
 
 // ============================================
 // AuthService (登录 / 登出 / 会话)

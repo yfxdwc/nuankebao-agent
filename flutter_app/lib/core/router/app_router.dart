@@ -11,14 +11,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/auth_provider.dart';
-import '../screens/auth/login_screen.dart';
-import '../screens/customers_page.dart';
-import '../screens/franchise_tree_page.dart';
-import '../screens/franchisee_detail_page.dart';
-import '../screens/add_franchisee_page.dart';
-import '../screens/profile_page.dart';
-import '../screens/wellness_record_form_page.dart';
-import '../screens/wellness_record_detail_page.dart';
+import '../../modules/auth/screens/login_screen.dart';
+import '../../screens/customers_page.dart';
+import '../../screens/franchise_tree_page.dart';
+import '../../screens/franchisee_detail_page.dart';
+import '../../screens/add_franchisee_page.dart';
+import '../../screens/profile_page.dart';
+import '../../screens/wellness_record_form_page.dart';
+import '../../screens/wellness_record_detail_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
