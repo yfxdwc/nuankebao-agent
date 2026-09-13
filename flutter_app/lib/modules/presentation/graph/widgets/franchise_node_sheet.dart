@@ -6,8 +6,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../models/franchisee.dart';
-import '../theme/app_theme.dart';
+import '../../../../core/models/franchisee.dart';
+import '../../../../core/theme/app_theme.dart';
 
 Future<void> showFranchiseNodeSheet(
   BuildContext context, {

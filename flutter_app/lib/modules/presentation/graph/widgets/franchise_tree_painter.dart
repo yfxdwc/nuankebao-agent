@@ -4,8 +4,8 @@
 // ============================================
 
 import 'package:flutter/material.dart';
-import '../models/franchisee.dart';
-import '../theme/app_theme.dart';
+import '../../../../core/models/franchisee.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class TreeLayout {
   static const double nodeRadius = 44;       // 节点半径 (88pt 直径)
