@@ -1,0 +1,24 @@
+[Unit]
+Description=暖客宝 PG 月度恢复演练 (decrypt → temp PG → 行数比对)
+Documentation=file:///__PROJECT_DIR__/deploy/README.md
+# 不写 Requires=docker.service — 理由同 backup.service.
+# restore_verify.sh 自己 precheck: 生产 PG + 临时 docker run 都依赖 docker 可用,
+# docker 命令不存在就 exit 3 fail-closed.
+RequiresMountsFor=__OFFSITE_DIR__
+
+[Service]
+Type=oneshot
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=%h/.config/nuankebao/paths.conf
+Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
+ExecStart=__PROJECT_DIR__/deploy/restore_verify.sh
+StandardOutput=append:__DATABACKUPS_DIR__/logs/restore-verify.log
+StandardError=append:__DATABACKUPS_DIR__/logs/restore-verify.log
+SuccessExitStatus=0
+
+# 安全加固 (TD-010 A4)
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+# restore-verify 写区域 (健康 state + staging + docker temp container)
+ReadWritePaths=__DATABACKUPS_DIR__ /tmp /var/run/docker.sock

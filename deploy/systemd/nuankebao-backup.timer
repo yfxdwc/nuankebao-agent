@@ -1,0 +1,11 @@
+[Unit]
+Description=暖客宝 每日备份 (凌晨 03:00, 加密 + 异地)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+AccuracySec=10s
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=default.target

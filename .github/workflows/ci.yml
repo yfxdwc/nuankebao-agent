@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+# 取消旧 runs (push 同一分支时)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ========== 基础: type-check + lint ==========
+  basic:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm type-check
+
+  # ========== 单元 + 集成测试 ==========
+  test:
+    name: Vitest
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: nuankebao
+          POSTGRES_PASSWORD: nuankebao_password
+          POSTGRES_DB: nuankebao_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nuankebao"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://nuankebao:nuankebao_password@localhost:5432/nuankebao_test
+      AUTH_SECRET: test-secret-32chars-123456789012345
+      PGCRYPTO_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      POSTGRES_PASSWORD: nuankebao_password
+      BACKUP_PASSPHRASE: test-backup-passphrase-only-for-ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: 应用 schema + seed
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+
+      - name: 跑 Vitest
+        run: pnpm test:run
+
+  # ========== Migration 兼容性 (CHARTER §3.5 + ADR-0004) ==========
+  db-compat:
+    name: Migration 兼容检测
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 跑 tools/check-migration-compat.sh
+        run: bash tools/check-migration-compat.sh
+        # ❌ 任一即失败 (CHARTER §3.5 绝对禁止模式)
+        # ⚠️ 警告不阻断 (IF EXISTS / ADD COLUMN 无 DEFAULT)
+        # 跳过 pnpm install (脚本不依赖 node_modules)
+
+  # ========== 端口硬约束 (主人规则) ==========
+  port-check:
+    name: Port 端口规范
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 检测 README / 文档中是否硬编码 3000
+        run: |
+          echo "=== 检查文档中硬编码的 3000 端口 ==="
+          if grep -rE "localhost:3000|127\.0\.0\.1:3000" docs/ README.md 2>/dev/null; then
+            echo "❌ 发现 3000 硬编码, 主人机器该端口被 sales ai 占用"
+            exit 1
+          fi
+          echo "✓ 未发现 3000 硬编码"
+
+# 未来 E2E 工作 (主人部署后启用):
+#   e2e:
+#     name: Playwright E2E
+#     runs-on: ubuntu-latest
+#     needs: [basic, test]
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: pnpm/action-setup@v4
+#         with:
+#           version: 9
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: "20"
+#           cache: "pnpm"
+#       - run: pnpm install --frozen-lockfile
+#       - run: npx playwright install --with-deps chromium
+#       - run: pnpm build
+#       - run: pnpm start &  # 启动生产 server
+#       - run: sleep 10
+#       - run: pnpm test:e2e
+#       - uses: actions/upload-artifact@v4
+#         if: failure()
+#         with:
+#           name: playwright-report
+#           path: playwright-report/

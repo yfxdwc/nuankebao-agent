@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  暖客宝 (nuankebao) 启动屏 — Android 5+ (drawable-v21)
+  亮/暗模式都用白底, 让 @mipmap/ic_launcher (白底+绿叶) 一直清晰可见
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@android:color/white" />
+    <item android:gravity="center">
+        <bitmap
+            android:gravity="center"
+            android:src="@mipmap/ic_launcher" />
+    </item>
+</layer-list>

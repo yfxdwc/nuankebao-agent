@@ -1,0 +1,22 @@
+# ============================================
+# Flutter 静态分析配置
+# Plan F2: 排除 _deprecated/ (旧代码, 留 1 周观察期后真删)
+# ============================================
+
+analyzer:
+  exclude:
+    # 旧代码 (Plan F2 留 1 周观察期, 真删前不参与静态分析)
+    - lib/_deprecated/**
+    - build/**
+    - android/**
+    - web/**
+    - linux/**
+
+  errors:
+    # 已废弃的 CustomerRow isFranchisee 字段 (TODO F2.5)
+    invalid_assignment: ignore
+
+linter:
+  rules:
+    avoid_print: false  # 允许 print() 在 main.dart 等调试用
+    avoid_unused_constructor_parameters: false

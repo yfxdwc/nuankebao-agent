@@ -1,0 +1,10 @@
+{
+  "pickedAt": "2026-09-04T11:57:23+08:00",
+  "pickedId": "logo-4",
+  "pickedFile": "logo-4-path-arc.svg",
+  "source": "logo-candidates/logo-4-path-arc.svg",
+  "note": "pi auto-pick per owner prompt '我看不到, 你选一个你觉得最好的, 直接用' (2026-09-04).\n选择理由: 单笔弧线 = B 形最强, 32px 缩放鲁棒, 'continuous learning loop' 同时讲 AGI 行业叙事 + 养生循环叙事, minimalist 高级感不撞 SaaS 模板, silhouette 强 (剪影仍可认 B).",
+  "pickedBy": "pi (auto-pick, owner deferred decision)",
+  "tool": "branding/logo-picker",
+  "rationaleRef": "docs/branding/logo-design-rationale.md §2"
+}

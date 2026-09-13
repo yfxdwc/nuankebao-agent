@@ -1,0 +1,33 @@
+import type { Metadata, Viewport } from "next";
+import "@/styles/globals.css";
+
+export const metadata: Metadata = {
+  title: "暖客宝 · 大健康销售 CRM",
+  description: "大健康行业销售人员的 CRM + AI 客户维护 + 养生记录系统",
+  // favicon / apple-touch-icon 由 Next.js 15 metadata-icons 约定自动注入:
+  //   src/app/icon.png       → <link rel="icon"> (192×192)
+  //   src/app/apple-icon.png → <link rel="apple-touch-icon"> (180×180)
+  // 唯一真源: tools/branding/nuankebao-logo-source.png (主人上传原图, 白底圆角 + 主题图)
+  // 重新生成: python3 tools/branding/render-logo.py
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: "#1f8a4c",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="zh-CN" suppressHydrationWarning>
+      <body className="min-h-screen bg-background font-sans antialiased">
+        {children}
+      </body>
+    </html>
+  );
+}

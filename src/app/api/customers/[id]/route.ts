@@ -1,0 +1,87 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { z } from "zod";
+import {
+  getCustomerById,
+  updateCustomer,
+  softDeleteCustomer,
+} from "@/lib/db/queries/customer";
+import { getAuditContextFromRequest } from "@/lib/audit/context";
+
+const UpdateCustomerSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  phone: z.string().regex(/^1[3-9]\d{9}$/, "手机号格式错误").optional(),
+  gender: z.enum(["M", "F", "U"]).optional(),
+  birthYear: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+  healthTags: z.array(z.string()).optional(),
+  diseaseHistory: z.string().optional(),
+  notes: z.string().optional(),
+  // 客户推荐人. 显式 null = 清空推荐人
+  referrerId: z.string().regex(/^\d+$/, "推荐人 ID 格式错误").nullable().optional(),
+});
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const customer = await getCustomerById(BigInt(id));
+  if (!customer) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  return NextResponse.json(customer);
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const input = UpdateCustomerSchema.parse(body);
+
+    const ctx = getAuditContextFromRequest(request, session);
+    const customer = await updateCustomer(BigInt(id), input, ctx);
+
+    if (!customer) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json(customer);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+    }
+    console.error("[PATCH /api/customers/[id]]", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const ctx = getAuditContextFromRequest(request, session);
+  const success = await softDeleteCustomer(BigInt(id), ctx);
+
+  if (!success) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  return NextResponse.json({ success: true });
+}

@@ -1,0 +1,27 @@
+[Unit]
+Description=暖客宝 工业级备份 (PG + Media + GPG 加密 + 异地 + GFS)
+# Documentation 路径在 install-systemd.sh sed 渲染
+Documentation=file:///__PROJECT_DIR__/deploy/README.md
+# 注意: 不写 Requires=docker.service — systemd user 实例看不到 system 服务, 会启动失败.
+#       backup.sh 自己 precheck: docker ps 没 nuankebao-postgres 直接 exit 2 fail-closed.
+RequiresMountsFor=__OFFSITE_DIR__
+
+[Service]
+Type=oneshot
+# WorkingDirectory + ExecStart 在 install-systemd.sh sed 渲染
+WorkingDirectory=__PROJECT_DIR__
+# paths.conf 由 install-systemd.sh 拷到 ~/.config/nuankebao/paths.conf
+EnvironmentFile=%h/.config/nuankebao/paths.conf
+# PATH 从 paths.conf 里的 USER_LOCAL_BIN 拼 (systemd Environment= 允许 var 引用)
+Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
+ExecStart=__PROJECT_DIR__/deploy/backup.sh
+StandardOutput=append:__DATABACKUPS_DIR__/logs/backup.log
+StandardError=append:__DATABACKUPS_DIR__/logs/backup.log
+SuccessExitStatus=0
+
+# 安全加固 (TD-010 A4)
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+# backup 服务额外加固：限制 write 区域 (TD-010 A4)
+ReadWritePaths=__DATABACKUPS_DIR__ __PROJECT_DIR__/data /tmp

@@ -1,0 +1,21 @@
+# Code Owners 自动审查规则
+# GitHub 会在 PR 中自动指派审查者
+# 详见: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# 默认: 主人审查
+*       @owner
+
+# 部署 / 运维 (敏感, 需主人确认)
+/tools/        @owner
+/docker/       @owner
+/docs/deploy.md @owner
+/.env.example  @owner
+
+# 数据库 schema (修改需谨慎)
+/src/lib/db/schema.ts @owner
+/drizzle/      @owner
+
+# 加密 / 审计 (合规相关)
+/src/lib/crypto/ @owner
+/src/lib/audit/  @owner
+/docs/security-compliance.md @owner

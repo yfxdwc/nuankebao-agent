@@ -1,0 +1,12 @@
+[Unit]
+Description=暖客宝 PG 月度演练 (每月第一周日 04:00)
+
+[Timer]
+# 每月第一周的周日 04:00 (Sun 1-7 号) — 错开 backup 03:00 + code-snapshot 04:00 时段
+OnCalendar=Sun *-*-1..7 04:00:00
+Persistent=true
+AccuracySec=10s
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=default.target

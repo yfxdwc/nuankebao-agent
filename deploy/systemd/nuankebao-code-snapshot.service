@@ -1,0 +1,23 @@
+[Unit]
+Description=暖客宝 代码快照 (dirty + untracked → 外置盘异地, fail-closed 预检)
+Documentation=file:///__PROJECT_DIR__/deploy/README.md
+# 错开 nuankebao-backup.service (避免同时跑 rsync 重叠)
+After=nuankebao-backup.service
+RequiresMountsFor=__OFFSITE_DIR__
+
+[Service]
+Type=oneshot
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=%h/.config/nuankebao/paths.conf
+Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
+ExecStart=__PROJECT_DIR__/deploy/code_snapshot.sh
+StandardOutput=append:__DATABACKUPS_DIR__/logs/code-snapshot.log
+StandardError=append:__DATABACKUPS_DIR__/logs/code-snapshot.log
+SuccessExitStatus=0
+
+# 安全加固 (TD-010 A4)
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+# code snapshot 写区域 (异地盘 + 健康 state + staging)
+ReadWritePaths=__OFFSITE_DIR__/nuankebao-codebackups __DATABACKUPS_DIR__ /tmp

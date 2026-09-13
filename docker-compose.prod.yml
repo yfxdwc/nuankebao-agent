@@ -1,0 +1,72 @@
+services:
+  postgres:
+    # container_name 保留 nuankebao-postgres (主人机器内部代号, 跟产品名 nuankebao 解耦)
+    image: pgvector/pgvector:pg16
+    container_name: nuankebao-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nuankebao}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-nuankebao}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nuankebao} -d ${POSTGRES_DB:-nuankebao}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # 不暴露端口到 host (只让 web 容器访问)
+    # ports:
+    #   - "5432:5432"
+    networks:
+      - nuankebao-net
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: nuankebao-web
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-nuankebao}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nuankebao}
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
+      AUTH_URL: ${AUTH_URL:-https://nuankebao.tooyang.top}
+      PGCRYPTO_KEY: ${PGCRYPTO_KEY:?PGCRYPTO_KEY must be set}
+      NODE_ENV: production
+      # 主机可访问
+      APP_PORT: 3000
+    networks:
+      - nuankebao-net
+      - web-net  # 暴露给 host / nginx
+
+  # 可选: nginx 反向代理 (推荐但可选, 也可用 host nginx)
+  nginx:
+    image: nginx:alpine
+    container_name: nuankebao-nginx
+    restart: always
+    depends_on:
+      - web
+    volumes:
+      # 主机上传目录 (host → container 映射, 主人部署时填: UPLOADS_HOST_DIR=/path/to/uploads)
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${UPLOADS_HOST_DIR:-/opt/nuankebao/public/uploads}:${UPLOADS_CONTAINER_DIR:-/opt/nuankebao/public/uploads}:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - web-net
+
+networks:
+  nuankebao-net:
+    driver: bridge
+  web-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    name: nuankebao-postgres-data

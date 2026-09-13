@@ -1,0 +1,11 @@
+[Unit]
+Description=暖客宝 每日代码快照 (04:00, 错开 backup 03:00)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+AccuracySec=10s
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=default.target

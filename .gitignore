@@ -1,0 +1,98 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.pyc
+.venv/
+venv/
+target/
+
+# Build outputs
+dist/
+build/
+out/
+*.log
+
+# IDE / OS
+# 注意: 只 ignore 根目录 .vscode/, 子目录的 .vscode/ (如 flutter_app/.vscode/launch.json) 要 commit
+/.vscode/
+.idea/
+.DSStore
+*.swp
+*~
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Coverage / cache
+coverage/
+.cache/
+.turbo/
+.parcel-cache/
+
+# Next.js
+.next/
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Drizzle
+drizzle/meta/
+drizzle/*.json
+
+# Project-specific (按需放开)
+# .muse-station-state/
+
+# Backups (不进 git) — 旧版 tools/backup.sh 用的根目录 backups/, 已 deprecated
+backups/
+*.sql
+*.sql.gz
+*.sql.gpg
+
+# 备份脚手架 (dev-domain-backup SOP §3.0)
+# - data/ 整体: 含密钥 + 健康 state + 备份副本
+# - /home/tooyan/nuankebao-databackups: 项目外独立备份目录 (防 rm -rf 误删)
+# - /media/tooyan/<盘符>/nuankebao-*: 异地盘备份副本 (dev 机器当前未挂载, 路径待补)
+data/
+/home/tooyan/nuankebao-databackups
+
+# 路径配置 (AGENTS §6.3 + deploy/README.md §11)
+# - deploy/paths.conf.example: 提交, 注释齐全的样板
+# - deploy/paths.conf:         gitignored, 主人当前机器真值 (每台机器一份)
+# - ~/.config/nuankebao/paths.conf: gitignored, systemd EnvironmentFile 真正读的
+deploy/paths.conf
+
+# 上传的照片 (运行时生成)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Playwright 测试产物
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Flutter 编译产物
+flutter_app/build/
+flutter_app/.dart_tool/
+flutter_app/.flutter-plugins*
+flutter_app/.idea/
+flutter_app/.metadata
+flutter_app/android/.gradle/
+flutter_app/android/local.properties
+flutter_app/android/app/build/
+flutter_app/android/build/
+flutter_app/ios/Pods/
+flutter_app/ios/Flutter/Flutter.framework
+flutter_app/ios/Flutter/Flutter.podspec
+*.apk
+*.aab
+*.ipa
+
+# Logo 渲染临时产物 (重跑 render-spa.py 即可重生)
+tools/branding/build/
+tools/branding/**/_tmp/
+# Logo 老版本备份 (git 可选, 但保留节省空间)
+tools/branding/legacy/

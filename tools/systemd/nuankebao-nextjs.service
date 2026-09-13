@@ -1,0 +1,21 @@
+[Unit]
+Description=NuankeBao Next.js Backend (3003) — 养生 CRM API + Admin Web
+After=network.target
+
+[Service]
+Type=simple
+# WorkingDirectory + ExecStart + EnvironmentFile 由 tools/install-systemd.sh sed 渲染
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=__PROJECT_DIR__/.env.local
+ExecStart=/bin/sh __PROJECT_DIR__/node_modules/.bin/next dev -p 3003 -H 0.0.0.0
+Restart=always
+RestartSec=30
+StandardOutput=append:/tmp/nuankebao-nextjs.log
+StandardError=append:/tmp/nuankebao-nextjs.log
+
+# 安全加固 (TD-010 A4)
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

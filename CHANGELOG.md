@@ -1,0 +1,499 @@
+# 变更日志 (CHANGELOG)
+
+所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
+
+## [0.4.2] - 2026-09-12
+
+### 🔧 /app-preview 登录连不上后端 (Flutter web API base URL 写错 IP)
+
+**背景**: 主人在 /app-preview 输入手机号 + 验证码 → 点登录 → `DioException [connection timeout]`. 原因: `public/app/main.dart.js` (Flutter web 编译产物, 2026-09-11 09:34 build) 裡 API base URL 硬编码 `http://192.168.1.200:3003/api`, 但主人当前 dev server 在 `192.168.1.99:3003`. 造成所有 API 请求连到错误 IP → TCP 连接超时 → “循环”表现其实是“每次都超时”.
+
+**这不是 R12 循环**: R12 是 dio XHR 拿不到 Set-Cookie (在 HTTP 层走身份). 现在是 TCP 层根本没连上, 根本进不到 R12 逻辑.
+
+**修复**:
+1. **源码** `flutter_app/lib/services/api_client.dart`: web 模式 (dart-define 为空时) 从 `Uri.base.origin` 自动检测 API base. IP 变不用 rebuild Flutter web. Native APK 仍走 dart-define.
+2. **编译产物** `public/app/main.dart.js`: `192.168.1.200` → `192.168.1.99` (sed 原地改, 立即生效)
+3. **service worker** `public/app/flutter_service_worker.js`: 更新 main.dart.js hash (0386df280dd852f4cb7aeafd2ecd99c0), 让 SW 知道有新版
+4. **version.json**: `0.1.0#1` → `0.1.1#2` (SW 检测版本变更)
+
+**主人浏览器侧需要** (不清缓存拿不到新文件):
+- `Ctrl+Shift+R` (Windows/Linux) / `Cmd+Shift+R` (Mac) 硬刷新
+- OR DevTools → Application → Service Workers → Unregister → 刷新
+- OR 隐私模式 / 无痕模式打开
+
+**后续 todo** (主人决策):
+- [ ] 主人装 Flutter SDK (~700MB, 见 AGENTS.md §7) 重 build, 让源码的 auto-detect 生效. 之后 IP 再变不需要再 sed main.dart.js
+- [ ] 考虑加 Flutter web build 脚本到 tools/ (类似 `tools/build-flutter-web.sh`), 统一 dart-define 参数
+
+**改动文件**:
+- `flutter_app/lib/services/api_client.dart` — `_rawBaseUrl` default 从硬编码 `.200` 改空. 新增 `hasExplicitBaseUrl` getter. `baseUrl` / `baseOrigin` 走 dart-define 优先 / `Uri.base` fallback
+- `public/app/main.dart.js` — sed 改 IP (1 处)
+- `public/app/flutter_service_worker.js` — 更新 main.dart.js hash
+- `public/app/version.json` — 0.1.1#2
+- `tools/build-flutter-web.sh` — **新增**, 一键 build + sync + bump version + 更新 SW hash. 主入口参数化 (IP / PORT / --auto / --no-sync / --help). 避免下次 IP 变或重 build 时手操错.
+
+**验证**:
+- ✅ `main.dart.js` 含 `192.168.1.99:3003`, 不含 `.200`
+- ✅ `version.json` 为 0.1.1#2
+- ✅ service worker hash 与 main.dart.js md5 一致
+- ✅ `tools/build-flutter-web.sh` 语法 OK / `--help` / `--auto` / 无参数 三路径都能干净报错或出帮助
+- ⚠️ 需主人浏览器硬刷新才能看到新代码 (service worker 缓存)
+
+**下次重 build 命令** (装 Flutter SDK 后):
+```bash
+# 指定 IP (最常用)
+./tools/build-flutter-web.sh 192.168.1.99 3003
+
+# 运行时自动从 Uri.base 推导 (IP 变不用 rebuild)
+./tools/build-flutter-web.sh --auto
+
+# 只 build 不同步
+./tools/build-flutter-web.sh --no-sync <IP>
+```
+
+---
+
+## [0.4.1] - 2026-09-12
+
+### 🚨 /app-preview 移除 blockIframe 机制 (主人 override AGENTS.md §5 反模式)
+
+**背景**: w14 第五刀 (2026-09-11) 在 `PreviewFrame` 加 `blockIframe=true` (pointer-events: none) 作为 R12 登录循环的"物理阻断"止血。AGENTS.md §5 同期记录此为"真修复"。
+
+**主人 2026-09-12 拍板**:
+- 删除 blockIframe 机制。iframe 现在永远可点
+- 顶部 `FlutterWebLoginBanner` 降级为 informational only (sky 蓝, 非 enforce), 解释 R12 是什么 + 建议走真机扫码, 不再点登录
+- R12 登录循环改用其他方式处理 (主人决策, 待实施: puppeteer 拦截 / middleware 拦截 / API disable)
+
+**⚠ 此次变更与 AGENTS.md §5 "贴告示 ≠ 修复" 反模式冲突**:
+- §5 结论: banner 单独存在 ≠ 修复, 物理阻断才是
+- 主人 override: §5 是默认最佳实践, 但 R12 主人有意识选择 banner-only, 准备接受登录循环风险
+- 后果: iframe 可点后, 在 iframe 里点登录必触发 R12 循环. 主人自行处理
+
+**改动文件**:
+- `src/components/preview/preview-frame.tsx` — 删除 blockIframe prop / forceInteractive state / toggleInteractive / toolbar 切换按钮 / effectiveBlockIframe 计算 / FlutterWebLoginBanner 内部渲染. iframe.style 永远 undefined (可点)
+- `src/components/preview/flutter-web-login-banner.tsx` — 删除 interactive prop. 改成 sky-50 (蓝) informational 配色, 恢复 X dismiss 按钮 + localStorage, 文案改成"什么是 R12"说明
+- `src/app/app-preview/page.tsx` — 删除 blockIframe={true}, FlutterWebLoginBanner 直接由 page render
+
+**保留不变**:
+- R12 文档 (`docs/login-failure-triage.md §2.B`) 保留, 描述 XHR-based dio 拿不到 Set-Cookie 头的问题
+- FlutterWebLoginBanner 仍然存在, 作为"提醒" (不再 enforce)
+
+**验证**:
+- ✅ TypeScript 通过
+- ✅ iframe 无 `style="pointer-events:none"`
+- ✅ toolbar 无 toggle 按钮
+- ✅ HTML 中无 blockIframe / "禁用交互" / "DEBUG 模式" 字样
+
+**后续 todo** (主人决策):
+- [ ] 实施 puppeteer 拦截 / middleware 拦截 / API disable 任一方式处理 R12 登录循环
+- [ ] 写 post-mortem: 为什么 override AGENTS.md §5 反模式
+- [ ] AGENTS.md §5 加注: 此变更的特例情况 (主人 override) 及 trade-off
+
+---
+
+## [0.4.0] - 2026-09-08
+
+### 🚀 备份脚手架内置 (dev-domain-backup SOP §3.0)
+
+**背景**: 主人 2026-09-08 ask_user 拍板, 项目需工业级备份 (PG + Media + GPG + 异地 + GFS). 调用 `~/.muse/skills/dev-domain-backup/SKILL.md` (v1.0 canonical, 2026-09-07) 全量实施.
+
+**新增 deploy/ 目录** (项目级备份运维):
+| 文件 | 职责 |
+|---|---|
+| `deploy/backup.sh` | PG (pg_dump -Fc) + Media (tar --zstd) → GPG AES256 加密 → 本地 + 异地 rsync → GFS 双保险 (mtime+14 AND count≤7) |
+| `deploy/code_snapshot.sh` | dirty + untracked + .git/ → 外置盘异地 (zstd level 19), 含 sha256 + manifest sidecar, fail-closed 预检 secret basename |
+| `deploy/restore_verify.sh` | 月度演练: 解密 → 起临时 PG:5435 → pg_restore → 14 张关键表行数比对 (生产 vs 演练) → 自动清理 |
+| `deploy/install-systemd.sh` | 一键装 6 个 systemd user unit (3 service + 3 timer) + enable --now |
+| `deploy/systemd/nuankebao-backup.{service,timer}` | 日 03:00 (Persistent=true, RandomizedDelaySec=5min) |
+| `deploy/systemd/nuankebao-code-snapshot.{service,timer}` | 日 04:00 (错开 backup 1h) |
+| `deploy/systemd/nuankebao-restore-verify.{service,timer}` | 月第一周日 04:00 (Sun *-*-1..7 04:00:00) |
+| `deploy/README.md` | §10 备份 SOP 落地文档 (架构 / 调度 / 安装 / 安全 / 排错 / 验收) |
+
+**新增数据目录**:
+- `/home/mm7/nuankebao-databackups/` — 项目外独立备份目录 (gitignored, 防 rm -rf 误删)
+  - `backup-key.gpg` (chmod 600, GPG passphrase-file, openssl rand -base64 32 生成)
+  - `pg-backups/` (GFS 7 份)
+  - `media/` (GFS 7 份)
+  - `backup-health/` (atomic JSON 状态, chmod 600)
+  - `logs/` (chmod 700 dir, 持久化日志)
+- `/media/mm7/mm7-sda/nuankebao-databackups/` — 异地盘副本 (含隐藏 .backup-key/ 异地密钥副本)
+- `/media/mm7/mm7-sda/nuankebao-codebackups/` — 异地代码快照
+- `data/` (项目内, gitignored, 预留给未来扩展)
+
+**3-2-1 副本策略** (SOP §2.1):
+- 本地 (nvme) + 异地 (外置盘 /media/mm7/mm7-sda) + systemd timer 调度
+- GPG 对称 AES256 加密 + passphrase-file (SOP §2.2 红线)
+- GFS 双保险 mtime+14 AND count≤7 (SOP §2.4)
+- fail-closed 预检 secret basename 黑名单 + 应排除路径检查 (SOP §2.5)
+
+**Deprecated** (老备份脚本, 改 redirect):
+- `tools/backup.sh` → `exec deploy/backup.sh "$@"` (透明跳转)
+- `tools/restore.sh` → `exit 1` (覆盖式恢复危险, 改走演练 + 手动)
+- `tools/backup-cron.sh` → `exit 1` (cron 改 systemd timer, Persistent + RandomizedDelay)
+
+**Smoke test** (2026-09-08):
+- ✅ `deploy/backup.sh` exit=0, 1s, PG=24850 bytes + Media=413 bytes
+- ✅ `deploy/code_snapshot.sh` exit=0, 1942 files, 5.5MB, 含 .git/, 排除 node_modules + .next + Flutter build
+- ✅ `deploy/restore_verify.sh` exit=0, 4s, 14/14 表 100% 行数一致
+- ✅ systemd unit 全部触发成功 (`systemctl --user start nuankebao-*.service`)
+
+**未启用** (主人拍板 skip-github-mirror):
+- GitHub 镜像 + monitor (项目无 git remote, 暂不需要)
+
+**密钥管理**:
+- 主密钥: `/home/mm7/nuankebao-databackups/backup-key.gpg` (chmod 600)
+- 异地副本: `/media/mm7/mm7-sda/nuankebao-databackups/.backup-key/backup-key.gpg`
+- ⚠ 主人请把密钥内容备份到密码管理器 (1Password / Bitwarden)
+
+## [0.3.0] - 2026-09-07
+
+### Changed (命名一致性反转)
+
+**背景**: AGENTS.md §6.3 原拍板"内部代号保留 bbt-", 仓库路径改名后保留 bbt-postgres / bbt-stack.service / tools/bbt-*.sh 等。主人 2026-09-07 ask_user「命名一致性」选 **all-nuankebao**, 全部反向统一为 nuankebao, 推翻 §6.3 保留清单。
+
+**全栈命名表** (统一 nuankebao, 见 AGENTS.md §6.1):
+
+| 类别 | 旧 | 新 |
+|---|---|---|
+| 仓库路径 | `/home/mm7/bbt-agent` | `/home/mm7/nuankebao-agent` |
+| Docker container | `bbt-postgres` | `nuankebao-postgres` |
+| Docker volume | `bbt-postgres-data` | `nuankebao-postgres-data` |
+| Docker network | `bbt-agent_default` | `nuankebao-agent_default` |
+| systemd system | `bbt-stack.service` / `bbt-cloudflared.service` | `nuankebao-stack.service` / `nuankebao-cloudflared.service` |
+| systemd user | `bbt-nextjs.service` | `nuankebao-nextjs.service` |
+| 脚本前缀 | `tools/bbt-*.sh` | `tools/nuankebao-*.sh` |
+| 日志前缀 | `/tmp/bbt-*.log` | `/tmp/nuankebao-*.log` |
+| PG user | `bbt` | `nuankebao` (ALTER ROLE bbt RENAME TO nuankebao) |
+| PG db | `bbt` | `nuankebao` (ALTER DATABASE bbt RENAME TO nuankebao) |
+| 云上路径 | `/opt/bbt/...` | `/opt/nuankebao/...` |
+| Cloudflare 临时通道 | `bbt.tooyang.top` | **已注释掉** (主人手工去 Cloudflare Dashboard 删 DNS) |
+
+**PG 迁移**: 用 rename-inplace (主人拍), `ALTER ROLE` + `ALTER DATABASE` 一次完成, 73MB named volume 数据保留, 14 张表全部迁到 nuankebao 账号下。
+
+**保留** (脚本内部变量名, §6.2): `BBT_DIR` / `BBT_PORT` / `BBT_HOSTNAME` 变量名保留, 只改默认值。kubernetes / docker 都有这种"内部名 vs 外部 brand"解耦惯例。
+
+**移除**:
+- `/home/mm7/bbt-agent/` (root:root 空目录, 残留的 docker/init.sql 已先 cp 给 nuankebao-agent)
+- `/home/mm7/bbt/` (pi cwd 标记, 已删)
+- `tools/bbt-stack.service` → `tools/nuankebao-stack.service`
+- `tools/bbt-tunnel.sh` → `tools/nuankebao-tunnel.sh`
+- `tools/systemd/bbt-nextjs.service` → `tools/systemd/nuankebao-nextjs.service`
+- `tools/nuankebao-rename-execute.sh` → `tools/.archive/` (改名任务已完成, 留档备查)
+
+**未改**:
+- Cloudflare DNS `bbt.tooyang.top` 记录 (Dashboard 操作, 主人手工删)
+- 备份脚本里 `BBT_DIR` 变量名 (主人同意 §6.2 保留)
+
+### Removed
+
+- 仓库 `bbt-agent_default` docker network (compose 重命名后自动删除)
+
+## [0.2.0] - 2026-09-05
+
+### 🔄 项目改名 + 品牌升级 (BBT → 暖客宝)
+
+### Changed (改名)
+
+**背景**: 原名 BBT 暗示碧波庭单家公司, 不能覆盖目标用户群体 (养生保健 / 健康管理 / 康复养老 / 营养食品 / 健康生活方式 五大细分行业)。
+重新命名为 **暖客宝 (NuankeBao)** —— “暖” + “客” + “宝”, 暗示温暖客户 + 客户是宝藏, 适合大健康销售气质。
+
+**用户可见改动**:
+- 销售 App 显示名: `bbt_agent` → `暖客宝` (Android label + iOS bundle display name)
+- Web 站点名: `BBT · 养生行业 CRM` → `暖客宝 · 大健康销售 CRM`
+- Web 后台侧栏: `BBT / 养生 CRM` → `暖客宝 / 大健康 CRM`
+- APK 下载页: 所有 BBT 字样 → 暖客宝
+
+**代码标识符**:
+- Flutter pubspec name: `bbt_agent` → `nuankebao`
+- Android package: `com.bbt.bbt_agent` → `cn.nuankebao.app` (Kotlin 目录同步 mv)
+- Dart class: `BbtApp` → `NuankeBaoApp`
+- dart-define: `BBT_API_BASE` → `NUANKEBAO_API_BASE`
+- env var: `BBT_APK_PATH` → `NUANKEBAO_APK_PATH`
+- APK 拷贝路径: `/tmp/BBT-release.apk` → `/tmp/NUANKEBAO-release.apk`
+- Excel 模板: `BBT-customer-template.xlsx` → `nuankebao-customer-template.xlsx`
+- APK 下载文件名: `BBT-release.apk` → `nuankebao-release.apk`
+
+**部署默认值**:
+- Postgres default user/db: `bbt` → `nuankebao` (密码 `bbt_password` → `nuankebao_password`)
+- AUTH_URL fallback: `https://bbt.your-domain.com` → `https://nuankebao.tooyang.top`
+- 云上中转路径: `/opt/nuankebao/public/uploads` → `/opt/nuankebao/public/uploads`
+- 云上密钥路径: `/etc/bbt/secrets/pgcrypto.key` → `/etc/nuankebao/secrets/pgcrypto.key`
+
+**保持不变** (主人拍板 2026-09-05):
+- **仓库目录** `/home/mm7/nuankebao-agent` (git remote 引用, 不动)
+- **Docker 容器名** `nuankebao-postgres` / `nuankebao-web` / `nuankebao-nginx` (主人机器内部代号)
+- **Volume 名** `nuankebao-postgres-data` (Docker 存储保留)
+- **Network 名** `nuankebao-net` / `web-net`
+- **systemd service** `bbt-stack.service` / `bbt-nextjs.service`
+- **脚本前缀** `tools/bbt-*.sh`
+- **`.env` / `.env.local`** 主人机器真实生产值 (重建数据库需手动迁移)
+- **`tools/branding/legacy/`** 历史 logo 资产
+
+### Migration (手动, 主人择机执行)
+
+主人 Q2 选 rename + Q3 选 replace 后, 下列是待手工迁移 (代码默认已切到 nuankebao, 但主人机器 .env / tunnel / DNS 还是 bbt):
+
+1. **生产数据库 user/db rename**: `bbt` → `nuankebao`
+   ```bash
+   # 备份 + 重建 + 迁移 SOP: tools/SOP.md (待补)
+   docker compose down postgres
+   docker volume rm nuankebao-postgres-data   # ⚠ 永久删数据, 需先全量备份
+   # .env: POSTGRES_USER=bbt → POSTGRES_USER=nuankebao
+   # .env: POSTGRES_DB=bbt → POSTGRES_DB=nuankebao
+   # .env: POSTGRES_PASSWORD 保持不变
+   docker compose up -d postgres
+   pnpm db:migrate
+   pnpm db:seed
+   # 从 gpg 备份恢复生产数据: ./tools/restore.sh <backup-file>
+   ```
+
+2. **Cloudflare tunnel hostname replace**: `bbt.tooyang.top` → `nuankebao.tooyang.top`
+   ```bash
+   # Cloudflare DNS: 加 CNAME nuankebao → 同 tunnel UUID
+   # ~/.cloudflared/config.yml: 加 hostname: nuankebao.tooyang.top
+   # .env: AUTH_URL=https://bbt.tooyang.top → AUTH_URL=https://nuankebao.tooyang.top
+   # 重启 cloudflared + nginx
+   # 老 bbt.tooyang.top 可保留为 301 跳转, 避免老用户失效
+   ```
+
+## [0.1.0] - 2026-09-04
+
+### 🎉 Phase 1 MVP + Phase 1.5 移动端
+
+### 新增 (Added)
+
+#### 后端 (Next.js 15 + Postgres)
+- 完整 13 表 schema + migration (customer / wellness_record / interaction / follow_up_task / body_part / service_item / product / store / staff / user / audit_log + 2 中间表)
+- 5 个审计触发器 (自动记录 INSERT/UPDATE/DELETE + user_id + IP)
+- AES-256-CBC 字段加密封装 (src/lib/crypto/field.ts)
+- withAuditContext + getAuditContextFromRequest 封装 (src/lib/audit/context.ts)
+- 业务层 queries (customer / wellness_record / interaction / follow_up-task / dictionary / dashboard / reports)
+- 16 个 API 端点 (含 Zod 验证 + Auth.js v5 session 校验):
+  - 客户: GET/POST /api/customers, GET/PATCH/DELETE /api/customers/[id]
+  - 养生记录: GET/POST /api/wellness-records, GET/PATCH/DELETE /api/wellness-records/[id]
+  - 跟进: GET/POST /api/follow-ups, PATCH /api/follow-ups/[id]
+  - 联系: GET/POST /api/interactions
+  - 字典: GET /api/dictionaries
+  - 仪表盘: GET /api/dashboard/stats
+  - 报表: GET /api/reports/overview
+  - 照片: POST /api/photos (base64, 5MB 限制)
+  - 导入: POST /api/import/customers (?mode=preview|commit)
+  - AI: GET /api/ai/profile/[id], POST /api/ai/follow-up
+  - 模板: GET /api/import/template
+  - 健康: GET /api/health
+- AI 客户端 (MiniMax + Vercel AI SDK), 无 API key 时自动 mock
+- 3 个 AI prompt 模板 (客户画像 / 跟进话术 / 效果分析)
+- Excel 导入工具 (xlsx + 字段校验 + 重复检测)
+- 完整文档:
+  - AGENTS.md (pi 协作约定, 反模式规则)
+  - README.md (项目说明 + 快速开始)
+  - docs/tech-stack-v0.1.md (技术栈定稿)
+  - docs/references.md (借鉴清单: NocoBase/Twenty/Frappe 等)
+  - docs/data-model.md (完整数据模型 + 加密示例)
+  - docs/security-compliance.md (PIPL 合规 + 加密 + 审计 + 备份)
+  - docs/phase-1-mvp.md (6 周实施计划)
+  - docs/deploy.md (Debian 完整部署指南 8 章)
+  - docs/user-manual.md (销售用)
+  - docs/w1-implementation.md (W1 实施日志)
+  - docs/flutter-migration.md (Flutter 迁移架构)
+  - 4 个 ADR: 技术栈 / 数据模型 (更多 W2+ 待加)
+
+#### Flutter 移动端 (Flutter 3.x + Riverpod)
+- 完整 35 个文件 (~3800 行 Dart)
+- 5 个 freezed 数据模型 (Customer / WellnessRecord / Dictionary / FollowUp / Dashboard)
+- 8 个 service (auth / customer / wellness_record / follow_up / interaction / dashboard / ai / photo)
+- 2 个 provider (auth + service_providers)
+- 12 个 screen:
+  - 登录 (auth/login_screen)
+  - 仪表盘 (dashboard, 含 PieChart)
+  - 客户管理 (列表/详情/新增编辑)
+  - 养生记录 (列表/详情/结构化表单, 含拍照)
+  - 跟进任务 (按到期时间分组)
+  - 联系记录
+  - AI 助手 (客户画像 + 跟进话术)
+  - 报表中心
+- 1 个 widget (stat_card + photo_picker)
+- 主题 (养生绿 Material 3)
+- go_router 路由 (含 Bottom Navigation 5 tab)
+- dio 拦截器 (自动加 Auth.js session cookie)
+- flutter_secure_storage (token 安全存储)
+- image_picker 集成 (相机/相册)
+- fl_chart 图表
+- 完整 README + pubspec.yaml
+
+#### 工具 + 脚本
+- tools/check-env.sh (工具链自检)
+- tools/check-port.sh (端口检测, 显示占用进程)
+- tools/pre-commit-port-check.sh (git commit 时端口硬约束)
+- tools/backup.sh (gpg 加密 + 异地同步)
+- tools/restore.sh (恢复演练)
+- tools/SOP.md (运维 SOP)
+
+#### 测试
+- 29 个 Vitest 测试 (单元 + 集成):
+  - crypto (7): AES / HMAC / hash roundtrip
+  - prompts (4): 3 个 AI 模板结构
+  - ai-client (5): mock fallback
+  - integration (6): 真实 DB (bbt_test 库)
+  - integration-extra (7): 业务层 (follow-up / interaction / dashboard / reports / audit / dictionary)
+- 7 个 Playwright E2E 测试:
+  - 登录流程 (完整 + 错误码)
+  - 路由守卫 (未登录跳 + 登录后跳)
+  - 客户管理 (列表 + 新增表单)
+  - API 健康检查
+- bbt_test 独立测试库 (TRUNCATE 自动隔离)
+
+#### CI
+- GitHub Actions workflow (.github/workflows/ci.yml):
+  - Type Check (type-check)
+  - Vitest (Postgres service 跑集成测试)
+  - Port 端口规范 (检测 3000 硬编码)
+- .nvmrc + .node-version (固定 Node 20)
+
+### 修复 (Fixed)
+- Postgres 镜像: postgres:16-alpine → pgvector/pgvector:pg16 (含 pgvector)
+- Refine v1.x 不存在 → W1 不装 (W3 复杂表单时再装)
+- 路由冲突: (admin) → admin/ (Next.js route group 不计入 URL)
+- drizzle .references() 类型推断问题 → schema.ts 用 @ts-nocheck
+- NextResponse.json 不能序列化 BigInt → API 层 bigint 转 string
+- session.user.phone 类型 → as any 绕过
+- BigInt EXTRACT 函数不支持 → (date - date)::int 直接返回天数
+- xlsx buffer 类型 → 转 Uint8Array
+- 字段加密 SET LOCAL 参数化不支持 → sql.raw()
+- audit_log.user_id NOT NULL 失败 → 改 nullable
+- TypeScript tests/ 目录污染 → tsconfig exclude
+
+### 工程化 (Changed)
+- 端口规则强化: pre-commit hook (阻断端口冲突 commit)
+- 完整端口占用记录 (3000/3001/3002/3100/3400/8080/9090 主人机器冲突)
+- 文档不硬编码端口 (3003 是 BBT 默认, 实际部署时检测)
+- Drizzle queries 全部加 audit context
+- 字段加密统一应用层 AES-256-CBC (不用 SQL pgcrypto)
+- API 错误处理统一 { error: string, details?: any }
+- Flutter 模型用 freezed (不可变 + JSON)
+- Flutter 状态用 Riverpod (不是 Provider)
+- Flutter 路由用 go_router (不是 Navigator 1.0)
+
+### 安全 (Security)
+- 字段加密 (AES-256-CBC, 32 bytes hex 密钥)
+- 审计日志 (5 触发器, 自动写)
+- 备份加密 (gpg AES-256)
+- 密钥轮换 SOP
+- HTTPS (Let's Encrypt)
+- 防火墙 (UFW, 只开 22/80/443)
+- 端口硬约束 (pre-commit hook)
+
+## [Unreleased] (Mobile-Only 阶段, 2026-09-07)
+
+### 📱 Mobile-Only 阶段拍板
+
+**背景**: W2-3 阶段 "Flutter + Next.js admin" 双线并行, 但主人 2026-09-07 直接指示: 「接下来开发只开发移动端, web 端服务等移动端开发完成后再补」。这是 L1 战略决策, 三项边界主人 ask_user 拍板。
+
+**主人拍板的三项边界** (详见 [ADR-0005](docs/adr/0005-mobile-only-phase.md)):
+
+| 边界 | 拍板 | 含义 |
+|---|---|---|
+| web admin 命运 | **freeze-keep** | 代码保留 / 部署照常 / 不加新 UI / 仅 P0 bug fix |
+| 解冻条件 | **master-decide** | 无预定义里程碑, 主人手动拍板时点 |
+| backend / schema 同步 | **flutter-only-sync** | Flutter service 必同步 / web admin client 暂停同步 |
+
+### Changed (宪法 + AGENTS 升级到 v0.1.2)
+
+- **`docs/CHARTER.md`** 升 v0.1.2:
+  - §4.3 同步策略表后端行: `auto-both` → `flutter-only-sync`
+  - **新增 §4.4 Mobile-Only 阶段章程** (4 段: web admin 状态 / backend 同步 / 解冻条件 / active 目录 / 误判处理)
+  - §7 路线图 W2-3 / W4 / W5-6 优先级调整
+  - §10 变更记录加 v0.1.2
+- **`AGENTS.md`** v0.1.2 落地:
+  - §3 同步策略整段改写 (3 子规则 + 拍板来源)
+  - §5 反模式 +2 条 (web 冻结期硬约束 + flutter-only-sync 类型暂停)
+  - §7 路线图 W2-3 / W4 调整 + 解冻候选参考
+  - §4 文件组织加活跃/冻结标记
+- **`docs/adr/0005-mobile-only-phase.md`** 新 ADR (4662 bytes), 详细记录决策 + 候选评估 + 风险缓解
+
+### 影响
+
+- ✅ Flutter 移动端 = 唯一 active frontend (双线 → 单线, 释放 ~40% 精力)
+- ✅ Web admin (`src/app/admin/**`) 保留运行, 不下线, 不加新功能
+- ✅ Backend / schema 改动只同步 Flutter service, web client 类型/调用暂停
+- ⏸️ Web 解冻 = 主人 ask_user 明确「移动端 OK, 解冻 web」才触发
+- ⏸️ 解冻后: web admin client 一次性 catch-up sync (类型/调用), CHARTER 升 v0.2.x
+
+### 待做 (解冻时)
+
+- [ ] 主人 ask_user 拍板解冻
+- [ ] 估 catch-up 工作量
+- [ ] 写 ADR-0006 解冻执行计划
+- [ ] web admin client 类型/调用 catch-up PR
+- [ ] CHARTER §4.4 移除, 升 v0.2.x
+
+---
+
+## [Unreleased] (W6 - 物理操作)
+
+### 新增 (Added)
+
+#### Schema 演进章程 (CHARTER §3.5 + §3.6, ADR-0004)
+
+- **`docs/CHARTER.md` 新增 §3.5 Schema 演进红线**:
+  - 6 个绝对禁止的 migration 模式 (DROP COLUMN / DROP TABLE / RENAME / ALTER TYPE 无 USING / SET NOT NULL 无 DEFAULT / DROP INDEX 在核心表)
+  - 3 个推荐但警告的模式 (ADD COLUMN 无 DEFAULT / 大表 ALTER / CREATE INDEX 不带 CONCURRENTLY)
+  - 强制 CI 集成 `tools/check-migration-compat.sh`
+- **`docs/CHARTER.md` 新增 §3.6 RBAC 扩展预留**:
+  - schema 必带 `created_by` / `store_id` / `deleted_at` / `user_role` 4 个 hook
+  - W4 之前必须补: `customer.store_id` 列 + 索引 + user.default_store_id
+  - W5 销售内测时不允许 `WHERE 1=1` 返回所有客户
+- **`docs/adr/0004-schema-evolution.md`** (新 ADR): Schema 演进章程的决策记录
+- **`tools/check-migration-compat.sh`** (新脚本, 250 行):
+  - 检测 7 类禁止模式 (DROP / RENAME / ALTER / SET NOT NULL)
+  - `IF EXISTS` 模式降为警告 (Drizzle dev 幂等 pattern, prod 前清理)
+  - CI / 本地两用 (`bash tools/check-migration-compat.sh`)
+- **`src/lib/db/migrate.ts`** 重构:
+  - 新增 `pnpm db:migrate:check` (只跑 compat 检查)
+  - 新增 `pnpm db:migrate:down <idx>` (单步回滚, 读 `drizzle/down/<同名>.sql`)
+  - 默认 `pnpm db:migrate` 自动先跑 compat 检查 (警告不阻断, 主人 review)
+- **`package.json` 新增 scripts**:
+  - `db:migrate:check` / `db:migrate:down` / `db:compat` / `check-port`
+- **`AGENTS.md §5` 反模式 +3 条: 不向后兼容 migration / NOT NULL 无 DEFAULT / 删破坏性不写 down**
+
+### 验证
+
+- ✅ `bash tools/check-migration-compat.sh` 跑现有 5 个 migration: 0 error, 1 warning (Drizzle dev IF EXISTS pattern)
+- ⚠️ W4 之前必须补 `customer.store_id` 列 + 索引 (已在 §3.6 标 TODO)
+
+### 待做
+- [ ] 主人装 Flutter SDK (~700MB)
+- [ ] 主人 `flutter run` 验证端到端
+- [ ] 主人按 `docs/deploy.md` 部署到自有物理服务器
+- [ ] 主人申请 + 配置 MINIMAX_API_KEY (AI 真实模式)
+- [ ] 主人 `flutter build apk/ios` + 上架 (TestFlight + Google Play)
+- [ ] 1-2 销售真用户内测
+- [ ] 收集反馈 + Phase 2 规划
+
+### 候选功能 (Phase 2)
+- [ ] 效果分析 API 端点 (prompt 已有, 缺 API)
+- [ ] 复购预测 (基于历史间隔)
+- [ ] 推送通知 (firebase_messaging)
+- [ ] 离线缓存 (sqflite)
+- [ ] 客户列表 debounce 搜索
+- [ ] 全局错误处理 (SnackBar)
+- [ ] PWA 模式 (Expo for Web)
+- [ ] 多租户 (SaaS 化)
+- [ ] 计费层
+
+---
+
+**版本**: v0.1.0 "养生绿"
+**日期**: 2026-09-04
+**commits**: 16
+**测试**: 36 (29 单元 + 7 E2E)
+**代码量**: ~12000 行 (后端 8000 + Flutter 3800 + 文档 1000)
+
+---
+
+## [0.2.0] 改名完成统计 (补充)
+
+**版本**: v0.2.0 "暖客宝"
+**日期**: 2026-09-05
+**改动范围**: 70+ 文件, 实际手改 40+ 文件
+**保持不动**: 仓库目录 / docker 容器名 / volume / systemd / 内部代号脚本

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  暖客宝 (nuankebao) 启动屏 — 亮模式
+  背景: 白色 (#FFFFFF)
+  Logo: 居中显示 @mipmap/ic_launcher (与 launcher 图标一致)
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@android:color/white" />
+    <item android:gravity="center">
+        <bitmap
+            android:gravity="center"
+            android:src="@mipmap/ic_launcher" />
+    </item>
+</layer-list>

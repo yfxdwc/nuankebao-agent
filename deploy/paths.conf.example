@@ -1,0 +1,63 @@
+# ============================================================
+# 暖客宝 路径配置样板 — 每台机器一份
+#
+# 用法 (AGENTS §6.3 + deploy/README.md §11):
+#   1. 复制本文件:
+#        cp deploy/paths.conf.example deploy/paths.conf
+#   2. 改里面的路径到你的机器:
+#        NUANKEBAO_PROJECT_DIR       项目根
+#        NUANKEBAO_DATABACKUPS_DIR   备份根 (独立目录, 防 rm -rf 误删)
+#        NUANKEBAO_OFFSITE_DIR       异地盘根 (空 = 不做异地)
+#        NUANKEBAO_USER_LOCAL_BIN    $HOME/.local/bin (pnpm/uv 通常在这)
+#
+# 自动生效场景:
+#   A. systemd: deploy/install-systemd.sh 装时自动 cp 到
+#        ~/.config/nuankebao/paths.conf (systemd EnvironmentFile= 读)
+#   B. 手动跑脚本: deploy/*.sh / tools/*.sh 顶部会自动 source 这份
+#        (本仓库路径 = ${NUANKEBAO_PROJECT_DIR}/deploy/paths.conf)
+#
+# 注释规则:
+#   - "#" 开头 = 注释, scripts 不会读
+#   - 留空 = 用系统默认 (脚本层 ${VAR:-默认} 兜底)
+#   - 引号必须保留 (路径含空格也不会爆)
+#
+# 强绑定 (改其中一个必须改其他, AGENTS §6.3):
+#   - Cloudflare DNS + tunnel config (走 TUNNEL_HOSTNAME)
+#   - .env 的 AUTH_URL
+#   - Flutter APK 的 NUANKEBAO_API_BASE
+# ============================================================
+
+# === 必填 (跟机器相关) ===
+
+# 项目根目录 (git clone 出来的位置)
+NUANKEBAO_PROJECT_DIR="/home/YOUR_USER/nuankebao-agent"
+
+# 备份根目录 (项目外独立, 防 rm -rf 误删; AGENTS §4)
+NUANKEBAO_DATABACKUPS_DIR="/home/YOUR_USER/nuankebao-databackups"
+
+# 异地盘根目录 (外置 SSD / NAS 挂载点)
+# - 备份脚本: rsync 到 NUANKEBAO_OFFSITE_DIR/nuankebao-databackups/
+# - 代码快照: 直接写到 NUANKEBAO_OFFSITE_DIR/nuankebao-codebackups/
+# - **留空 = 不做异地** (dev 模式, OFFSITE_DIR 会自动 fallback 到 DATABACKUPS_DIR/offsite/)
+# - 注意: code_snapshot.sh 的 fail-closed 检查会用这个路径的前 2 级做 mountpoint 探测
+NUANKEBAO_OFFSITE_DIR=""
+
+# === 可选 (PATH 拼接, 不填用 $HOME/.local/bin) ===
+NUANKEBAO_USER_LOCAL_BIN="$HOME/.local/bin"
+
+# === 可选 (生产/高级) ===
+
+# Cloudflare Tunnel 配置目录 (空 = 走 ~/.cloudflared 或 /etc/cloudflared)
+# NUANKEBAO_CLOUDFLARED_DIR=""
+
+# === 校验: 不要改下面的 NUANKEBAO_CONFIG_VERSION ===
+# 用于将来 schema 变更时检测老配置
+NUANKEBAO_CONFIG_VERSION="1"
+
+# ============================================================
+# 校验 (运行 ./tools/check-env.sh 会读这份):
+#   NUANKEBAO_PROJECT_DIR       必须存在 + 可读
+#   NUANKEBAO_DATABACKUPS_DIR   必须存在 + 可写
+#   NUANKEBAO_OFFSITE_DIR       空 = 跳过; 非空 = 必须存在 + 可写
+#   NUANKEBAO_USER_LOCAL_BIN    留空 = 默认 $HOME/.local/bin
+# ============================================================

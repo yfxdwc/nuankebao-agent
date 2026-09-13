@@ -1,0 +1,35 @@
+[Unit]
+Description=NuankeBao Application Stack (Docker Compose)
+# Documentation + WorkingDirectory 由 tools/install-guards.sh sed 渲染
+Documentation=file://__PROJECT_DIR__/AGENTS.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=__PROJECT_DIR__
+
+# 起: docker compose up -d (后台, 自愈靠容器内 restart=always)
+ExecStart=/usr/bin/docker compose up -d
+
+# 停: 保留 named volume (postgres-data 不会丢)
+ExecStop=/usr/bin/docker compose down
+
+# 重载: 重新拉起 (配置改了用)
+ExecReload=/usr/bin/docker compose up -d
+
+# 慢启动容忍 (首次 build / 拉镜像)
+TimeoutStartSec=300
+TimeoutStopSec=60
+
+# 失败自动重启 unit (但容器内 restart 才是常态)
+Restart=on-failure
+RestartSec=30
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,347 @@
+// ============================================
+// 加盟网络图谱 (Plan F3)
+// CustomPainter 渲染二叉树 + Stack + Positioned 处理点击
+// 中老年大字 + 大节点 (88pt)
+// ============================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../models/franchisee.dart';
+import '../providers/service_providers.dart';
+import '../theme/app_theme.dart';
+import '../widgets/empty_state.dart';
+import '../widgets/franchise_chip.dart';
+import '../widgets/franchise_node_sheet.dart';
+import '../widgets/franchise_tree_painter.dart';
+
+// W5 RBAC: ≤3 层硬限 (ADR-0006 / 《禁止传销条例》红线)
+const int _maxAllowedDepth = 3;
+
+class FranchiseTreePage extends ConsumerStatefulWidget {
+  const FranchiseTreePage({super.key});
+
+  @override
+  ConsumerState<FranchiseTreePage> createState() => _FranchiseTreePageState();
+}
+
+class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
+  int _depth = 3;
+  FranchiseeTreeNode? _highlightedNode;
+
+  @override
+  Widget build(BuildContext context) {
+    final asyncTree = ref.watch(myFranchiseeTreeProvider(_depth));
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('我的加盟网络'),
+        toolbarHeight: 64,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, size: 28),
+            tooltip: '刷新',
+            onPressed: () => ref.invalidate(myFranchiseeTreeProvider),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // 上级信息条 (如果有)
+          asyncTree.maybeWhen(
+            data: (tree) => _buildReferrerBar(tree),
+            orElse: () => const SizedBox.shrink(),
+          ),
+
+          // 深度切换 chip
+          _buildDepthSelector(),
+          const Divider(height: 1),
+
+          // 树渲染
+          Expanded(
+            child: asyncTree.when(
+              loading: () => const LoadingState(),
+              error: (e, _) => ErrorState(
+                error: e,
+                onRetry: () => ref.invalidate(myFranchiseeTreeProvider),
+              ),
+              data: (tree) => _buildTreeView(tree),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReferrerBar(FranchiseeTreeNode tree) {
+    if (tree.placementSide == null) return const SizedBox.shrink();
+    return FutureBuilder(
+      future: ref.read(franchiseeServiceProvider).getById(tree.id),
+      builder: (ctx, snap) {
+        if (!snap.hasData) return const SizedBox.shrink();
+        final me = snap.data!;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: AppTheme.franchisee.withOpacity(0.08),
+          child: Row(
+            children: [
+              const Icon(Icons.arrow_upward, size: 20, color: AppTheme.franchisee),
+              const SizedBox(width: 8),
+              const Text(
+                '我的上级',
+                style: TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                me.name,
+                style: const TextStyle(
+                  fontSize: AppTheme.fontMd,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.franchisee,
+                ),
+              ),
+              const Spacer(),
+              const FranchiseChip(type: 'franchisee', fontSize: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDepthSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: AppTheme.bgWarm,
+      child: Row(
+        children: [
+          const Text(
+            '深度',
+            style: TextStyle(
+              fontSize: AppTheme.fontMd,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          for (final d in [1, 2, _maxAllowedDepth]) ...[
+            _depthChip(d),
+            const SizedBox(width: 8),
+          ],
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.franchisee.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              '≤3 层',
+              style: TextStyle(
+                fontSize: AppTheme.fontXs,
+                color: AppTheme.franchisee,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '${_depth}层',
+            style: const TextStyle(
+              fontSize: AppTheme.fontSm,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _depthChip(int d) {
+    final selected = _depth == d;
+    return GestureDetector(
+      onTap: () => setState(() => _depth = d),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.primary : Colors.white,
+          border: Border.all(
+            color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.4),
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          '$d层',
+          style: TextStyle(
+            fontSize: AppTheme.fontSm,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? Colors.white : AppTheme.primary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTreeView(FranchiseeTreeNode tree) {
+    if (tree.children.isEmpty) {
+      return EmptyState(
+        icon: Icons.account_tree_outlined,
+        title: '还没有下线',
+        hint: '点击下方"添加下线"按钮, 发展第一位加盟商',
+        onAction: () => _showAddDownlineHint(tree),
+        actionLabel: '+ 添加下线',
+      );
+    }
+
+    // 计算画布大小
+    final canvasSize = TreeLayout.computeCanvasSize(tree, _depth);
+    final positions = TreeLayout.computePositions(tree, canvasSize);
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.vertical,
+        child: SizedBox(
+          width: canvasSize.width,
+          height: canvasSize.height,
+          child: Stack(
+            children: [
+              // 1. Painter (连线 + 节点圆形)
+              CustomPaint(
+                size: canvasSize,
+                painter: FranchiseTreePainter(
+                  root: tree,
+                  positions: positions,
+                  highlightedNodeId: _highlightedNode?.id,
+                  currentUserId: tree.id,
+                ),
+              ),
+
+              // 2. Positioned 透明 hitTest 区 (点击节点)
+              ..._buildHitAreas(tree, positions),
+
+              // 3. 空位提示 (虚线圆 + +号)
+              ..._buildEmptySlots(tree, positions),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildHitAreas(
+    FranchiseeTreeNode node,
+    Map<String, Offset> positions,
+  ) {
+    final widgets = <Widget>[];
+    final pos = positions[node.id];
+    if (pos == null) return widgets;
+
+    // 节点点击区 (方形, 88x88 中心)
+    widgets.add(
+      Positioned(
+        left: pos.dx - TreeLayout.nodeRadius,
+        top: pos.dy - TreeLayout.nodeRadius,
+        width: TreeLayout.nodeSize,
+        height: TreeLayout.nodeSize,
+        child: GestureDetector(
+          onTap: () => _onNodeTap(node),
+          behavior: HitTestBehavior.opaque,
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+
+    for (final child in node.children) {
+      widgets.addAll(_buildHitAreas(child, positions));
+    }
+    return widgets;
+  }
+
+  List<Widget> _buildEmptySlots(
+    FranchiseeTreeNode node,
+    Map<String, Offset> positions,
+  ) {
+    final widgets = <Widget>[];
+    final pos = positions[node.id];
+    if (pos == null) return widgets;
+
+    // 当前节点下: 看左右是否有人, 没有就显示空位
+    final hasLeft = node.children.any((c) => c.placementSide == 'left');
+    final hasRight = node.children.any((c) => c.placementSide == 'right');
+
+    if (!hasLeft) {
+      widgets.add(_emptySlot(pos.translate(-40, 50), '左', () => _onEmptySlotTap(node, 'left')));
+    }
+    if (!hasRight) {
+      widgets.add(_emptySlot(pos.translate(40, 50), '右', () => _onEmptySlotTap(node, 'right')));
+    }
+
+    for (final child in node.children) {
+      widgets.addAll(_buildEmptySlots(child, positions));
+    }
+    return widgets;
+  }
+
+  Widget _emptySlot(Offset position, String label, VoidCallback onTap) {
+    return Positioned(
+      left: position.dx - 32,
+      top: position.dy - 32,
+      width: 64,
+      height: 64,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppTheme.primary.withOpacity(0.4),
+              width: 2,
+              style: BorderStyle.solid,
+            ),
+            color: Colors.white.withOpacity(0.5),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.add,
+                size: 20,
+                color: AppTheme.primary,
+              ),
+              Text(
+                '空$label',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _onNodeTap(FranchiseeTreeNode node) {
+    setState(() => _highlightedNode = node);
+    showFranchiseNodeSheet(context, node: node);
+  }
+
+  void _onEmptySlotTap(FranchiseeTreeNode parent, String side) {
+    // 跳转到添加下线页面, 预填 parent + side
+    context.push('/franchisees/new?parentId=${parent.id}&sideHint=$side');
+  }
+
+  void _showAddDownlineHint(FranchiseeTreeNode tree) {
+    // 根节点空树 → 跳转到添加页 (独立模式)
+    context.push('/franchisees/new');
+  }
+}

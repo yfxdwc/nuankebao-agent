@@ -1,0 +1,263 @@
+# AGENTS.md — 暖客宝 项目协作约定 (给 pi / Codex / 任何 agent)
+
+> **本文件是项目操作层规约** (Operational Layer)。任何 agent 进入本项目时,**应先读元宪法** [`docs/CHARTER.md`](docs/CHARTER.md) **理解治理哲学与红线,再读本文件理解具体执行规则**。
+>
+> **阅读顺序**:
+> 1. `docs/CHARTER.md` (L0 元层 —— 治理哲学 / 红线 / 域边界)
+> 2. 本文件 (L2 操作层 —— 具体怎么做)
+> 3. `docs/adr/*` (L1 战略层 —— 历史决策,按需)
+>
+> **章节引用约定**: 本文件每个 `## §X` 标题后标注 `(CHARTER §Y)`,对齐元宪法章节。
+
+## §1. 项目 vibe (CHARTER §1 宗旨 + §2 原则 2/3)
+
+**项目**: 暖客宝(NuankeBao)· 大健康行业销售人员的 CRM + AI 客户维护 + 养生记录系统
+
+**用户群体**:养生保健 / 健康管理 / 康复养老 / 营养食品 / 健康生活方式 等大健康细分行业的**销售 + 客服人员**(中年女性为主,移动端重度使用)
+
+**目标用户**:
+- 主:大健康门店 / 品牌**销售 + 客服人员**(中年女性为主,移动端重度使用)
+- 次:门店老板 / 店长(看报表 + 团队管理)
+
+**视觉风格**:
+- 简洁 + 温暖(养生行业气质)
+- 移动优先,PC 端也要可用
+- 不要 SaaS 风(避免传统 CRM 的销售漏斗 / 冷色调 / dashboard 风格)
+
+**核心交互**:
+- 一键录入:养生记录结构化表单(部位 / 状态 / 用料 / 效果)
+- 客户画像:看一个客户 = 看到他的所有历史
+- AI 辅助:跟进建议 + 话术生成(后期)
+
+**反 vibe**:
+- ❌ 不要传统 CRM 的销售漏斗(Kanban / pipeline)主界面
+- ❌ 不要 dashboard 复杂图表(养生销售看不懂)
+- ❌ 不要炫技动画
+- ❌ 不要暗色主题(养生行业偏温暖)
+
+## §2. 技术栈 (CHARTER §3.2 技术栈红线 + ADR-0001) (已拍板 2026-09-03)
+
+```
+- 前端:    Next.js 15 (App Router) + shadcn/ui + Tailwind CSS
+- 后端:    Next.js Route Handlers (单体仓库,后期可拆 NestJS)
+- ORM:     Drizzle (SQL-first, 比 Prisma 轻)
+- 数据库:  PostgreSQL 16 + pgcrypto (字段加密) + pgvector (向量检索)
+- 认证:    Auth.js v5 + 手机号验证码 (阿里云短信网关)
+- AI:      MiniMax API (国内 endpoint, 假设 minimax = MiniMax)
+- 部署:    Docker Compose, 主人自有物理服务器
+- 监控:    Postgres 触发器审计 + OpenTelemetry + 简易 Grafana
+- 包管理:  pnpm
+- 语言:    TypeScript (strict)
+- 测试:    Vitest (单元) + Playwright (E2E)
+```
+
+> 📚 **学习借鉴**: 我们借鉴 NocoBase / Twenty / Frappe / Vault / Oso / Formily 等成熟项目的设计思路与实现方法。详见 [`docs/references.md`](./docs/references.md)。
+> **原则**: 借鉴思路 ≠ 复制代码 — 看懂设计, 重新实现; 引用代码片段时注明出处 + 协议允许。
+
+## §3. pi 协作规则 (CHARTER §5 决策权 + §2 原则 6/7)
+
+### 该做
+- ✅ **每次开新 feature** → 先 `pi`,在 prompt 里描述 vibe,不要直接动手
+- ✅ **小步快跑** → 一次只让 pi 实现一个 feature,不要一次堆 10 个
+- ✅ **必须自己验收** → UI 类必须截图看,LIB 类必须跑通单测
+- ✅ **git commit 要带上下文** → `feat(mood-tracker): 加滑块 + 曲线图`
+- ✅ **数据敏感字段必须加密** → 健康状态 / 疾病史 / 联系方式 走 pgcrypto
+- ✅ **任何数据库写都要走 audit log** → 谁改了什么
+- ✅ **选端口前先检测** → 跑 `./tools/check-port.sh [PORT]` 确认空闲，避免撞主人其他项目
+- ✅ **改了端口的 commit 必须经过 pre-commit hook** → `tools/pre-commit-port-check.sh` (安装: `ln -s ../../tools/pre-commit-port-check.sh .git/hooks/pre-commit`)
+- ✅ **改 / 加 migration 前必跑 `pnpm db:compat`** → 检查 DROP / RENAME / ALTER TYPE 无 USING / SET NOT NULL 无 DEFAULT 等禁止模式。CI `db-compat` job 失败 = PR 阻断。详见 CHARTER §3.5 + ADR-0004
+- ✅ **前端同步策略 (mobile-only, v0.1.2 主人拍, 2026-09-07)**:
+  - **销售侧功能 (录入/拍照/跟进/客户详情)** → **只做 Flutter APK** (`flutter_app/`), 不再做 web admin 同名功能
+  - **Backend / API 改动** → **flutter-only-sync** = Flutter service 必同步 + web admin client 暂停同步 (类型/调用解冻时一次性 catch-up)
+  - **纯管理功能 (报表/导入/审计/团队管理)** → **web 解冻前不开发** (CHARTER §4.4 freeze-keep)
+  - **拍板来源**: 主人 2026-09-07 ask_user 三项决定: (1) web 命运 = freeze-keep (2) 解冻条件 = master-decide (3) backend 同步 = flutter-only-sync. 详见 CHARTER §4.4 + ADR-0005
+  - **活跃目录** (v0.1.2 起): `flutter_app/lib/**` + `src/app/api/**` + `src/lib/**` + `src/middleware.ts` + `src/app/(auth)/login/**`
+  - **冻结目录** (仅 P0 bug fix): `src/app/admin/**` + `src/components/business/**` (web admin 业务组件) + `src/components/admin/**`
+
+### 不该做
+- ❌ **不要 sudo 改系统配置** — 这是 暖客宝 项目级别,跨用户操作要找主人拍
+- ❌ **不要 git push** — 主人拍后再推 remote
+- ❌ **不要写一堆 TODO 占位代码** — TODO 一定是真要做的,不是凑数
+- ❌ **不要装 pip/npm 依赖不写进 package.json/requirements.txt**
+- ❌ **不要把客户健康数据放第三方公有云** — 自有服务器是底线
+- ❌ **不要用 AGPL 协议的底座** — 未来 SaaS 会被卡脖子
+- ❌ **不要用 OpenAI API 直连** — 数据出境风险, MiniMax / 通义 替代
+
+## §4. 文件组织约定 (MVP 阶段单层) (CHARTER §4 域边界)
+
+```
+nuankebao-agent/                              ← v0.1.2 mobile-only 阶段
+├── flutter_app/                ← ✅ 活跃 (主战场, §4.4.4)
+│   ├── lib/
+│   │   ├── screens/            ← 12 个 Flutter screen (auth/customers/wellness/follow_ups/interactions/ai/reports/dashboard)
+│   │   ├── services/           ← Dio API client + auth/customer/wellness/follow_up/ai/photo services
+│   │   ├── models/             ← freezed 数据类
+│   │   ├── providers/          ← Riverpod state
+│   │   ├── router/             ← go_router
+│   │   └── theme/              ← 养生绿 Material 3
+│   └── android/                ← APK 构建产物
+├── deploy/                     ← ✅ 活跃 (项目级运维 + 备份, dev-domain-backup SOP)
+│   ├── backup.sh               ← 工业级备份 (PG + Media + GPG + 异地 + GFS)
+│   ├── code_snapshot.sh        ← 代码快照 (dirty + untracked → 外置盘)
+│   ├── restore_verify.sh       ← PG 月度演练 (decrypt → temp PG → 行数比对)
+│   ├── install-systemd.sh      ← 一键装 systemd user timers + enable
+│   ├── README.md               ← §10 备份 SOP 落地文档
+│   └── systemd/                ← 6 个 unit (3 对 service+timer)
+│       ├── nuankebao-backup.{service,timer}            ← 日 03:00
+│       ├── nuankebao-code-snapshot.{service,timer}     ← 日 04:00
+│       └── nuankebao-restore-verify.{service,timer}    ← 月度 第一周日 04:00
+├── data/                       ← ⚠ gitignored (backup-key + backup-health + logs)
+├── src/                        ← Next.js (单层, 后期扩 monorepo 再调整)
+│   ├── app/
+│   │   ├── (auth)/login/       ← ✅ 活跃 (登录页, Flutter + Web 共用)
+│   │   ├── (admin)/            ← ❄ 冻结 (web admin, §4.4.1 仅 P0 fix)
+│   │   │   ├── customers/      ← 客户管理
+│   │   │   ├── wellness-records/ ← 养生记录
+│   │   │   ├── follow-ups/     ← 跟进任务
+│   │   │   └── reports/        ← 报表
+│   │   └── api/                ← ✅ 活跃 (Route Handlers, Flutter 消费)
+│   ├── components/
+│   │   ├── ui/                 ← shadcn 基础组件
+│   │   ├── business/           ← ❄ 冻结 (web 业务组件 12 个)
+│   │   ├── admin/              ← ❄ 冻结 (sidebar/topbar/bottom-tab)
+│   │   ├── auth/               ← ✅ 活跃 (login-form, Flutter 同步)
+│   │   └── preview/            ← ✅ 活跃 (手机真机预览 iframe)
+│   ├── lib/                    ← ✅ 活跃 (业务逻辑)
+│   │   ├── db/                 ← Drizzle schema + migrations
+│   │   ├── ai/                 ← MiniMax wrapper + prompt 模板
+│   │   ├── crypto/             ← pgcrypto 字段加密封装
+│   │   ├── auth/               ← Auth.js 配置
+│   │   └── audit/              ← 审计日志封装
+│   ├── hooks/                  ← React hooks
+│   └── styles/                 ← Tailwind + 全局样式
+├── /home/tooyan/nuankebao-databackups/    ← ⚠ gitignored (项目外独立备份目录, 防 rm -rf)
+│   ├── backup-key.gpg                  ← GPG 密钥 (chmod 600, 主副本)
+│   ├── pg-backups/                     ← pg-*.dump.gpg (GFS 7 份)
+│   ├── media/                          ← media-*.tar.zst.enc (GFS 7 份)
+│   ├── backup-health/                  ← atomic JSON 状态
+│   └── logs/                           ← backup.log / code-snapshot.log / restore-verify.log
+├── /media/tooyan/<盘符>/nuankebao-*    ← ⚠ 异地盘副本 (3-2-1 异地策略, AGENTS §6.1; 当前 dev 机器未挂载, 路径待补)
+├── tests/                              ← ✅ 活跃 (Vitest + Playwright)
+├── docs/                       ← 设计文档 + ADR
+│   ├── adr/                    ← 架构决策记录 (0001-0005)
+│   ├── CHARTER.md              ← 元宪法 (v0.1.2)
+│   ├── data-model.md           ← 数据模型详细
+│   ├── phase-1-mvp.md          ← Phase 1 实施计划
+│   └── security-compliance.md  ← 安全合规方案
+├── tools/                      ← 脚本 (backup / deploy / env-check / check-migration-compat)
+├── docker/                     ← Docker 配置
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   └── init.sql                ← pgvector + pgcrypto 初始化
+├── .env.example                ← 环境变量示例
+├── package.json
+├── tsconfig.json
+├── drizzle.config.ts
+├── next.config.ts
+└── AGENTS.md
+```
+
+## §5. 反模式 (前 3 个月踩过的坑) (CHARTER §7 反模式沉淀)
+
+**记录中,边做边记**
+
+- ❌ **不要用 Prisma** —— Drizzle 更 SQL-first,养生记录复杂 JSONB schema Drizzle 写起来更顺
+- ❌ **不要把养生记录存成大文本** —— 必须结构化(部位/状态/用料/效果 分字段),AI 才能用
+- ❌ **不要相信前端校验** —— 所有健康字段后端也要二次加密 + 校验
+- ❌ **不要把客户手机号明文存** —— 即使"自己用",手机号也走 pgcrypto
+- ❌ **不要 import lodash 全文** —— lodash-es 按需 import,养生系统体积敏感
+- ❌ **拍脑袋设端口** —— 必须先跑 `./tools/check-port.sh [PORT]` 确认空闲，不要默认 3000/3001 (主人机器已被占用)
+- ❌ **凭印象选端口** —— 不准凭"我以为"或"上次选的"设端口，必须每次检测。主人机器上 30+ 端口被占用，3000/3001/3002/3100/3400/8080/9090 都冲突
+- ❌ **不要硬编码端口到文档** —— README/文档中端口号仅供参考，主人部署时需根据实际环境调整
+- ❌ **migration 不向后兼容** —— `DROP COLUMN` / `DROP TABLE` / `RENAME` / `ALTER COLUMN TYPE` 无 `USING` 全部阻断 (CI 跑 `tools/check-migration-compat.sh`)。详见 CHARTER §3.5 + ADR-0004
+- ❌ **migration NOT NULL 列不加 DEFAULT** —— 老 APK INSERT 失败 = W3 必崩。加 DEFAULT 或 nullable
+- ❌ **删破坏性 migration 不写 down.sql** —— 跑挂后无回滚 = 主人手工处理。`drizzle/down/<同名>.sql` 必带 (CHARTER §3.5)
+- ❌ **mobile-only 阶段加 web admin 新功能** (v0.1.2 起, CHARTER §4.4) —— 即使「顺手改下很快」也不行. 销售侧功能默认 Flutter, web 解冻前不在 `src/app/admin/` 加新页面/新交互. Schema-driven 调用修可 (`§4.4.5` 第 3 行). 主人 override 例外
+- ❌ **mobile-only 阶段同步 web admin client 类型/调用** —— backend / schema 改动后, Flutter service 必同步 (修 freezed model + service 方法), web admin client 的类型/调用更新暂停, 解冻时一次性 catch-up. 但要保证 web admin 现有功能不被打挂 (=§4.4.1 schema-driven UI 改动)
+- ❌ **贴告示 ≠ 修复 (登录循环 w14 第三次复发, 2026-09-11)** — 在登录按钮上方加 banner 解释“为什么不能点”，不等于阻止了循环。**修法 = 让触发条件物理上不发生** (pointer-events:none / 服务端拦截 / API disable / 重构为不可能调用)，不是“让人自觉”。w14 第一次（R4 单点修）和第三次（加 banner）都犯这个错。详见 `docs/login-failure-triage.md §0` DoD。
+  - ⚠ **主人 override (2026-09-12, CHANGELOG [0.4.1])**: /app-preview 完全删除 blockIframe 机制, iframe 永远可点. Banner 降级为纯 informational (sky 蓝, 恢复 dismiss 按钮). R12 登录循环改用其他方式 (puppeteer 拦截 / middleware / API disable, 待实施). 后果: iframe 里点登录 = 必崩循环. 主人拍接受这个风险. **此变更仅限 /app-preview, 不要外推到其他登录场景**. 后续补: post-mortem + AGENTS.md §5 沉淈特例条目.
+- ❌ **修一个根因就 commit (登录循环 w14 三次复发, 2026-09-11)** — R1-R12 共 12 个已知根因（详见 `docs/login-failure-triage.md §2`）。任何登录 / auth / 拦截器 / middleware / Flutter web 相关改动，**必须全 12 项过一遍验证**，不能“修了 R4 就 commit, R6 下次再说”。单点修复 = 必复发。CI 阻断（待补 §6 checklist）。
+- ❌ **puppeteer / curl 模拟 ≠ Flutter web UI 真行为 (w14 R12 发现, 2026-09-11)** — puppeteer `ctx.request.post()` 走 chromium 完整 cookie jar，模拟不到 dio web 平台 XHR 拿不到 Set-Cookie 头的真实情况。**"puppeteer 通过" ≠ "Flutter web 能用"**。任何“登录成功”的验证不能只看 API 状态码 / puppeteer 模拟，必须跑真 Flutter web UI（input → button click → 看 toast）+ 主人真手机 APK 验证。详见 `docs/login-failure-triage.md §4`。
+
+## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
+
+> **历史**:
+> - 2026-09-05 §6.1-6.2 用户可见 / 代码标识符改名 (CHANGELOG [0.2.0])
+> - 2026-09-06 §6.3 主人原拍"内部代号保留 bbt-", 仓库路径改名 (CHANGELOG [0.2.1])
+> - 2026-09-07 **反转 §6.3**: 主人在 ask_user「命名一致性」选 all-nuankebao, 内部代号也全切. 详见 CHANGELOG [0.3.0].
+
+### 6.1 全栈命名表 (统一 nuankebao, 2026-09-07 终态)
+
+| 类别 | 名称 | 备注 |
+|---|---|---|
+| 产品名 | 暖客宝 (NuankeBao) | 用户可见 |
+| 仓库路径 | `/home/tooyan/nuankebao-agent` | git 工作目录 |
+| Docker container | `nuankebao-postgres` / `nuankebao-web` / `nuankebao-nginx` | compose 定义 |
+| Docker volume | `nuankebao-postgres-data` | named volume |
+| Docker network | `nuankebao-net` | bridge |
+| systemd system | `nuankebao-stack.service` / `nuankebao-cloudflared.service` | /etc/systemd/system/ |
+| systemd user | `nuankebao-nextjs.service` | ~/.config/systemd/user/ |
+| 脚本前缀 | `tools/nuankebao-*.sh` | tools/ |
+| 日志前缀 | `/tmp/nuankebao-*.log` | system + script |
+| PG user/db | `nuankebao` / `nuankebao` | ALTER ROLE + ALTER DATABASE |
+| Tunnel hostname | `nuankebao.tooyang.top` | Cloudflare DNS + tunnel ingress |
+
+### 6.2 脚本内部变量 (历史命名, 不动)
+
+> 工业界惯例: 脚本内部 `BBT_DIR` / `BBT_PORT` / `BBT_HOSTNAME` 等变量名保留 (改名只改默认值, 不改引用). kubernetes / docker 都有这种"内部名 vs 外部 brand"解耦. 切到 nuankebao 影响所有 backup / restore / guard 脚本, 风险大于收益.
+
+### 6.3 ⚠ 强绑定 (任何一项变, 必须同步变其他)
+
+```
+[hostname] Cloudflare DNS + tunnel config  (/home/tooyan/.cloudflared/config.yml)
+    ↓ 验证 / 影响
+[AUTH_URL] .env                          (middleware getPublicBaseUrl() 用它做 fallback)
+    ↓ 验证 / 影响
+[APK base URL] flutter build apk --dart-define=NUANKEBAO_API_BASE=...
+```
+
+**只改其一必报错**:
+- 改 hostname 但没改 AUTH_URL → OAuth callback URL 错 → 登录失败
+- 改 AUTH_URL 但没重新 build APK → APK 仍指旧 hostname → 销售员登录失败
+- 改 hostname 但没在 Cloudflare Dashboard 配 tunnel → 老 hostname 失效
+
+切换 SOP: `docs/deploy.md` §6 (待补, 后续 ticket).
+
+### 6.4 已变更 (部署默认值, 生产 deploy 时手工覆盖)
+
+- Postgres default user/db: `nuankebao` (docker-compose.yml / .env 2026-09-07 in-place rename 完成)
+- Postgres default password: `nuankebao_password` (生产 deploy 时改强密码)
+- AUTH_URL fallback: `https://nuankebao.tooyang.top`
+- 云上中转路径: `/opt/nuankebao/...`
+- 云上密钥路径: `/etc/nuankebao/secrets/`
+
+> 当前 dev 机器已 100% nuankebao 化. 生产 deploy 时按本表执行.
+
+## §7. 当前进度 (CHARTER §8 路线图)
+
+- [x] 项目骨架 + git init
+- [x] 工具链自检 (tools/check-env.sh)
+- [x] **vibe / 技术栈拍板** (2026-09-03) ← 本次
+- [x] **技术栈定稿** (Next.js + Refine + Postgres) + 自建决策复核
+- [x] **学习借鉴清单** (NocoBase / Twenty / Frappe / 等) → `docs/references.md`
+- [x] ADR-0001 技术栈选型
+- [x] ADR-0002 数据模型
+- [x] tech-stack-v0.1.md 完整依赖清单
+- [x] Phase 1 MVP 计划文档
+- [x] 安全合规方案
+- [ ] **W1: 项目骨架 + Docker + Next.js + Drizzle + Auth.js** (等主人"开始" 触发)
+- [x] **W1 实施完成** (2026-09-03) — 30+ 文件, 详见 `docs/w1-implementation.md`
+- [x] **备份脚手架内置** (2026-09-08) — `deploy/` 完整备份栈 + 6 个 systemd timer 已装已启. 详见 `deploy/README.md` §10 + `dev-domain-backup` SOP
+- [x] **项目改名** BBT → 暖客宝 (2026-09-05) — 详见 CHANGELOG [0.2.0]
+- [ ] **W2-3: 数据模型 + Flutter 移动端 + 字段加密 + 审计** (mobile-only 双线并行→单线 Flutter, CHARTER §4.4)
+  - Drizzle schema 完整化 (CHARTER §3.5 红线)
+  - Flutter 12 screen 真机验收 + native 验证 (拍照 / SQLite / 推送)
+  - flutter-only-sync (web client 暂停同步)
+  - Web admin `src/app/admin/**` 不动 (仅 P0 bug fix)
+- [ ] **W4: Flutter 移动端报表 + 内测** (web admin 报表后补, 等解冻)
+- [ ] W5-6: 部署自有服务器 + 备份 SOP + Flutter APK 销售内测
+  - ⏰ **W6 内测通过** (Flutter 移动端 1-2 真用户日常用) — 是 web 解冻的**候选参考**, 但**不强制触发解冻** (master-decide, CHARTER §4.4.3)
+  - ⏰ **主人手动拍板解冻**: ask_user 中明确说「移动端 OK, 解冻 web」才解冻
+  - ⏰ 解冻后回头修订 `docs/CHARTER.md` §4 域边界 (AI 域细化 + 实际边界图),见 CHARTER §10.3.1
+- [ ] Phase 2: AI Copilot (MiniMax API) — Flutter 优先
+- [ ] Phase 3: SaaS 化 (多租户) — web admin 解冻后并行

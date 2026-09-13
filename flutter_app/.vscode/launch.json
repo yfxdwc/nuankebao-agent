@@ -1,0 +1,53 @@
+{
+  "//": "暖客宝 Flutter launch 配置 - Web + Phone 并行 (ADR-0003)",
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "1. 🌐 Web (浏览器, 0装包)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "-d", "web-server",
+        "--web-port=8080",
+        "--web-hostname=0.0.0.0",
+        "--dart-define=ENV=dev"
+      ],
+      "presentation": {
+        "group": "nuankebao-dev",
+        "order": 1
+      }
+    },
+    {
+      "name": "2. 📱 Phone (无线 hot reload, 需先 adb connect)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "-d", "192.168.1.10:5555",
+        "--dart-define=ENV=dev"
+      ],
+      "presentation": {
+        "group": "nuankebao-dev",
+        "order": 2
+      }
+    },
+    {
+      "name": "3. 🔄 Web + Phone (compound, F5 一键并行)",
+      "type": "dart",
+      "request": "launch",
+      "compound": true,
+      "configurations": [
+        "1. 🌐 Web (浏览器, 0装包)",
+        "2. 📱 Phone (无线 hot reload, 需先 adb connect)"
+      ],
+      "presentation": {
+        "group": "nuankebao-dev",
+        "order": 3
+      },
+      "stopAll": true
+    }
+  ]
+}
