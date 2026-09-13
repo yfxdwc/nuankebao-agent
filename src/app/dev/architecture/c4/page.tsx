@@ -225,15 +225,15 @@ export default function C4ArchitecturePage() {
         </Button>
 
         <div className="flex items-center gap-2 mb-2">
-          <Network className="h-7 w-7 text-purple-700" />
-          <h1 className="text-3xl font-bold text-slate-900">C4 架构图</h1>
+          <Network className="h-7 w-7 text-primary" />
+          <h1 className="text-3xl font-bold text-foreground">C4 架构图</h1>
         </div>
-        <p className="text-slate-600">
+        <p className="text-muted-foreground">
           C4 模型 4 层架构图 (System Context → Container → Component → Code).
           借鉴自{" "}
           <a
             href="https://github.com/sales-ai/sales-ai/blob/main/web-next/src/app/(dashboard)/admin/dev-architecture/c4/page.tsx"
-            className="text-blue-600 hover:underline"
+            className="text-primary hover:underline"
             target="_blank"
             rel="noreferrer"
           >
@@ -248,12 +248,12 @@ export default function C4ArchitecturePage() {
         </div>
       </div>
 
-      <section className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-        <p className="text-sm text-amber-800">
+      <section className="mb-6 p-4 bg-muted border border-primary/30 rounded-lg">
+        <p className="text-sm text-foreground">
           <strong>关于 C4 模型</strong>:{" "}
           <a
             href="https://c4model.com/"
-            className="text-blue-600 hover:underline"
+            className="text-primary hover:underline"
             target="_blank"
             rel="noreferrer"
           >
@@ -282,7 +282,7 @@ export default function C4ArchitecturePage() {
                 </p>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto p-4 bg-slate-50 rounded-lg">
+                <div className="overflow-x-auto p-4 bg-muted rounded-lg">
                   <MermaidRenderer chart={layer.chart} />
                 </div>
               </CardContent>
@@ -291,12 +291,12 @@ export default function C4ArchitecturePage() {
         );
       })}
 
-      <footer className="text-xs text-slate-500 border-t pt-4">
+      <footer className="text-xs text-muted-foreground border-t pt-4">
         <p>
           ⚠️ 这是 mermaid 渲染版本. 文字版见{" "}
           <Link
             href="/dev/architecture"
-            className="text-blue-600 hover:underline"
+            className="text-primary hover:underline"
           >
             /dev/architecture
           </Link>{" "}
