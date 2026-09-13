@@ -242,8 +242,12 @@ function generateMermaid(modules: ModuleInfo[]): string {
   // classDef
   lines.push("  classDef modStyle fill:#dcfce7,stroke:#16a34a,color:#15803d");
   lines.push("  classDef coreStyle fill:#e0f2fe,stroke:#0284c7,color:#075985");
-  modules.forEach((m) => lines.push(`  class M_${m.name.toUpperCase()} modStyle`));
-  coreCategories.forEach((c) => lines.push(`  class C_${c.key.toUpperCase()} coreStyle`));
+  modules.forEach((m) => {
+    lines.push(`  class M_${m.name.toUpperCase()} modStyle`);
+  });
+  coreCategories.forEach((c) => {
+    lines.push(`  class C_${c.key.toUpperCase()} coreStyle`);
+  });
   return lines.join("\n");
 }
 
