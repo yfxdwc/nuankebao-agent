@@ -10,11 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/models/franchisee.dart';
-import '../core/providers/service_providers.dart';
-import '../core/theme/app_theme.dart';
-import '../core/widgets/big_button.dart';
-import '../core/widgets/empty_state.dart';
+import '../../../core/models/franchisee.dart';
+import '../../../core/providers/service_providers.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/big_button.dart';
+import '../../../core/widgets/empty_state.dart';
 
 class AddFranchiseePage extends ConsumerStatefulWidget {
   /// 预填的推荐人 ID (从"加到空位"进入)

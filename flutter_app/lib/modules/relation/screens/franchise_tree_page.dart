@@ -8,13 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/models/franchisee.dart';
-import '../core/providers/service_providers.dart';
-import '../core/theme/app_theme.dart';
-import '../core/widgets/empty_state.dart';
-import '../core/widgets/franchise_chip.dart';
-import '../modules/presentation/graph/widgets/franchise_node_sheet.dart';
-import '../modules/presentation/graph/widgets/franchise_tree_painter.dart';
+import '../../../core/models/franchisee.dart';
+import '../../../core/providers/service_providers.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/franchise_chip.dart';
+import '../../presentation/graph/widgets/franchise_node_sheet.dart';
+import '../../presentation/graph/widgets/franchise_tree_painter.dart';
 
 // W5 RBAC: ≤3 层硬限 (ADR-0006 / 《禁止传销条例》红线)
 const int _maxAllowedDepth = 3;
