@@ -83,8 +83,8 @@ export function RollbackButton({ tag, shortName }: RollbackButtonProps) {
           <strong>错误:</strong> {error}
         </div>
       )}
-      <p className="text-xs text-slate-500">
-        snapshot: <code className="bg-slate-100 px-1.5 py-0.5 rounded">{shortName}</code>
+      <p className="text-xs text-muted-foreground">
+        snapshot: <code className="bg-muted px-1.5 py-0.5 rounded">{shortName}</code>
       </p>
     </div>
   );

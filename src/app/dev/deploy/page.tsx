@@ -172,11 +172,11 @@ export default async function DeployDashboardPage() {
 
         <div className="flex items-center gap-2 mb-2">
           <Database className="size-7 text-green-700" />
-          <h1 className="text-3xl font-bold text-slate-900">
+          <h1 className="text-3xl font-bold text-foreground">
             部署 + 备份 Dashboard
           </h1>
         </div>
-        <p className="text-slate-600">
+        <p className="text-muted-foreground">
           读取{" "}
           <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">
             {DATABACKUPS_ROOT}
@@ -205,7 +205,7 @@ export default async function DeployDashboardPage() {
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <div>
-              <span className="text-slate-500">状态: </span>
+              <span className="text-muted-foreground">状态: </span>
               <Badge
                 variant={backup?.status === "success" ? "default" : "destructive"}
               >
@@ -213,11 +213,11 @@ export default async function DeployDashboardPage() {
               </Badge>
             </div>
             <div>
-              <span className="text-slate-500">时间: </span>
+              <span className="text-muted-foreground">时间: </span>
               {formatDate(backup?.ts)} ({relativeTime(backup?.ts)})
             </div>
             <div>
-              <span className="text-slate-500">耗时: </span>
+              <span className="text-muted-foreground">耗时: </span>
               {backup?.elapsed_sec ?? "—"} 秒
             </div>
             {backup?.reason && (
@@ -237,14 +237,14 @@ export default async function DeployDashboardPage() {
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <div>
-              <span className="text-slate-500">PG: </span>
+              <span className="text-muted-foreground">PG: </span>
               {formatBytes(backup?.pg_size_bytes)}
             </div>
             <div>
-              <span className="text-slate-500">Media: </span>
+              <span className="text-muted-foreground">Media: </span>
               {formatBytes(backup?.media_size_bytes)}
             </div>
-            <div className="text-xs text-slate-500 mt-2">
+            <div className="text-xs text-muted-foreground mt-2">
               host: {backup?.host ?? "—"}
             </div>
           </CardContent>
@@ -264,14 +264,14 @@ export default async function DeployDashboardPage() {
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <div>
-              <span className="text-slate-500">PG: </span>
+              <span className="text-muted-foreground">PG: </span>
               <strong>{pgBackupCount}</strong> / 7
             </div>
             <div>
-              <span className="text-slate-500">Media: </span>
+              <span className="text-muted-foreground">Media: </span>
               <strong>{mediaBackupCount}</strong> / 7
             </div>
-            <div className="text-xs text-slate-500 mt-2">
+            <div className="text-xs text-muted-foreground mt-2">
               异地副本: /media/tooyan/&lt;盘符&gt;/nuankebao-*
             </div>
           </CardContent>
@@ -291,7 +291,7 @@ export default async function DeployDashboardPage() {
             {codeSnapshot ? (
               <>
                 <div>
-                  <span className="text-slate-500">状态: </span>
+                  <span className="text-muted-foreground">状态: </span>
                   <Badge
                     variant={
                       codeSnapshot.status === "success"
@@ -303,7 +303,7 @@ export default async function DeployDashboardPage() {
                   </Badge>
                 </div>
                 <div>
-                  <span className="text-slate-500">时间: </span>
+                  <span className="text-muted-foreground">时间: </span>
                   {formatDate(codeSnapshot.ts)} ({relativeTime(codeSnapshot.ts)})
                 </div>
                 {codeSnapshot.reason && (
@@ -313,7 +313,7 @@ export default async function DeployDashboardPage() {
                 )}
               </>
             ) : (
-              <div className="text-slate-500">无数据</div>
+              <div className="text-muted-foreground">无数据</div>
             )}
           </CardContent>
         </Card>
@@ -329,7 +329,7 @@ export default async function DeployDashboardPage() {
             {restoreVerify ? (
               <>
                 <div>
-                  <span className="text-slate-500">状态: </span>
+                  <span className="text-muted-foreground">状态: </span>
                   <Badge
                     variant={
                       restoreVerify.status === "success"
@@ -341,11 +341,11 @@ export default async function DeployDashboardPage() {
                   </Badge>
                 </div>
                 <div>
-                  <span className="text-slate-500">时间: </span>
+                  <span className="text-muted-foreground">时间: </span>
                   {formatDate(restoreVerify.ts)} ({relativeTime(restoreVerify.ts)})
                 </div>
                 <div>
-                  <span className="text-slate-500">表行数比对: </span>
+                  <span className="text-muted-foreground">表行数比对: </span>
                   <strong>{restoreVerify.tables_matched ?? 0}</strong> /{" "}
                   {restoreVerify.tables_total ?? 0}
                 </div>
@@ -356,7 +356,7 @@ export default async function DeployDashboardPage() {
                 )}
               </>
             ) : (
-              <div className="text-slate-500">无数据</div>
+              <div className="text-muted-foreground">无数据</div>
             )}
           </CardContent>
         </Card>
@@ -364,17 +364,17 @@ export default async function DeployDashboardPage() {
 
       {/* PG 备份文件列表 (GFS 7 份) */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-900 mb-3">
+        <h2 className="text-lg font-semibold text-foreground mb-3">
           PG 备份文件 ({pgBackups.length} 份)
         </h2>
         <Card>
           <CardContent className="pt-4">
             {pgBackups.length === 0 ? (
-              <p className="text-sm text-slate-500">无备份文件</p>
+              <p className="text-sm text-muted-foreground">无备份文件</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-slate-500 border-b">
+                  <thead className="text-left text-xs text-muted-foreground border-b">
                     <tr>
                       <th className="pb-2">文件名</th>
                       <th className="pb-2">大小</th>
@@ -406,7 +406,7 @@ export default async function DeployDashboardPage() {
             <CardTitle className="text-base">backup.log (最近 20 行)</CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="text-xs font-mono whitespace-pre-wrap bg-slate-50 p-3 rounded max-h-96 overflow-y-auto">
+            <pre className="text-xs font-mono whitespace-pre-wrap bg-muted p-3 rounded max-h-96 overflow-y-auto">
               {backupLog.length === 0
                 ? "(空)"
                 : backupLog.join("\n")}
@@ -419,14 +419,14 @@ export default async function DeployDashboardPage() {
             <CardTitle className="text-base">restore-verify.log (最近 10 行)</CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="text-xs font-mono whitespace-pre-wrap bg-slate-50 p-3 rounded max-h-96 overflow-y-auto">
+            <pre className="text-xs font-mono whitespace-pre-wrap bg-muted p-3 rounded max-h-96 overflow-y-auto">
               {restoreLog.length === 0 ? "(空)" : restoreLog.join("\n")}
             </pre>
           </CardContent>
         </Card>
       </section>
 
-      <footer className="text-xs text-slate-500 border-t pt-4 space-y-1">
+      <footer className="text-xs text-muted-foreground border-t pt-4 space-y-1">
         <p>
           ⚠️ 数据源是主机的 databackups 目录, 不在 docker / web 容器内. web 服务必须跑在
           主人机器上才能正常读取.
