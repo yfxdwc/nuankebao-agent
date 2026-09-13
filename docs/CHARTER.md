@@ -1,8 +1,8 @@
 # CHARTER.md — 暖客宝 项目元宪法 (Meta-Constitution)
 
-**版本**: v0.1.2
+**版本**: v0.1.3
 **生效日期**: 2026-09-05
-**修订日期**: 2026-09-07 (v0.1.2 — Mobile-only 阶段, web admin 冻结, 详见 §4.4 + §10.2)
+**修订日期**: 2026-09-13 (v0.1.3 — 底座 + 模块化插件架构, 详见 §4 + ADR-0007)
 **维护者**: mm7 主人 (虾王,飞书 ou_b7dc078b75aa76960a16252688dbe6f9)
 **变更权**: 主人拍板
 **派生层**: 操作层 → [`AGENTS.md`](../../AGENTS.md)
@@ -192,47 +192,85 @@
 
 ## §4. 域划分 (Domain Boundaries)
 
-> 暖客宝项目按**业务域**切分。MVP 早期(W2-3),域边界**软约束**:有架构意图,不强求形式化 API 边界 —— 等 W4 实测后再升级硬约束。
+> 暖客宝项目按"**双域 + 底座 + 模块化插件**"组织 (v0.1.3 主人拍板, ADR-0007)。
+> 两个域定位清晰: **APK 域 = 主产品** (销售员日常用的移动端), **WEB 域 = 开发项目 APK 用的脚手架** (开发 / 预览 / 部署 / 文档)。
+> 每个域内部 = **底座** (不可替换的基建) + **业务模块** (可独立替换/改进的功能单元)。
 
-### 4.1 五大业务域
+### 4.1 总体架构图 (APK 域 + WEB 域)
 
 ```
-┌────────────────────────────────────────────┐
-│              暖客宝 (NuankeBao)              │
-├─────────┬─────────┬──────────┬──────┬───────┤
-│ 客户域  │ 养生域  │ 跟进域   │ AI域 │ 部署域 │
-│Customer │Wellness │ Follow-up│  AI  │ Deploy │
-├─────────┴─────────┴──────────┴──────┴───────┤
-│              认证域 (Auth)  ← 跨域基础        │
-├────────────────────────────────────────────┤
-│              基础设施 (Infra)                 │
-└────────────────────────────────────────────┘
+┌────────────────────────── APK 域 (主产品) ──────────────────────────┐
+│                                                                     │
+│  ┌─ APK 底座 (flutter_app/lib/core/: 不可替换) ────────────────┐   │
+│  │  router / providers / http / theme / models / widgets        │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                              ↑ 复用                                │
+│  ┌─ 业务模块 (flutter_app/lib/modules/: 可独立替换/改进) ─────┐    │
+│  │  • auth        登录                                          │    │
+│  │  • customer    客户档案                                      │    │
+│  │  • wellness    养生记录                                      │    │
+│  │  • follow_up   跟进任务                                      │    │
+│  │  • presentation  图谱(graph) + 列表(list) 合并                │    │
+│  │  • meeting     会议组织 (占位)                                │    │
+│  │  • relation ★  客户/加盟关系 (接口 + 默认实现, 可替换)         │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────── WEB 域 (脚手架) ──────────────────────────┐
+│                                                                     │
+│  ┌─ WEB 底座 (Next.js 15 + shadcn + Tailwind + Route Handlers) ─┐  │
+│  │  App Router + shadcn/ui + Tailwind + Drizzle API + Auth.js    │  │
+│  └──────────────────────────────────────────────────────────┘   │
+│                              ↑ 服务                                │
+│  ┌─ 开发域模块 (docs/dev-modules/: 文档化视图, 物理位置不动) ───┐  │
+│  │  • task-snapshot    任务快照 (scripts/ + .pi/extensions/)    │  │
+│  │  • references       同类项目借鉴关注 (docs/references.md)    │  │
+│  │  • ui-kit           UI 方案 (components/ui/ + tailwind)      │  │
+│  │  • project-skill    项目 Skill (AGENTS.md + .pi/ + .muse/)   │  │
+│  │  • architecture     架构图 (CHARTER §4 + 生成脚本)            │  │
+│  │  • flutter-preview  APK 预览脚手架 (app-preview/ + preview/)  │  │
+│  │  • deploy           部署脚本 (tools/ + deploy/)              │  │
+│  └──────────────────────────────────────────────────────────┘    │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                              ↓↑
+        ┌──────────────────────────────────────────────┐
+        │  共享基础设施 (后端 API + DB)                  │
+        │  src/lib/ + src/app/api/ + Drizzle schema    │
+        │  + 字段加密 + 审计 + 认证                     │
+        └──────────────────────────────────────────────┘
 ```
 
-| 域 | 职责 | 关键表 (Drizzle) | API 入口 |
+### 4.2 业务域 (按数据视角划分, 横向贯穿 APK 域 + 共享后端)
+
+> 注: 这些业务域**不直接对应目录结构**, 而是数据库 schema 的逻辑分组. 后端 API 按业务域组织 (`src/app/api/<domain>/`), Flutter 业务模块可能横跨多个业务域 (e.g. `modules/customer/` 同时调客户域 + 跟进域的 API).
+
+| 业务域 | 职责 | 关键表 (Drizzle) | API 入口 |
 |---|---|---|---|
 | **客户域** | 客户档案 / 标签 / 画像 | `customers`, `customer_tags` | `/api/customers/*` |
 | **养生域** | 养生记录 / 用料 / 效果 | `wellness_records`, `wellness_items` | `/api/wellness-records/*` |
 | **跟进域** | 跟进任务 / 话术 / 提醒 | `follow_ups`, `reminders` | `/api/follow-ups/*` |
+| **关系域** ★ | 客户/加盟/分销等节点关系 (v0.1.3 新增) | `relations`, `relation_nodes` | `/api/relations/*` |
 | **AI 域** | Copilot / 跟进建议 / 话术生成 | `ai_prompts`, `ai_runs` | `/api/ai/*` |
-| **部署域** | 备份 / 监控 / 部署脚本 | (文件系统) | (脚本) |
 | **认证域** | 手机号验证码 / 角色 | `auth_users`, `auth_sessions` | `/api/auth/*` |
 
-### 4.2 域边界软建议 (W2-3 MVP 早期)
+### 4.3 模块化规则 (v0.1.3 新增)
 
-- **跨域调用走 API**(Route Handler),不准 `lib/customer/db.ts` 直接 join `wellness_records` —— 但同 process 内不强求 DTO 隔离
-- **域内表可以 JOIN**,跨域表走 API 或应用层 join
-- W6 销售内测后,**根据实测违规案例**升级为硬规则(详见 §10.3.1)
+**APK 域** (`flutter_app/lib/modules/<module>/`):
+- 每个业务模块必须有 `screens/` + `providers/` + `README.md`
+- 模块内部 widget / service 可选, 但跨模块**禁止直接 import**, 必须走 `core/` 底座
+- 模块改进时**不影响其他模块**, 通过 `core/` 接口对接
 
-### 4.3 前端策略 (apk-first, 2026-09-04 主人拍)
+**WEB 域** (`docs/dev-modules/*.md`):
+- 物理位置维持现状 (`scripts/` + `docs/` + `.pi/` + `tools/` + `deploy/`), 不强制迁移
+- 每个开发模块在 `docs/dev-modules/<name>.md` 有 README (职责 / 物理位置 / 扩展指南)
+- 主人 review 时检查新模块是否同步 `docs/dev-modules/`
 
-| 功能类型 | 入口 | 同步策略 |
-|---|---|---|
-| 销售侧 (录入/拍照/跟进/客户详情) | **Flutter APK** (`flutter_app/`) | 主 |
-| 后端 / API 改动 | **flutter-only-sync** (v0.1.2 起, 详见 §4.4) | Flutter service 必同步; web admin client 暂停 |
-| 纯管理 (报表/导入/审计/团队管理) | **Next.js admin web** (`src/app/admin/`) | 次 |
-
-> **当前阶段**: Mobile-only (v0.1.2 起)。§4.4 定义冻结 / 解冻规则。
+**客户/加盟关系模块** ★ (v0.1.3 重点, ADR-0007 §详细方案):
+- 接口: `RelationSystem` abstract class (7 方法: `name` / `getGraph` / `addRelation` / `removeRelation` / `findPaths` / `getNode` / `getChildren`)
+- 默认实现: `FranchiseRelationSystem implements RelationSystem`
+- 未来切换: 主人想换「分销」「会员等级」「上下级」等关系系统时, 新建 `XxxRelationSystem implements RelationSystem`, 改 `relationSystemProvider` 默认值, **调用方零改动**
 
 ### 4.4 Mobile-Only 阶段章程 (v0.1.2 拍板)
 
@@ -464,7 +502,8 @@
 |---|---|---|---|
 | v0.1.0 | 2026-09-05 | 已废 | 首次拍板,主人 add-charter 选项拍板 |
 | v0.1.1 | 2026-09-05 | 已废 | 去除 sales-ai 过度借鉴 (8 项),见 §10.2 |
-| v0.1.2 | 2026-09-07 | **生效** | Mobile-only 阶段: web admin freeze-keep + flutter-only-sync + master-decide 解冻,见 §4.4 + ADR-0005 |
+| v0.1.2 | 2026-09-07 | 已废 | Mobile-only 阶段: web admin freeze-keep + flutter-only-sync + master-decide 解冻,见 §4.4 + ADR-0005 |
+| v0.1.3 | 2026-09-13 | **生效** | 底座 + 模块化插件架构: APK 域分 `core/` 底座 + `modules/` 业务模块 / WEB 域分 WEB 底座 + `dev-modules/` 文档化视图 / 客户/加盟关系抽 `RelationSystem` 接口 / 9 阶段渐进迁移,见 §4 + ADR-0007 |
 
 ### 10.2 变更记录
 
@@ -473,10 +512,14 @@
 | 2026-09-05 | v0.1.0 | 新增 | mm7 主人拍板 | 首次创建,补齐 AGENTS.md 之上无元宪法 |
 | 2026-09-05 | v0.1.1 | 修订 | mm7 主人拍板 | 8 项去过度借鉴: §5.1 决策 5→3 层 / §5.2 ask 7→3 条 / §5.3 Plan 5→3 段(软建议) / §6.1 法规 5→3 条 / §7 反模式三大根因删除 / §8 Phase 2/3 列表删除 / §9 文档审查频率删除 / §10.3 代码引用删除 |
 | 2026-09-07 | v0.1.2 | 修订 | mm7 主人拍板 | Mobile-only 阶段: §4.3 后端同步 auto-both → flutter-only-sync / 新增 §4.4 freeze-keep + master-decide 解冻 / §7 W2-3 / W4 重点调整; 配套 ADR-0005 |
+| 2026-09-13 | v0.1.3 | 修订 | mm7 主人拍板 | 底座 + 模块化插件架构: §4 重写 (五大业务域 → 双域 + 底座 + 模块化插件) / §4.1 加架构图 (APK 域 vs WEB 域) / §4.2 业务域横向贯穿说明 / §4.3 模块化规则 (★ 客户/加盟关系 RelationSystem 接口) / §4.4 保留 v0.1.2 Mobile-Only / §10.3 加 ADR-0007 触发项; 配套 ADR-0007 |
 
 ### 10.3 待办
 
-- [ ] 等 W6 销售内测通过后,回头修订 §4 域边界(AI 域细化 + 实际边界图,见 §10.3.1)
+- [x] **2026-09-13 v0.1.3 §4 重写完成** — 底座 + 模块化插件架构落地 (主人 ask_user 4 项拍板 + ADR-0007)
+- [ ] **Phase 1-7 渐进迁移** (per ADR-0007 §实施路线图): auth / customer / wellness / follow_up / presentation / relation ★ / meeting, 一次一个模块 + 单模块 commit
+- [ ] **Phase 8-9 文档同步**: docs/dev-modules/ WEB 域文档化视图 + AGENTS.md §4 文件组织实地更新
+- [ ] 等 W6 销售内测通过后,回头修订 §4.2 业务域(AI 域细化 + 关系域接口契约,见 §10.3.1)
 - [ ] 等 Phase 1 完成后补 §6.2 健康数据实际合规清单
 - [ ] Phase 3 SaaS 化前补 GDPR + 等保 2 级(回到 §6.1)
 

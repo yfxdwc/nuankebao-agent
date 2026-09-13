@@ -2,6 +2,108 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.0] - 2026-09-13
+
+### 🏗️ 底座 + 模块化插件架构重构基线 (v0.1.3 元宪法)
+
+**背景**: W2-3 阶段 Flutter 移动端开发过程中, 项目暴露了三大结构性问题:
+1. **APK 域模块边界缺失** — `flutter_app/lib/screens/` 目录平铺 12 个 screen, 包括 franchisee_* (加盟关系) 与 customers_page (客户档案) 等不同业务线混合在一起
+2. **客户/加盟关系耦合在 customer 业务中** — 3 个 franchisee screen 与 customer 直接耦合, 没有抽象为可替换的关系系统
+3. **WEB 域职责不清** — 7 个开发域模块 (任务快照/借鉴关注/UI 方案/项目 Skill/架构图/APK 预览/部署脚本) 散落在 scripts/ + docs/ + .pi/ + tools/ + deploy/ 多个物理目录, 没有统一模块清单
+
+主人 2026-09-13 ask_user 4 项拍板 + 落 ADR-0007, 引入"**双域 + 底座 + 模块化插件**"架构:
+
+| 维度 | 拍板 | 落地 |
+|---|---|---|
+| WEB 域模块清单 | all_7 (全部) | task-snapshot / references / ui-kit / project-skill / architecture / flutter-preview / deploy |
+| APK 域模块清单 | merge_graph_list | auth / customer / wellness / follow_up / **presentation (graph+list 合并)** / meeting / **relation** |
+| 客户/加盟关系抽象 | abstract_now | `RelationSystem` abstract class + `FranchiseRelationSystem` 默认实现, 调用方走接口 |
+| 实施节奏 | incremental | 9 阶段渐进迁移 (Phase 0-9), 一次一个模块 + 单模块 commit |
+
+### Added (架构基线)
+
+- **`docs/adr/0007-modular-architecture.md`** (~10 KB) — 完整架构决策记录: 总架构图 + 模块清单 + RelationSystem 接口设计 + 9 阶段实施路线图 + 风险评估 + 候选对比
+- **`docs/CHARTER.md`** 升 v0.1.3:
+  - §4 重写: "五大业务域" → "双域 + 底座 + 模块化插件" 两段式
+  - §4.1 总架构图: APK 域 (主产品) + WEB 域 (脚手架) + 共享基础设施
+  - §4.2 业务域横向贯穿说明 (按数据视角, 不直接对应目录结构)
+  - §4.3 模块化规则 (★ 客户/加盟关系 RelationSystem 接口)
+  - §4.4 保留 v0.1.2 Mobile-Only 章程 (冻结规则不变)
+  - §10.1 版本表 +1 行 (v0.1.3 生效)
+  - §10.2 变更记录 +1 行 (2026-09-13)
+  - §10.3 待办重写 (Phase 1-7 渐进迁移 + Phase 8-9 文档同步)
+- **`AGENTS.md` §4 重写**:
+  - 标题改为 "v0.1.3 底座 + 模块化插件"
+  - 文件树增加 `flutter_app/lib/core/` + `flutter_app/lib/modules/` (APK 域)
+  - 文件树增加 `docs/dev-modules/` (WEB 域文档化视图)
+  - `docs/adr/` 标到 0007
+  - 新增 §4.5 模块化约束 (APK 域规则 + WEB 域规则 + 客户/加盟关系模块接口)
+  - 新增 §4.6 渐进迁移路线 (Phase 0-9 状态表 + 每 Phase DoD)
+- **`CHANGELOG.md` [0.5.0]** (本条目)
+
+### 设计要点
+
+**1. APK 域物理模块化**:
+```
+flutter_app/lib/
+├── core/                  ← ★ 底座 (不可替换)
+│   ├── router/  providers/  http/  theme/  models/  widgets/
+└── modules/               ← ★ 业务模块 (可独立替换/改进)
+    ├── auth/  customer/  wellness/  follow_up/
+    ├── presentation/      ← 图谱 + 列表合并
+    ├── meeting/           ← 占位
+    └── relation/          ← ★ 客户/加盟关系
+```
+
+**2. WEB 域文档化视图**:
+- 物理位置维持现状 (`scripts/` + `docs/` + `.pi/` + `tools/` + `deploy/`)
+- `docs/dev-modules/*.md` 作为软约束视图
+- 新增开发模块时同步 README + 更新索引
+
+**3. 客户/加盟关系模块 ★ 重点**:
+```dart
+// flutter_app/lib/modules/relation/lib/relation_system.dart
+abstract class RelationSystem {
+  String get name;
+  Future<List<RelationNode>> getGraph(String rootId);
+  Future<void> addRelation({required String fromId, required String toId, required RelationType type});
+  Future<void> removeRelation({required String fromId, required String toId});
+  Future<List<RelationPath>> findPaths({required String fromId, required String toId});
+  Future<RelationNode?> getNode(String nodeId);
+  Future<List<RelationNode>> getChildren(String parentId);
+}
+
+class FranchiseRelationSystem implements RelationSystem { ... }
+// 未来: class DistributionRelationSystem implements RelationSystem { ... }
+```
+
+**4. 实施节奏 (per ADR-0007 §实施路线图)**:
+- Phase 0 (0.5 天): 架构基线文档 ✅ 当前
+- Phase 1-7 (5 天): auth / customer / wellness / follow_up / presentation / relation★ / meeting 渐进迁移
+- Phase 8-9 (1.5 天): docs/dev-modules/ + 实地更新收尾
+
+### 验证
+
+- ✅ `docs/CHARTER.md` §4 含完整架构图 (APK 域 + WEB 域 + 共享基础设施)
+- ✅ `docs/CHARTER.md` §10.1 含 v0.1.3 行
+- ✅ `AGENTS.md` §4 标题 "v0.1.3 底座 + 模块化插件"
+- ✅ `AGENTS.md` §4.5 模块化约束 + §4.6 渐进迁移路线
+- ✅ `docs/adr/0007-modular-architecture.md` ~10 KB, 含 9 阶段路线图 + RelationSystem 接口设计
+- ⏳ Phase 1-7 代码迁移待执行 (主人拍板节奏, 一次一个模块)
+
+### 不变
+
+- ❄ `src/app/admin/` + `src/components/business/` + `src/components/admin/` 仍冻结 (CHARTER §4.4 freeze-keep)
+- ❄ `flutter_app/lib/screens/` 等旧文件: Phase 1-7 渐进迁移, 暂留 `_deprecated/` 目录
+
+### 后续行动
+
+- [ ] 主人 review 本条目 + CHARTER v0.1.3 + AGENTS §4
+- [ ] Phase 1: `modules/auth/` 迁移 (主人拍节奏后开始)
+- [ ] Phase 6: `modules/relation/` 抽接口 (★ 重点, 必须加单测)
+
+---
+
 ## [0.4.2] - 2026-09-12
 
 ### 🔧 /app-preview 登录连不上后端 (Flutter web API base URL 写错 IP)

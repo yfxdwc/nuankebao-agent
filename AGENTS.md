@@ -84,46 +84,58 @@
 - ❌ **不要用 AGPL 协议的底座** — 未来 SaaS 会被卡脖子
 - ❌ **不要用 OpenAI API 直连** — 数据出境风险, MiniMax / 通义 替代
 
-## §4. 文件组织约定 (MVP 阶段单层) (CHARTER §4 域边界)
+## §4. 文件组织约定 (v0.1.3 底座 + 模块化插件) (CHARTER §4 域划分)
+
+> **架构定位 (v0.1.3)**: 项目按"**双域 + 底座 + 模块化插件**"组织。
+> - **APK 域** = 主产品 (销售员日常用的移动端), 物理位置 `flutter_app/lib/`
+> - **WEB 域** = 开发项目 APK 用的脚手架 (开发 / 预览 / 部署 / 文档), 物理位置 `src/` + 周边
+> 每个域内部 = **底座** (不可替换) + **业务模块** (可独立替换/改进)
+> 详见 [`docs/CHARTER.md`](docs/CHARTER.md) §4 + [`docs/adr/0007-modular-architecture.md`](docs/adr/0007-modular-architecture.md)
 
 ```
-nuankebao-agent/                              ← v0.1.2 mobile-only 阶段
-├── flutter_app/                ← ✅ 活跃 (主战场, §4.4.4)
+nuankebao-agent/                              ← v0.1.3 底座 + 模块化插件
+├── flutter_app/                ← ✅ 活跃 (APK 域 = 主产品)
 │   ├── lib/
-│   │   ├── screens/            ← 12 个 Flutter screen (auth/customers/wellness/follow_ups/interactions/ai/reports/dashboard)
-│   │   ├── services/           ← Dio API client + auth/customer/wellness/follow_up/ai/photo services
-│   │   ├── models/             ← freezed 数据类
-│   │   ├── providers/          ← Riverpod state
-│   │   ├── router/             ← go_router
-│   │   └── theme/              ← 养生绿 Material 3
+│   │   ├── core/               ← ★ APK 底座 (不可替换)
+│   │   │   ├── router/         ← go_router 配置
+│   │   │   ├── providers/      ← 共享 Riverpod providers
+│   │   │   ├── http/           ← dio + 拦截器
+│   │   │   ├── theme/          ← Material 3 养生绿
+│   │   │   ├── models/         ← 共享 freezed models
+│   │   │   └── widgets/        ← 共享 widgets
+│   │   ├── modules/            ← ★ 业务模块 (可独立替换/改进)
+│   │   │   ├── auth/           ← 登录
+│   │   │   ├── customer/       ← 客户档案
+│   │   │   ├── wellness/       ← 养生记录
+│   │   │   ├── follow_up/      ← 跟进任务
+│   │   │   ├── presentation/   ← 图谱(graph) + 列表(list) 合并
+│   │   │   ├── meeting/        ← 会议组织 (占位)
+│   │   │   └── relation/       ← ★ 客户/加盟关系 (接口 + 默认实现)
+│   │   ├── app.dart / main.dart
+│   │   └── _deprecated/        ← 旧文件暂存, 待 Phase 1-7 迁移完后清理
 │   └── android/                ← APK 构建产物
-├── deploy/                     ← ✅ 活跃 (项目级运维 + 备份, dev-domain-backup SOP)
+├── deploy/                     ← ✅ 活跃 (dev-modules/deploy 物理位置)
 │   ├── backup.sh               ← 工业级备份 (PG + Media + GPG + 异地 + GFS)
 │   ├── code_snapshot.sh        ← 代码快照 (dirty + untracked → 外置盘)
 │   ├── restore_verify.sh       ← PG 月度演练 (decrypt → temp PG → 行数比对)
 │   ├── install-systemd.sh      ← 一键装 systemd user timers + enable
 │   ├── README.md               ← §10 备份 SOP 落地文档
 │   └── systemd/                ← 6 个 unit (3 对 service+timer)
-│       ├── nuankebao-backup.{service,timer}            ← 日 03:00
-│       ├── nuankebao-code-snapshot.{service,timer}     ← 日 04:00
-│       └── nuankebao-restore-verify.{service,timer}    ← 月度 第一周日 04:00
 ├── data/                       ← ⚠ gitignored (backup-key + backup-health + logs)
-├── src/                        ← Next.js (单层, 后期扩 monorepo 再调整)
+├── src/                        ← Next.js (WEB 域 = 脚手架)
 │   ├── app/
 │   │   ├── (auth)/login/       ← ✅ 活跃 (登录页, Flutter + Web 共用)
 │   │   ├── (admin)/            ← ❄ 冻结 (web admin, §4.4.1 仅 P0 fix)
-│   │   │   ├── customers/      ← 客户管理
-│   │   │   ├── wellness-records/ ← 养生记录
-│   │   │   ├── follow-ups/     ← 跟进任务
-│   │   │   └── reports/        ← 报表
-│   │   └── api/                ← ✅ 活跃 (Route Handlers, Flutter 消费)
+│   │   ├── api/                ← ✅ 活跃 (Route Handlers, Flutter 消费)
+│   │   ├── app-preview/        ← ✅ 活跃 (dev-modules/flutter-preview)
+│   │   └── preview/            ← ✅ 活跃 (dev-modules/flutter-preview)
 │   ├── components/
-│   │   ├── ui/                 ← shadcn 基础组件
-│   │   ├── business/           ← ❄ 冻结 (web 业务组件 12 个)
+│   │   ├── ui/                 ← ✅ 活跃 (dev-modules/ui-kit)
+│   │   ├── business/           ← ❄ 冻结 (web admin 业务组件 12 个)
 │   │   ├── admin/              ← ❄ 冻结 (sidebar/topbar/bottom-tab)
 │   │   ├── auth/               ← ✅ 活跃 (login-form, Flutter 同步)
-│   │   └── preview/            ← ✅ 活跃 (手机真机预览 iframe)
-│   ├── lib/                    ← ✅ 活跃 (业务逻辑)
+│   │   └── preview/            ← ✅ 活跃 (dev-modules/flutter-preview)
+│   ├── lib/                    ← ✅ 活跃 (共享后端业务逻辑)
 │   │   ├── db/                 ← Drizzle schema + migrations
 │   │   ├── ai/                 ← MiniMax wrapper + prompt 模板
 │   │   ├── crypto/             ← pgcrypto 字段加密封装
@@ -139,13 +151,30 @@ nuankebao-agent/                              ← v0.1.2 mobile-only 阶段
 │   └── logs/                           ← backup.log / code-snapshot.log / restore-verify.log
 ├── /media/tooyan/<盘符>/nuankebao-*    ← ⚠ 异地盘副本 (3-2-1 异地策略, AGENTS §6.1; 当前 dev 机器未挂载, 路径待补)
 ├── tests/                              ← ✅ 活跃 (Vitest + Playwright)
-├── docs/                       ← 设计文档 + ADR
-│   ├── adr/                    ← 架构决策记录 (0001-0005)
-│   ├── CHARTER.md              ← 元宪法 (v0.1.2)
+├── docs/                       ← ✅ 活跃 (设计文档 + ADR + dev-modules 文档化视图)
+│   ├── adr/                    ← 架构决策记录 (0001-0007)
+│   │   ├── 0001-tech-stack.md
+│   │   ├── 0002-data-model.md
+│   │   ├── 0003-flutter-dev-workflow.md
+│   │   ├── 0004-schema-evolution.md
+│   │   ├── 0005-mobile-only-phase.md
+│   │   └── 0007-modular-architecture.md  ← ★ 新增 (本架构)
+│   ├── dev-modules/            ← ★ WEB 域开发模块文档化视图 (Phase 8 创建)
+│   │   ├── README.md           ← 总入口 + 模块清单
+│   │   ├── task-snapshot.md    ← scripts/ + .pi/extensions/
+│   │   ├── references.md       ← docs/references.md
+│   │   ├── ui-kit.md           ← components/ui/ + tailwind
+│   │   ├── project-skill.md    ← AGENTS.md + .pi/ + .muse/
+│   │   ├── architecture.md     ← CHARTER §4 + 架构图生成脚本
+│   │   ├── flutter-preview.md  ← src/app/{app-preview,preview}/ + components/preview/
+│   │   └── deploy.md           ← tools/ + deploy/ + systemd
+│   ├── CHARTER.md              ← 元宪法 (v0.1.3)
 │   ├── data-model.md           ← 数据模型详细
 │   ├── phase-1-mvp.md          ← Phase 1 实施计划
 │   └── security-compliance.md  ← 安全合规方案
-├── tools/                      ← 脚本 (backup / deploy / env-check / check-migration-compat)
+├── tools/                      ← 脚本 (dev-modules/deploy 物理位置 + env-check + check-migration-compat)
+├── scripts/                    ← ✅ 活跃 (dev-modules/task-snapshot 物理位置)
+│   └── task-snapshot.sh        ← 任务级快照 (start/list/find/diff/rollback)
 ├── docker/                     ← Docker 配置
 │   ├── docker-compose.yml
 │   ├── Dockerfile
@@ -157,6 +186,48 @@ nuankebao-agent/                              ← v0.1.2 mobile-only 阶段
 ├── next.config.ts
 └── AGENTS.md
 ```
+
+### §4.5 模块化约束 (CHARTER §4.3 模块化规则)
+
+**APK 域模块** (`flutter_app/lib/modules/<module>/`):
+- ✅ **必须有**: `screens/` + `providers/` + `README.md`
+- ⚠ **可选**: `widgets/` + `services/` (模块私有)
+- ❌ **禁止**: 跨模块直接 import — 必须走 `core/` 底座接口
+- ❌ **禁止**: 把业务逻辑写在 `core/` — `core/` 只放基建
+
+**WEB 域开发模块** (物理位置不动, 文档化视图 `docs/dev-modules/<name>.md`):
+- ✅ **模块清单已锁定** (7 个, per ADR-0007): task-snapshot / references / ui-kit / project-skill / architecture / flutter-preview / deploy
+- ✅ **新增模块时**: 同步 `docs/dev-modules/<name>.md` README + 更新 `docs/dev-modules/README.md` 索引
+- ⚠ **物理位置**: 维持现状 (`scripts/` + `docs/` + `.pi/` + `tools/` + `deploy/`), 不强制迁移
+
+**客户/加盟关系模块** ★ (CHARTER §4.3 + ADR-0007 §详细方案):
+- 📁 位置: `flutter_app/lib/modules/relation/`
+- 🔌 接口: `RelationSystem` abstract class (7 方法契约)
+- 🏭 默认实现: `FranchiseRelationSystem implements RelationSystem`
+- 🔄 切换: 改 `relationSystemProvider` 默认值, 调用方零改动
+
+### §4.6 渐进迁移路线 (per ADR-0007 §实施路线图)
+
+| Phase | 模块 | 时间 | 状态 |
+|---|---|---|---|
+| 0 | 架构基线 (CHARTER v0.1.3 + AGENTS §4 + ADR-0007 + CHANGELOG [0.5.0]) | 0.5 天 | 🔄 当前 |
+| 1 | `modules/auth/` | 0.5 天 | ⏳ 待开始 |
+| 2 | `modules/customer/` | 1 天 | ⏳ |
+| 3 | `modules/wellness/` | 1 天 | ⏳ |
+| 4 | `modules/follow_up/` | 0.5 天 | ⏳ |
+| 5 | `modules/presentation/` (graph + list 合并) | 1 天 | ⏳ |
+| 6 | `modules/relation/` ★ (抽接口 + 默认实现) | 1.5 天 | ⏳ |
+| 7 | `modules/meeting/` (占位) | 0.1 天 | ⏳ |
+| 8 | `docs/dev-modules/` WEB 域文档化视图 | 1 天 | ⏳ |
+| 9 | CHARTER §4 / AGENTS §4 实地更新收尾 | 0.5 天 | ⏳ |
+
+**每 Phase DoD**:
+- [ ] `git mv` 历史可追 (`git log --follow <file>` 能查到旧路径)
+- [ ] `flutter build apk` 成功 (Phase 1-7)
+- [ ] 真机验证核心功能 (主人 + 1-2 个测试场景)
+- [ ] 单测通过 (Phase 6 必须有 RelationSystem 单测)
+- [ ] commit message 标注 phase 编号
+
 
 ## §5. 反模式 (前 3 个月踩过的坑) (CHARTER §7 反模式沉淀)
 
