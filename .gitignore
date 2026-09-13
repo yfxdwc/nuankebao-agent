@@ -96,3 +96,10 @@ tools/branding/build/
 tools/branding/**/_tmp/
 # Logo 老版本备份 (git 可选, 但保留节省空间)
 tools/branding/legacy/
+
+# --- 任务级快照机制 (AGENTS §8.1) ---
+# scripts/task-snapshot.sh 在 .git/snapshots/<tag>.diff 兜底 dirty/untracked 文件
+# (ADR 0020 D2). 这些 diff 不能进 git (回滚时才用, 单独 git apply), 否则膨胀.
+# 另: baseline init 时排除 cmdline-tools.zip (2.3KB HTML 文本, 非真 zip)
+.git/snapshots/
+cmdline-tools.zip
