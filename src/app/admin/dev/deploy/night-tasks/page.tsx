@@ -1,5 +1,5 @@
 // ============================================
-// /dev/deploy/night-tasks — 定时任务状态 (借鉴 sales-ai /admin/night-tasks/tasks)
+// /admin/dev/deploy/night-tasks — 定时任务状态 (借鉴 sales-ai /admin/night-tasks/tasks)
 //
 // 列出 3 个 systemd timer:
 //   - nuankebao-backup.timer (每日 03:00)
@@ -161,8 +161,8 @@ export default async function NightTasksPage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
       <DevPageHeader
-        backHref="/dev/deploy"
-        backLabel="返回 /dev/deploy"
+        backHref="/admin/dev/deploy"
+        backLabel="返回 /admin/dev/deploy"
         icon={Clock}
         title="夜间任务"
         description={
@@ -310,8 +310,8 @@ export default async function NightTasksPage() {
         </p>
         <p className="mt-1">
           📊 备份执行结果见{" "}
-          <Link href="/dev/deploy" className="text-primary hover:underline">
-            /dev/deploy
+          <Link href="/admin/dev/deploy" className="text-primary hover:underline">
+            /admin/dev/deploy
           </Link>{" "}
           (atomic JSON).
         </p>

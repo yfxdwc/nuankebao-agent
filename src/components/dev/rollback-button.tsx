@@ -51,7 +51,7 @@ export function RollbackButton({ tag, shortName }: RollbackButtonProps) {
         throw new Error(data.stderr || data.error || `HTTP ${res.status}`);
       }
       alert(`✅ 回滚成功\n\nstdout:\n${data.stdout}\n\nstderr:\n${data.stderr}`);
-      router.push("/dev/snapshot");
+      router.push("/admin/dev/snapshot");
       router.refresh();
     } catch (e) {
       setError((e as Error).message);

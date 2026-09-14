@@ -1,5 +1,5 @@
 // ============================================
-// /dev/deploy/systemd — systemd units 详情 (借鉴 sales-ai /admin/night-tasks)
+// /admin/dev/deploy/systemd — systemd units 详情 (借鉴 sales-ai /admin/night-tasks)
 //
 // 数据源: deploy/systemd/ 模板 + systemctl --user status (实时)
 // 主人 v0.1.4 拍板 C 选项 (借鉴 sales-ai)
@@ -155,8 +155,8 @@ export default async function SystemdPage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
       <DevPageHeader
-        backHref="/dev/deploy"
-        backLabel="返回 /dev/deploy"
+        backHref="/admin/dev/deploy"
+        backLabel="返回 /admin/dev/deploy"
         icon={Settings}
         title="systemd Units"
         description={

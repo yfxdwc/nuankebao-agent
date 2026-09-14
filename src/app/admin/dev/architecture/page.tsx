@@ -1,5 +1,5 @@
 // ============================================
-// /dev/architecture — 渲染 CHARTER §4.1 ASCII 文字图为 mermaid SVG
+// /admin/dev/architecture — 渲染 CHARTER §4.1 ASCII 文字图为 mermaid SVG
 //
 // ★ v0.1.3 架构重点: 主人 2026-09-13 拍板 key_modules_ui
 // 这里把当前 docs/CHARTER.md §4.1 ASCII 架构图渲染成可视化的 mermaid SVG.
@@ -47,7 +47,7 @@ flowchart TB
       WCORE_S["shadcn/ui + Tailwind"]
       WCORE_A["Drizzle API + Auth.js"]
     end
-    subgraph WDEVS["开发域模块 (docs/dev-modules/)<br/>文档化视图"]
+    subgraph WDEVS["开发域模块 (docs/admin/dev-modules/)<br/>文档化视图"]
       W_TASK["task-snapshot"]
       W_REFS["references"]
       W_UI["ui-kit"]
@@ -56,7 +56,7 @@ flowchart TB
       W_PREV["flutter-preview"]
       W_DEPLOY["deploy"]
     end
-    WDEVS_UI["/dev/<br/>3 个 UI 入口<br/>(架构/部署/快照)"]
+    WDEVS_UI["/admin/dev/<br/>3 个 UI 入口<br/>(架构/部署/快照)"]
   end
 
   subgraph SHARED["共享基础设施 (后端 API + DB)"]
@@ -85,7 +85,7 @@ flowchart TB
 // Phase 8 文档化视图说明
 const documentationPages = [
   {
-    href: "/docs/dev-modules/README.md",
+    href: "/docs/admin/dev-modules/README.md",
     title: "WEB 域 7 模块 README 索引",
     desc: "总入口 + 模块清单 + 维护 SOP",
   },
@@ -111,9 +111,9 @@ export default function ArchitecturePage() {
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
       <div className="mb-6">
         <Button variant="ghost" size="sm" asChild className="mb-3">
-          <Link href="/dev">
+          <Link href="/admin/dev">
             <ArrowLeft className="size-4 mr-1" />
-            返回 /dev
+            返回 /admin/dev
           </Link>
         </Button>
 

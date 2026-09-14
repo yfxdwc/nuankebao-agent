@@ -1,5 +1,5 @@
 // ============================================
-// /dev/snapshot/[tag] — 单个 snapshot 详情 + rollback 按钮
+// /admin/dev/snapshot/[tag] — 单个 snapshot 详情 + rollback 按钮
 // ============================================
 
 import Link from "next/link";
@@ -95,9 +95,9 @@ export default async function SnapshotDetailPage({ params }: PageProps) {
     <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
       <div className="mb-6">
         <Button variant="ghost" size="sm" asChild className="mb-3">
-          <Link href="/dev/snapshot">
+          <Link href="/admin/dev/snapshot">
             <ArrowLeft className="size-4 mr-1" />
-            返回 /dev/snapshot
+            返回 /admin/dev/snapshot
           </Link>
         </Button>
 

@@ -1,5 +1,5 @@
 // ============================================
-// /dev/architecture/c4 — C4 模型架构图 (借鉴 sales-ai /admin/dev-architecture/c4)
+// /admin/dev/architecture/c4 — C4 模型架构图 (借鉴 sales-ai /admin/dev-architecture/c4)
 //
 // C4 4 层:
 // 1. System Context (外部用户/系统)
@@ -118,7 +118,7 @@ flowchart TB
     PRES_MOD["presentation<br/>(graph+list)"]
   end
 
-  subgraph WEB_COMP["WEB 域 7 模块 (docs/dev-modules/)"]
+  subgraph WEB_COMP["WEB 域 7 模块 (docs/admin/dev-modules/)"]
     TASK_MOD["task-snapshot"]
     REF_MOD["references"]
     UI_MOD["ui-kit"]
@@ -217,8 +217,8 @@ export default function C4ArchitecturePage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
       <DevPageHeader
-        backHref="/dev/architecture"
-        backLabel="返回 /dev/architecture"
+        backHref="/admin/dev/architecture"
+        backLabel="返回 /admin/dev/architecture"
         icon={Network}
         title="C4 架构图"
         description={
@@ -289,10 +289,10 @@ export default function C4ArchitecturePage() {
         <p>
           ⚠️ 这是 mermaid 渲染版本. 文字版见{" "}
           <Link
-            href="/dev/architecture"
+            href="/admin/dev/architecture"
             className="text-primary hover:underline"
           >
-            /dev/architecture
+            /admin/dev/architecture
           </Link>{" "}
           (CHARTER §4.1 总架构图).
         </p>

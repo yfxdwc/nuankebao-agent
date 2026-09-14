@@ -1,5 +1,5 @@
 // ============================================
-// /dev/deploy/backups — 备份详情 (借鉴 sales-ai /admin/night-tasks/reports)
+// /admin/dev/deploy/backups — 备份详情 (借鉴 sales-ai /admin/night-tasks/reports)
 //
 // 数据源: /home/tooyan/nuankebao-databackups/{pg-backups,media,offsite}/
 // 显示: 本地 vs 异地对比, GFS 副本数, 还原演练状态
@@ -186,8 +186,8 @@ export default async function BackupsPage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
       <DevPageHeader
-        backHref="/dev/deploy"
-        backLabel="返回 /dev/deploy"
+        backHref="/admin/dev/deploy"
+        backLabel="返回 /admin/dev/deploy"
         icon={Database}
         title="备份详情"
         description={
@@ -269,10 +269,10 @@ export default async function BackupsPage() {
               <li>
                 📊 GFS 副本数 &lt; 7 → 警告, 详见{" "}
                 <Link
-                  href="/dev/deploy"
+                  href="/admin/dev/deploy"
                   className="text-primary hover:underline"
                 >
-                  /dev/deploy
+                  /admin/dev/deploy
                 </Link>{" "}
                 总览
               </li>

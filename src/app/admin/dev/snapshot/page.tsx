@@ -1,5 +1,5 @@
 // ============================================
-// /dev/snapshot — 任务快照列表
+// /admin/dev/snapshot — 任务快照列表
 //
 // 主人 2026-09-13 拍板 key_modules_ui (3 个关键 UI 之三).
 // 列出最近 10 个 pre-* git tag + diff/rollback 链接.
@@ -41,7 +41,7 @@ interface SnapshotTag {
 }
 
 // 同步 import (不用 dynamic import, Next.js dev mode dynamic import 在 server component
-// 里偶尔卡住导致 30s+ 超时, per 2026-09-13 主人反馈 /dev/snapshot 没渲染)
+// 里偶尔卡住导致 30s+ 超时, per 2026-09-13 主人反馈 /admin/dev/snapshot 没渲染)
 const execFileAsync = promisify(execFile);
 
 async function fetchSnapshots(): Promise<SnapshotTag[]> {
@@ -88,9 +88,9 @@ export default async function SnapshotListPage() {
     <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
       <div className="mb-6">
         <Button variant="ghost" size="sm" asChild className="mb-3">
-          <Link href="/dev">
+          <Link href="/admin/dev">
             <ArrowLeft className="size-4 mr-1" />
-            返回 /dev
+            返回 /admin/dev
           </Link>
         </Button>
 
@@ -128,7 +128,7 @@ export default async function SnapshotListPage() {
           {snapshots.map((s) => (
             <Link
               key={s.name}
-              href={`/dev/snapshot/${encodeURIComponent(s.name)}`}
+              href={`/admin/dev/snapshot/${encodeURIComponent(s.name)}`}
               className="block group"
             >
               <Card className="hover:shadow-md hover:border-border transition-all">
@@ -173,7 +173,7 @@ export default async function SnapshotListPage() {
           </a>{" "}
           顶部注释, 借鉴自 sales-ai (per{" "}
           <a
-            href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/dev-modules/task-snapshot.md"
+            href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/admin/dev-modules/task-snapshot.md"
             className="text-blue-600 hover:underline"
             target="_blank"
             rel="noreferrer"

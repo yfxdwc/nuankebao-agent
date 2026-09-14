@@ -1,5 +1,5 @@
 // ============================================
-// /dev/architecture/modules — APK 域 7 模块依赖图 (借鉴 sales-ai /admin/dev-architecture/modules)
+// /admin/dev/architecture/modules — APK 域 7 模块依赖图 (借鉴 sales-ai /admin/dev-architecture/modules)
 //
 // 自动从 flutter_app/lib/modules/ 解析:
 // - 7 模块状态 (screens / widgets / lib 数量)
@@ -270,8 +270,8 @@ export default async function ModulesArchitecturePage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
       <DevPageHeader
-        backHref="/dev/architecture"
-        backLabel="返回 /dev/architecture"
+        backHref="/admin/dev/architecture"
+        backLabel="返回 /admin/dev/architecture"
         icon={Package}
         title="APK 模块依赖图"
         description={
@@ -410,8 +410,8 @@ export default async function ModulesArchitecturePage() {
         </p>
         <p>
           {"⚠️ 这是源码静态分析 (import 关系), 不是运行时调用图. 真运行时数据流见 "}
-          <Link href="/dev/architecture" className="text-primary hover:underline">
-            /dev/architecture
+          <Link href="/admin/dev/architecture" className="text-primary hover:underline">
+            /admin/dev/architecture
           </Link>
           {"."}
         </p>

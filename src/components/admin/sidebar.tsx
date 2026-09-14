@@ -18,10 +18,11 @@ const navItems = [
 ];
 
 // 主人 2026-09-14 override 拍板 (v0.1.4 master-decide, AGENTS §3 反模式“mobile-only 阶段加 web admin 新功能” 主人在此场景显式拍板例外):
-// 在 admin 侧栏加 /dev 入口, 让主人一键从销售员产品 admin 跳到开发工具门户. 不影响 /admin/* 冻结规则的其他页
-// - /dev 本身是活跃域 (per ADR-0008 §6), 不是新页面, 只是侧栏入口
+// 在 admin 侧栏加 /admin/dev 入口, 让主人一键从销售员产品 admin 跳到开发工具门户. 不影响 /admin/* 冻结规则的其他页
+// - /dev 工具门户在 v0.1.4 已迁到 /admin/dev/ (物理位置: src/app/admin/dev/), 这里 href 同步更新
+// - /dev 老 URL 重定向到 /admin/dev (per src/app/dev/page.tsx)
 // - 定位: “工具”类别, 区别于 8 个产品 nav, 视觉上分隔
-const toolNavItem = { href: "/dev", label: "开发工具", icon: Wrench };
+const toolNavItem = { href: "/admin/dev", label: "开发工具", icon: Wrench };
 
 export function AdminSidebar() {
   const pathname = usePathname();
@@ -60,7 +61,7 @@ export function AdminSidebar() {
             </Link>
           );
         })}
-        {/* 工具分隔: 主人 2026-09-14 override, 加 /dev 入口 (v0.1.4 master-decide) */}
+        {/* 工具分隔: 主人 2026-09-14 override, 加 /admin/dev 入口 (v0.1.4 master-decide) */}
         <div className="my-3 border-t border-border/60" aria-hidden="true" />
         {(() => {
           const Icon = toolNavItem.icon;

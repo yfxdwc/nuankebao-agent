@@ -2,7 +2,7 @@
 
 // ============================================
 // Mermaid 渲染器 (client component)
-// 用于 /dev/architecture 渲染 CHARTER §4 文字图
+// 用于 /admin/dev/architecture 渲染 CHARTER §4 文字图
 // mermaid 是 browser-only 库, 必须客户端渲染
 // ============================================
 

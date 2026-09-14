@@ -1,5 +1,5 @@
 // ============================================
-// /dev/architecture/apis — 共享后端 API 列表 (借鉴 sales-ai /admin/dev-architecture/apis)
+// /admin/dev/architecture/apis — 共享后端 API 列表 (借鉴 sales-ai /admin/dev-architecture/apis)
 //
 // 自动从 src/app/api/**/route.ts 解析:
 // - HTTP method (GET/POST/PATCH/DELETE)
@@ -171,8 +171,8 @@ export default async function ApisArchitecturePage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
       <DevPageHeader
-        backHref="/dev/architecture"
-        backLabel="返回 /dev/architecture"
+        backHref="/admin/dev/architecture"
+        backLabel="返回 /admin/dev/architecture"
         icon={Network}
         title="后端 API 列表"
         description={
@@ -308,10 +308,10 @@ export default async function ApisArchitecturePage() {
           ⚠️ 跳过 [...nextauth] catch-all (Auth.js 内部), 不计入 API 列表.
           真实运行时数据见{" "}
           <Link
-            href="/dev/architecture"
+            href="/admin/dev/architecture"
             className="text-primary hover:underline"
           >
-            /dev/architecture
+            /admin/dev/architecture
           </Link>
           .
         </p>

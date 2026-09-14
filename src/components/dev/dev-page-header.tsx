@@ -1,5 +1,5 @@
 // ============================================
-// DevPageHeader — 7 个 /dev/* 子页通用 header (DRY 重构, v0.1.4)
+// DevPageHeader — 7 个 /admin/dev/* 子页通用 header (DRY 重构, v0.1.4)
 //
 // 抽取前: 7 个 page.tsx 各自复制 22 行 header 代码
 // 抽取后: 1 行调用, 改一处生效 7 处

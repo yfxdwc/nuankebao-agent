@@ -1,5 +1,5 @@
 // ============================================
-// /dev/deploy — 部署 + 备份健康 dashboard
+// /admin/dev/deploy — 部署 + 备份健康 dashboard
 //
 // 主人 2026-09-13 拍板 key_modules_ui (3 个关键 UI 之二).
 // 读取 deploy/backup.sh + code_snapshot.sh + restore_verify.sh 输出的
@@ -164,9 +164,9 @@ export default async function DeployDashboardPage() {
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
       <div className="mb-6">
         <Button variant="ghost" size="sm" asChild className="mb-3">
-          <Link href="/dev">
+          <Link href="/admin/dev">
             <ArrowLeft className="size-4 mr-1" />
-            返回 /dev
+            返回 /admin/dev
           </Link>
         </Button>
 
