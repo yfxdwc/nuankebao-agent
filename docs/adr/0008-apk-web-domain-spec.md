@@ -138,10 +138,10 @@ flutter_app/lib/
 | # | 路径 | 状态 | 用途 | 用户 |
 |---|---|---|---|---|
 | 1 | **`/admin/*`** (16 页) | ❄ **冻结** (v0.1.2 freeze-keep) | 销售员产品 web admin (仪表盘 + 客户管理 + 养生记录 + 跟进 + 联系 + 报表 + 导入 + AI + App 下载) | 主人 (历史遗留) |
-| 2 | **`/dev`** (v0.1.3 新) | ✅ 活跃 | 主人开发工具门户 (3 卡片: architecture / deploy / snapshot) | 主人 |
-| 3 | **`/dev/architecture`** | ✅ 活跃 (v0.1.3 新) | 渲染 CHARTER §4.1 文字图为 mermaid SVG | 主人 |
-| 4 | **`/dev/deploy`** | ✅ 活跃 (v0.1.3 新) | 读取 backup-health/*.json 显示备份状态 + PG 备份列表 + 日志 | 主人 |
-| 5 | **`/dev/snapshot`** + `[tag]` | ✅ 活跃 (v0.1.3 新) | 任务快照列表 + 详情 + rollback | 主人 |
+| 2 | **`/admin/dev`** (v0.1.3 新, v0.1.4 迁入 admin) | ✅ 活跃 | 主人开发工具门户 (3 卡片: architecture / deploy / snapshot), 老 /dev URL 重定向到此 | 主人 |
+| 3 | **`/admin/dev/architecture`** | ✅ 活跃 (v0.1.3 新) | 渲染 CHARTER §4.1 文字图为 mermaid SVG | 主人 |
+| 4 | **`/admin/dev/deploy`** | ✅ 活跃 (v0.1.3 新) | 读取 backup-health/*.json 显示备份状态 + PG 备份列表 + 日志 | 主人 |
+| 5 | **`/admin/dev/snapshot`** + `[tag]` | ✅ 活跃 (v0.1.3 新) | 任务快照列表 + 详情 + rollback | 主人 |
 | 6 | **`/app-preview`** | ✅ 活跃 (v0.1.3 维护) | Flutter web 编译产物 iframe 嵌入 (手机端预览) | 主人 |
 | 7 | **`/login`** | ✅ 活跃 | Flutter web + Web 共用登录页 | 销售员 (web 罕见) |
 | 8 | **`/`** (根) | ✅ 重定向 | 重定向到 /admin (或 /login 未登录) | — |
@@ -208,7 +208,7 @@ src/
 | 边界 | 规则 |
 |---|---|
 | APK 域 ↔ WEB 域 | ❌ **不直接互调** — 都通过 /api/* 后端 |
-| WEB 域 /admin/* ↔ /dev/* | ❌ **不互调** — admin 冻结, dev 是新独立模块 |
+| WEB 域 /admin/* ↔ /admin/dev/* | ✅ **同域** — /admin/dev 物理位置在 /admin 下, 侧栏统一导航 (v0.1.4 master-decide 集成); 老 /dev URL 重定向到 /admin/dev |
 | WEB 域 /admin ↔ /app-preview | ❌ **不互调** — admin 是产品, app-preview 是 Flutter web 预览 |
 | WEB 域 /dev ↔ /app-preview | ❌ **不互调** — dev 是工具, app-preview 是预览 |
 | 共享后端 /api/* ↔ 任何域 | ✅ **两域都调** — 这是唯一共享层 |
@@ -285,7 +285,7 @@ src/
 ### 5.3 主人监控备份
 
 ```
-1. 主人浏览器开 https://nuankebao.tooyang.top/dev/deploy
+1. 主人浏览器开 https://nuankebao.tooyang.top/admin/dev/deploy
 2. 看 backup-health/*.json → 上次备份时间 / 状态 / GFS 副本数
 3. 看 backup.log 最近 20 行 → 排错
 4. 不需要登录 ssh
@@ -312,7 +312,7 @@ src/
 | 路径 / 模块 | 状态 | 说明 |
 |---|---|---|
 | WEB /admin/* | ❄ 冻结 (v0.1.2) | 销售员产品 admin web (mobile-only 阶段) |
-| WEB /dev/* | ✅ 活跃 (v0.1.3) | 主人开发工具 |
+| WEB /admin/dev/* | ✅ 活跃 (v0.1.3, v0.1.4 迁入 admin) | 主人开发工具 (master-decide 集成到 admin 侧栏) |
 | WEB /app-preview | ✅ 活跃 (v0.1.3) | Flutter web 预览 |
 | WEB /login | ✅ 活跃 | Flutter + Web 共用 |
 | WEB /api/* | ✅ 活跃 | 后端 API (两域共享) |

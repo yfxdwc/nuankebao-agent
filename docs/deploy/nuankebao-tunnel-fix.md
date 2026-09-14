@@ -142,10 +142,11 @@ curl -s -o /dev/null -w "HTTP %{http_code}\n" --max-time 15 https://nuankebao.to
 
 # 4c. 浏览器访问
 # https://nuankebao.tooyang.top/admin
-# https://nuankebao.tooyang.top/dev                  (★ v0.1.3 新加的 3 个 dev UI)
-# https://nuankebao.tooyang.top/dev/architecture     (mermaid 渲染 CHARTER §4.1)
-# https://nuankebao.tooyang.top/dev/deploy           (备份健康 dashboard)
-# https://nuankebao.tooyang.top/dev/snapshot         (任务快照列表)
+# https://nuankebao.tooyang.top/admin/dev                  (★ v0.1.3 新加的 3 个 dev UI, v0.1.4 迁到 admin 下)
+# https://nuankebao.tooyang.top/admin/dev/architecture     (mermaid 渲染 CHARTER §4.1)
+# https://nuankebao.tooyang.top/admin/dev/deploy           (备份健康 dashboard)
+# https://nuankebao.tooyang.top/admin/dev/snapshot         (任务快照列表)
+# 注: 老 URL /dev/* 在 v0.1.4 自动重定向到 /admin/dev/* (per src/app/dev/page.tsx)
 ```
 
 ---
@@ -183,11 +184,11 @@ bash tools/fix-nuankebao-deploy.sh verify
 ✅ https://nuankebao.tooyang.top/login
 ✅ https://nuankebao.tooyang.top/admin
 ✅ https://nuankebao.tooyang.top/app-preview
-✅ https://nuankebao.tooyang.top/dev                   (★ v0.1.3 新)
-✅ https://nuankebao.tooyang.top/dev/architecture      (★ mermaid 渲染)
-✅ https://nuankebao.tooyang.top/dev/deploy            (★ 备份 dashboard)
-✅ https://nuankebao.tooyang.top/dev/snapshot          (★ 任务快照列表)
-✅ https://nuankebao.tooyang.top/dev/snapshot/pre-...  (★ 详情 + rollback)
+✅ https://nuankebao.tooyang.top/admin/dev                   (★ v0.1.3 新, v0.1.4 迁到 admin 下)
+✅ https://nuankebao.tooyang.top/admin/dev/architecture      (★ mermaid 渲染)
+✅ https://nuankebao.tooyang.top/admin/dev/deploy            (★ 备份 dashboard)
+✅ https://nuankebao.tooyang.top/admin/dev/snapshot          (★ 任务快照列表)
+✅ https://nuankebao.tooyang.top/admin/dev/snapshot/pre-...  (★ 详情 + rollback)
 ```
 
 ---
