@@ -15,6 +15,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import Link from "next/link";
 import { MermaidRenderer } from "@/components/dev/mermaid-renderer";
+import { DevPageHeader } from "@/components/dev/dev-page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -268,40 +269,35 @@ export default async function ModulesArchitecturePage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-      <div className="mb-6">
-        <Button variant="ghost" size="sm" asChild className="mb-3">
-          <Link href="/dev/architecture">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            返回 /dev/architecture
-          </Link>
-        </Button>
-
-        <div className="flex items-center gap-2 mb-2">
-          <Package className="h-7 w-7 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">APK 模块依赖图</h1>
-        </div>
-        <p className="text-muted-foreground">
-          自动从{" "}
-          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-            flutter_app/lib/modules/
-          </code>{" "}
-          解析 7 模块 + core 底座 + 跨模块调用. 借鉴自{" "}
-          <a
-            href="https://github.com/sales-ai/sales-ai/blob/main/web-next/src/app/(dashboard)/admin/dev-architecture/modules/page.tsx"
-            className="text-primary hover:underline"
-            target="_blank"
-            rel="noreferrer"
-          >
-            sales-ai /admin/dev-architecture/modules
-          </a>
-          .
-        </p>
-        <div className="mt-3 flex gap-2 flex-wrap">
-          <Badge variant="outline">v0.1.4</Badge>
-          <Badge variant="secondary">★ 借鉴 sales-ai</Badge>
-          <Badge variant="secondary">auto-parsed from source</Badge>
-        </div>
-      </div>
+      <DevPageHeader
+        backHref="/dev/architecture"
+        backLabel="返回 /dev/architecture"
+        icon={Package}
+        title="APK 模块依赖图"
+        description={
+          <>
+            自动从{" "}
+            <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+              flutter_app/lib/modules/
+            </code>{" "}
+            解析 7 模块 + core 底座 + 跨模块调用. 借鉴自{" "}
+            <a
+              href="https://github.com/sales-ai/sales-ai/blob/main/web-next/src/app/(dashboard)/admin/dev-architecture/modules/page.tsx"
+              className="text-primary hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              sales-ai /admin/dev-architecture/modules
+            </a>
+            .
+          </>
+        }
+        badges={[
+          { label: "v0.1.4", variant: "outline" },
+          { label: "★ 借鉴 sales-ai" },
+          { label: "auto-parsed from source" },
+        ]}
+      />
 
       {/* 模块状态卡 */}
       <section className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

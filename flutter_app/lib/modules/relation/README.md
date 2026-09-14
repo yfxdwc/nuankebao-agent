@@ -55,7 +55,7 @@ class RelationPath {
 | `lib/relation_node.dart` | RelationNode / RelationType / RelationPath 数据类 |
 | `lib/franchise_relation.dart` | FranchiseRelationSystem implements RelationSystem (★ 默认实现) |
 | `lib/relation_system_provider.dart` | `relationSystemProvider` (★ 切换点) |
-| `lib/relation_graph_provider.dart` | `myRelationGraphProvider` / `myFranchiseeTreeViaRelationProvider` (调用方桥接) |
+| `lib/relation_graph_provider.dart` | `myRelationGraphProvider` (Phase 6 后续: 调用方重构后用) |
 
 ## 默认实现: FranchiseRelationSystem
 

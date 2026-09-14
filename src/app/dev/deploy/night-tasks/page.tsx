@@ -16,8 +16,7 @@ import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { DevPageHeader } from "@/components/dev/dev-page-header";
 import {
   Card,
   CardContent,
@@ -25,7 +24,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  ArrowLeft,
   Clock,
   Server,
   Database,
@@ -161,37 +159,31 @@ export default async function NightTasksPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-      <section className="mb-6">
-        <Button variant="ghost" size="sm" asChild className="mb-3">
-          <Link href="/dev/deploy">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            返回 /dev/deploy
-          </Link>
-        </Button>
-
-        <div className="flex items-center gap-2 mb-2">
-          <Clock className="h-7 w-7 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">夜间任务</h1>
-        </div>
-        <p className="text-muted-foreground">
-          3 个 systemd timer 实时状态 (备份 / 代码快照 / 还原演练).
-          借鉴自{" "}
-          <a
-            href="https://github.com/sales-ai/sales-ai/blob/main/web-next/src/app/(dashboard)/admin/night-tasks/tasks/page.tsx"
-            className="text-primary hover:underline"
-            target="_blank"
-            rel="noreferrer"
-          >
-            sales-ai /admin/night-tasks/tasks
-          </a>
-          .
-        </p>
-        <div className="mt-3 flex gap-2 flex-wrap">
-          <Badge variant="outline">v0.1.4</Badge>
-          <Badge variant="secondary">★ 借鉴 sales-ai</Badge>
-          <Badge variant="secondary">systemctl --user list-timers</Badge>
-        </div>
-      </section>
+      <DevPageHeader
+        backHref="/dev/deploy"
+        backLabel="返回 /dev/deploy"
+        icon={Clock}
+        title="夜间任务"
+        description={
+          <>
+            3 个 systemd timer 实时状态 (备份 / 代码快照 / 还原演练). 借鉴自{" "}
+            <a
+              href="https://github.com/sales-ai/sales-ai/blob/main/web-next/src/app/(dashboard)/admin/night-tasks/tasks/page.tsx"
+              className="text-primary hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              sales-ai /admin/night-tasks/tasks
+            </a>
+            .
+          </>
+        }
+        badges={[
+          { label: "v0.1.4", variant: "outline" },
+          { label: "★ 借鉴 sales-ai" },
+          { label: "systemctl --user list-timers" },
+        ]}
+      />
 
       {/* 任务列表 */}
       <section className="mb-8 space-y-4">
