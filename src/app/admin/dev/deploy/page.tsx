@@ -161,7 +161,7 @@ export default async function DeployDashboardPage() {
   const gfsWarn = pgBackupCount < 7 || mediaBackupCount < 7;
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+    <main className="mx-auto max-w-5xl">
       <div className="mb-6">
         <Button variant="ghost" size="sm" asChild className="mb-3">
           <Link href="/admin/dev">

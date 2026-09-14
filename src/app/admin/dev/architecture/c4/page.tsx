@@ -215,7 +215,7 @@ const layers = [
 
 export default function C4ArchitecturePage() {
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+    <main className="mx-auto max-w-5xl">
       <DevPageHeader
         backHref="/admin/dev/architecture"
         backLabel="返回 /admin/dev/architecture"

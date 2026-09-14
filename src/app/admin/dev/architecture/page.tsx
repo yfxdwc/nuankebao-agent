@@ -108,39 +108,7 @@ const documentationPages = [
 
 export default function ArchitecturePage() {
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-      <div className="mb-6">
-        <Button variant="ghost" size="sm" asChild className="mb-3">
-          <Link href="/admin/dev">
-            <ArrowLeft className="size-4 mr-1" />
-            返回 /admin/dev
-          </Link>
-        </Button>
-
-        <div className="flex items-center gap-2 mb-2">
-          <Network className="size-7 text-purple-700" />
-          <h1 className="text-3xl font-bold text-foreground">
-            架构图 (Architecture)
-          </h1>
-        </div>
-        <p className="text-muted-foreground">
-          渲染{" "}
-          <a
-            href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/CHARTER.md#41-总体架构图-apk-域--web-域"
-            className="text-blue-600 hover:underline"
-            target="_blank"
-            rel="noreferrer"
-          >
-            CHARTER.md §4.1
-          </a>{" "}
-          v0.1.3 架构图为可视化的 mermaid SVG.
-        </p>
-        <div className="mt-3 flex gap-2 flex-wrap">
-          <Badge variant="outline">v0.1.3</Badge>
-          <Badge variant="secondary">★ 双域 + 底座 + 模块化插件</Badge>
-        </div>
-      </div>
-
+    <main>
       <section className="mb-10 p-6 bg-white border rounded-lg shadow-sm overflow-x-auto">
         <h2 className="text-lg font-semibold text-foreground mb-4">
           总架构图 (CHARTER §4.1 mermaid 渲染)

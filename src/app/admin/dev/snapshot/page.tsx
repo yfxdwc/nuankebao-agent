@@ -85,7 +85,7 @@ export default async function SnapshotListPage() {
   const snapshots = await fetchSnapshots();
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+    <main className="mx-auto max-w-5xl">
       <div className="mb-6">
         <Button variant="ghost" size="sm" asChild className="mb-3">
           <Link href="/admin/dev">

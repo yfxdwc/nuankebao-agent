@@ -1,20 +1,17 @@
 // ============================================
-// /admin/dev 总入口 — 开发工具门户 (WEB 域脚手架 UI)
-//
-// v0.1.3 主人 ask_user 拍板 key_modules_ui (2026-09-13):
-// 3 个关键 UI: architecture / deploy / task-snapshot.
+// /admin/dev 总览 tab — 开发工具门户首页
 //
 // v0.1.4 主人 2026-09-14 拍板 (master-decide, AGENTS §3 master-override):
-// /dev → /admin/dev 物理位置迁移. 原因: 主人希望在 admin 同域一键打开开发工具,
-// 不切换 React tree. 详见 sidebar.tsx 顶部注释 + CHANGELOG [unreleased].
+// 开发工具子模块以"顶部 tab 导航 + 内容区"方式呈现, 替代原入口卡片.
+// 当前页 = "总览" tab 内容 (其他 tab 在 components/dev/dev-tabs-nav.tsx).
 //
-// 位置: src/app/admin/dev/ (在 admin 域下, 跟其他 8 个产品 nav 平级)
-// - 销售员产品 nav (仪表盘/客户/养生/...) = 冻结
-// - /admin/dev/* = 主人开发工具 UI (master-override 例外, 因不冲突产品功能)
+// Tab 清单 (详见 components/dev/dev-tabs-nav.tsx):
+// - 总览 (本页, /admin/dev)        — 模块卡片列表 + CLI 模块
+// - 架构 (/admin/dev/architecture) — 架构图
+// - 部署 (/admin/dev/deploy)       — 部署 + 备份状态
+// - 快照 (/admin/dev/snapshot)     — 任务快照
 //
-// 老 URL /dev → /admin/dev 重定向 (per src/app/dev/page.tsx)
-//
-// 关联: docs/architecture/v0.1.3-final.md §5.2 WEB 域模块清单
+// 顶部 tab 由 /admin/dev/layout.tsx 注入, 当前页只渲染内容区.
 // ============================================
 
 import Link from "next/link";
@@ -33,22 +30,21 @@ import {
   Terminal,
   BookOpen,
   Package,
-  Eye,
   ServerCog,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
-  title: "开发工具 · 暖客宝",
-  description: "主人自用的开发工具门户 (architecture / deploy / task-snapshot)",
+  title: "开发工具 · 总览 · 暖客宝",
+  description: "主人自用的开发工具门户 (总览 · 架构 · 部署 · 快照)",
 };
 
-// 3 个有 UI 的模块
+// 3 个有 WEB UI 的子模块 — 顶部 tab 直接链到这些
 const implementedModules = [
   {
     href: "/admin/dev/architecture",
     icon: Network,
-    title: "架构图 (Architecture)",
+    title: "架构图",
     description: "渲染 docs/CHARTER.md §4 文字版架构图为 mermaid SVG",
     color: "bg-purple-50 text-purple-700",
     badge: "★ v0.1.3",
@@ -56,7 +52,7 @@ const implementedModules = [
   {
     href: "/admin/dev/deploy",
     icon: Database,
-    title: "部署 + 备份 (Deploy)",
+    title: "部署 + 备份",
     description: "读取 data/backup-health/*.json 显示备份健康状态 + 最近日志",
     color: "bg-green-50 text-green-700",
     badge: null,
@@ -64,7 +60,7 @@ const implementedModules = [
   {
     href: "/admin/dev/snapshot",
     icon: History,
-    title: "任务快照 (Task Snapshot)",
+    title: "任务快照",
     description: "列出 git tag pre-* 历史 + diff 预览 + rollback 按钮",
     color: "bg-amber-50 text-amber-700",
     badge: "⚠ 危险操作",
@@ -77,51 +73,32 @@ const cliOnlyModules = [
     icon: Terminal,
     title: "task-snapshot (CLI)",
     description: "bash scripts/task-snapshot.sh <start|list|find|diff|rollback>",
-    color: "bg-muted text-muted-foreground",
   },
   {
     icon: BookOpen,
     title: "references",
     description: "docs/references.md + 外部项目监控 SOP",
-    color: "bg-muted text-muted-foreground",
   },
   {
     icon: Package,
     title: "ui-kit",
     description: "src/components/ui/ shadcn 组件 (无独立页, 被其他页用)",
-    color: "bg-muted text-muted-foreground",
   },
   {
     icon: ServerCog,
     title: "project-skill",
     description: "AGENTS.md + .pi/settings.json + ~/.muse/skills/",
-    color: "bg-muted text-muted-foreground",
   },
 ];
 
-export default function DevHomePage() {
+export default function DevOverviewPage() {
   return (
-    <div className="mx-auto max-w-5xl">
-      <header className="mb-8">
-        <div className="flex items-center gap-2 mb-2">
-          <Eye className="size-7 text-muted-foreground" />
-          <h1 className="text-3xl font-bold text-foreground">开发工具门户</h1>
-        </div>
-        <p className="text-muted-foreground">
-          暖客宝 WEB 域 (脚手架) 的可视化入口. 仅主人/agent 使用, 不给销售员.
-        </p>
-        <div className="mt-3 flex gap-2 flex-wrap">
-          <Badge variant="outline">v0.1.3 架构重构 (2026-09-13)</Badge>
-          <Badge variant="secondary">CHARTER §4 双域</Badge>
-          <Badge variant="secondary">AGENTS §4.5 模块化</Badge>
-        </div>
-      </header>
-
-      <section className="mb-10">
-        <h2 className="text-lg font-semibold text-foreground mb-4">
-          ✨ 有 WEB UI 的模块 (3 个)
+    <div className="mx-auto max-w-5xl space-y-6 md:space-y-10">
+      <section>
+        <h2 className="text-base md:text-lg font-semibold text-foreground mb-3 md:mb-4">
+          ✨ 子模块 (3 个 · 顶部 tab 进入)
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {implementedModules.map((m) => {
             const Icon = m.icon;
             return (
@@ -142,7 +119,7 @@ export default function DevHomePage() {
                     </div>
                     <CardTitle className="text-base flex items-center gap-1">
                       {m.title}
-                      <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
+                      <ArrowUpRight className="size-4 text-muted-foreground transition-colors" />
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -155,27 +132,27 @@ export default function DevHomePage() {
         </div>
       </section>
 
-      <section className="mb-10">
-        <h2 className="text-lg font-semibold text-foreground mb-4">
+      <section>
+        <h2 className="text-base md:text-lg font-semibold text-foreground mb-3 md:mb-4">
           📂 CLI / 文件级 模块 (4 个)
         </h2>
-        <p className="text-sm text-muted-foreground mb-4">
+        <p className="text-sm text-muted-foreground mb-3">
           主人 2026-09-13 拍板 key_modules_ui, 只给 3 个关键模块加 UI. 以下 4 个仍走 CLI / 文件级 / 自动触发.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
           {cliOnlyModules.map((m) => {
             const Icon = m.icon;
             return (
               <Card key={m.title} className="bg-muted/50">
                 <CardContent className="pt-4 flex items-start gap-3">
-                  <div className={`inline-flex p-2 rounded-lg ${m.color} shrink-0`}>
+                  <div className="inline-flex p-2 rounded-lg bg-muted text-muted-foreground shrink-0">
                     <Icon className="size-4" />
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">
                       {m.title}
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-1 font-mono">
+                    <p className="text-xs text-muted-foreground mt-1 font-mono break-all">
                       {m.description}
                     </p>
                   </div>
