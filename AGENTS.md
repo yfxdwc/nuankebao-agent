@@ -2,6 +2,10 @@
 
 > **本文件是项目操作层规约** (Operational Layer)。任何 agent 进入本项目时,**应先读元宪法** [`docs/CHARTER.md`](docs/CHARTER.md) **理解治理哲学与红线,再读本文件理解具体执行规则**。
 >
+> **版本**: v0.1.4
+> **同步 CHARTER**: v0.1.4 (双域细化 + 底座模块化, 详见 CHARTER §4 + ADR-0007 + ADR-0008)
+> **派生层**: 元宪法 → `docs/CHARTER.md`; 战略层 → `docs/adr/*`
+>
 > **阅读顺序**:
 > 1. `docs/CHARTER.md` (L0 元层 —— 治理哲学 / 红线 / 域边界)
 > 2. 本文件 (L2 操作层 —— 具体怎么做)
