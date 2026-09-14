@@ -16,6 +16,7 @@ import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 import { DevPageHeader } from "@/components/dev/dev-page-header";
 import {
   Card,

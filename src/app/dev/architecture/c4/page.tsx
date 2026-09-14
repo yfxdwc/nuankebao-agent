@@ -14,14 +14,14 @@
 import Link from "next/link";
 import { MermaidRenderer } from "@/components/dev/mermaid-renderer";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Layers, Users, Server, Code2, Network } from "lucide-react";
+import { Layers, Users, Server, Code2, Network } from "lucide-react";
+import { DevPageHeader } from "@/components/dev/dev-page-header";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -216,37 +216,31 @@ const layers = [
 export default function C4ArchitecturePage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-      <div className="mb-6">
-        <Button variant="ghost" size="sm" asChild className="mb-3">
-          <Link href="/dev/architecture">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            返回 /dev/architecture
-          </Link>
-        </Button>
-
-        <div className="flex items-center gap-2 mb-2">
-          <Network className="h-7 w-7 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">C4 架构图</h1>
-        </div>
-        <p className="text-muted-foreground">
-          C4 模型 4 层架构图 (System Context → Container → Component → Code).
-          借鉴自{" "}
-          <a
-            href="https://github.com/sales-ai/sales-ai/blob/main/web-next/src/app/(dashboard)/admin/dev-architecture/c4/page.tsx"
-            className="text-primary hover:underline"
-            target="_blank"
-            rel="noreferrer"
-          >
-            sales-ai /admin/dev-architecture/c4
-          </a>
-          .
-        </p>
-        <div className="mt-3 flex gap-2 flex-wrap">
-          <Badge variant="outline">v0.1.4</Badge>
-          <Badge variant="secondary">★ 借鉴 sales-ai</Badge>
-          <Badge variant="secondary">mermaid 渲染</Badge>
-        </div>
-      </div>
+      <DevPageHeader
+        backHref="/dev/architecture"
+        backLabel="返回 /dev/architecture"
+        icon={Network}
+        title="C4 架构图"
+        description={
+          <>
+            C4 模型 4 层架构图 (System Context → Container → Component → Code). 借鉴自{" "}
+            <a
+              href="https://github.com/sales-ai/sales-ai/blob/main/web-next/src/app/(dashboard)/admin/dev-architecture/c4/page.tsx"
+              className="text-primary hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              sales-ai /admin/dev-architecture/c4
+            </a>
+            .
+          </>
+        }
+        badges={[
+          { label: "v0.1.4", variant: "outline" },
+          { label: "★ 借鉴 sales-ai" },
+          { label: "mermaid 渲染" },
+        ]}
+      />
 
       <section className="mb-6 p-4 bg-muted border border-primary/30 rounded-lg">
         <p className="text-sm text-foreground">

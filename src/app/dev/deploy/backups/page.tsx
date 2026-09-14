@@ -13,6 +13,7 @@ import path from "node:path";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DevPageHeader } from "@/components/dev/dev-page-header";
 import {
   Card,
   CardContent,
@@ -20,7 +21,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  ArrowLeft,
   Database,
   HardDrive,
   Cloud,
@@ -185,37 +185,32 @@ async function BackupCategory({
 export default async function BackupsPage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-      <div className="mb-6">
-        <Button variant="ghost" size="sm" asChild className="mb-3">
-          <Link href="/dev/deploy">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            返回 /dev/deploy
-          </Link>
-        </Button>
-
-        <div className="flex items-center gap-2 mb-2">
-          <Database className="h-7 w-7 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">备份详情</h1>
-        </div>
-        <p className="text-muted-foreground">
-          PG dump + Media tar 备份文件 (本地 vs 异地对比). 借鉴自{" "}
-          <a
-            href="https://github.com/sales-ai/sales-ai/blob/main/web-next/src/app/(dashboard)/admin/night-tasks/reports/page.tsx"
-            className="text-primary hover:underline"
-            target="_blank"
-            rel="noreferrer"
-          >
-            sales-ai /admin/night-tasks/reports
-          </a>
-          .
-        </p>
-        <div className="mt-3 flex gap-2 flex-wrap">
-          <Badge variant="outline">v0.1.4</Badge>
-          <Badge variant="secondary">★ 借鉴 sales-ai</Badge>
-          <Badge variant="secondary">GFS 7 副本</Badge>
-          <Badge variant="secondary">GPG AES256</Badge>
-        </div>
-      </div>
+      <DevPageHeader
+        backHref="/dev/deploy"
+        backLabel="返回 /dev/deploy"
+        icon={Database}
+        title="备份详情"
+        description={
+          <>
+            PG dump + Media tar 备份文件 (本地 vs 异地对比). 借鉴自{" "}
+            <a
+              href="https://github.com/sales-ai/sales-ai/blob/main/web-next/src/app/(dashboard)/admin/night-tasks/reports/page.tsx"
+              className="text-primary hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              sales-ai /admin/night-tasks/reports
+            </a>
+            .
+          </>
+        }
+        badges={[
+          { label: "v0.1.4", variant: "outline" },
+          { label: "★ 借鉴 sales-ai" },
+          { label: "GFS 7 副本" },
+          { label: "GPG AES256" },
+        ]}
+      />
 
       <section className="mb-8 space-y-6">
         <BackupCategory
