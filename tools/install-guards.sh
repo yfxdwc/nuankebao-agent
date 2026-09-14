@@ -22,7 +22,9 @@ BBT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_NAME="nuankebao-stack.service"
 SERVICE_SRC="$BBT_DIR/tools/$SERVICE_NAME"
 SERVICE_DST="/etc/systemd/system/$SERVICE_NAME"
-CRON_USER="mm7"
+# CRON_USER 默认 mm7 (tc-studio99 历史默认, 见 git log), tc dev (tooyan) 上 export 覆盖:
+#   sudo CRON_USER=tooyan ./tools/install-guards.sh
+CRON_USER="${CRON_USER:-mm7}"
 POSTBOOT_LINE="@reboot sleep 60 && $BBT_DIR/tools/post-boot-check.sh >> /tmp/nuankebao-boot-check.log 2>&1"
 
 say()  { printf '\033[36m[install-guards]\033[0m %s\n' "$*"; }
