@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Heart, Bell, FileText, Sparkles, BarChart3, Upload, MessageCircle, Brain, Download } from "lucide-react";
+import { Users, Heart, Bell, FileText, Sparkles, BarChart3, Upload, MessageCircle, Brain, Download, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -16,6 +16,12 @@ const navItems = [
   { href: "/admin/ai", label: "AI 助手", icon: Brain },
   { href: "/admin/download", label: "App 下载", icon: Download },
 ];
+
+// 主人 2026-09-14 override 拍板 (v0.1.4 master-decide, AGENTS §3 反模式“mobile-only 阶段加 web admin 新功能” 主人在此场景显式拍板例外):
+// 在 admin 侧栏加 /dev 入口, 让主人一键从销售员产品 admin 跳到开发工具门户. 不影响 /admin/* 冻结规则的其他页
+// - /dev 本身是活跃域 (per ADR-0008 §6), 不是新页面, 只是侧栏入口
+// - 定位: “工具”类别, 区别于 8 个产品 nav, 视觉上分隔
+const toolNavItem = { href: "/dev", label: "开发工具", icon: Wrench };
 
 export function AdminSidebar() {
   const pathname = usePathname();
@@ -54,6 +60,28 @@ export function AdminSidebar() {
             </Link>
           );
         })}
+        {/* 工具分隔: 主人 2026-09-14 override, 加 /dev 入口 (v0.1.4 master-decide) */}
+        <div className="my-3 border-t border-border/60" aria-hidden="true" />
+        {(() => {
+          const Icon = toolNavItem.icon;
+          const isActive =
+            pathname === toolNavItem.href ||
+            pathname.startsWith(toolNavItem.href + "/");
+          return (
+            <Link
+              href={toolNavItem.href}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {toolNavItem.label}
+            </Link>
+          );
+        })()}
       </nav>
       <div className="absolute bottom-4 left-3 right-3 text-xs text-muted-foreground">
         <p className="px-3">v0.1 · Phase 1 W1</p>

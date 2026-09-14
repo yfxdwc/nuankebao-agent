@@ -95,7 +95,7 @@ const cliOnlyModules = [
 
 export default function DevHomePage() {
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+    <div className="mx-auto max-w-5xl">
       <header className="mb-8">
         <div className="flex items-center gap-2 mb-2">
           <Eye className="size-7 text-muted-foreground" />
@@ -201,6 +201,6 @@ export default function DevHomePage() {
           .
         </p>
       </footer>
-    </main>
+    </div>
   );
 }
