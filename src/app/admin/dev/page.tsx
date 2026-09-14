@@ -4,9 +4,15 @@
 // v0.1.3 主人 ask_user 拍板 key_modules_ui (2026-09-13):
 // 3 个关键 UI: architecture / deploy / task-snapshot.
 //
-// 位置: src/app/admin/dev/ (与 src/app/admin/ 区分)
-// - admin/ = 销售员产品 (CHARTER §4.4 v0.1.2 冻结, 仅 P0 fix)
-// - dev/   = 主人开发工具 UI (无冻结, 因不冲突产品 admin)
+// v0.1.4 主人 2026-09-14 拍板 (master-decide, AGENTS §3 master-override):
+// /dev → /admin/dev 物理位置迁移. 原因: 主人希望在 admin 同域一键打开开发工具,
+// 不切换 React tree. 详见 sidebar.tsx 顶部注释 + CHANGELOG [unreleased].
+//
+// 位置: src/app/admin/dev/ (在 admin 域下, 跟其他 8 个产品 nav 平级)
+// - 销售员产品 nav (仪表盘/客户/养生/...) = 冻结
+// - /admin/dev/* = 主人开发工具 UI (master-override 例外, 因不冲突产品功能)
+//
+// 老 URL /dev → /admin/dev 重定向 (per src/app/dev/page.tsx)
 //
 // 关联: docs/architecture/v0.1.3-final.md §5.2 WEB 域模块清单
 // ============================================
