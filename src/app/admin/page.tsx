@@ -167,9 +167,10 @@ export default async function AdminDashboardPage() {
                       </Badge>
                     </div>
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      {/* ui-style-allow-inline-style: 动态百分比宽度 */}
                       <div
                         className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${pct}%` }} {/* ui-style-allow-inline-style: 动态百分比宽度 */}
+                        style={{ width: `${pct}%` }}
                       />
                     </div>
                   </div>

@@ -208,6 +208,23 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 - 🏭 默认实现: `FranchiseRelationSystem implements RelationSystem`
 - 🔄 切换: 改 `relationSystemProvider` 默认值, 调用方零改动
 
+**`lib/screens/profile_page.dart`** (WEB 域 admin 扩展页, v0.1.4 Phase 9 决策):
+- 按 v0.1.3 §4.4.5 主人拍板 "override §4.4 freeze" 后保留
+- **不归入 modules/customer/** (profile 是 web admin 扩展, 不是 APK 模块)
+- **不归入 modules/profile/** (新建模块需主人 ask_user 拍板)
+- 后续若要做独立模块 (profile), 主人拍板后再迁移
+
+**`lib/_deprecated/`** (v0.1.4 Phase 9 真删评估):
+- 1 周观察期已过 (v0.1.2 → v0.1.3 拍板 2026-09-07 → 现在 > 1 周)
+- **可删**: git rm -r flutter_app/lib/_deprecated/ (per _deprecated/README.md)
+- 但: 主人实际部署后, 若主理人未验证生产环境, 保留备份更稳
+- **本次决定**: 暂不删 (per AGENTS §3 "不要 sudo 改系统配置" 类比), 主人 review 后手工删
+
+**`src/app/preview/`** (v0.1.4 Phase 9 并入 app-preview):
+- history: W19 早期版本, v0.1.3 重构后完整版在 `/app-preview`
+- **本 commit**: `/preview` → redirect to `/app-preview` (307)
+- 下次清理: 主人 review 后可删 `src/app/preview/page.tsx` 单文件 (留 1 周观察)
+
 ### §4.6 渐进迁移路线 (per ADR-0007 §实施路线图)
 
 | Phase | 模块 | 时间 | 状态 |
