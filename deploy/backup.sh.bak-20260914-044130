@@ -52,8 +52,8 @@ BBT_DIR="${BBT_DIR:-${NUANKEBAO_PROJECT_DIR:-/home/tooyan/nuankebao-agent}}"
 DATABACKUPS="${DATABACKUPS:-${NUANKEBAO_DATABACKUPS_DIR:-/home/tooyan/nuankebao-databackups}}"
 BACKUP_DIR="${BACKUP_DIR:-$DATABACKUPS/pg-backups}"
 MEDIA_BACKUP_DIR="${MEDIA_BACKUP_DIR:-$DATABACKUPS/media}"
-OFFSITE_DIR="${OFFSITE_DIR:-/media/mm7/tc_backup/nuankebao}"
-KEY_FILE="${KEY_FILE:-/etc/backup-keys/nuankebao.key.gpg}"
+OFFSITE_DIR="${OFFSITE_DIR:-${NUANKEBAO_OFFSITE_DIR:-$DATABACKUPS/offsite}}"
+KEY_FILE="${KEY_FILE:-$DATABACKUPS/backup-key.gpg}"
 
 LOG_DIR="${LOG_DIR:-$DATABACKUPS/logs}"
 LOG="${LOG_DIR}/backup.log"
@@ -201,44 +201,23 @@ else
     echo "$(LOG_TS) [3/5] OK media encrypted backup: $MEDIA_ENC ($MEDIA_ENC_SIZE bytes)"
 fi
 
-# === ssh push (主理人 2026-09-14 拍: 异地到 lk:/media/mm7/tc_backup/nuankebao) ===
-if ! ssh -o BatchMode=yes -o ConnectTimeout=10 lk true 2>/dev/null; then
-    echo "$(LOG_TS) [FATAL] ssh lk unreachable" | tee -a "$LOG" >&2
-    exit 10
-fi
-ssh -o BatchMode=yes lk "mkdir -p ${OFFSITE_DIR}/pg-backups ${OFFSITE_DIR}/media && chmod 700 ${OFFSITE_DIR} ${OFFSITE_DIR}/pg-backups ${OFFSITE_DIR}/media"
-AVAIL_KB=$(ssh -o BatchMode=yes lk "df -k ${OFFSITE_DIR}" | tail -1 | awk '{print $4}')
-AVAIL_GB=$((AVAIL_KB / 1024 / 1024))
-echo "$(LOG_TS) [pre-check] ssh ok, ${OFFSITE_DIR} free=${AVAIL_GB}G" | tee -a "$LOG"
-if [[ "${AVAIL_GB}" -lt 2 ]]; then
-    echo "$(LOG_TS) [FATAL] offsite space < 2G, abort" | tee -a "$LOG" >&2
-    exit 11
-fi
-echo "$(LOG_TS) [3/5] rsync PG -> lk:${OFFSITE_DIR}/pg-backups/" | tee -a "$LOG"
-shopt -s nullglob
-for f in "$BACKUP_DIR"/pg-*.dump.gpg; do
-    if ! rsync -a "$f" "lk:${OFFSITE_DIR}/pg-backups/"; then
-        shopt -u nullglob
-        echo "$(LOG_TS) [FATAL] rsync PG failed: $f" | tee -a "$LOG" >&2
-        exit 12
-    fi
-done
-shopt -u nullglob
-echo "$(LOG_TS) [3/5] rsync media -> lk:${OFFSITE_DIR}/media/" | tee -a "$LOG"
-shopt -s nullglob
-for f in "$MEDIA_BACKUP_DIR"/*.tar.zst.enc "$MEDIA_BACKUP_DIR"/*.sha256 "$MEDIA_BACKUP_DIR"/*.manifest.json; do
-    if ! rsync -a "$f" "lk:${OFFSITE_DIR}/media/"; then
-        shopt -u nullglob
-        echo "$(LOG_TS) [FATAL] rsync media failed: $f" | tee -a "$LOG" >&2
-        exit 13
-    fi
-done
-shopt -u nullglob
-ssh -o BatchMode=yes lk "mkdir -p ${OFFSITE_DIR}/.backup-key && chmod 700 ${OFFSITE_DIR}/.backup-key"
-ssh -o BatchMode=yes lk "install -m 600 /dev/stdin ${OFFSITE_DIR}/.backup-key/backup-key.gpg" < "$KEY_FILE"
-PG_COUNT=$(ssh -o BatchMode=yes lk "ls -1 ${OFFSITE_DIR}/pg-backups/*.gpg 2>/dev/null | wc -l")
-MEDIA_COUNT=$(ssh -o BatchMode=yes lk "ls -1 ${OFFSITE_DIR}/media/*.enc 2>/dev/null | wc -l")
-echo "$(LOG_TS) [3/5] OK offsite PG=$PG_COUNT MEDIA=$MEDIA_COUNT key-copied" | tee -a "$LOG"
+# ============== 3) 异地 rsync (SOP §2.5 + §3.1) ==============
+
+# tc (2026-09-10 主人拍): OFFSITE_DIR 是本地双副本, 不依赖 /media/tooyan/<盘符>/<盘符>
+mkdir -p "$OFFSITE_DIR/pg-backups" "$OFFSITE_DIR/media"
+chmod 700 "$OFFSITE_DIR/pg-backups" "$OFFSITE_DIR/media"
+
+echo "$(LOG_TS) [4/5] rsync -> $OFFSITE_DIR"
+rsync -a --delete-after "$BACKUP_DIR/" "$OFFSITE_DIR/pg-backups/" || {
+    echo "$(LOG_TS) [WARN] PG 异地 rsync 部分失败 (继续, 本地副本完整)" | tee -a "$LOG" >&2
+}
+rsync -a --delete-after "$MEDIA_BACKUP_DIR/" "$OFFSITE_DIR/media/" || {
+    echo "$(LOG_TS) [WARN] media 异地 rsync 部分失败 (继续, 本地副本完整)" | tee -a "$LOG" >&2
+}
+chmod -R go-rwx "$OFFSITE_DIR/pg-backups/" "$OFFSITE_DIR/media/" 2>/dev/null || true
+install -d -m 700 "$OFFSITE_DIR/.backup-key"
+install -m 600 "$KEY_FILE" "$OFFSITE_DIR/.backup-key/backup-key.gpg" || true
+echo "$(LOG_TS) [4/5] OK 异地副本: PG=$(ls -1 $OFFSITE_DIR/pg-backups/*.gpg 2>/dev/null | wc -l) MEDIA=$(ls -1 $OFFSITE_DIR/media/*.enc 2>/dev/null | wc -l) 密钥已异地副本"
 
 # ============== 4) GFS 清理: mtime+14 AND count<=7 双保险 (SOP §2.4) ==============
 
