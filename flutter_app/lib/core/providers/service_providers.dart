@@ -108,6 +108,16 @@ final franchiseesProvider = FutureProvider<List<dynamic>>(
 );
 
 /// 我的加盟树 (Plan F3 图谱视图用)
+// v0.1.3 Phase 6.5 ★ 设计决策:
+// 不强制走 RelationSystem 接口 (因为 FranchiseeTreeNode 是 Franchise 特有的
+// 数据形状, 不是通用 RelationNode). 节点 CRUD 走 FranchiseeService (业务具体).
+// 关系操作 (addRelation/removeRelation/getNode) 走 RelationSystem 接口 (抽象通用).
+//
+// 切换关系系统时 (e.g. → DistributionRelationSystem):
+// - add_franchisee_page / franchise_tree_page 需重做 UI (因 FranchiseeTreeNode 是 franchise 特有)
+// - franchisee_detail_page (getById → getNode) 已走接口, 零改动 ✓
+//
+// 详见 docs/adr/0007-modular-architecture.md + 关系接口边界说明
 final myFranchiseeTreeProvider = FutureProvider.family<dynamic, int>(
   (ref, depth) async {
     return ref.watch(franchiseeServiceProvider).getMyTree(depth: depth);

@@ -9,10 +9,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/franchisee.dart';
-import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../lib/relation_system.dart';
+import '../lib/relation_system_provider.dart';
+import '../lib/franchise_relation.dart';
 import '../../../core/widgets/franchise_chip.dart';
 
 class FranchiseeDetailPage extends ConsumerWidget {
@@ -292,7 +294,10 @@ class FranchiseeDetailPage extends ConsumerWidget {
     );
     if (ok == true) {
       try {
-        await ref.read(franchiseeServiceProvider).delete(franchiseeId);
+        await ref.read(relationSystemProvider).removeRelation(
+          fromId: franchiseeId,
+          toId: franchiseeId,
+        );
         ref.invalidate(myFranchiseeTreeProvider);
         if (!context.mounted) return;
         context.pop();
@@ -307,5 +312,31 @@ class FranchiseeDetailPage extends ConsumerWidget {
 }
 
 final _franchiseeProvider = FutureProvider.family<Franchisee, String>(
-  (ref, id) async => ref.watch(franchiseeServiceProvider).getById(id),
+  // v0.1.3 Phase 6.5: 走 RelationSystem 接口 (不再直接调 FranchiseeService)
+  (ref, id) async {
+    final system = ref.watch(relationSystemProvider);
+    final node = await system.getNode(id);
+    if (node == null) {
+      throw Exception('加盟商 $id 不存在');
+    }
+    // 将 RelationNode 转为 UI 需要的 Franchisee (向后兼容)
+    return _nodeToFranchisee(node);
+  },
 );
+
+// RelationNode → Franchisee 转换 (适配层, UI 兼容)
+Franchisee _nodeToFranchisee(RelationNode node) {
+  return Franchisee(
+    id: node.id,
+    name: node.name,
+    phone: node.metadata['phone'] as String? ?? '',
+    referrerId: node.metadata['referrerId'] as String?,
+    placementSide: node.metadata['placementSide'] as String?,
+    placementPath: node.metadata['placementPath'] as String? ?? '',
+    placementDepth: (node.metadata['placementDepth'] as num?)?.toInt() ?? 0,
+    isActive: node.metadata['isActive'] as bool? ?? true,
+    joinedAt: node.metadata['joinedAt'] != null
+        ? DateTime.tryParse(node.metadata['joinedAt'] as String)
+        : null,
+  );
+}
