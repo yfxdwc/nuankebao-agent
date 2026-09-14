@@ -221,7 +221,7 @@ export function PreviewFrame({ path, width, height, showFrame, flutterCssFix = f
   }
 
   return (
-    <div className="flex flex-col bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100 flex-1 min-h-0">
+    <div className="flex flex-col bg-gradient-to-br from-muted via-background to-muted flex-1 min-h-0">
       {/* Toolbar */}
       <header className="border-b bg-white/80 backdrop-blur sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center gap-2 md:gap-3">
@@ -341,15 +341,15 @@ export function PreviewFrame({ path, width, height, showFrame, flutterCssFix = f
           style={{
             width: dimensions.w * scale + (showFrame ? 32 : 0),
             height: dimensions.h * scale + (showFrame ? 32 : 0),
-          }}
+          }} /* ui-style-allow-inline-style: 动态计算 (scale/top/bottom/width/height) */
         >
           {showFrame ? (
             /* iPhone 风格柜架 */
             <div
-              className="absolute inset-0 bg-[#0a0a0a] rounded-[3rem] shadow-2xl ring-1 ring-black/10"
+              className="absolute inset-0 bg-foreground rounded-[3rem] shadow-2xl ring-1 ring-foreground/10"
               style={{
                 padding: 12 * scale,
-              }}
+              }} /* ui-style-allow-inline-style: 动态计算 (scale/top/bottom/width/height) */
             >
               {/* 灵动岛 (iPhone 14 Pro+) */}
               {dimensions.w >= 390 && (
@@ -359,7 +359,7 @@ export function PreviewFrame({ path, width, height, showFrame, flutterCssFix = f
                     top: 8 * scale,
                     width: 100 * scale,
                     height: 28 * scale,
-                  }}
+                  }} /* ui-style-allow-inline-style: 动态计算 (scale/top/bottom/width/height) */
                   aria-hidden="true"
                 />
               )}
@@ -391,7 +391,7 @@ export function PreviewFrame({ path, width, height, showFrame, flutterCssFix = f
                   bottom: 6 * scale,
                   width: 120 * scale,
                   height: 4 * scale,
-                }}
+                }} /* ui-style-allow-inline-style: 动态计算 (scale/top/bottom/width/height) */
                 aria-hidden="true"
               />
             </div>
@@ -406,7 +406,7 @@ export function PreviewFrame({ path, width, height, showFrame, flutterCssFix = f
                 width: dimensions.w * scale,
                 height: dimensions.h * scale,
                 // v0.1.x: blockIframe 机制已删 (主人 2026-09-12 拍), iframe 永远可点
-              }}
+              }} /* ui-style-allow-inline-style: 动态计算 (scale/top/bottom/width/height) */
               title={`预览 ${currentPath}`}
               onLoad={handleIframeLoad}
             />

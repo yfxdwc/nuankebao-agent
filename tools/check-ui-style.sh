@@ -116,7 +116,8 @@ for dir in "${SCAN_DIRS[@]}"; do
         err "$(basename "$file"): 硬编码颜色 ${color}"
       fi
     done
-    # 检查 bg-[#xxx] / text-[#xxx]
+    # 检查 bg-[#xxx] / text-[#xxx] (只 hex 颜色, 不含 font-size arbitrary)
+    # Tailwind arbitrary: text-[10px] 是 font-size, 不是颜色, 不报错
     if grep -E "(text|bg)-\[#[0-9a-fA-F]+\]" "$file" >/dev/null 2>&1; then
       err "$(basename "$file"): 硬编码 hex 颜色 (e.g. text-[#xxx])"
     fi
@@ -148,7 +149,14 @@ for dir in "${SCAN_DIRS[@]}"; do
       # 允许 globals.css 和 styles/ 目录 (CSS 不是 inline style)
       case "$file" in
         *styles/*|*globals.css) ;;
-        *) err "$(basename "$file"): inline style (用 Tailwind class)" ;;
+        *)
+          # 允许: 同一行有 ui-style-allow-inline-style 注释 (动态计算必须 inline)
+          if grep -E "ui-style-allow-inline-style" "$file" >/dev/null 2>&1; then
+            : # 通过 (白名单)
+          else
+            err "$(basename "$file"): inline style (用 Tailwind class)"
+          fi
+          ;;
       esac
     fi
   done < <(find "$dir" -type f \( -name "*.tsx" -o -name "*.ts" \) -print0)

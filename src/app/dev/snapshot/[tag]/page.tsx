@@ -103,11 +103,11 @@ export default async function SnapshotDetailPage({ params }: PageProps) {
 
         <div className="flex items-center gap-2 mb-2">
           <History className="size-7 text-amber-700" />
-          <h1 className="text-3xl font-bold text-slate-900 font-mono break-all">
+          <h1 className="text-3xl font-bold text-foreground font-mono break-all">
             {detail.tag}
           </h1>
         </div>
-        <p className="text-slate-600">
+        <p className="text-muted-foreground">
           snapshot 详情 + diff stat + commit 列表 + ⚠ rollback 按钮
         </p>
       </div>
@@ -138,10 +138,10 @@ export default async function SnapshotDetailPage({ params }: PageProps) {
 
       {/* Diff stat */}
       <section className="mb-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-3">Diff stat</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-3">Diff stat</h2>
         <Card>
           <CardContent className="pt-4">
-            <pre className="text-xs font-mono whitespace-pre overflow-x-auto bg-slate-50 p-3 rounded max-h-96 overflow-y-auto">
+            <pre className="text-xs font-mono whitespace-pre overflow-x-auto bg-muted p-3 rounded max-h-96 overflow-y-auto">
               {detail.diffStat || "(无变更)"}
             </pre>
           </CardContent>
@@ -150,12 +150,12 @@ export default async function SnapshotDetailPage({ params }: PageProps) {
 
       {/* Commits */}
       <section className="mb-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-3">
+        <h2 className="text-lg font-semibold text-foreground mb-3">
           Commits ({detail.commits.length} 个)
         </h2>
         {detail.commits.length === 0 ? (
           <Card className="border-dashed">
-            <CardContent className="pt-4 text-center text-slate-500">
+            <CardContent className="pt-4 text-center text-muted-foreground">
               无 commits (snapshot 与 HEAD 相同)
             </CardContent>
           </Card>
@@ -165,14 +165,14 @@ export default async function SnapshotDetailPage({ params }: PageProps) {
               <ol className="space-y-2">
                 {detail.commits.map((c) => (
                   <li key={c.sha} className="flex items-start gap-3 text-sm">
-                    <GitCommit className="size-4 text-slate-400 mt-0.5 shrink-0" />
+                    <GitCommit className="size-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <code className="text-xs text-slate-500 mr-2">
+                      <code className="text-xs text-muted-foreground mr-2">
                         {c.shortSha}
                       </code>
-                      <span className="text-slate-700">{c.subject}</span>
+                      <span className="text-muted-foreground">{c.subject}</span>
                     </div>
-                    <span className="text-xs text-slate-500 shrink-0">
+                    <span className="text-xs text-muted-foreground shrink-0">
                       {c.date}
                     </span>
                   </li>
@@ -183,14 +183,14 @@ export default async function SnapshotDetailPage({ params }: PageProps) {
         )}
       </section>
 
-      <footer className="text-xs text-slate-500 border-t pt-4">
+      <footer className="text-xs text-muted-foreground border-t pt-4">
         <p>
           API:{" "}
-          <code className="bg-slate-100 px-1.5 py-0.5 rounded">
+          <code className="bg-muted px-1.5 py-0.5 rounded">
             GET /api/dev/snapshot/{detail.tag}
           </code>{" "}
           |{" "}
-          <code className="bg-slate-100 px-1.5 py-0.5 rounded">
+          <code className="bg-muted px-1.5 py-0.5 rounded">
             POST /api/dev/snapshot/{detail.tag}?confirm=yes
           </code>
         </p>

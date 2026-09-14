@@ -5,6 +5,11 @@ After=network.target
 [Service]
 Type=simple
 # WorkingDirectory + ExecStart + EnvironmentFile 由 tools/install-systemd.sh sed 渲染
+# tc-full-deploy-2026-09-13: systemd 默认 PATH 不含 ~/.local/bin (node 装这里),
+# 不补 PATH 会 exit 127. 手动写全 PATH 而不是 source ~/.bashrc, 因为:
+#   1) /home/tooyan/.local/bin 是真实路径, 不依赖 user shell 启动顺序
+#   2) source bashrc 在 systemd 非交互环境会被 guard return 跳过
+Environment="PATH=/home/tooyan/.local/bin:/home/tooyan/.local/share/pnpm:/home/tooyan/jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=__PROJECT_DIR__/.env.local
 ExecStart=/bin/sh __PROJECT_DIR__/node_modules/.bin/next dev -p 3003 -H 0.0.0.0

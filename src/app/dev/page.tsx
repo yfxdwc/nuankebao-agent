@@ -71,25 +71,25 @@ const cliOnlyModules = [
     icon: Terminal,
     title: "task-snapshot (CLI)",
     description: "bash scripts/task-snapshot.sh <start|list|find|diff|rollback>",
-    color: "bg-slate-50 text-slate-700",
+    color: "bg-muted text-muted-foreground",
   },
   {
     icon: BookOpen,
     title: "references",
     description: "docs/references.md + 外部项目监控 SOP",
-    color: "bg-slate-50 text-slate-700",
+    color: "bg-muted text-muted-foreground",
   },
   {
     icon: Package,
     title: "ui-kit",
     description: "src/components/ui/ shadcn 组件 (无独立页, 被其他页用)",
-    color: "bg-slate-50 text-slate-700",
+    color: "bg-muted text-muted-foreground",
   },
   {
     icon: ServerCog,
     title: "project-skill",
     description: "AGENTS.md + .pi/settings.json + ~/.muse/skills/",
-    color: "bg-slate-50 text-slate-700",
+    color: "bg-muted text-muted-foreground",
   },
 ];
 
@@ -98,10 +98,10 @@ export default function DevHomePage() {
     <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
       <header className="mb-8">
         <div className="flex items-center gap-2 mb-2">
-          <Eye className="size-7 text-slate-700" />
-          <h1 className="text-3xl font-bold text-slate-900">开发工具门户</h1>
+          <Eye className="size-7 text-muted-foreground" />
+          <h1 className="text-3xl font-bold text-foreground">开发工具门户</h1>
         </div>
-        <p className="text-slate-600">
+        <p className="text-muted-foreground">
           暖客宝 WEB 域 (脚手架) 的可视化入口. 仅主人/agent 使用, 不给销售员.
         </p>
         <div className="mt-3 flex gap-2 flex-wrap">
@@ -112,7 +112,7 @@ export default function DevHomePage() {
       </header>
 
       <section className="mb-10">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           ✨ 有 WEB UI 的模块 (3 个)
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -120,7 +120,7 @@ export default function DevHomePage() {
             const Icon = m.icon;
             return (
               <Link key={m.href} href={m.href} className="group">
-                <Card className="h-full transition-all hover:shadow-md hover:border-slate-400">
+                <Card className="h-full transition-all hover:shadow-md hover:border-border">
                   <CardHeader>
                     <div className="flex items-center justify-between mb-1">
                       <div
@@ -136,11 +136,11 @@ export default function DevHomePage() {
                     </div>
                     <CardTitle className="text-base flex items-center gap-1">
                       {m.title}
-                      <ArrowUpRight className="size-4 text-slate-400 group-hover:text-slate-700 transition-colors" />
+                      <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-slate-600">{m.description}</p>
+                    <p className="text-sm text-muted-foreground">{m.description}</p>
                   </CardContent>
                 </Card>
               </Link>
@@ -150,26 +150,26 @@ export default function DevHomePage() {
       </section>
 
       <section className="mb-10">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           📂 CLI / 文件级 模块 (4 个)
         </h2>
-        <p className="text-sm text-slate-600 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           主人 2026-09-13 拍板 key_modules_ui, 只给 3 个关键模块加 UI. 以下 4 个仍走 CLI / 文件级 / 自动触发.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {cliOnlyModules.map((m) => {
             const Icon = m.icon;
             return (
-              <Card key={m.title} className="bg-slate-50/50">
+              <Card key={m.title} className="bg-muted/50">
                 <CardContent className="pt-4 flex items-start gap-3">
                   <div className={`inline-flex p-2 rounded-lg ${m.color} shrink-0`}>
                     <Icon className="size-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-800">
+                    <h3 className="text-sm font-semibold text-foreground">
                       {m.title}
                     </h3>
-                    <p className="text-xs text-slate-600 mt-1 font-mono">
+                    <p className="text-xs text-muted-foreground mt-1 font-mono">
                       {m.description}
                     </p>
                   </div>
@@ -180,7 +180,7 @@ export default function DevHomePage() {
         </div>
       </section>
 
-      <footer className="text-xs text-slate-500 border-t pt-4">
+      <footer className="text-xs text-muted-foreground border-t pt-4">
         <p>
           完整架构说明见{" "}
           <Link

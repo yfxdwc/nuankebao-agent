@@ -169,7 +169,7 @@ export default async function AdminDashboardPage() {
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
+                        style={{ width: `${pct}%` }} {/* ui-style-allow-inline-style: 动态百分比宽度 */}
                       />
                     </div>
                   </div>

@@ -119,11 +119,11 @@ export default function ArchitecturePage() {
 
         <div className="flex items-center gap-2 mb-2">
           <Network className="size-7 text-purple-700" />
-          <h1 className="text-3xl font-bold text-slate-900">
+          <h1 className="text-3xl font-bold text-foreground">
             架构图 (Architecture)
           </h1>
         </div>
-        <p className="text-slate-600">
+        <p className="text-muted-foreground">
           渲染{" "}
           <a
             href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/CHARTER.md#41-总体架构图-apk-域--web-域"
@@ -142,14 +142,14 @@ export default function ArchitecturePage() {
       </div>
 
       <section className="mb-10 p-6 bg-white border rounded-lg shadow-sm overflow-x-auto">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           总架构图 (CHARTER §4.1 mermaid 渲染)
         </h2>
         <MermaidRenderer chart={ARCHITECTURE_DIAGRAM} />
       </section>
 
       <section className="mb-10">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           关联文档 (4 个)
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -159,19 +159,19 @@ export default function ArchitecturePage() {
               href={`https://github.com/tooyan/nuankebao-agent/blob/main/${d.href}`}
               target="_blank"
               rel="noreferrer"
-              className="block p-4 bg-white border rounded-lg hover:shadow-md hover:border-slate-400 transition-all"
+              className="block p-4 bg-white border rounded-lg hover:shadow-md hover:border-border transition-all"
             >
-              <h3 className="text-sm font-semibold text-slate-800">
+              <h3 className="text-sm font-semibold text-foreground">
                 {d.title}
               </h3>
-              <p className="text-xs text-slate-600 mt-1 font-mono">{d.href}</p>
-              <p className="text-xs text-slate-700 mt-2">{d.desc}</p>
+              <p className="text-xs text-muted-foreground mt-1 font-mono">{d.href}</p>
+              <p className="text-xs text-muted-foreground mt-2">{d.desc}</p>
             </a>
           ))}
         </div>
       </section>
 
-      <section className="text-xs text-slate-500 border-t pt-4">
+      <section className="text-xs text-muted-foreground border-t pt-4">
         <p>
           ⚠️ 这是 mermaid 渲染版本. 文字版 (ASCII) 见{" "}
           <a

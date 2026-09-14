@@ -96,12 +96,12 @@ export default async function SnapshotListPage() {
 
         <div className="flex items-center gap-2 mb-2">
           <History className="size-7 text-amber-700" />
-          <h1 className="text-3xl font-bold text-slate-900">
+          <h1 className="text-3xl font-bold text-foreground">
             任务快照 (Task Snapshot)
           </h1>
         </div>
-        <p className="text-slate-600">
-          最近 10 个 <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">pre-*</code>{" "}
+        <p className="text-muted-foreground">
+          最近 10 个 <code className="text-xs bg-muted px-1.5 py-0.5 rounded">pre-*</code>{" "}
           git tag. 点击查看 diff, 危险操作 (rollback) 需二次确认.
         </p>
         <div className="mt-3 flex gap-2 flex-wrap">
@@ -113,11 +113,11 @@ export default async function SnapshotListPage() {
 
       {snapshots.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="pt-6 text-center text-slate-500">
+          <CardContent className="pt-6 text-center text-muted-foreground">
             <p className="mb-2">无 snapshot tag</p>
             <p className="text-xs">
               创建第一个 snapshot:{" "}
-              <code className="bg-slate-100 px-1.5 py-0.5 rounded">
+              <code className="bg-muted px-1.5 py-0.5 rounded">
                 bash scripts/task-snapshot.sh start &lt;name&gt;
               </code>
             </p>
@@ -131,23 +131,23 @@ export default async function SnapshotListPage() {
               href={`/dev/snapshot/${encodeURIComponent(s.name)}`}
               className="block group"
             >
-              <Card className="hover:shadow-md hover:border-slate-400 transition-all">
+              <Card className="hover:shadow-md hover:border-border transition-all">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-mono flex items-center gap-2">
                       <History className="size-4 text-amber-600" />
                       {s.shortName}
-                      <ArrowUpRight className="size-4 text-slate-400 group-hover:text-slate-700 transition-colors" />
+                      <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
                     </CardTitle>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted-foreground">
                       {s.relative} ({s.createdAt})
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="flex items-center justify-between text-sm">
-                    <div className="text-slate-700">
-                      <span className="font-mono text-xs text-slate-500 mr-2">
+                    <div className="text-muted-foreground">
+                      <span className="font-mono text-xs text-muted-foreground mr-2">
                         {s.headSha}
                       </span>
                       {s.subject}
@@ -160,7 +160,7 @@ export default async function SnapshotListPage() {
         </section>
       )}
 
-      <footer className="text-xs text-slate-500 border-t pt-4 mt-8 space-y-1">
+      <footer className="text-xs text-muted-foreground border-t pt-4 mt-8 space-y-1">
         <p>
           📋 完整 SOP 见{" "}
           <a

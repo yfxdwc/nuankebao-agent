@@ -178,7 +178,7 @@ export default async function DeployDashboardPage() {
         </div>
         <p className="text-muted-foreground">
           读取{" "}
-          <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">
+          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
             {DATABACKUPS_ROOT}
           </code>{" "}
           下的 atomic JSON 状态 + 最近日志.
