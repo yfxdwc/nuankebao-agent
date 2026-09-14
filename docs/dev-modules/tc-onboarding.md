@@ -183,3 +183,8 @@ adb devices
 - 双域 (APK + WEB) 共存架构: `docs/adr/0008-apk-web-domain-spec.md`
 - 系统约定 + 命名一致性: `AGENTS.md §6`
 - 任务级快照 (改 ≥3 文件前必打): `scripts/task-snapshot.sh`
+## 11. 凭证管理 (2026-09-14)
+
+GitHub PAT 不再嵌在 origin URL, 改走 `~/.git-credentials` (chmod 600) + `credential.helper=store` (git config --global).
+SKILL.md: ~/.muse/skills/credentials/SKILL.md v2.16 (2026-09-14) 标 GitHub Token 验证活跃.
+
