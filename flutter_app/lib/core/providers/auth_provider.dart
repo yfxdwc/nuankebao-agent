@@ -35,7 +35,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await ApiClient.maybeInjectDevTokenFromUrl();
     // R12 治本: 冷启动同步 (web 平台 service worker / page reload 后 storage 仍可能有 cookie)
     await ApiClient.syncCookiesFromBrowser();
-    final logged = await _auth.isLoggedIn();
+    var logged = await _auth.isLoggedIn();
+    // R12 时序: Flutter web 启动后 _checkLogin 第一次跑时, cookie 可能还没设 (用户刚在别处调
+    // /api/auth/flutter-login 然后 navigate 到这里). 重试 1 次, 间隔 200ms, 覆盖时序问题.
+    if (!logged) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      await ApiClient.syncCookiesFromBrowser();
+      logged = await _auth.isLoggedIn();
+    }
     state = state.copyWith(isLoggedIn: logged);
   }
 

@@ -109,8 +109,14 @@ class AuthService {
     // R12 治本 (web): 优先读内存变量 (flutter_secure_storage web 强制 AES 加密,
     // 外部注入 / 冷启动拿不到). native 走 storage.
     final wsTok = ApiClient.webSessionToken;
-    if (wsTok != null && wsTok.isNotEmpty) return true;
+    if (wsTok != null && wsTok.isNotEmpty) {
+      // ignore: avoid_print
+      print('[R12 debug] isLoggedIn: web mem token present, returning true');
+      return true;
+    }
     final token = await ApiClient.storage.read(key: ApiClient.sessionTokenKey);
+    // ignore: avoid_print
+    print('[R12 debug] isLoggedIn: storage.token.len=${token?.length ?? 0}');
     return token != null && token.isNotEmpty;
   }
 

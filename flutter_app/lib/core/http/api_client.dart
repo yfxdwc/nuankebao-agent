@@ -136,14 +136,20 @@ class ApiClient {
   static Future<void> syncCookiesFromBrowser() async {
     if (!kIsWeb) return;
     final cookies = web_cookie.WebCookieSync.readAll();
+    // ignore: avoid_print
+    print('[R12 debug] syncCookiesFromBrowser: cookies=${cookies.keys.toList()}');
     if (cookies.isEmpty) return;
     // 同步 cookie name + value (两个 key 分别存)
     if (cookies.containsKey('authjs.session-token')) {
       await storage.write(key: sessionCookieNameKey, value: 'authjs.session-token');
       await storage.write(key: sessionTokenKey, value: cookies['authjs.session-token']!);
+      // ignore: avoid_print
+      print('[R12 debug] wrote authjs.session-token, valueLen=${cookies['authjs.session-token']!.length}');
     } else if (cookies.containsKey('__Secure-authjs.session-token')) {
       await storage.write(key: sessionCookieNameKey, value: '__Secure-authjs.session-token');
       await storage.write(key: sessionTokenKey, value: cookies['__Secure-authjs.session-token']!);
+      // ignore: avoid_print
+      print('[R12 debug] wrote __Secure-authjs.session-token');
     }
   }
 
