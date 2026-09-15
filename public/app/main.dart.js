@@ -52116,7 +52116,11 @@
         t1 = type$.String,
         result = A.LinkedHashMap_LinkedHashMap$_empty(t1, t1),
         cookieStr = document.cookie;
-      if (cookieStr == null || cookieStr.length === 0)
+      if (cookieStr == null)
+        cookieStr = "";
+      t1 = cookieStr.length;
+      A.print("[R12 debug] WebCookieSync.readAll: cookieStr.len=" + t1 + ", preview=" + B.JSString_methods.substring$2(cookieStr, 0, t1 < 50 ? t1 : 50));
+      if (t1 === 0)
         return result;
       for (t1 = cookieStr.split(";"), t2 = t1.length, _i = 0; _i < t2; ++_i) {
         part = t1[_i];
@@ -52134,6 +52138,15 @@
     },
     main0() {
       var t1, t2, t3, t4, t5, value, result, _null = null;
+      if ($.WidgetsBinding__instance == null)
+        A.WidgetsFlutterBinding$();
+      $.WidgetsBinding__instance.toString;
+      window.toString;
+      t1 = document.cookie;
+      t2 = typeof console != "undefined";
+      t2.toString;
+      if (t2)
+        window.console.log("R12 debug main document.cookie=" + A.S(t1));
       if ($.WidgetsBinding__instance == null)
         A.WidgetsFlutterBinding$();
       t1 = $.WidgetsBinding__instance;
