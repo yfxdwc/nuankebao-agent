@@ -52142,11 +52142,10 @@
         A.WidgetsFlutterBinding$();
       $.WidgetsBinding__instance.toString;
       window.toString;
-      t1 = document.cookie;
-      t2 = typeof console != "undefined";
-      t2.toString;
-      if (t2)
-        window.console.log("R12 debug main document.cookie=" + A.S(t1));
+      t1 = typeof console != "undefined";
+      t1.toString;
+      if (t1)
+        window.console.log("R12 debug main boot");
       if ($.WidgetsBinding__instance == null)
         A.WidgetsFlutterBinding$();
       t1 = $.WidgetsBinding__instance;
