@@ -3,12 +3,9 @@ const { chromium } = pkg;
 const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const ctx = await browser.newContext({ viewport: { width: 420, height: 880 }, serviceWorkers: 'block' });
 const page = await ctx.newPage();
-page.on('console', msg => console.log('[console]', msg.type().slice(0,3), msg.text().slice(0, 200)));
-page.on('pageerror', err => console.log('[pageerror]', err.message.slice(0, 200)));
+page.on('requestfailed', req => console.log('[reqfail]', req.url().slice(-60), req.failure()?.errorText));
 page.on('response', resp => {
-  if (resp.url().includes('/api/customers')) {
-    console.log('RESP:', resp.url().slice(-30), 'status:', resp.status());
-  }
+  if (resp.status() >= 400) console.log('[resp]', resp.status(), resp.url().slice(-60));
 });
 
 await page.goto('http://localhost:3003/api/health');
@@ -16,19 +13,23 @@ await page.evaluate(async () => {
   await fetch('/api/auth/flutter-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: '13800138000', code: '123456' }) });
 });
 
-await page.goto('http://localhost:3003/app/customers?_init=4', { waitUntil: 'domcontentloaded', timeout: 60000 });
-// 等更久
-await page.waitForTimeout(40000);
-await page.screenshot({ path: '/tmp/r12-final.png', fullPage: false });
+await page.goto('http://localhost:3003/app/customers', { waitUntil: 'load', timeout: 60000 });
+await page.waitForTimeout(60000);
 
 const url = page.url();
-console.log('URL:', url.slice(-50));
+console.log('URL:', url);
+// 看 页面 DOM 结构
 const html = await page.content();
-console.log('"图谱":', html.includes('图谱'));
-console.log('"王女士":', html.includes('王女士'));
-console.log('"客户":', html.includes('客户'));
-console.log('"网络":', html.includes('网络'));
-if (url.includes('/login')) console.log('❌ 还在 /login');
-else if (url.includes('customers')) console.log('✅ 不循环!');
+console.log('flutters view:', html.includes('flutter-view'));
+console.log('flutt glass:', html.includes('flt-glass-pane'));
+console.log('canvas:', html.match(/<canvas[^>]*>/g)?.length || 0);
 
+// 看 Flutter web 渲染了什么
+const bodyText = await page.evaluate(() => {
+  const canvas = document.querySelector('flt-glass-pane');
+  return canvas ? 'fltt-glass-pane exists, size=' + canvas.getBoundingClientRect() : 'no glass-pane';
+});
+console.log('canvas state:', bodyText);
+
+await page.screenshot({ path: '/tmp/r12-diag.png', fullPage: false });
 await browser.close();
