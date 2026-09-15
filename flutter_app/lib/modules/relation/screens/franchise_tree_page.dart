@@ -69,7 +69,16 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
           const Divider(height: 1),
 
           // 搜索框 (名字模糊匹配; 匹配节点 + 上下级链高亮, 其余淡化)
-          _buildSearchBar(),
+          asyncTree.maybeWhen(
+            data: (tree) => _buildSearchBar(tree),
+            orElse: () => const SizedBox.shrink(),
+          ),
+
+          // 搜索结果提示 (0 匹配时明示, 其余不占位)
+          asyncTree.maybeWhen(
+            data: (tree) => _buildSearchHint(tree),
+            orElse: () => const SizedBox.shrink(),
+          ),
 
           // 树渲染
           Expanded(
@@ -200,20 +209,11 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(FranchiseeTreeNode tree) {
     final q = _search.trim();
     // 预算匹配数 (用于后缀徽标, 全树 O(n) 走一遍)
-    // 注意: tree 数据来自 provider, 切深度时 invalidate → 重新走
-    final asyncTree = ref.watch(myFranchiseeTreeProvider(_depth));
-    int matchCount = 0;
-    asyncTree.maybeWhen(
-      data: (tree) {
-        if (q.isEmpty) return;
-        final lower = q.toLowerCase();
-        matchCount = _countMatches(tree, lower);
-      },
-      orElse: () {},
-    );
+    final matchCount =
+        q.isEmpty ? 0 : _countMatches(tree, q.toLowerCase());
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: TextField(
@@ -271,6 +271,26 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
       c += _countMatches(child, lowerQuery);
     }
     return c;
+  }
+
+  /// 搜索结果提示条 (有查询且 0 匹配时显示红字提醒)
+  Widget _buildSearchHint(FranchiseeTreeNode tree) {
+    final q = _search.trim();
+    if (q.isEmpty) return const SizedBox.shrink();
+    final count = _countMatches(tree, q.toLowerCase());
+    if (count > 0) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      color: AppTheme.danger.withOpacity(0.08),
+      child: Text(
+        '没有匹配「$q」的加盟商',
+        style: const TextStyle(
+          fontSize: AppTheme.fontXs,
+          color: AppTheme.danger,
+        ),
+      ),
+    );
   }
 
   /// 递归遍历全树, 返回名字 contains(query) 的节点 id 集合
