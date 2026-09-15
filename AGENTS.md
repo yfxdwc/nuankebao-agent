@@ -78,6 +78,8 @@
   - **活跃目录** (v0.1.2 起): `flutter_app/lib/**` + `src/app/api/**` + `src/lib/**` + `src/middleware.ts` + `src/app/(auth)/login/**`
   - **冻结目录** (仅 P0 bug fix): `src/app/admin/**` + `src/components/business/**` (web admin 业务组件) + `src/components/admin/**`
 - ✅ **任务开始前必打 task-snapshot** → `bash scripts/task-snapshot.sh start <task-name>` (或依赖 `.pi/extensions/auto-task-snapshot.ts` 在第一条 user 消息自动打). 完整 SOP 见 §8.1. 改 / 加 ≥ 3 文件 或 跨域时**强制**先 snapshot.
+- ✅ **单点问题修一处后必全仓扫一遍** (2026-09-15 主人立) → 修一个具体 bug (如整页刷新的 `<a>`) 后, 必须全仓 grep 同类问题 (如所有 `<a href>` / `window.location` / `router.push` / `<form action>`), 确认无其他遗漏才 commit. 单点修复 = 必复发, 跟 §5 登录循环 w14 三次复发同根.
+- ✅ **改前端必起 dev server + 截图验证** (2026-09-15 主人立) → 任何 web admin / Next.js / Flutter web UI 改动, 必 `pnpm dev` 起服务 (port 先跑 `./tools/check-port.sh`) + 截图 (playwright / 浏览器) + 视觉验证, 不能只看 `tsc --noEmit` / `pnpm build` 就 commit. 详见 §5 w14 R12 puppeteer ≠ Flutter web UI 真行为 同根问题.
 
 ### 不该做
 - ❌ **不要 sudo 改系统配置** — 这是 暖客宝 项目级别,跨用户操作要找主人拍
@@ -273,6 +275,7 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   - ⚠ **主人 override (2026-09-12, CHANGELOG [0.4.1])**: /app-preview 完全删除 blockIframe 机制, iframe 永远可点. Banner 降级为纯 informational (sky 蓝, 恢复 dismiss 按钮). R12 登录循环改用其他方式 (puppeteer 拦截 / middleware / API disable, 待实施). 后果: iframe 里点登录 = 必崩循环. 主人拍接受这个风险. **此变更仅限 /app-preview, 不要外推到其他登录场景**. 后续补: post-mortem + AGENTS.md §5 沉淈特例条目.
 - ❌ **修一个根因就 commit (登录循环 w14 三次复发, 2026-09-11)** — R1-R12 共 12 个已知根因（详见 `docs/login-failure-triage.md §2`）。任何登录 / auth / 拦截器 / middleware / Flutter web 相关改动，**必须全 12 项过一遍验证**，不能“修了 R4 就 commit, R6 下次再说”。单点修复 = 必复发。CI 阻断（待补 §6 checklist）。
 - ❌ **puppeteer / curl 模拟 ≠ Flutter web UI 真行为 (w14 R12 发现, 2026-09-11)** — puppeteer `ctx.request.post()` 走 chromium 完整 cookie jar，模拟不到 dio web 平台 XHR 拿不到 Set-Cookie 头的真实情况。**"puppeteer 通过" ≠ "Flutter web 能用"**。任何“登录成功”的验证不能只看 API 状态码 / puppeteer 模拟，必须跑真 Flutter web UI（input → button click → 看 toast）+ 主人真手机 APK 验证。详见 `docs/login-failure-triage.md §4`。
+- ❌ **Button asChild 套原生 `<a>` 触发整页刷新 (2026-09-15 发现)** — shadcn `Button asChild` 套 `<a href="/admin/x">` 时, 浏览器按超链接语义跳转, 整页 HTML 重新加载, sidebar/topbar 全部重挂载, 视觉上整页闪一下。**修法 = 必须 `Button asChild` 套 `<Link href>`** (next/link) 走 RSC 软导航, 只换 `<main>` 区域 children, sidebar/topbar 保留。例外 (仍用原生 `<a>`): `tel:` 协议 (按钮触发拨号) + `download` 属性 (浏览器原生下载) + `mailto:`。仓内已知误用点: `src/components/business/import-customers.tsx:272` 修复于 commit 717a289。验证手段: playwright + dev server, Network 面板看 `document` 请求数 = 0 + `fetch/xhr` 请求 (RSC `?_rsc=...`) > 0 = 软导航成功。
 
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
