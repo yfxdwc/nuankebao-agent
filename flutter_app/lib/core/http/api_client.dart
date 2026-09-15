@@ -137,13 +137,13 @@ class ApiClient {
     if (!kIsWeb) return;
     final cookies = web_cookie.WebCookieSync.readAll();
     if (cookies.isEmpty) return;
-    final sessionName = cookies['authjs.session-token'] ??
-        cookies['__Secure-authjs.session-token'];
-    if (sessionName != null && sessionName.isNotEmpty) {
-      await storage.write(key: sessionCookieNameKey, value: sessionName);
-      // HttpOnly 时 value 为空字符串, 保留 name 但下次 onRequest 拼 Cookie 头
-      // 时 token 仍会是空 → 会 401. dev 模式不 HttpOnly 能读到 value.
-      await storage.write(key: sessionTokenKey, value: sessionName);
+    // 同步 cookie name + value (两个 key 分别存)
+    if (cookies.containsKey('authjs.session-token')) {
+      await storage.write(key: sessionCookieNameKey, value: 'authjs.session-token');
+      await storage.write(key: sessionTokenKey, value: cookies['authjs.session-token']!);
+    } else if (cookies.containsKey('__Secure-authjs.session-token')) {
+      await storage.write(key: sessionCookieNameKey, value: '__Secure-authjs.session-token');
+      await storage.write(key: sessionTokenKey, value: cookies['__Secure-authjs.session-token']!);
     }
   }
 

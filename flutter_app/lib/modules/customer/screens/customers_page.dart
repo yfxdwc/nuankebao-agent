@@ -101,21 +101,33 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       ),
       body: Column(
         children: [
-          // 搜索框 (图谱视图下隐藏, 图谱不需要文本搜索)
-          if (_viewMode == _CustomerViewMode.list) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: TextField(
-                controller: _searchController,
-                style: const TextStyle(fontSize: AppTheme.fontMd),
-                decoration: const InputDecoration(
-                  hintText: '搜索 姓名 或 手机号',
-                  prefixIcon: Icon(Icons.search, size: 28),
-                ),
-                onChanged: (v) => setState(() => _search = v),
+          // 搜索框 (始终可见; 列表视图下走 list 过滤, 图谱视图下高亮匹配节点)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(fontSize: AppTheme.fontMd),
+              decoration: InputDecoration(
+                hintText: _viewMode == _CustomerViewMode.graph
+                    ? '搜索客户姓名 (高亮匹配节点)'
+                    : '搜索 姓名 或 手机号',
+                prefixIcon: const Icon(Icons.search, size: 28),
+                suffixIcon: _search.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close, size: 22),
+                        tooltip: '清除',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _search = '');
+                        },
+                      ),
               ),
+              onChanged: (v) => setState(() => _search = v),
             ),
-            // 过滤 chip (48pt 高)
+          ),
+          // 过滤 chip (列表视图下; 图谱视图不需要 — 搜索已可定位)
+          if (_viewMode == _CustomerViewMode.list)
             SizedBox(
               height: 56,
               child: ListView(
@@ -132,7 +144,6 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 ],
               ),
             ),
-          ],
 
           // 主体: 列表 / 图谱
           Expanded(
@@ -202,20 +213,46 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             actionLabel: '+ 添加客户',
           );
         }
+        // 预算搜索匹配数 (用于顶部提示条文案)
+        final searchQuery = _search.trim();
+        final matchCount = searchQuery.isEmpty
+            ? 0
+            : graph.nodes
+                .where((n) => n.name.toLowerCase().contains(searchQuery.toLowerCase()))
+                .length;
         return Column(
           children: [
-            // 顶部小提示条 (长按节点高亮, 双指缩放)
+            // 顶部提示条: 默认指引 + 搜索结果数
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: AppTheme.primaryLight.withOpacity(0.3),
+              color: searchQuery.isNotEmpty
+                  ? (matchCount > 0
+                      ? AppTheme.primaryLight.withOpacity(0.5)
+                      : AppTheme.danger.withOpacity(0.08))
+                  : AppTheme.primaryLight.withOpacity(0.3),
               child: Row(
                 children: [
-                  const Icon(Icons.touch_app_outlined, size: 20, color: AppTheme.primaryDark),
+                  Icon(
+                    searchQuery.isNotEmpty ? Icons.search : Icons.touch_app_outlined,
+                    size: 20,
+                    color: searchQuery.isNotEmpty && matchCount == 0
+                        ? AppTheme.danger
+                        : AppTheme.primaryDark,
+                  ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      '长按节点高亮推荐链 · 点击节点进详情 · 双指缩放',
-                      style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.primaryDark),
+                      searchQuery.isEmpty
+                          ? '长按节点高亮推荐链 · 点击节点进详情 · 双指缩放'
+                          : (matchCount > 0
+                              ? '匹配 $matchCount 位客户 · 其余淡化'
+                              : '没有匹配「$searchQuery」的客户'),
+                      style: TextStyle(
+                        fontSize: AppTheme.fontSm,
+                        color: searchQuery.isNotEmpty && matchCount == 0
+                            ? AppTheme.danger
+                            : AppTheme.primaryDark,
+                      ),
                     ),
                   ),
                   Text(
@@ -229,11 +266,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 ],
               ),
             ),
-            // 图谱本体
+            // 图谱本体 (传 searchQuery 让节点环高亮匹配)
             Expanded(
               child: Container(
                 color: AppTheme.bgWarm,
-                child: CustomerGraphView(graph: graph),
+                child: CustomerGraphView(
+                  graph: graph,
+                  searchQuery: searchQuery.isEmpty ? null : searchQuery,
+                ),
               ),
             ),
           ],

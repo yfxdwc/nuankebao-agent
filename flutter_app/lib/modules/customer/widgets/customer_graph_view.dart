@@ -190,7 +190,17 @@ Set<String> _computeHighlightedPath(
 
 class CustomerGraphView extends StatefulWidget {
   final CustomerGraph graph;
-  const CustomerGraphView({super.key, required this.graph});
+
+  /// 搜索关键词 (来自页面顶部搜索框, 在图谱视图下高亮匹配节点)
+  /// - 非空: 名字 contains(query) 的节点被标记为「搜索匹配」, 渲染上加 ring
+  /// - 空 / null: 不影响, 长按高亮独立工作
+  final String? searchQuery;
+
+  const CustomerGraphView({
+    super.key,
+    required this.graph,
+    this.searchQuery,
+  });
 
   @override
   State<CustomerGraphView> createState() => _CustomerGraphViewState();
@@ -204,6 +214,20 @@ class _CustomerGraphViewState extends State<CustomerGraphView> {
   void dispose() {
     _transformController.dispose();
     super.dispose();
+  }
+
+  /// 计算搜索匹配的节点 id 集合 (大小写不敏感, 按名字 contains)
+  /// 返回 null = 无搜索词 (不参与高亮); 空 Set = 有搜索词但 0 匹配
+  Set<String>? _computeSearchMatches(
+    List<CustomerGraphNode> nodes,
+    String query,
+  ) {
+    if (query.isEmpty) return null;
+    final q = query.toLowerCase();
+    return {
+      for (final n in nodes)
+        if (n.name.toLowerCase().contains(q)) n.id,
+    };
   }
 
   @override
@@ -244,9 +268,22 @@ class _CustomerGraphViewState extends State<CustomerGraphView> {
       }
     }
 
-    final highlighted = _highlightedId == null
+    // 长按高亮 = 单个节点 + 它向下的子孙链 (现有语义)
+    final longPressHighlighted = _highlightedId == null
         ? null
         : _computeHighlightedPath(_highlightedId!, childrenByParent);
+
+    // 搜索高亮 = 名字匹配的节点集合 (仅匹配节点本身, 不扩展链, 与长按区分)
+    final searchMatches = _computeSearchMatches(nodes, widget.searchQuery ?? '');
+
+    // 合并: 两者任一为高亮即高亮; 任一触发即视为「有高亮 → 淡出未高亮」
+    Set<String>? highlighted;
+    if (longPressHighlighted != null || (searchMatches != null && searchMatches.isNotEmpty)) {
+      highlighted = <String>{
+        ...?longPressHighlighted,
+        ...?searchMatches,
+      };
+    }
 
     return InteractiveViewer(
       transformationController: _transformController,
@@ -273,7 +310,9 @@ class _CustomerGraphViewState extends State<CustomerGraphView> {
             ...nodes.map((n) {
               final pos = positions[n.id];
               if (pos == null) return const SizedBox.shrink();
-              final isHighlighted = highlighted?.contains(n.id) ?? false;
+              final isLongPressHit = longPressHighlighted?.contains(n.id) ?? false;
+              final isSearchHit = searchMatches?.contains(n.id) ?? false;
+              final isHighlighted = isLongPressHit || isSearchHit;
               final isFaded = highlighted != null && !isHighlighted;
               return Positioned(
                 left: pos.dx - _GraphLayout.nodeRadius,
