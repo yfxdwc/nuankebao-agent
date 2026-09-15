@@ -30,6 +30,16 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
   int _depth = 3;
   FranchiseeTreeNode? _highlightedNode;
 
+  /// 搜索框控制器 (加盟商名字模糊匹配)
+  final _searchController = TextEditingController();
+  String _search = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final asyncTree = ref.watch(myFranchiseeTreeProvider(_depth));
@@ -57,6 +67,9 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
           // 深度切换 chip
           _buildDepthSelector(),
           const Divider(height: 1),
+
+          // 搜索框 (名字模糊匹配; 匹配节点 + 上下级链高亮, 其余淡化)
+          _buildSearchBar(),
 
           // 树渲染
           Expanded(
@@ -187,6 +200,89 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
     );
   }
 
+  Widget _buildSearchBar() {
+    final q = _search.trim();
+    // 预算匹配数 (用于后缀徽标, 全树 O(n) 走一遍)
+    // 注意: tree 数据来自 provider, 切深度时 invalidate → 重新走
+    final asyncTree = ref.watch(myFranchiseeTreeProvider(_depth));
+    int matchCount = 0;
+    asyncTree.maybeWhen(
+      data: (tree) {
+        if (q.isEmpty) return;
+        final lower = q.toLowerCase();
+        matchCount = _countMatches(tree, lower);
+      },
+      orElse: () {},
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        style: const TextStyle(fontSize: AppTheme.fontMd),
+        decoration: InputDecoration(
+          hintText: '搜索加盟商名字',
+          prefixIcon: const Icon(Icons.search, size: 24),
+          suffixIcon: q.isEmpty
+              ? null
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (matchCount > 0)
+                      Container(
+                        margin: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$matchCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: AppTheme.fontXs,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      tooltip: '清除',
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {
+                          _search = '';
+                          _highlightedNode = null;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+        ),
+        onChanged: (v) => setState(() => _search = v),
+      ),
+    );
+  }
+
+  /// 递归遍历全树, 统计名字 contains(query) 的节点数
+  int _countMatches(FranchiseeTreeNode node, String lowerQuery) {
+    var c = node.name.toLowerCase().contains(lowerQuery) ? 1 : 0;
+    for (final child in node.children) {
+      c += _countMatches(child, lowerQuery);
+    }
+    return c;
+  }
+
+  /// 递归遍历全树, 返回名字 contains(query) 的节点 id 集合
+  Set<String> _collectMatches(FranchiseeTreeNode node, String lowerQuery) {
+    final result = <String>{};
+    if (node.name.toLowerCase().contains(lowerQuery)) result.add(node.id);
+    for (final child in node.children) {
+      result.addAll(_collectMatches(child, lowerQuery));
+    }
+    return result;
+  }
+
   Widget _buildTreeView(FranchiseeTreeNode tree) {
     if (tree.children.isEmpty) {
       return EmptyState(
@@ -201,6 +297,12 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
     // 计算画布大小
     final canvasSize = TreeLayout.computeCanvasSize(tree, _depth);
     final positions = TreeLayout.computePositions(tree, canvasSize);
+
+    // 搜索匹配集合 (空查询 → null, painter 不参与高亮)
+    final q = _search.trim();
+    final Set<String>? searchMatchedIds = q.isEmpty
+        ? null
+        : _collectMatches(tree, q.toLowerCase());
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -218,6 +320,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
                   root: tree,
                   positions: positions,
                   highlightedNodeId: _highlightedNode?.id,
+                  searchMatchedIds: searchMatchedIds,
                   currentUserId: tree.id,
                 ),
               ),

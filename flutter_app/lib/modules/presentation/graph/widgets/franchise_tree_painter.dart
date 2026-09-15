@@ -133,14 +133,30 @@ class FranchiseTreePainter extends CustomPainter {
   final FranchiseeTreeNode root;
   final Map<String, Offset> positions;
   final String? highlightedNodeId;
+
+  /// 搜索匹配节点 id 集合 (来自页面顶部搜索框).
+  /// 与 highlightedNodeId 是独立的两条高亮路径, painter 取并集渲染.
+  /// - null = 无搜索 (不参与高亮)
+  /// - 空 Set = 有搜索但 0 匹配 (与 null 表现一致, 不污染)
+  /// - 非空 Set = 这些 id 全部高亮
+  final Set<String>? searchMatchedIds;
+
   final String? currentUserId; // 根节点标识 (绿色"我")
 
   FranchiseTreePainter({
     required this.root,
     required this.positions,
     this.highlightedNodeId,
+    this.searchMatchedIds,
     this.currentUserId,
   });
+
+  /// 判断某节点是否被「任何来源」高亮 (长按 / 搜索 / 并集)
+  bool _isAnyHighlight(String nodeId) {
+    if (highlightedNodeId != null && highlightedNodeId == nodeId) return true;
+    if (searchMatchedIds != null && searchMatchedIds!.contains(nodeId)) return true;
+    return false;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -156,10 +172,18 @@ class FranchiseTreePainter extends CustomPainter {
       final childPos = positions[child.id];
       if (childPos == null) continue;
 
+      // 是否被搜索高亮 (任一端命中即加粗高亮, 否则淡化)
+      final edgeHighlighted =
+          _isAnyHighlight(node.id) || _isAnyHighlight(child.id);
+      final color = edgeHighlighted
+          ? AppTheme.accent.withOpacity(0.9)
+          : AppTheme.primaryDark.withOpacity(0.35);
+      final stroke = edgeHighlighted ? 3.5 : 2.0;
+
       // 父→子连线 (用柔和的曲线)
       final paint = Paint()
-        ..color = AppTheme.primaryDark.withOpacity(0.6)
-        ..strokeWidth = 2
+        ..color = color
+        ..strokeWidth = stroke
         ..style = PaintingStyle.stroke;
 
       final path = Path();
@@ -180,10 +204,14 @@ class FranchiseTreePainter extends CustomPainter {
     if (pos == null) return;
 
     final isCurrentUser = currentUserId != null && node.id == currentUserId;
-    final isHighlighted = node.id == highlightedNodeId;
+    final isHighlighted = _isAnyHighlight(node.id);
+    // 「有高亮但当前节点不在高亮集合内」 = 淡化 (长按 / 搜索只要触发, 整体淡化其余)
+    final anyHighlightActive = highlightedNodeId != null ||
+        (searchMatchedIds != null && searchMatchedIds!.isNotEmpty);
+    final isFaded = anyHighlightActive && !isHighlighted;
 
-    _drawNodeCircle(canvas, pos, node, isCurrentUser, isHighlighted);
-    _drawNodeLabel(canvas, pos, node, isCurrentUser);
+    _drawNodeCircle(canvas, pos, node, isCurrentUser, isHighlighted, isFaded);
+    _drawNodeLabel(canvas, pos, node, isCurrentUser, isFaded);
 
     for (final child in node.children) {
       _drawNodes(canvas, child);
@@ -196,6 +224,7 @@ class FranchiseTreePainter extends CustomPainter {
     FranchiseeTreeNode node,
     bool isCurrentUser,
     bool isHighlighted,
+    bool isFaded,
   ) {
     // 1. 阴影 (highlight 时加)
     if (isHighlighted) {
@@ -208,8 +237,15 @@ class FranchiseTreePainter extends CustomPainter {
       );
     }
 
-    // 2. 主圆 (当前用户=绿, 其他=紫)
-    final color = isCurrentUser ? AppTheme.primary : AppTheme.franchisee;
+    // 2. 主圆 (当前用户=绿, 其他=紫; 淡化时用低饱和灰)
+    final Color color;
+    if (isFaded) {
+      color = AppTheme.franchisee.withOpacity(0.35);
+    } else if (isCurrentUser) {
+      color = AppTheme.primary;
+    } else {
+      color = AppTheme.franchisee;
+    }
     canvas.drawCircle(
       center,
       TreeLayout.nodeRadius,
@@ -220,7 +256,7 @@ class FranchiseTreePainter extends CustomPainter {
     canvas.drawCircle(
       center,
       TreeLayout.nodeRadius - 4,
-      Paint()..color = Colors.white.withOpacity(0.2),
+      Paint()..color = Colors.white.withOpacity(isFaded ? 0.1 : 0.2),
     );
 
     // 4. 首字母 (大字)
@@ -228,9 +264,9 @@ class FranchiseTreePainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: initial,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 32,
-          color: Colors.white,
+          color: isFaded ? Colors.white.withOpacity(0.5) : Colors.white,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -244,15 +280,18 @@ class FranchiseTreePainter extends CustomPainter {
     Offset center,
     FranchiseeTreeNode node,
     bool isCurrentUser,
+    bool isFaded,
   ) {
     // 姓名 (圆下方)
     final name = node.name;
     final tpName = TextPainter(
       text: TextSpan(
         text: name,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 16,
-          color: AppTheme.textPrimary,
+          color: isFaded
+              ? AppTheme.textPrimary.withOpacity(0.4)
+              : AppTheme.textPrimary,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -269,11 +308,13 @@ class FranchiseTreePainter extends CustomPainter {
     // "我" 标记 (根节点)
     if (isCurrentUser) {
       final tpMe = TextPainter(
-        text: const TextSpan(
+        text: TextSpan(
           text: '(我)',
           style: TextStyle(
             fontSize: 12,
-            color: AppTheme.primary,
+            color: isFaded
+                ? AppTheme.primary.withOpacity(0.5)
+                : AppTheme.primary,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -293,8 +334,12 @@ class FranchiseTreePainter extends CustomPainter {
           style: TextStyle(
             fontSize: 11,
             color: node.placementSide == 'left'
-                ? AppTheme.primaryDark
-                : AppTheme.franchisee,
+                ? (isFaded
+                    ? AppTheme.primaryDark.withOpacity(0.4)
+                    : AppTheme.primaryDark)
+                : (isFaded
+                    ? AppTheme.franchisee.withOpacity(0.4)
+                    : AppTheme.franchisee),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -309,8 +354,20 @@ class FranchiseTreePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant FranchiseTreePainter old) {
-    return old.root != root ||
+    if (old.root != root ||
         old.highlightedNodeId != highlightedNodeId ||
-        old.currentUserId != currentUserId;
+        old.currentUserId != currentUserId) {
+      return true;
+    }
+    // searchMatchedIds: Set 默认 == 是 identity, 内容比较需手写
+    final a = old.searchMatchedIds;
+    final b = searchMatchedIds;
+    if (identical(a, b)) return false;
+    if (a == null || b == null) return true;
+    if (a.length != b.length) return true;
+    for (final id in a) {
+      if (!b.contains(id)) return true;
+    }
+    return false;
   }
 }
