@@ -11,6 +11,8 @@ class WebCookieSync {
   static Map<String, String> readAll() {
     final result = <String, String>{};
     final cookieStr = html.document.cookie;
+    // ignore: avoid_print
+    print('[R12 debug] WebCookieSync.readAll: cookieStr.len=${cookieStr.length}, preview=${cookieStr.substring(0, cookieStr.length < 50 ? cookieStr.length : 50)}');
     if (cookieStr == null || cookieStr.isEmpty) return result;
     for (final part in cookieStr.split(';')) {
       final i = part.indexOf('=');

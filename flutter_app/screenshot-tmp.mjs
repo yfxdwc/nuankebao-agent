@@ -3,17 +3,22 @@ const { chromium } = pkg;
 const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const ctx = await browser.newContext({ viewport: { width: 420, height: 880 }, serviceWorkers: 'block' });
 const page = await ctx.newPage();
-console.log('打开 http://localhost:3003/app/customers?_dev_token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q...');
-await page.goto('http://localhost:3003/app/customers?_dev_token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiQ05GSnZpd2libWtvQWNrangxbVBtNnVndEtYV1diRUJrWEZoeFFnMlVxM1kzb2E3WXpNR08zRnF6YVFhZjZQU3p0MGhUN0d2R0tHb2RIdzFOQ0xLdEEifQ..IRglLrkt49syOBZoJJ59wA.FjrgYL-L1E8nYHjy7m7vw_r_ZLJhTXEMml9ZR_SEO9PvZyq3wCyOTAagQIRIWZE5-ykzmgS4WkqUMj8h4GKJ949KfGnN1XM_R5LuezFryEG0Q7ATpOe6uhOQ78tU4z12pCOJFd-9U3_mqpMK-EH9WAYBjiAXChfczyJD8BxY_zGNEepHIZQhSr-nBs5fILrj.jUutFKLPrtAAg14kLWW77tS4Wfxn-cvJa1iVxhxFRJU', { waitUntil: 'domcontentloaded', timeout: 60000 });
-await page.waitForTimeout(25000);
-await page.screenshot({ path: '/tmp/r12-fix-v4.png', fullPage: false });
+page.on('console', msg => { const t = msg.text(); if (t.includes('R12')) console.log('[browser]', t); });
+
+await page.goto('http://localhost:3003/app/', { waitUntil: 'load', timeout: 60000 });
+await page.waitForTimeout(20000);
+
+const r = await page.evaluate(async () => {
+  const resp = await fetch('/api/auth/flutter-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: '13800138000', code: '123456' }) });
+  return { status: resp.status, cookies: document.cookie };
+});
+console.log('after login: docCookies len=', r.cookies.length);
+
+await page.goto('http://localhost:3003/app/customers?_init=13', { waitUntil: 'load', timeout: 60000 });
+await page.waitForTimeout(30000);
+
 const url = page.url();
-const html = await page.content();
-console.log('URL:', url.slice(-80));
-console.log('"图谱":', html.includes('图谱'));
-console.log('"王女士":', html.includes('王女士'));
-console.log('"客户":', html.includes('客户'));
-console.log('"登录":', html.includes('登录'));
+console.log('URL:', url);
 if (url.includes('/login')) console.log('❌ 还在 /login');
-else if (url.includes('customers')) console.log('✅✅✅ R12 治本成功!');
+else if (url.includes('customers')) console.log('✅ 不循环!');
 await browser.close();
