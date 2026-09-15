@@ -4,7 +4,9 @@
 // 单文件 ~400 行, 易维护
 // =================================
 
+import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/customer.dart';
 import '../models/wellness_record.dart';
 import '../models/dictionaries.dart';
@@ -26,6 +28,17 @@ class AuthService {
     final csrf = csrfRes.data['csrfToken'] as String?;
     if (csrf == null) {
       throw Exception('获取安全令牌失败, 请检查网络后重试');
+    }
+
+    // R12 治本方案 A: dev + web 走专用 endpoint 拿 body token (HttpOnly 绕不过)
+    if (kIsWeb) {
+      try {
+        await _loginDevWeb(phone: phone, code: code);
+        return; // dev web 登录成功, storage 有 token
+      } catch (e) {
+        // dev 专用 endpoint 不可用 (prod? 部署环境不同?) fallback 老 Auth.js callback
+        // (老路径 web 仍会循环, 但 native / prod 仍能走)
+      }
     }
 
     final loginRes = await _dio.post(
@@ -53,9 +66,50 @@ class AuthService {
     if (!ok) {
       throw Exception('登录失败, 请检查验证码');
     }
+    // R12 治本: 拿到 session cookie 后从浏览器 document.cookie 同步 (web 平台)
+    // dio onResponse 拦截器已经 set 了 (native 平台), 这里多一道兑底以防 web XHR
+    // 头不可见。带后存储后 isLoggedIn() / _checkLogin() 能读到。
+    await ApiClient.syncCookiesFromBrowser();
+  }
+
+  /// R12 治本方案 A: dev + web 平台走专用 endpoint 拿 body 返回的 session token
+  ///
+  /// Auth.js 默认 httpOnly=true, JS 读不到。dio XHR 拿不到 Set-Cookie 头。
+  /// 唯一可行的路径: 后端返回 body 带 token (dev 模式 only, prod  404)。
+  ///
+  /// 调用后:
+  ///   - storage.session_cookie_name + session_token 已写入
+  ///   - 后续 dio 请求从 storage 读 token 拼 Cookie 头
+  Future<void> _loginDevWeb({required String phone, required String code}) async {
+    // 用 dio 调 endpoint (dio web 平台 XHR 拿不到 Set-Cookie 头, 但能读 body)
+    final resp = await _dio.post('/auth/flutter-login', data: {
+      'phone': phone,
+      'code': code,
+    }, options: Options(contentType: Headers.jsonContentType));
+    if (resp.statusCode != 200 || resp.data is! Map) {
+      throw Exception('登录响应格式错误');
+    }
+    final body = resp.data as Map;
+    if (body['sessionToken'] is! String) {
+      throw Exception(body['error']?.toString() ?? '登录失败');
+    }
+    final cookieName = (body['cookieName'] as String?) ?? 'authjs.session-token';
+    final sessionToken = body['sessionToken'] as String;
+    // R12 治本 (web): flutter_secure_storage 强制 AES 加密, raw token 不可注入.
+    // 改存 ApiClient 内存变量. 跳 storage 路径 — 冷启动会丢, 但 dev 模式接受.
+    ApiClient.setWebSession(cookieName: cookieName, token: sessionToken);
+    // 另存 storage 作兑底 (native 路径仍用, web 路径优先内存变量)
+    await ApiClient.storage.write(
+      key: ApiClient.sessionCookieNameKey, value: cookieName);
+    await ApiClient.storage.write(
+      key: ApiClient.sessionTokenKey, value: sessionToken);
   }
 
   Future<bool> isLoggedIn() async {
+    // R12 治本 (web): 优先读内存变量 (flutter_secure_storage web 强制 AES 加密,
+    // 外部注入 / 冷启动拿不到). native 走 storage.
+    final wsTok = ApiClient.webSessionToken;
+    if (wsTok != null && wsTok.isNotEmpty) return true;
     final token = await ApiClient.storage.read(key: ApiClient.sessionTokenKey);
     return token != null && token.isNotEmpty;
   }

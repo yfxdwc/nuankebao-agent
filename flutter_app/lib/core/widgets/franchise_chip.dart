@@ -1,6 +1,6 @@
 // 加盟徽章 (紫色色块, 中老年清晰)
 import 'package:flutter/material.dart';
-import ''../theme/app_theme.dart'';
+import '../theme/app_theme.dart';
 
 class FranchiseChip extends StatelessWidget {
   /// 'franchisee' = 紫色"加盟"

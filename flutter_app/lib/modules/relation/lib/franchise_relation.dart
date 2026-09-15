@@ -56,7 +56,7 @@ class FranchiseRelationSystem implements RelationSystem {
     final tree = await _service.getMyTree(depth: 1);
     final parent = _findById(tree, parentId);
     if (parent == null) return [];
-    return parent.children.map(_toRelationNode).toList();
+    return parent.children.map(_toRelationNodeFromTree).toList();
   }
 
   @override

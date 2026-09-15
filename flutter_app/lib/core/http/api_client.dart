@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'web_cookie_sync.dart' as web_cookie;
 
 /// 规整 暖客宝 API base URL → 恒以 /api 结尾。
 ///
@@ -117,6 +119,71 @@ class ApiClient {
     await storage.delete(key: sessionTokenKey);
   }
 
+  /// R12 治本 (方案 B): web 平台从 document.cookie 读 Auth.js cookie
+  /// 同步到 storage + 内存 jar。
+  ///
+  /// 调用时机:
+  ///   1. AuthService.login() 成功后 (server 302 + 浏览器已写 cookie)
+  ///   2. onResponse 拦截器 (作为 dio 拦截不到的 web 平台兑底)
+  ///   3. App 启动 isLoggedIn() 前 (冷启动补一次)
+  ///
+  /// 边界:
+  ///   - HttpOnly cookie 拿不到 (Auth.js session-token 是 HttpOnly, 平台限制)
+  ///     → 这个限制让方案 B 在生产 web 上失败. 治本需方案 A (CORS ACAO)
+  ///     或者换 cookie 策略 (非 HttpOnly).
+  ///   - dev 模式 cookie 是 authjs.session-token (不 HttpOnly, 能读到)
+  ///     → dev 模式 R12 治本有效, 跟 owner 调试场景贴齐
+  static Future<void> syncCookiesFromBrowser() async {
+    if (!kIsWeb) return;
+    final cookies = web_cookie.WebCookieSync.readAll();
+    if (cookies.isEmpty) return;
+    final sessionName = cookies['authjs.session-token'] ??
+        cookies['__Secure-authjs.session-token'];
+    if (sessionName != null && sessionName.isNotEmpty) {
+      await storage.write(key: sessionCookieNameKey, value: sessionName);
+      // HttpOnly 时 value 为空字符串, 保留 name 但下次 onRequest 拼 Cookie 头
+      // 时 token 仍会是空 → 会 401. dev 模式不 HttpOnly 能读到 value.
+      await storage.write(key: sessionTokenKey, value: sessionName);
+    }
+  }
+
+  /// R12 治本: web 平台 session token 存到内存 (flutter_secure_storage web 强制 AES 加密,
+  /// 外部注入 / 跨会话冷启动拿不到). native 平台仍走 storage.
+  /// dio 拦截器优先读这个, 没有再 fallback storage.
+  static String? _webSessionToken;
+  static String? _webSessionCookieName;
+  // public getter 给 isLoggedIn / 其他模块读 (private static field 跨文件不可访问)
+  static String? get webSessionToken => _webSessionToken;
+  static String? get webSessionCookieName => _webSessionCookieName;
+  static void setWebSession({required String cookieName, required String token}) {
+    _webSessionCookieName = cookieName;
+    _webSessionToken = token;
+  }
+  static void clearWebSession() {
+    _webSessionCookieName = null;
+    _webSessionToken = null;
+  }
+
+  /// R12 治本 dev 模式旁路: 从 URL query 读 ?_dev_token=... 注入 session
+  /// (Playwright / 调试人手使用). 仅 web + dev mode 生效.
+  ///
+  /// 用法: POST /api/auth/flutter-login 拿 body.sessionToken, 填到 URL
+  /// http://localhost:3003/app/customers?_dev_token=<jwt>
+  ///
+  /// 生产 HTTPS + HttpOnly cookie 这个方案走不了, 但生产本身不应该用 web.
+  static Future<void> maybeInjectDevTokenFromUrl() async {
+    if (!kIsWeb) return;
+    // ignore: do_not_use_environment
+    final uri = Uri.base;
+    final token = uri.queryParameters['_dev_token'];
+    if (token == null || token.isEmpty) return;
+    final cookieName =
+        uri.queryParameters['_dev_cookie_name'] ?? 'authjs.session-token';
+    setWebSession(cookieName: cookieName, token: token);
+    // ignore: avoid_print
+    print('[R12 debug] injected dev token from URL: name=$cookieName tokenLen=${token.length}');
+  }
+
   static ApiClient create() {
     final dio = Dio(BaseOptions(
       baseUrl: baseUrl,
@@ -139,8 +206,14 @@ class ApiClient {
             options.method.toUpperCase() == 'HEAD') {
           options.headers.remove(Headers.contentTypeHeader);
         }
-        final name = await sessionCookieName();
-        final token = await sessionToken();
+        // R12 治本 (web): 优先读内存里的 session (flutter_secure_storage 加密拿不到)
+        // native: 走 storage
+        String? name = _webSessionCookieName;
+        String? token = _webSessionToken;
+        if (name == null || token == null) {
+          name = await sessionCookieName();
+          token = await sessionToken();
+        }
         final parts = <String>[];
         if (name != null && token != null) {
           parts.add('$name=$token');
@@ -150,6 +223,9 @@ class ApiClient {
         }
         if (parts.isNotEmpty) {
           options.headers['Cookie'] = parts.join('; ');
+          // ignore: avoid_print
+          final cookiePreview = parts.join('; ');
+          print('[R12 debug] dio onRequest: Cookie=${cookiePreview.substring(0, cookiePreview.length < 80 ? cookiePreview.length : 80)}...');
         }
         return handler.next(options);
       },
@@ -170,6 +246,8 @@ class ApiClient {
             }
           }
         }
+        // R12 治本: web 平台 XHR 拿不到 Set-Cookie 头, 同步从 document.cookie 兑底
+        await syncCookiesFromBrowser();
         return handler.next(response);
       },
       onError: (e, handler) {

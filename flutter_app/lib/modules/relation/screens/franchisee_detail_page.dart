@@ -9,12 +9,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/franchisee.dart';
+import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../lib/relation_system.dart';
 import '../lib/relation_system_provider.dart';
 import '../lib/franchise_relation.dart';
+import '../lib/relation_node.dart';
 import '../../../core/widgets/franchise_chip.dart';
 
 class FranchiseeDetailPage extends ConsumerWidget {

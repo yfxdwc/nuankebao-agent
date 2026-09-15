@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/franchise_chip.dart'';
+import '../../../core/widgets/franchise_chip.dart';
 
 class CustomerRow extends StatelessWidget {
   final Customer customer;
