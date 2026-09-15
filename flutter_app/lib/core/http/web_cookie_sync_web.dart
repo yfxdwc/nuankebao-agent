@@ -10,10 +10,10 @@ class WebCookieSync {
   /// —— 这是 R12 治本方案 B 的核心限制. 我们需要走其他路拿 token.
   static Map<String, String> readAll() {
     final result = <String, String>{};
-    final cookieStr = html.document.cookie;
+    final cookieStr = html.document.cookie ?? '';
     // ignore: avoid_print
     print('[R12 debug] WebCookieSync.readAll: cookieStr.len=${cookieStr.length}, preview=${cookieStr.substring(0, cookieStr.length < 50 ? cookieStr.length : 50)}');
-    if (cookieStr == null || cookieStr.isEmpty) return result;
+    if (cookieStr.isEmpty) return result;
     for (final part in cookieStr.split(';')) {
       final i = part.indexOf('=');
       if (i <= 0) continue;
