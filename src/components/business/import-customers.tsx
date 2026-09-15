@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -269,7 +270,7 @@ export function ImportCustomers() {
             <div className="flex gap-2 pt-2">
               <Button onClick={reset}>继续导入</Button>
               <Button variant="outline" asChild>
-                <a href="/admin/customers">查看客户列表</a>
+                <Link href="/admin/customers">查看客户列表</Link>
               </Button>
             </div>
           </CardContent>
