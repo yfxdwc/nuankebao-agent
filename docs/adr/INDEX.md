@@ -10,6 +10,7 @@
 | # | 标题 | 状态 | 拍板日期 | 关键决策 |
 |---|---|---|---|---|
 | 0009 | [预览框架冻结 (4 层防御)](./0009-preview-framework-freeze.md) | ✅ Accepted | 2026-09-16 | tag baseline + pre-commit guard (block) + ADR + Vitest/Playwright 测试; 9 个路径冻结 |
+| 0010 | [加盟树深度 ≤3 → ≤4 放宽 (主人 override, dev/test seed data)](./0010-franchise-tree-depth-4-dev-override.md) | ✅ Accepted | 2026-09-16 | 主人 ask_user d234bdd4 拍板; 单 tree 1+2+4+8+16=31 节点; 3 文件各改 1-3 行; ADR-0006 amendment (非废弃) |
 | 0008 | [APK 域 + WEB 域功能清单与协作关系](./0008-apk-web-domain-spec.md) | ✅ Accepted | 2026-09-13 | 两域共存 (不是 dev↔prod 切换); 共享后端 API; WEB 域 production mode 永久 |
 | 0007 | [底座 + 模块化插件架构](./0007-modular-architecture.md) | ✅ Accepted | 2026-09-13 | APK 域分 `core/` 底座 + `modules/` 业务模块; WEB 域 `dev-modules/` 文档化视图; ★ RelationSystem 接口 |
 | 0006 | (预留) | — | — | — |

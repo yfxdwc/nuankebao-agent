@@ -114,10 +114,15 @@ export const franchisee = pgTable(
   })
 );
 
-// W5 RBAC: ≤3 层硬约束 CHECK (ADR-0006 合规边界 / 《禁止传销条例》)
+// ADR-0010: ≤4 层硬约束 (主人 2026-09-16 override)
+//   历史: ADR-0006 设 ≤3 层 (《禁止传销条例》红线) → ADR-0010 放宽到 ≤4 (dev/test seed data)
+//   注: schema.ts 的 sql raw block 当前未被 migrate 应用, 约束只在 src/lib/db/queries/franchisee-tree.ts:46 service 层 enforce
+//       所以本 sql block 实际是「文档 / 漂移预防」作用, 真改要去改 service. 真上 prod 时要么:
+//         (a) 把这段 sql 真接到 drizzle migrate 加 CHECK constraint (防御性)
+//         (b) 删掉这段 (避免跟 service drift, 靠单层 service 兜底)
 export const franchiseeMaxDepthCheck = sql`
-  ALTER TABLE franchisee ADD CONSTRAINT franchisee_max_depth_3
-  CHECK (placement_depth <= 3)
+  ALTER TABLE franchisee ADD CONSTRAINT franchisee_max_depth_4
+  CHECK (placement_depth <= 4)
 `;
 
 export type Franchisee = typeof franchisee.$inferSelect;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { z } from "zod";
 import {
   listWellnessRecords,
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!isAuthSkipped() && !session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -58,7 +59,8 @@ export async function POST(request: NextRequest) {
     const input = CreateWellnessRecordSchema.parse(body);
 
     const ctx = getAuditContextFromRequest(request, session);
-    const record = await createWellnessRecord(input, ctx, BigInt(session.user.id));
+    const userId = session?.user?.id ? BigInt(session.user.id) : BigInt(0);
+    const record = await createWellnessRecord(input, ctx, userId);
 
     return NextResponse.json(record, { status: 201 });
   } catch (error) {

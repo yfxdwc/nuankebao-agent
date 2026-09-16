@@ -34,7 +34,8 @@ export interface PlaceResult {
  *
  * 边界:
  *   - referrerId 必须存在 (调用方保证)
- *   - 二叉树深度理论无限 (W5 RBAC 时再加 ≤3 层硬约束)
+ *   - 二叉树深度上限 4 层 (主人 2026-09-16 override, ADR-0010)
+ *     历史: 3 层 → 4 层 (test data 单 tree 31 节点需求, dev/test only)
  *   - 返回 fallback=true 让 frontend 提示"已自动放到 XXX"
  */
 export async function placeNewFranchisee(
@@ -42,8 +43,12 @@ export async function placeNewFranchisee(
   referrerId: bigint,
   sideHint?: PlacementSide
 ): Promise<PlaceResult> {
-  // W5 RBAC: ≤3 层硬约束 (ADR-0006 / 《禁止传销条例》)
-  // referrer depth >= 3 不能添加下线 (DB CHECK 也会拒, 这是双层防御)
+  // ADR-0010: 主人 2026-09-16 override, ≤4 层硬约束 (dev/test seed data)
+  //   - 目的: 1 个 tree 装 31 节点 (1+2+4+8+16), 满足主人「30+ 加盟商」需求
+  //   - 边界: referrer depth >= 4 不能添加下线 (depth 4 节点不允许有子)
+  //   - 风险: ADR-0006 合规边界放宽 1 层, 仍 < 5 (《禁止传销条例》实务解读 5+ 才入刑)
+  //   - 回滚: 删 ADR-0010 + 把 4 改回 3 (1 行). depth=4 节点保留可查, 但不能再加子
+  const MAX_DEPTH = 4; // ADR-0010 override; revert: 改回 3
   const [ref] = await tx
     .select({ id: franchisee.id, depth: franchisee.placementDepth })
     .from(franchisee)
@@ -59,9 +64,9 @@ export async function placeNewFranchisee(
     throw new Error(`Referrer not found: ${referrerId}`);
   }
 
-  if (ref.depth >= 3) {
+  if (ref.depth >= MAX_DEPTH) {
     throw new Error(
-      `加盟树深度上限 3 层, 不能再添加下线 (ADR-0006 红线, referrer depth=${ref.depth})`
+      `加盟树深度上限 ${MAX_DEPTH} 层, 不能再添加下线 (ADR-0010 主人 override, referrer depth=${ref.depth})`
     );
   }
 

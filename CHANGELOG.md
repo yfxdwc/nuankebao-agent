@@ -2,6 +2,31 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased]
+
+### 🌲 加盟树深度放宽 ≤3 → ≤4 (ADR-0010, 主人 override)
+
+**背景**: 主人 2026-09-16 ask 拍板: "测试数据中各类型的客户都创建一些. 加盟客户创建 30 个以上, 尽量体现更多更全面的复杂的分支、关系".
+
+加盟二叉树 ≤3 层硬约束下, 单 tree 最多 15 节点 (1+2+4+8). 要 30+ 必须放宽到 ≤4 层 (1+2+4+8+16=31). 主人选 `relax-3to4` 候选 (D), 显式 override ADR-0006 合规红线.
+
+**主人 2 个细节拍板** (ask_user d234bdd4, 2026-09-16): `tree-shape=relax-3to4` (单 tree 31 节点) + `种子=没加盟、没做过养生、但已加连接方式或在暖客宝中添加了基础信息的潜在客户` (主人自定义语义, 不归 schema type 字段, 用 notes 标记).
+
+### Changed
+
+- **`src/lib/db/queries/franchisee-tree.ts:46-67`** — `if (ref.depth >= 3)` → `const MAX_DEPTH = 4` + ADR-0010 引用注释. service 层 hard guard.
+- **`src/app/api/franchisees/me/tree/route.ts:25`** — `Math.min(depth, 3)` → `Math.min(depth, 4)`. tree 查询最大深度.
+- **`src/lib/db/schema.ts:118-123`** — `franchisee_max_depth_3 CHECK (≤3)` → `franchisee_max_depth_4 CHECK (≤4)`. sql raw block (当前未接入 migrate, 文档作用).
+
+### Added
+
+- **`docs/adr/0010-franchise-tree-depth-4-dev-override.md`** (~200 行) — ADR-0006 amendment, 4 候选评估 + 主人 override 依据 + 合规风险 (《禁止传销条例》实务 ≤5 才入刑) + revert 流程
+- **`docs/adr/INDEX.md`** — 加 0010 行
+
+### Not Changed (TODO 记账)
+
+- DB CHECK constraint 实际未接入 drizzle migrate (待 §5 Follow-up): 当前 service 层兜底, 直 DB insert 仍可超 depth 4 (主人评估可接受)
+
 ## [0.5.2] - 2026-09-16
 
 ### 🔒 预览框架冻结 (Preview Framework Freeze, ADR-0009)

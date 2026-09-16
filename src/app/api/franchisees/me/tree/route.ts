@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const depth = Math.min(
     parseInt(searchParams.get("depth") ?? "3"),
-    3 // W5 RBAC: ≤3 层硬限 (ADR-0006 / 《禁止传销条例》红线)
+    4 // ADR-0010: ≤4 层硬限 (主人 2026-09-16 override, dev/test seed data 需求)
   );
 
   // ★ 业务空状态 (非错误): user 没加盟关系 → 返回 200 + 空树.
