@@ -460,3 +460,105 @@ bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached +
 - [ ] `cat .pi/settings.json` 看到 `extensions: ["./extensions/auto-task-snapshot.ts"]`
 - [ ] 在 nuankebao-agent cwd 启动 pi, 发第一条 user 消息, 看到 `🔖 Auto-snapshot: auto-...` notify
 - [ ] agent 说完话后 `git status` 显示 `nothing to commit, working tree clean`
+
+## §9. 预览框架冻结 (Preview Framework Freeze) (CHARTER §7 反模式沉淀 + ADR-0009)
+
+> **生效**: 2026-09-16 主人拍板 (CHANGELOG [0.5.2], ADR-0009).
+> **基线**: `baseline-preview-v0.1.4-280f5fa` (commit `280f5fa`).
+> **保护**: `tools/pre-commit-preview-guard.sh` 已装 (`.git/hooks/pre-commit` symlink).
+> **测试**: `pnpm test` 跑 `tests/preview-framework-snapshot.test.ts` + `pnpm test:e2e` 跑 `e2e/preview-smoke.spec.ts`.
+
+### §9.1 红线 (一图概览)
+
+```
+预览框架 9 个路径 = 冻结 (baseline-preview-v0.1.4-280f5fa):
+
+  src/app/app-preview/             ← 主预览页 (Next.js page + iframe)
+  src/app/preview/                 ← /preview → /app-preview 307 redirect 兜底
+  src/components/preview/          ← PreviewFrame + FlutterWebLoginBanner (2 个组件)
+  tools/build-flutter-web.sh       ← 一键 build + sync (编译产物 → public/app/)
+  tools/dev-app-proxy.py           ← Flutter web dev server 反代 (?dev=1 路径核心)
+  tools/install-dev-app-proxy.sh   ← dev-app-proxy.py 一键安装 (systemd user)
+  tools/install-flutter-dev-tunnel.sh  ← cloudflared path rule 安装
+  tools/start-flutter-dev.sh       ← Flutter web dev server 启动器 (后台/前台/stop/status)
+  public/app/                      ← Flutter web 编译产物 (git tracked)
+
+不在冻结清单的相邻文件:
+  ❌ flutter_app/lib/**           (业务源码, 改业务 ≠ 改 preview)
+  ❌ src/app/(admin)/             (已 freeze-keep, 跟本机制独立)
+  ❌ src/components/business/     (WEB admin 业务组件)
+  ❌ tools/pre-commit-preview-guard.sh  (guard 自身, 改它要走 §9.3 SOP)
+  ❌ docs/dev-modules/flutter-preview.md (治理文档, 可演进)
+  ❌ tests/preview-framework-snapshot.test.ts + e2e/preview-smoke.spec.ts (测试自身)
+```
+
+### §9.2 违规 = 立即阻断
+
+任何 commit 修改上面 9 个路径中**任一**文件, `pre-commit-preview-guard.sh` 立即 **exit 1**:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚫 Preview Framework Guard: 检测到预览框架文件被修改
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - src/components/preview/preview-frame.tsx
+
+预览框架已冻结 (baseline-preview-v0.1.4-280f5fa).
+修改前必读: docs/adr/0009-preview-framework-freeze.md §3 改前 SOP
+
+如确认必要 (主人拍板后), 用 --no-verify bypass:
+  git commit --no-verify -m 'fix(preview): ...'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### §9.3 改前 SOP (强约束, 不是禁止)
+
+1. **ask_user 拍板** — 改 preview 框架**不**是 agent 自动决策, 必须主人 ask_user 拍.
+   - ❌ 禁止"顺手优化 preview CSS"
+   - ❌ 禁止"agent 自动任务改了 preview banner 文案"
+   - ✅ 触发场景: 主人显式升级 / W19+ 大版本 / 业务模块深度联动
+2. **跑测试看 baseline 状态** — `pnpm test tests/preview-framework-snapshot.test.ts` 必须 pass
+3. **现场验证** — `bash tools/check-port.sh 3003` + `pnpm dev` + 浏览器开 `/app-preview` 看 preview 稳
+4. **commit 显式声明** — 两种方式选一:
+   - `git commit --no-verify -m "fix(preview): ..."` (推荐, 简单)
+   - `git commit -m "[preview-bypass] fix(preview): ..."` (留痕)
+
+### §9.4 应急解冻 (preview 已挂, 来不及走 §9.3)
+
+详见 [ADR-0009 §4](../docs/adr/0009-preview-framework-freeze.md#4-应急解冻-emergency-unfreeze).
+
+速查:
+
+```bash
+# 单文件回滚
+git checkout baseline-preview-v0.1.4-280f5fa -- src/components/preview/preview-frame.tsx
+git commit --no-verify -m "fix(preview): 紧急回滚 preview-frame.tsx 到 baseline"
+
+# 整 framework 回滚
+git stash push -m "preview-emergency-$(date +%s)"
+git checkout baseline-preview-v0.1.4-280f5fa -- src/app/app-preview/ src/app/preview/ src/components/preview/ tools/build-flutter-web.sh tools/dev-app-proxy.py tools/install-dev-app-proxy.sh tools/install-flutter-dev-tunnel.sh tools/start-flutter-dev.sh public/app/
+git add -A
+git commit --no-verify -m "fix(preview): 紧急回滚整个 preview framework 到 baseline-preview-v0.1.4-280f5fa"
+```
+
+**应急解冻后强制**: 24h 内写 `docs/preview-emergency-postmortem-<date>.md` + 主人 review + AGENTS §X 加新反模式条目.
+
+### §9.5 与其他规则的关系
+
+| 机制 | 关系 |
+|---|---|
+| **task-snapshot** (§8.1) | 改 preview 框架 = 跨域 + ≥3 文件 → 强制先 `task-snapshot.sh start preview-XXX` |
+| **CHANGELOG [0.5.2]** | 任何 preview framework bypass commit 必须同时更新 CHANGELOG, 否则 PR 阻断 |
+| **CI `pnpm test` / `pnpm test:e2e`** | preview-framework-snapshot.test.ts + preview-smoke.spec.ts 是 gate, fail = 不收 |
+| **CHARTER §7 反模式沉淀** | 本机制是 W14 R12 三次复发的"治本沉淀", 写在这里是反模式沉淀的代表案例 |
+| **ADR-0005 web admin freeze-keep** | 平行机制 (web admin 冻结 vs preview 冻结), 各自独立 |
+
+### §9.6 验收清单 (新装 / 改 / 排错后必看)
+
+- [ ] `git tag -l 'baseline-preview-*'` 看到 `baseline-preview-v0.1.4-280f5fa`
+- [ ] `ls -la .git/hooks/pre-commit` 看到 symlink → `../../tools/pre-commit-preview-guard.sh`
+- [ ] `cat tools/pre-commit-preview-guard.sh` 看到 9 个冻结路径 hardcoded
+- [ ] 在预览框架文件上 `git add` + `git commit` (无 --no-verify) → 应 exit 1 + 看到阻断 banner
+- [ ] 同样 commit 加 `--no-verify` → 应 exit 0 + commit 成功
+- [ ] `pnpm test tests/preview-framework-snapshot.test.ts` 应 pass (9 个路径验证 + version.json 一致性)
+- [ ] `pnpm test:e2e e2e/preview-smoke.spec.ts` 应 pass (主人 dev server 3003 + 可选 :8080)
+- [ ] `cat docs/adr/0009-preview-framework-freeze.md` 阅读 §3 改前 SOP 知晓

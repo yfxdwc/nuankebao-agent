@@ -3,6 +3,7 @@
 > **职责**: 在 WEB 端预览 Flutter web 编译产物 (mobile-first 验收用)
 > **物理位置**: `src/app/{app-preview,preview}/` + `src/components/preview/` + `public/app/`
 > **入口**: <https://nuankebao.tooyang.top/app-preview> (部署后)
+> **冻结状态**: ⚠ **预览框架已冻结 (2026-09-16, ADR-0009, baseline-preview-v0.1.4-280f5fa)**. 详见 [§Frozen Contract](#frozen-contract-adr-0009).
 
 ## 当前实现
 
@@ -90,3 +91,73 @@ git tracked 的 Flutter web build 产物:
 - [ ] Flutter web 渲染正常 (中老年大字 + 养生绿主题)
 - [ ] 显示当前 API base URL (诊断)
 - [ ] ⚠ banner 显示 R12 提示 (informational only)
+
+## Frozen Contract (ADR-0009)
+
+> **完整决策**: [ADR-0009 §3 改前 SOP](../../adr/0009-preview-framework-freeze.md#3-改前-sop-justified-change-workflow) + [AGENTS §9](../../AGENTS.md#9-预览框架冻结-preview-framework-freeze-charter-7-反模式沉淀--adr-0009)
+>
+> **生效**: 2026-09-16 主人拍板. **基线 tag**: `baseline-preview-v0.1.4-280f5fa`.
+
+### 9 个冻结路径 (本模块物理位置)
+
+```
+src/app/app-preview/             ← 本模块主页面 (Next.js page + iframe)
+src/app/preview/                 ← /preview → /app-preview 307 redirect 兜底
+src/components/preview/          ← PreviewFrame + FlutterWebLoginBanner (2 个组件)
+public/app/                      ← Flutter web 编译产物 (git tracked)
+```
+
+加上 preview 框架生态 (跨模块但同冻结域):
+```
+tools/build-flutter-web.sh
+tools/dev-app-proxy.py
+tools/install-dev-app-proxy.sh
+tools/install-flutter-dev-tunnel.sh
+tools/start-flutter-dev.sh
+```
+
+### 改前 SOP (强约束)
+
+1. **ask_user 拍板** — 不是 agent 自动决策. 触发场景: 主人显式升级 / W19+ 大版本 / 业务模块深度联动
+2. **跑测试** — `pnpm test tests/preview-framework-snapshot.test.ts` 必须 pass (9 路径 + version.json)
+3. **现场验证** — `bash tools/check-port.sh 3003` + `pnpm dev` 后浏览器开 `/app-preview` 看 preview 稳
+4. **commit 显式声明** — 二选一:
+   - `git commit --no-verify -m "fix(preview): ..."` (推荐)
+   - `git commit -m "[preview-bypass] fix(preview): ..."` (留痕)
+
+### ⚠ 故意 NOT 冻结 (本模块演进必要)
+
+| 路径 | 不冻结原因 |
+|---|---|
+| `docs/dev-modules/flutter-preview.md` (本文件) | 治理文档 — §Frozen Contract 段本就需要演进, 自身不该被自己冻结 |
+| `flutter_app/lib/**` | 业务源码 — 改业务 = 改 preview 显示什么, **不该被 preview freeze 拦** |
+
+### 应急解冻 (preview 已挂)
+
+```bash
+# 单文件回滚
+git checkout baseline-preview-v0.1.4-280f5fa -- src/components/preview/preview-frame.tsx
+git commit --no-verify -m "fix(preview): 紧急回滚 preview-frame.tsx 到 baseline"
+
+# 整 framework 回滚 (9 个路径全打)
+git stash push -m "preview-emergency-$(date +%s)"
+git checkout baseline-preview-v0.1.4-280f5fa -- \
+  src/app/app-preview/ src/app/preview/ src/components/preview/ \
+  tools/build-flutter-web.sh tools/dev-app-proxy.py \
+  tools/install-dev-app-proxy.sh tools/install-flutter-dev-tunnel.sh \
+  tools/start-flutter-dev.sh public/app/
+git add -A
+git commit --no-verify -m "fix(preview): 紧急回滚整个 preview framework 到 baseline"
+```
+
+**应急后强制**: 24h 内写 postmortem + 主人 review + AGENTS §X 加新反模式条目.
+
+### 测试入口
+
+```bash
+# Vitest snapshot (CI 必跑)
+pnpm test tests/preview-framework-snapshot.test.ts
+
+# Playwright smoke (主人 dev server :3003 时跑; ?dev=1 路径默认 skip)
+pnpm test:e2e e2e/preview-smoke.spec.ts
+```

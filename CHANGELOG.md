@@ -2,6 +2,59 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.2] - 2026-09-16
+
+### 🔒 预览框架冻结 (Preview Framework Freeze, ADR-0009)
+
+**背景**: 主人 2026-09-16 ask 拍板: "当前的项目开发预览模式已经够用, http://192.168.1.99:3003/app-preview 与 http://192.168.1.99:3003/app 和实际代码基本实现了实时同步. 需要锁定成果, 确保预览模式稳定. 在接下来的开发过程中不管修改哪个模块的代码或增加减少哪个模块, 都不允许动这套预览框架".
+
+预览框架已演进 4 个月 (W14 R12 三次复发 → 主人 override → v0.1.4 ?dev=1 加 Flutter web dev server). 当前 `280f5fa` 是已知好状态, 但**没有治理保护**: 没有冻结清单 / 没有 baseline / 没有 commit-time guard / 没有测试覆盖 / 没有 AGENTS 红线.
+
+后果: 后续任意 task agent 不知道这个约束, 改业务模块时顺手改 preview, 预览挂掉 → 主人重新经历 W14 R12 那种"复盘 → 急救 → override → 妥协"循环.
+
+**主人 3 个细节拍板** (ask_user 04a475b1, 2026-09-16): heavy (标准 + Vitest snapshot + Playwright smoke) + block mode (必须 `--no-verify` 显式 bypass) + full ADR (~300 行, 同 ADR-0008 体量).
+
+### Added
+
+- **`docs/adr/0009-preview-framework-freeze.md`** (~300 行, 7 节) — **主文档**, 完整 4 层防御 SOP:
+  - §1 冻结清单 (9 个路径, 故意 NOT 冻结的相邻文件白名单)
+  - §2 保护机制 (4 层: tag baseline + pre-commit guard + ADR + Vitest/Playwright 测试)
+  - §3 改前 SOP (ask_user 拍板 → checklist → commit 显式声明)
+  - §4 应急解冻 (单文件 revert / 整 framework revert / post-mortem 强制)
+  - §5 候选评估 (5 方案对比 + 否决原因)
+  - §6 关联文档 (上游元宪法 + 下游 dev-modules + 工具/测试)
+  - §7 元数据 (拍板日期 / baseline sha / 复审周期)
+- **`tools/pre-commit-preview-guard.sh`** — guard 实现 (block mode, exit 1 on violation)
+- **`tests/preview-framework-snapshot.test.ts`** — Vitest snapshot (验证 9 个路径文件存在 + version.json 一致性)
+- **`e2e/preview-smoke.spec.ts`** — Playwright smoke (静态路径必须 / `?dev=1` 前置 curl :8080 否则 skip)
+- **git tag** `baseline-preview-v0.1.4-280f5fa` — 历史锚点 (已知好状态 sha)
+- **`.git/hooks/pre-commit`** symlink → `../../tools/pre-commit-preview-guard.sh`
+
+### Changed
+
+- **`AGENTS.md` §9 新加** — Preview Framework Freeze 红线 (一图概览 + 违规 = 阻断 + 改前 SOP + 应急解冻 + 与其他规则关系 + 验收清单)
+- **`docs/adr/INDEX.md`** — 加 ADR-0009 行 (按时间倒序插到顶部) + 元架构分类加一行
+- **`docs/dev-modules/flutter-preview.md`** — 加 §Frozen Contract 章节引用 ADR-0009
+
+### 不变
+
+- 预览框架 9 个路径内容**完全不变** (本次任务自身不改 preview 文件, 只加 governance)
+- v0.1.4 双域架构 (ADR-0008) 不变
+- v0.1.3 双域 + 底座 + 模块化 (ADR-0007) 不变
+- W14 R12 历史 (login-failure-triage.md) 不变 — 本 ADR 是该教训的"治本沉淀"
+
+### 验证
+
+- ✅ ADR-0009 写完整 (~300 行, 7 节, 同 ADR-0008 体量)
+- ✅ INDEX.md 更新 (top-row 插入 + 元架构分类)
+- ✅ AGENTS §9 加完整 (6 子节, 含验收清单)
+- ✅ dev-modules/flutter-preview.md 加 §Frozen Contract
+- ✅ 9 个冻结路径**未触动** (git diff baseline-preview-v0.1.4-280f5fa -- 9 paths 应为空)
+- ✅ pre-commit guard 已装, 在预览文件上 `git add` + `git commit` (无 --no-verify) 应 exit 1
+- ✅ Vitest snapshot test pass
+- ✅ Playwright smoke test pass (`?dev=1` 默认 skip)
+- ✅ git tag baseline-preview-v0.1.4-280f5fa 创建
+
 ## [0.5.1] - 2026-09-13
 
 ### 📋 APK 域 + WEB 域功能清单与协作关系细化 (v0.1.4, ADR-0008)
