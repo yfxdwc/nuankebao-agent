@@ -176,6 +176,24 @@ Q4: 怎么验证的?
 - **必查**: `flutter build web --dart-define=USE_PATH_URL_STRATEGY=true` 是否设置
 - **修复**: 加 `--dart-define=USE_PATH_URL_STRATEGY=true` 让 Flutter web 用 path 路由
 
+#### R13: Flutter web `<base href>` 与 serve 路径不一致 (/app + /app-preview 白屏, 2026-09-16)
+
+- **现象**: `/app` + `/app-preview` 一片空白. Flutter web bootstrap HTML 用 `<base href="/">` + `<script src="flutter_bootstrap.js">`, 浏览器解析为根 `/flutter_bootstrap.js`. 但 Flutter build 输出在 `public/app/`, Next.js public static serving 只暴露 `/app/*`, 根路径 404 → Flutter bootstrap JS 加载失败 → Flutter 不渲染 → 白屏.
+- **必查**:
+  - `cat public/app/index.html | grep 'base href'` 必须 = `<base href="/app/">` (跟 Next.js 服务的路径对齐)
+  - devtools Network > Flutter bootstrap 加载看是否 404
+  - **curl 验证陷阱**: `curl http://localhost:3003/app/flutter_bootstrap.js` 返回 200 OK 也会误导 — 真实问题在浏览器解析 `<base href>` 后去根路径拉. 真验证必须跑真 Chromium (playwright headless 即可, 不需要 puppeteer).
+- **修复**:
+  - `tools/build-flutter-web.sh` step 3 加 `--base-href /app/` flag (`flutter build web --release --base-href /app/ $DART_DEFINE`)
+  - rebuild: `./tools/build-flutter-web.sh --auto` (≈4 min)
+  - 主人浏览器侧 Ctrl+Shift+R 硬刷新清 SW 缓存
+- **不传 flag 的副作用清单**:
+  - Flutter bootstrap JS, main.dart.js, canvaskit/*.wasm, canvaskit/*.js, assets/*, icons/*, manifest.json, favicon.png 全部从根路径拉 → 全 404
+  - Next.js dev 日志会持续刷 `/flutter_bootstrap.js 404` + `/manifest.json 404` + `/favicon.png 404` (帮助排查)
+- **dev mode 例外**: `tools/start-flutter-dev.sh` 不传 `--web-base-href` (Flutter 3.24.5 dev server 不支持此 flag), 但 dev mode 下 Flutter web 跑在 Flutter 自己 server (:8080) 根路径, 默认 base href `/` 对得上, 不影响
+- **APK 不受影响**: APK 走 native Dio, 跟 web 资源路径无关
+- **本轮 commit**: `35aec5c` (build script) + `3b8c4e1` (auto-snapshot rebuild output, 含 public/app/index.html base href / main.dart.js / flutter_service_worker.js hash / version.json)
+
 ---
 
 ## §3. iframe 嵌 SPA 五项必查
@@ -189,8 +207,9 @@ Q4: 怎么验证的?
 | 3 | server OPTIONS 返回 `Access-Control-Allow-Origin`? | `curl -I -X OPTIONS ...` |
 | 4 | cookie Secure 标志 vs 实际协议? | devtools Application > Cookies |
 | 5 | callback 302 是否跨源? | `curl -I -X POST .../callback/credentials` 看 location |
+| 6 | **Flutter web `--base-href` 与 serve 路径一致?** (2026-09-16 加, 修 /app + /app-preview 空白) | `cat public/app/index.html \| grep 'base href'` 看 `<base href="/app/">`, 不一致 = 浏览器解析资源到根 / Flutter build 输出在 /app/ → 资源全 404 → 白屏. 修法: `tools/build-flutter-web.sh` 加 `--base-href /app/`. dev mode 不传此 flag (Flutter 3.24.5 dev server 不支持). |
 
-5 项任一未查清就上线 = 必然撞登录循环.
+6 项任一未查清就上线 = 必然撞登录循环 / 白屏.
 
 ---
 
