@@ -89,6 +89,9 @@ export default async function AppPreviewPage({ searchParams }: PageProps) {
         width={width}
         height={height}
         showFrame={showFrame}
+        flutterCssFix={true}  // q3-A 真修复 (2026-09-15 主人拍): Flutter web 在 Next.js 父页 + sandboxed iframe 下
+                              //   flt-glass-pane 默认渲染 0×0 → 空白。PreviewFrame 注入 CSS 修复
+                              //   不传 = 默认 false → 主人看到空白 = 这次的 bug.
         // v0.1.x: 不再 blockIframe=true (主人拍, R12 改用其他方式处理)
       />
     </div>
