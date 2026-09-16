@@ -297,30 +297,37 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
               ),
             ),
             // 图谱本体 (复用 modules/presentation/graph 的 painter)
+            // AGENTS §3 fix-graph-zoom-pan (2026-09-16): 用 InteractiveViewer 替代嵌套 SingleChildScrollView
+            //   - 双指缩放 (0.3 - 3.0 倍)
+            //   - 单指拖动 (panEnabled)
+            //   - boundaryMargin 预留边缘空间, 避免 pan 到边界后被夹
+            //   - 1-5 节点 → 默认 scroll OK; 30+ 节点 (master depth-4 override) → 必须 zoom/pan
+            //   - hitarea (Positioned GestureDetector) 仍可接收 tap (InteractiveViewer 不拦截单击)
             Expanded(
               child: Container(
                 color: AppTheme.bgWarm,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.vertical,
-                    child: SizedBox(
-                      width: canvasSize.width,
-                      height: canvasSize.height,
-                      child: Stack(
-                        children: [
-                          CustomPaint(
-                            size: canvasSize,
-                            painter: FranchiseTreePainter(
-                              root: tree,
-                              positions: positions,
-                              searchMatchedIds: searchMatchedIds,
-                              currentUserId: tree.id,
-                            ),
+                child: InteractiveViewer(
+                  panEnabled: true,
+                  scaleEnabled: true,
+                  minScale: 0.3,
+                  maxScale: 3.0,
+                  boundaryMargin: const EdgeInsets.all(80),
+                  child: SizedBox(
+                    width: canvasSize.width,
+                    height: canvasSize.height,
+                    child: Stack(
+                      children: [
+                        CustomPaint(
+                          size: canvasSize,
+                          painter: FranchiseTreePainter(
+                            root: tree,
+                            positions: positions,
+                            searchMatchedIds: searchMatchedIds,
+                            currentUserId: tree.id,
                           ),
-                          ..._buildHitareas(tree, positions),
-                        ],
-                      ),
+                        ),
+                        ..._buildHitareas(tree, positions),
+                      ],
                     ),
                   ),
                 ),

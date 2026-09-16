@@ -344,34 +344,38 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
         ? null
         : _collectMatches(tree, q.toLowerCase());
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.vertical,
-        child: SizedBox(
-          width: canvasSize.width,
-          height: canvasSize.height,
-          child: Stack(
-            children: [
-              // 1. Painter (连线 + 节点圆形)
-              CustomPaint(
-                size: canvasSize,
-                painter: FranchiseTreePainter(
-                  root: tree,
-                  positions: positions,
-                  highlightedNodeId: _highlightedNode?.id,
-                  searchMatchedIds: searchMatchedIds,
-                  currentUserId: tree.id,
-                ),
+    // AGENTS §3 fix-graph-zoom-pan (2026-09-16): InteractiveViewer 替代嵌套 SingleChildScrollView
+    //   - 双指缩放 0.3-3.0 倍 + 单指拖动 + boundaryMargin=80
+    //   - hitareas (GestureDetector onTap) + 空位 +号 (Positioned) 仍可点 (InteractiveViewer 不拦截 tap)
+    return InteractiveViewer(
+      panEnabled: true,
+      scaleEnabled: true,
+      minScale: 0.3,
+      maxScale: 3.0,
+      boundaryMargin: const EdgeInsets.all(80),
+      child: SizedBox(
+        width: canvasSize.width,
+        height: canvasSize.height,
+        child: Stack(
+          children: [
+            // 1. Painter (连线 + 节点圆形)
+            CustomPaint(
+              size: canvasSize,
+              painter: FranchiseTreePainter(
+                root: tree,
+                positions: positions,
+                highlightedNodeId: _highlightedNode?.id,
+                searchMatchedIds: searchMatchedIds,
+                currentUserId: tree.id,
               ),
+            ),
 
-              // 2. Positioned 透明 hitTest 区 (点击节点)
-              ..._buildHitAreas(tree, positions),
+            // 2. Positioned 透明 hitTest 区 (点击节点)
+            ..._buildHitAreas(tree, positions),
 
-              // 3. 空位提示 (虚线圆 + +号)
-              ..._buildEmptySlots(tree, positions),
-            ],
-          ),
+            // 3. 空位提示 (虚线圆 + +号)
+            ..._buildEmptySlots(tree, positions),
+          ],
         ),
       ),
     );
