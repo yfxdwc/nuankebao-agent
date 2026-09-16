@@ -36,6 +36,13 @@
 
 - **`scripts/seed-test-data.ts`** (~440 行) — idempotent, 走 API 为主 (audit log), Part E 直接 drizzle insert `user` 表绑 root franchisee (13800138000 / 123456), 让 dev login 后 `/api/franchisees/me/tree` 返回完整 31 节点
 
+### Fixed (graph InteractiveViewer)
+
+- **`flutter_app/lib/modules/customer/screens/customers_page.dart:295-326`** — `_buildGraphView` 嵌套 `SingleChildScrollView (水平+垂直)` → `InteractiveViewer(panEnabled, scaleEnabled, minScale:0.3, maxScale:3.0, boundaryMargin:80)`. 加双指缩放 + 单指拖动. 31 节点 depth-4 树 可交互
+- **`flutter_app/lib/modules/relation/screens/franchise_tree_page.dart:_buildTreeView`** — 同样替换. (legacy 关系页, `/franchise-tree` redirect 仍跳)
+- **commit `4a1693e` + `5863699`** — source + preview-bypass bundle rebuild (AGENTS §9.3 SOP)
+- **验证**: chromium + CDP touch event 模拟双指 zoom in (root 节点明显变大, 其他 2 个子被裁出); API 返 31 节点 depth=4 满二叉
+
 ## [0.5.2] - 2026-09-16
 
 ### 🔒 预览框架冻结 (Preview Framework Freeze, ADR-0009)
