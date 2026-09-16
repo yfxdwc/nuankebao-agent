@@ -10,6 +10,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/models/customer.dart';
+// fix-graph-zoom-pan (2026-09-16): auto-fit initial scale, user can see whole tree on open
+import 'dart:math' as math;
 import '../../../core/models/franchisee.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
@@ -48,6 +50,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   /// 是否已从 URL 读取初始 view 参数 (避免 build 期间 setState + 重复读)
   bool _viewModeInitialized = false;
 
+  /// fix-graph-zoom-pan (2026-09-16): InteractiveViewer 的 TransformationController
+  ///   - 初始值设为 fit-to-viewport (auto-fit), user 进图谱页面就能看全树
+  ///   - user 可双指缩放 / 单指拖动改 controller.value, 后续不需要重置 (persist across zoom/pan)
+  final TransformationController _graphTransformController = TransformationController();
+
+  /// 是否已 auto-fit 过 (避免 build 重跑时反复 reset)
+  bool _graphAutoFitApplied = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -64,6 +74,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _graphTransformController.dispose();
     super.dispose();
   }
 
@@ -298,39 +309,56 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             ),
             // 图谱本体 (复用 modules/presentation/graph 的 painter)
             // AGENTS §3 fix-graph-zoom-pan (2026-09-16): 用 InteractiveViewer 替代嵌套 SingleChildScrollView
-            //   - 双指缩放 (0.3 - 3.0 倍)
-            //   - 单指拖动 (panEnabled)
-            //   - boundaryMargin 预留边缘空间, 避免 pan 到边界后被夹
-            //   - 1-5 节点 → 默认 scroll OK; 30+ 节点 (master depth-4 override) → 必须 zoom/pan
-            //   - hitarea (Positioned GestureDetector) 仍可接收 tap (InteractiveViewer 不拦截单击)
+            //   v2 加 auto-fit initial scale (LayoutBuilder + TransformationController): user 一进页面看全树
+            //   - minScale 0.1 (允许 31 节点 depth-4 树 fit 进手机屏幕)
+            //   - maxScale 3.0 (细节看 zoom)
+            //   - boundaryMargin 80 预留 pan 边界空间
+            //   - hitarea (Positioned GestureDetector) 仍可接收 tap
             Expanded(
-              child: Container(
-                color: AppTheme.bgWarm,
-                child: InteractiveViewer(
-                  panEnabled: true,
-                  scaleEnabled: true,
-                  minScale: 0.3,
-                  maxScale: 3.0,
-                  boundaryMargin: const EdgeInsets.all(80),
-                  child: SizedBox(
-                    width: canvasSize.width,
-                    height: canvasSize.height,
-                    child: Stack(
-                      children: [
-                        CustomPaint(
-                          size: canvasSize,
-                          painter: FranchiseTreePainter(
-                            root: tree,
-                            positions: positions,
-                            searchMatchedIds: searchMatchedIds,
-                            currentUserId: tree.id,
-                          ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // 首次拿到 size 后 auto-fit (post-frame, 避免 build 期间 setState)
+                  if (!_graphAutoFitApplied) {
+                    final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
+                    final scaleX = viewportSize.width / canvasSize.width;
+                    final scaleY = viewportSize.height / canvasSize.height;
+                    // fit 选 min + 加 10% padding, 但不低于 0.1
+                    final fitScale = math.max(0.1, math.min(scaleX, scaleY) * 0.95);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _graphTransformController.value = Matrix4.identity()..scale(fitScale);
+                      setState(() => _graphAutoFitApplied = true);
+                    });
+                  }
+                  return Container(
+                    color: AppTheme.bgWarm,
+                    child: InteractiveViewer(
+                      transformationController: _graphTransformController,
+                      panEnabled: true,
+                      scaleEnabled: true,
+                      minScale: 0.1,
+                      maxScale: 3.0,
+                      boundaryMargin: const EdgeInsets.all(80),
+                      child: SizedBox(
+                        width: canvasSize.width,
+                        height: canvasSize.height,
+                        child: Stack(
+                          children: [
+                            CustomPaint(
+                              size: canvasSize,
+                              painter: FranchiseTreePainter(
+                                root: tree,
+                                positions: positions,
+                                searchMatchedIds: searchMatchedIds,
+                                currentUserId: tree.id,
+                              ),
+                            ),
+                            ..._buildHitareas(tree, positions),
+                          ],
                         ),
-                        ..._buildHitareas(tree, positions),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ],

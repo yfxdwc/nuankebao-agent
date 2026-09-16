@@ -22,6 +22,8 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/franchise_chip.dart';
 import '../../presentation/graph/widgets/franchise_node_sheet.dart';
 import '../../presentation/graph/widgets/franchise_tree_painter.dart';
+// fix-graph-zoom-pan v2 (2026-09-16): auto-fit initial scale
+import 'dart:math' as math;
 
 // W5 RBAC: ≤3 层硬限 (ADR-0006 / 《禁止传销条例》红线)
 const int _maxAllowedDepth = 3;
@@ -41,9 +43,14 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
   final _searchController = TextEditingController();
   String _search = '';
 
+  /// fix-graph-zoom-pan v2: auto-fit initial scale (进页面看全树)
+  final TransformationController _treeTransformController = TransformationController();
+  bool _treeAutoFitApplied = false;
+
   @override
   void dispose() {
     _searchController.dispose();
+    _treeTransformController.dispose();
     super.dispose();
   }
 
@@ -345,39 +352,53 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
         : _collectMatches(tree, q.toLowerCase());
 
     // AGENTS §3 fix-graph-zoom-pan (2026-09-16): InteractiveViewer 替代嵌套 SingleChildScrollView
-    //   - 双指缩放 0.3-3.0 倍 + 单指拖动 + boundaryMargin=80
-    //   - hitareas (GestureDetector onTap) + 空位 +号 (Positioned) 仍可点 (InteractiveViewer 不拦截 tap)
-    return InteractiveViewer(
-      panEnabled: true,
-      scaleEnabled: true,
-      minScale: 0.3,
-      maxScale: 3.0,
-      boundaryMargin: const EdgeInsets.all(80),
-      child: SizedBox(
-        width: canvasSize.width,
-        height: canvasSize.height,
-        child: Stack(
-          children: [
-            // 1. Painter (连线 + 节点圆形)
-            CustomPaint(
-              size: canvasSize,
-              painter: FranchiseTreePainter(
-                root: tree,
-                positions: positions,
-                highlightedNodeId: _highlightedNode?.id,
-                searchMatchedIds: searchMatchedIds,
-                currentUserId: tree.id,
-              ),
+    //   v2 加 auto-fit initial scale: user 一进页面看全树, 然后手动 zoom/pan
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!_treeAutoFitApplied) {
+          final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
+          final scaleX = viewportSize.width / canvasSize.width;
+          final scaleY = viewportSize.height / canvasSize.height;
+          final fitScale = math.max(0.1, math.min(scaleX, scaleY) * 0.95);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _treeTransformController.value = Matrix4.identity()..scale(fitScale);
+            setState(() => _treeAutoFitApplied = true);
+          });
+        }
+        return InteractiveViewer(
+          transformationController: _treeTransformController,
+          panEnabled: true,
+          scaleEnabled: true,
+          minScale: 0.1,
+          maxScale: 3.0,
+          boundaryMargin: const EdgeInsets.all(80),
+          child: SizedBox(
+            width: canvasSize.width,
+            height: canvasSize.height,
+            child: Stack(
+              children: [
+                // 1. Painter (连线 + 节点圆形)
+                CustomPaint(
+                  size: canvasSize,
+                  painter: FranchiseTreePainter(
+                    root: tree,
+                    positions: positions,
+                    highlightedNodeId: _highlightedNode?.id,
+                    searchMatchedIds: searchMatchedIds,
+                    currentUserId: tree.id,
+                  ),
+                ),
+
+                // 2. Positioned 透明 hitTest 区 (点击节点)
+                ..._buildHitAreas(tree, positions),
+
+                // 3. 空位提示 (虚线圆 + +号)
+                ..._buildEmptySlots(tree, positions),
+              ],
             ),
-
-            // 2. Positioned 透明 hitTest 区 (点击节点)
-            ..._buildHitAreas(tree, positions),
-
-            // 3. 空位提示 (虚线圆 + +号)
-            ..._buildEmptySlots(tree, positions),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
