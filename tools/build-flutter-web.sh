@@ -185,9 +185,20 @@ else
 fi
 
 # ---------- 3. flutter build web ----------
-title "flutter build web --release $DART_DEFINE"
+# v0.1.4 (2026-09-16): 加 --base-href /app/
+# 原因: Flutter bootstrap HTML 用 <base href> + 相对路径加载资源 (flutter_bootstrap.js /
+#       main.dart.js / canvaskit/* / assets/* 等). 默认 base href = "/", 浏览器解析所有相对
+#       路径到根, 但 Flutter build 输出在 Next.js public/app/, 根路径全 404 → 一片空白.
+#       显式 --base-href /app/ 让 Flutter web 知道自己 serve 在 /app/ 子路径, 所有资源从
+#       /app/* 解析, 完美对齐 Next.js public static serving.
+# 副作用: 浏览器 service worker 缓存了旧 base href → 主人侧 Ctrl+Shift+R 硬刷新.
+#         APK 不受影响 (APK 走 native, 跟 web 资源路径无关).
+#         dev mode (tools/start-flutter-dev.sh) 不传此 flag: Flutter 3.24.5 dev server
+#         不支持 --web-base-href, 但 dev mode 跑在 Flutter 自己 server (:8080) 根路径,
+#         默认 base href 就对得上, 不影响.
+title "flutter build web --release --base-href /app/ $DART_DEFINE"
 START_T=$(date +%s)
-$FLUTTER build web --release $DART_DEFINE 2>&1 | tee "$LOG_FILE" | tail -15 | sed "s/^/  /"
+$FLUTTER build web --release --base-href /app/ $DART_DEFINE 2>&1 | tee "$LOG_FILE" | tail -15 | sed "s/^/  /"
 ELAPSED=$(( $(date +%s) - START_T ))
 ok "build 完成 (用时 ${ELAPSED}s)"
 ok "日志: $LOG_FILE"
