@@ -29,7 +29,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # ---------- 默认 ----------
 TUNNEL_CONFIG="$HOME/.cloudflared-tc-prod/config.yml"
-DEV_PORT="${DEV_PORT:-8080}"
+DEV_PORT="${DEV_PORT:-8181}"  # 默认指 dev-app-proxy (aiohttp path strip)
+# 注: 不是 Flutter dev server 的 8080. 8181 → proxy → 8080.
 
 # ---------- 参数 ----------
 DRY_RUN=false
@@ -106,14 +107,17 @@ else
 # >>> nuankebao flutter dev start >>>
 # v0.1.4 加 (2026-09-16, 主人拍): 让 /app-preview?dev=1 走 Flutter web dev server
 # 秒级 hot reload. 同源保证 cookie 共享 + WebSocket OK.
-# 配合: tools/start-flutter-dev.sh (后台起 flutter run -d web-server)
+# 配合:
+#   - tools/start-flutter-dev.sh (后台起 flutter run -d web-server → 8080)
+#   - tools/dev-app-proxy.py     (aiohttp path strip 8181, 转 8080)
+# service 指向 8181 (反代), 不是 8080. 反代做 path strip + WebSocket 透传.
 # 回滚: ./tools/install-flutter-dev-tunnel.sh --revert
   - hostname: nuankebao.tooyang.top
     path: /dev-app
-    service: http://127.0.0.1:$DEV_PORT
+    service: http://127.0.0.1:8181
   - hostname: nuankebao.tooyang.top
     path: /dev-app/*
-    service: http://127.0.0.1:$DEV_PORT
+    service: http://127.0.0.1:8181
 # <<< nuankebao flutter dev end <<<
 EOF
 )
