@@ -18,12 +18,6 @@ export async function GET(request: NextRequest) {
 
   const userId = session?.user?.id ? BigInt(session.user.id) : BigInt(0);
   const fid = await getFranchiseeIdByUserId(userId);
-  if (!fid) {
-    return NextResponse.json(
-      { error: "User has no franchisee record" },
-      { status: 404 }
-    );
-  }
 
   const { searchParams } = new URL(request.url);
   const depth = Math.min(
@@ -31,8 +25,25 @@ export async function GET(request: NextRequest) {
     3 // W5 RBAC: ≤3 层硬限 (ADR-0006 / 《禁止传销条例》红线)
   );
 
+  // ★ 业务空状态 (非错误): user 没加盟关系 → 返回 200 + 空树.
+  //   旧版返回 404 + 'User has no franchisee record', Flutter ErrorState
+  //   兜底为「网络不太好」, 误导用户. 业务上「未加盟」是合法状态,
+  //   应走 empty state, 不是网络错误.
+  if (!fid) {
+    return NextResponse.json({
+      id: "0",
+      name: "未加盟",
+      placementSide: null,
+      placementDepth: 0,
+      placementPath: "",
+      referrerId: null,
+      children: [],
+    });
+  }
+
   const tree = await getFranchiseeTree(fid, depth);
   if (!tree) {
+    // franchiseeId 存在但记录被删/查不到 → 真正的 404 (前后端不一致)
     return NextResponse.json({ error: "Tree root not found" }, { status: 404 });
   }
   return NextResponse.json(tree);

@@ -213,11 +213,25 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       data: (raw) {
         // myFranchiseeTreeProvider 返回 dynamic (兼容关系接口迁移期), 这里 cast
         final tree = raw as FranchiseeTreeNode?;
-        if (tree == null || _countDescendants(tree) == 0) {
+
+        // ★ 业务空状态 (非错误, 不走 ErrorState):
+        //   - tree == null: 后端 404 真错误 (franchiseeId 存在但记录被删)
+        //   - id == "0" / name == "未加盟": user 没加盟关系 (dev mode / 普通用户)
+        //   - _countDescendants(tree) <= 1: 只有自己没下线 (加盟了但没发展)
+        if (tree == null ||
+            tree.id == '0' ||
+            tree.name == '未加盟' ||
+            _countDescendants(tree) <= 1) {
+          final isUnaffiliated =
+              tree == null || tree.id == '0' || tree.name == '未加盟';
           return EmptyState(
             icon: Icons.account_tree_outlined,
-            title: '还没有加盟客户, 无法生成图谱',
-            hint: '普通 / 种子客户不参与图谱, 加入加盟后才显示',
+            title: isUnaffiliated
+                ? '还不是加盟商, 没有加盟网络'
+                : '还没有加盟客户, 无法生成图谱',
+            hint: isUnaffiliated
+                ? '当前账号未关联加盟关系, 无法查看加盟图谱'
+                : '普通 / 种子客户不参与图谱, 加入加盟后才显示',
             onAction: () => context.push('/customers/new'),
             actionLabel: '+ 添加客户',
           );

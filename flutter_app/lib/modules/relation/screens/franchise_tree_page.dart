@@ -311,6 +311,19 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
   }
 
   Widget _buildTreeView(FranchiseeTreeNode tree) {
+    // ★ 业务空状态 (非错误, 不走 ErrorState):
+    //   - id == "0" / name == "未加盟": user 没加盟关系 (dev mode / 普通用户)
+    //     → 旧版这情况是后端 404, Flutter ErrorState 误为「网络不太好」,
+    //       误导用户. 业务上「未加盟」是合法状态, 应走 empty state.
+    if (tree.id == '0' || tree.name == '未加盟') {
+      return EmptyState(
+        icon: Icons.account_tree_outlined,
+        title: '还不是加盟商, 没有加盟网络',
+        hint: '当前账号未关联加盟关系, 无法查看加盟图谱',
+        onAction: () => context.push('/customers/new'),
+        actionLabel: '+ 添加客户',
+      );
+    }
     if (tree.children.isEmpty) {
       return EmptyState(
         icon: Icons.account_tree_outlined,
