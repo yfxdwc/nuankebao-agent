@@ -10,29 +10,16 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/models/customer.dart';
-import '../../../core/models/wellness_record.dart';
+import '../../../core/models/franchisee.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../widgets/big_fab.dart';
-import '../widgets/customer_graph_view.dart';
 import '../widgets/customer_row.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/franchise_chip.dart';
+import '../../presentation/graph/widgets/franchise_tree_painter.dart';
 import 'add_record_sheet.dart';
-
-// 复用 search query 类型
-class _CustomerQuery {
-  final String? search;
-  const _CustomerQuery({this.search});
-
-  @override
-  bool operator ==(Object other) =>
-      other is _CustomerQuery && other.search == search;
-
-  @override
-  int get hashCode => search?.hashCode ?? 0;
-}
 
 /// 客户页视图模式: 列表 / 图谱
 enum _CustomerViewMode { list, graph }
@@ -41,7 +28,7 @@ enum _CustomerViewMode { list, graph }
 // CustomersListPage (主页: 客户列表 / 图谱)
 // ============================================
 
-enum _CustomerFilter { all, franchisee, normal, pending }
+enum _CustomerFilter { all, franchisee, normal, seed }
 
 class CustomersListPage extends ConsumerStatefulWidget {
   const CustomersListPage({super.key});
@@ -54,7 +41,25 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   final _searchController = TextEditingController();
   String _search = '';
   _CustomerFilter _filter = _CustomerFilter.all;
+
+  /// 视图模式: 默认列表; 但可以从 URL ?view=graph 进入 (路由 /franchise-tree 重定向过来)
   _CustomerViewMode _viewMode = _CustomerViewMode.list;
+
+  /// 是否已从 URL 读取初始 view 参数 (避免 build 期间 setState + 重复读)
+  bool _viewModeInitialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // URL ?view=graph → 默认进入图谱 tab (供 /franchise-tree redirect 使用)
+    if (!_viewModeInitialized) {
+      final viewParam = GoRouterState.of(context).uri.queryParameters['view'];
+      if (viewParam == 'graph') {
+        _viewMode = _CustomerViewMode.graph;
+      }
+      _viewModeInitialized = true;
+    }
+  }
 
   @override
   void dispose() {
@@ -65,7 +70,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   @override
   Widget build(BuildContext context) {
     final asyncCustomers = ref.watch(customersProvider(_search.isEmpty ? null : _search));
-    final asyncGraph = ref.watch(myCustomerGraphProvider);
+    // 图谱 tab 数据源: 加盟客户的 2 线图谱 (复用 franchisee/me/tree)
+    // 普通 / 种子客户不参与图谱, 由 type 字段 + 后端过滤保证 (待补)
+    final asyncTree = ref.watch(myFranchiseeTreeProvider(3));
 
     return Scaffold(
       appBar: AppBar(
@@ -140,7 +147,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   const SizedBox(width: 8),
                   _buildChip(_CustomerFilter.normal, '🟢 普通'),
                   const SizedBox(width: 8),
-                  _buildChip(_CustomerFilter.pending, '• 待办'),
+                  _buildChip(_CustomerFilter.seed, '🌱 种子'),
                 ],
               ),
             ),
@@ -149,7 +156,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           Expanded(
             child: _viewMode == _CustomerViewMode.list
                 ? _buildListView(asyncCustomers)
-                : _buildGraphView(asyncGraph),
+                : _buildGraphView(asyncTree),
           ),
         ],
       ),
@@ -196,30 +203,39 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     );
   }
 
-  Widget _buildGraphView(AsyncValue<CustomerGraph> asyncGraph) {
-    return asyncGraph.when(
+  Widget _buildGraphView(AsyncValue<dynamic> asyncTree) {
+    return asyncTree.when(
       loading: () => const LoadingState(),
       error: (e, _) => ErrorState(
         error: e,
-        onRetry: () => ref.invalidate(myCustomerGraphProvider),
+        onRetry: () => ref.invalidate(myFranchiseeTreeProvider),
       ),
-      data: (graph) {
-        if (graph.nodes.isEmpty) {
+      data: (raw) {
+        // myFranchiseeTreeProvider 返回 dynamic (兼容关系接口迁移期), 这里 cast
+        final tree = raw as FranchiseeTreeNode?;
+        if (tree == null || _countDescendants(tree) == 0) {
           return EmptyState(
             icon: Icons.account_tree_outlined,
-            title: '还没有客户, 无法生成图谱',
-            hint: '添加客户后, 在编辑客户时设置「推荐人」即可生成推荐关系图',
+            title: '还没有加盟客户, 无法生成图谱',
+            hint: '普通 / 种子客户不参与图谱, 加入加盟后才显示',
             onAction: () => context.push('/customers/new'),
             actionLabel: '+ 添加客户',
           );
         }
-        // 预算搜索匹配数 (用于顶部提示条文案)
+        // 预算搜索匹配数 (全树 O(n) 走一遍)
         final searchQuery = _search.trim();
         final matchCount = searchQuery.isEmpty
             ? 0
-            : graph.nodes
-                .where((n) => n.name.toLowerCase().contains(searchQuery.toLowerCase()))
-                .length;
+            : _countMatches(tree, searchQuery.toLowerCase());
+
+        // 计算画布尺寸 + 节点坐标
+        const depth = 3;
+        final canvasSize = TreeLayout.computeCanvasSize(tree, depth);
+        final positions = TreeLayout.computePositions(tree, canvasSize);
+        final searchMatchedIds = searchQuery.isEmpty
+            ? null
+            : _collectMatches(tree, searchQuery.toLowerCase());
+
         return Column(
           children: [
             // 顶部提示条: 默认指引 + 搜索结果数
@@ -243,10 +259,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   Expanded(
                     child: Text(
                       searchQuery.isEmpty
-                          ? '长按节点高亮推荐链 · 点击节点进详情 · 双指缩放'
+                          ? '点击节点进详情 · 我 (绿) 是根节点 · 加盟客户 2 线图谱'
                           : (matchCount > 0
-                              ? '匹配 $matchCount 位客户 · 其余淡化'
-                              : '没有匹配「$searchQuery」的客户'),
+                              ? '匹配 $matchCount 位加盟客户 · 其余淡化'
+                              : '没有匹配「$searchQuery」'),
                       style: TextStyle(
                         fontSize: AppTheme.fontSm,
                         color: searchQuery.isNotEmpty && matchCount == 0
@@ -256,7 +272,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     ),
                   ),
                   Text(
-                    '${graph.count} 位客户',
+                    '${_countDescendants(tree)} 位加盟客户',
                     style: const TextStyle(
                       fontSize: AppTheme.fontSm,
                       color: AppTheme.primaryDark,
@@ -266,13 +282,33 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 ],
               ),
             ),
-            // 图谱本体 (传 searchQuery 让节点环高亮匹配)
+            // 图谱本体 (复用 modules/presentation/graph 的 painter)
             Expanded(
               child: Container(
                 color: AppTheme.bgWarm,
-                child: CustomerGraphView(
-                  graph: graph,
-                  searchQuery: searchQuery.isEmpty ? null : searchQuery,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: SizedBox(
+                      width: canvasSize.width,
+                      height: canvasSize.height,
+                      child: Stack(
+                        children: [
+                          CustomPaint(
+                            size: canvasSize,
+                            painter: FranchiseTreePainter(
+                              root: tree,
+                              positions: positions,
+                              searchMatchedIds: searchMatchedIds,
+                              currentUserId: tree.id,
+                            ),
+                          ),
+                          ..._buildHitareas(tree, positions),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -280,6 +316,61 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         );
       },
     );
+  }
+
+  /// 递归统计全树节点数 (含根)
+  int _countDescendants(FranchiseeTreeNode node) {
+    var c = 1;
+    for (final child in node.children) {
+      c += _countDescendants(child);
+    }
+    return c;
+  }
+
+  /// 名字 contains(query) 的节点数
+  int _countMatches(FranchiseeTreeNode node, String lowerQuery) {
+    var c = node.name.toLowerCase().contains(lowerQuery) ? 1 : 0;
+    for (final child in node.children) {
+      c += _countMatches(child, lowerQuery);
+    }
+    return c;
+  }
+
+  /// 名字 contains(query) 的节点 id 集合
+  Set<String> _collectMatches(FranchiseeTreeNode node, String lowerQuery) {
+    final result = <String>{};
+    if (node.name.toLowerCase().contains(lowerQuery)) result.add(node.id);
+    for (final child in node.children) {
+      result.addAll(_collectMatches(child, lowerQuery));
+    }
+    return result;
+  }
+
+  /// 节点点击 hit area (走 franchisee 详情)
+  List<Widget> _buildHitareas(
+    FranchiseeTreeNode node,
+    Map<String, Offset> positions,
+  ) {
+    final widgets = <Widget>[];
+    final pos = positions[node.id];
+    if (pos == null) return widgets;
+    widgets.add(
+      Positioned(
+        left: pos.dx - TreeLayout.nodeRadius,
+        top: pos.dy - TreeLayout.nodeRadius,
+        width: TreeLayout.nodeSize,
+        height: TreeLayout.nodeSize,
+        child: GestureDetector(
+          onTap: () => context.push('/franchisees/${node.id}'),
+          behavior: HitTestBehavior.opaque,
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+    for (final child in node.children) {
+      widgets.addAll(_buildHitareas(child, positions));
+    }
+    return widgets;
   }
 
   Widget _buildChip(_CustomerFilter f, String label) {
@@ -641,7 +732,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       }
       if (!mounted) return;
       ref.invalidate(customersProvider);
-      ref.invalidate(myCustomerGraphProvider);
+      ref.invalidate(myFranchiseeTreeProvider);
       context.pop();
     } catch (e) {
       if (!mounted) return;

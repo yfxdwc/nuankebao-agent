@@ -2,6 +2,13 @@
 // 加盟网络图谱 (Plan F3)
 // CustomPainter 渲染二叉树 + Stack + Positioned 处理点击
 // 中老年大字 + 大节点 (88pt)
+//
+// ⚠ DEPRECATED (v0.1.4, 拍板 2026-09-16): 路由 /franchise-tree 已重定向到
+//   /customers?view=graph (客户页图谱 tab), 本文件 1 周观察期后主人 review 删除.
+//   决策来源: ask_user domain_split=reuse_franchisee
+//                          franchise_tree_page=redirect_to_customer
+//   调用方: 0 (route redirect 后), import 已从 app_router.dart 删除
+//   保留理由: 1 周观察期内主人手动 review, 确认无回退需求再 git rm
 // ============================================
 
 import 'package:flutter/material.dart';

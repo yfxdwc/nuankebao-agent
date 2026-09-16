@@ -13,7 +13,6 @@ import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../../modules/auth/screens/login_screen.dart';
 import '../../modules/customer/screens/customers_page.dart';
-import '../../modules/relation/screens/franchise_tree_page.dart';
 import '../../modules/relation/screens/franchisee_detail_page.dart';
 import '../../modules/relation/screens/add_franchisee_page.dart';
 import '../../screens/profile_page.dart';
@@ -138,10 +137,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // 我的加盟网络 (图谱视图, Plan F3 已实施)
+      // v0.1.4: 重定向到 /customers?view=graph (客户页的"图谱"tab 画的是
+      //   加盟客户的 2 线图谱, /franchise-tree 路由保留 redirect 兼容老入口)
+      //   模块状态: modules/relation/ screens/franchise_tree_page.dart 标记
+      //   为 deprecated, 1 周观察期后主人 review 删除.
+      //   拍板: 2026-09-16 ask_user domain_split=reuse_franchisee
+      //                       franchise_tree_page=redirect_to_customer
       GoRoute(
         path: '/franchise-tree',
         name: 'franchise-tree',
-        builder: (context, state) => const FranchiseTreePage(),
+        redirect: (context, state) => '/customers?view=graph',
       ),
     ],
   );
