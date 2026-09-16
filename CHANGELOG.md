@@ -43,6 +43,17 @@
 - **commit `4a1693e` + `5863699`** — source + preview-bypass bundle rebuild (AGENTS §9.3 SOP)
 - **验证**: chromium + CDP touch event 模拟双指 zoom in (root 节点明显变大, 其他 2 个子被裁出); API 返 31 节点 depth=4 满二叉
 
+### Fixed (graph InteractiveViewer v2, master 「还没修好」反馈)
+
+- **v2 commit `7e2fe20` + `0e8ef5f`** — `LayoutBuilder + TransformationController` 加 auto-fit initial scale
+  - v1 只加 InteractiveViewer, 但 scale=1.0 初始 = 31 节点 depth-4 树 (3520×812) 只看到 root+2 子, master 反映「没修好」
+  - v2 auto-fit 进页面看全树: `fitScale = max(0.1, min(scaleX, scaleY) * 0.95)`, `Matrix4.identity()..scale(fitScale)`
+  - `minScale 0.3 → 0.1` (允许手机屏 fit 全树)
+  - flag `_graphAutoFitApplied` 防重复 reset
+  - 同样改造 `franchise_tree_page.dart`
+- **验证**: chromium + CDP touch 模拟 6 次 zoom in 后 root 充满屏 (像素 #4A7C59 = AppTheme.primary = 绿 ✓)
+- **根节点颜色 bug 误判纠正**: 之前紫色是 stale ddc lag (dev mode 服旧 dill), 实际源码 root=green 已对
+
 ## [0.5.2] - 2026-09-16
 
 ### 🔒 预览框架冻结 (Preview Framework Freeze, ADR-0009)
