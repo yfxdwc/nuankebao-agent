@@ -80,12 +80,18 @@ preflight() {
 # ---------- 子命令 ----------
 cmd_start_bg() {
   preflight
-  log "🚀 后台启动 Flutter web dev server → 127.0.0.1:$WEB_PORT"
+  # v0.1.4: 带 --web-base-href=/dev-app, 让 dev server 接收 /dev-app/main.dart.js 时
+  # 知道要去掉 /dev-app 前缀. 配合 cloudflared path rule /dev-app* → 8080.
+  # dart-define 优先: NUANKEBAO_API_BASE, 兜底用 LAN IP .env.local APP_PORT.
+  local api_base="${NUANKEBAO_API_BASE:-http://127.0.0.1:${APP_PORT:-3003}/api}"
+  log "🚀 后台启动 Flutter web dev server → 127.0.0.1:$WEB_PORT (base-href=/dev-app, API=$api_base)"
   (cd "$FLUTTER_DIR" && \
     flutter run -d web-server \
                 --web-port="$WEB_PORT" \
                 --web-hostname="$WEB_HOST" \
-                --dart-define=ENV="$ENV_VAL") \
+                --web-base-href=/dev-app/ \
+                --dart-define=ENV="$ENV_VAL" \
+                --dart-define=NUANKEBAO_API_BASE="$api_base") \
     > "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   ok "PID=$(cat "$PID_FILE"), 日志=$LOG_FILE"
@@ -99,12 +105,15 @@ cmd_start_bg() {
 
 cmd_start_fg() {
   preflight
-  log "🚀 前台启动 Flutter web dev server → 127.0.0.1:$WEB_PORT"
+  local api_base="${NUANKEBAO_API_BASE:-http://127.0.0.1:${APP_PORT:-3003}/api}"
+  log "🚀 前台启动 Flutter web dev server → 127.0.0.1:$WEB_PORT (base-href=/dev-app, API=$api_base)"
   log "💡 Ctrl+C 退出"
   exec flutter run -d web-server \
                    --web-port="$WEB_PORT" \
                    --web-hostname="$WEB_HOST" \
-                   --dart-define=ENV="$ENV_VAL"
+                   --web-base-href=/dev-app/ \
+                   --dart-define=ENV="$ENV_VAL" \
+                   --dart-define=NUANKEBAO_API_BASE="$api_base"
 }
 
 cmd_stop() {
