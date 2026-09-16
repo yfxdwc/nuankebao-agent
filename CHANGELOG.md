@@ -27,6 +27,15 @@
 
 - DB CHECK constraint 实际未接入 drizzle migrate (待 §5 Follow-up): 当前 service 层兜底, 直 DB insert 仍可超 depth 4 (主人评估可接受)
 
+### Fixed (BFS bug, 同任务期间发现)
+
+- **`src/lib/db/queries/franchisee-tree.ts` BFS loop** — 不把 `depth >= MAX_DEPTH` 的子节点 push 进 queue. 原 bug: BFS fallback 只检查 input.referrerId depth, 下降到 depth=MAX 叶子当 parent → 新节点 depth=MAX+1 超限 (手动验证: `referrerId=10 (depth=3)` + sideHint=left → 落到 `徐长山 (depth=4).left` → placement_depth=5)
+- **`src/app/api/franchisees/route.ts` catch** — business 错误 (`深度上限` / `No available position` / `Referrer not found`) 转 400 + 友好消息, 避免误导用户「服务器错误」
+
+### Added (test infra)
+
+- **`scripts/seed-test-data.ts`** (~440 行) — idempotent, 走 API 为主 (audit log), Part E 直接 drizzle insert `user` 表绑 root franchisee (13800138000 / 123456), 让 dev login 后 `/api/franchisees/me/tree` 返回完整 31 节点
+
 ## [0.5.2] - 2026-09-16
 
 ### 🔒 预览框架冻结 (Preview Framework Freeze, ADR-0009)

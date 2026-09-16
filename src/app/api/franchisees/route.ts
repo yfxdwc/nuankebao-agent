@@ -85,6 +85,16 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
     }
+    // Business 4xx 错误 (深度上限 / 树满 / referrer 不存在) 转 400, 避免误导用户「服务器错误」
+    if (error instanceof Error) {
+      const msg = error.message;
+      if (msg.includes("深度上限") || msg.includes("No available position")) {
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+      if (msg.includes("Referrer not found")) {
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+    }
     console.error("[POST /api/franchisees]", error);
     return NextResponse.json(
       { error: "Internal server error" },

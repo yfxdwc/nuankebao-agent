@@ -80,16 +80,34 @@ async function apiGet<T>(path: string): Promise<T> {
 }
 
 // 手机号去重 (idx_franchisee_phone_hash unique + idx_customer_phone_hash unique)
-//   起始: 13900000000 + 当前 max(id) (避免跟现存手动测过的撞)
+//   策略: phone = 13900000000 + max(id) (含 deleted, 抩开 id 间隔)
+//   本 script 创建 31 franchisees + 10 customers. 现存 id 最高 ~37 (含 cleaned-up),
+//   起始手机号 = 13900000099 (走 padding 避开之前手动测试的 13900000001-13900000031).
 let _phoneCounter = 13900000000;
 async function initPhoneCounter() {
   try {
-    const f = await apiGet<{ items?: { id: string }[] }>("/api/franchisees?limit=1");
-    const c = await apiGet<{ items?: { id: string }[] }>("/api/customers?limit=1");
-    const maxF = f?.items?.[0]?.id ? parseInt(f.items[0].id) : 0;
-    const maxC = c?.items?.[0]?.id ? parseInt(c.items[0].id) : 0;
-    _phoneCounter = 13900000000 + Math.max(maxF, maxC) + 1;
-    info(`phone counter 从 ${_phoneCounter} 开始 (避免撞现存手动测试数据)`);
+    const postgres = (await import("postgres")).default;
+    const { drizzle } = await import("drizzle-orm/postgres-js");
+    const { franchisee, customer } = await import("../src/lib/db/schema");
+    const { sql } = await import("drizzle-orm");
+
+    const conn = postgres(process.env.DATABASE_URL!);
+    const db = drizzle(conn);
+
+    const maxIds = await db
+      .select({
+        fMax: sql<number>`COALESCE(MAX(${franchisee.id}), 0)::int`,
+        cMax: sql<number>`COALESCE(MAX(${customer.id}), 0)::int`,
+      })
+      .from(franchisee)
+      .leftJoin(customer, sql`true`);
+    const fMax = maxIds?.[0]?.fMax ?? 0;
+    const cMax = maxIds?.[0]?.cMax ?? 0;
+    const maxId = Math.max(fMax, cMax);
+    // 起步 = 13900000000 + max(id) + 100 (padding, 避开后续手动测试重复)
+    _phoneCounter = 13900000000 + maxId + 100;
+    info(`phone counter 从 ${_phoneCounter} 开始 (max id=${maxId}, padding=100, 含 deleted)`);
+    await conn.end();
   } catch (e) {
     warn(`initPhoneCounter 失败 (用默认 ${_phoneCounter}): ${e}`);
   }
@@ -277,8 +295,59 @@ const CUSTOMER_SPECS: CustomerSpec[] = [
 ];
 
 // ============================================
-// 主流程
+// Part E: 创建 dev 用户 (13800138000) 绑 root franchisee
+//   目的: dev login 后 /api/franchisees/me/tree 能看到完整 31 节点树
+//   边界: user 表无 API endpoint (待补), 用 drizzle 直接 insert (绕过 audit log,
+//         主人 ok — dev user 不是生产数据)
 // ============================================
+
+async function seedDevUser(rootFranchiseeId: string) {
+  info("\n=== Part E: 创建 dev 用户绑 root franchisee ===");
+  try {
+    const postgres = (await import("postgres")).default;
+    const { drizzle } = await import("drizzle-orm/postgres-js");
+    const { user } = await import("../src/lib/db/schema");
+    const { sql } = await import("drizzle-orm");
+    const { encryptField, hashForLookup } = await import("../src/lib/crypto/field");
+
+    const conn = postgres(process.env.DATABASE_URL!);
+    const db = drizzle(conn);
+
+    const devPhone = "13800138000";
+    const phoneEncrypted = encryptField(devPhone);
+    const phoneHash = hashForLookup(devPhone);
+
+    // 只在用户不存在时插入 (idempotent)
+    const existing = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(sql`${user.phoneHash} = ${phoneHash}`)
+      .limit(1);
+
+    if (existing.length > 0) {
+      // update franchisee_id 绑 root
+      await db
+        .update(user)
+        .set({ franchiseeId: BigInt(rootFranchiseeId), updatedAt: new Date() })
+        .where(sql`${user.id} = ${existing[0].id}`);
+      ok(`dev 用户已存在 (id=${existing[0].id}), 绑 franchiseeId=${rootFranchiseeId}`);
+    } else {
+      await db.insert(user).values({
+        name: "SeedTest-dev用户",
+        phoneEncrypted,
+        phoneHash,
+        role: "sales",
+        isActive: true,
+        franchiseeId: BigInt(rootFranchiseeId),
+      });
+      ok(`dev 用户已创建 + 绑 franchiseeId=${rootFranchiseeId}`);
+    }
+
+    await conn.end();
+  } catch (e) {
+    warn(`seedDevUser 跳过 (可能 env 未加载或表不存在): ${e}`);
+  }
+}
 
 async function main() {
   info(`API_BASE: ${API_BASE}`);
@@ -385,6 +454,12 @@ async function main() {
     } catch (e) {
       warn(`普通客户 ${spec.name} 加养生记录失败 (可能 endpoint 不存在): ${e}`);
     }
+  }
+
+  // ===== Part E: dev 用户绑 root (上面所有数据创建完了再能拿 root id) =====
+  const rootFranchisee = createdFranchisees[0];
+  if (rootFranchisee) {
+    await seedDevUser(rootFranchisee.id);
   }
 
   // ===== 总结 =====

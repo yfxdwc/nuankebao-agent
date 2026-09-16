@@ -90,13 +90,16 @@ export async function placeNewFranchisee(
   }
 
   // 2. Fallback: BFS 左优先
+  //   Bug fix (2026-09-16, task seed-test-data): 只检查 input.referrerId depth 不足
+  //   BFS 下降到的节点 也需 depth < MAX_DEPTH — 否则叶子节点 (depth=MAX) 被当 parent,
+  //   newDepth = MAX+1 > MAX_DEPTH 超限. 修法: 不把 depth >= MAX_DEPTH 的子节点 push 进 queue.
   const queue: bigint[] = [referrerId];
   while (queue.length > 0) {
     const parentId = queue.shift()!;
 
     // SELECT FOR UPDATE 锁父节点的所有直接子
     const children = await tx
-      .select({ id: franchisee.id, side: franchisee.placementSide })
+      .select({ id: franchisee.id, side: franchisee.placementSide, depth: franchisee.placementDepth })
       .from(franchisee)
       .where(
         and(
@@ -116,9 +119,12 @@ export async function placeNewFranchisee(
       return { parentId, side: "right", fallback: !!sideHint };
     }
 
-    // 左右都满, 递归下一层
-    if (leftChild) queue.push((leftChild as any).id);
-    if (rightChild) queue.push((rightChild as any).id);
+    // 左右都满, 递归下一层. 跳过 depth >= MAX_DEPTH 的子节点 (它们是叶子, 不能当 parent).
+    for (const child of children) {
+      if ((child as any).depth < MAX_DEPTH) {
+        queue.push((child as any).id);
+      }
+    }
   }
 
   throw new Error(

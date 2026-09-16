@@ -56,6 +56,16 @@ TOTAL (满二叉): 1 + 2 + 4 + 8 = 15 节点
 | `src/lib/db/schema.ts:118-123` | `franchisee_max_depth_3 CHECK (≤3)` | `franchisee_max_depth_4 CHECK (≤4)` | sql raw block (当前未被 migrate 应用, 仅文档作用) |
 | `docs/adr/INDEX.md` | — | 加 0010 行 | 索引同步 |
 
+### 0.1 跟进 bug fix (2026-09-16, 同任务期间发现)
+
+**bug**: BFS fallback 只检查 `input.referrerId` 的 depth, 不检查 BFS-发现 parent 的 depth. 测试时手输入 `referrerId=10 (孙志强, depth=3)` + `sideHint=left` (位置被占), BFS 下降到 `徐长山 (depth=4)`, 新节点被放到 `徐长山.left` → `placement_depth=5`, 超 MAX_DEPTH=4.
+
+**修法** (1 文件, src/lib/db/queries/franchisee-tree.ts BFS loop):
+- BFS 不把 `depth >= MAX_DEPTH` 的子节点 push 进 queue (它们是叶子, 不能当 parent)
+- 避免 BFS 把 depth-4 叶子当 parent
+
+**未加单测**: 本次未补 Vitest regression (git scope 控制), 仅手动验证. TODO §5 加 记.
+
 ## 1. 合规风险评估 (主人 override 已授权, 仍需记录)
 
 | 维度 | 评估 |
