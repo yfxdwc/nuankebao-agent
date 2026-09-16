@@ -202,4 +202,108 @@ describe("Preview Framework Freeze — Snapshot Test (ADR-0009, AGENTS §9)", ()
       }
     });
   });
+
+  /**
+   * §6 多源一致性 (5 源 frozen path 列表应同步)
+   *
+   * 防 ADR-0009 §1 / AGENTS §9.1 / dev-modules §Frozen Contract / guard 脚本 / 本测试
+   * 5 处 hardcode 同一份 9 路径时, 改 A 忘改 B 脱钩.
+   *
+   * 本节只检查 §1 / §9.1 / §Frozen Contract 三份 doc 与 EXPECTED 一致.
+   * guard 脚本已在 §3 检查. 本测试自身 EXPECTED 是唯一真理源.
+   */
+  describe("6. 三份 doc (ADR-0009 §1 / AGENTS §9.1 / dev-modules §Frozen Contract) 应与 EXPECTED 一致", () => {
+    /**
+     * 从 doc 的指定 section 抠出所有路径形式的字符串 (走 fenced code block)
+     * 严格模式: 只抠 ```...``` 块中以 src/tools/public 开头的行, 取第一个 token
+     *
+     * section 范围: 从 sectionHeading 匹配处开始, 到下一个 ## (h2) 标题结束.
+     * 这样不会被子标题 ### 提前截断 (例如 dev-modules 在 §Frozen Contract 内有多个 ### ).
+     */
+    function extractPathsFromDocSection(
+      docRelPath: string,
+      sectionHeading: RegExp
+    ): string[] {
+      const content = readFileSync(join(PROJECT_ROOT, docRelPath), "utf-8");
+      const m = content.match(sectionHeading);
+      if (!m || m.index === undefined) return [];
+      const sectionStart = m.index + m[0].length;
+      // 找下一个 h2 标题 (## ) — 不要被子标题 (### ) 截断
+      const rest = content.slice(sectionStart);
+      const nextH2 = rest.match(/\n##\s/);
+      const sectionEnd = nextH2 ? sectionStart + nextH2.index! : content.length;
+      const section = content.slice(sectionStart, sectionEnd);
+
+      // 抠所有 fenced code block
+      const paths: string[] = [];
+      const blocks = section.matchAll(/```\n([\s\S]*?)```/g);
+      for (const block of blocks) {
+        for (const line of block[1].split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#")) continue;
+          // 仅抠 (src|tools|public)/ 开头的路径
+          if (/^(src|tools|public)\//.test(trimmed)) {
+            const path = trimmed.split(/\s+/)[0];
+            paths.push(path);
+          }
+        }
+      }
+      return paths;
+    }
+
+    it("6.1 ADR-0009 §1 冻结清单 (markdown 列表) 应有 9 个路径", () => {
+      // ADR §1 用 markdown 列表格式 (- src/...), 不在 fenced block. 用行级 grep 提取.
+      const content = readFileSync(
+        join(PROJECT_ROOT, "docs/adr/0009-preview-framework-freeze.md"),
+        "utf-8"
+      );
+      const sectionMatch = content.match(/## 1\. 冻结清单[\s\S]*?(?=\n##\s)/);
+      expect(sectionMatch, "ADR-0009 §1 section 应存在").not.toBeNull();
+      const section = sectionMatch![0];
+      const lines = section
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => /^(src|tools|public)\//.test(l));
+      // 提取每行的第一个 token (去掉 `<- xxx` 注释)
+      const paths = lines.map((l) => l.split(/\s+/)[0]);
+      // 排序后比对 (与 EXPECTED 集合一致)
+      expect(
+        [...paths].sort(),
+        "ADR-0009 §1 路径列表应与 EXPECTED_FROZEN_PATHS 一致"
+      ).toEqual([...EXPECTED_FROZEN_PATHS].slice().sort());
+    });
+
+    it("6.2 AGENTS.md §9.1 红线 (一图概览) 应有 9 个路径", () => {
+      // §9.1 是 h3 (###), 在 §9 (h2) 内
+      const paths = extractPathsFromDocSection(
+        "AGENTS.md",
+        /^### §9\.1 红线/m
+      );
+      // AGENTS §9.1 用 fenced code block 列出 9 路径
+      expect(
+        paths.length,
+        `AGENTS §9.1 期望 9 个路径, 实际 ${paths.length}: ${JSON.stringify(paths)}`
+      ).toBe(EXPECTED_FROZEN_PATHS.length);
+      expect(
+        [...paths].sort(),
+        "AGENTS §9.1 路径列表应与 EXPECTED_FROZEN_PATHS 一致"
+      ).toEqual([...EXPECTED_FROZEN_PATHS].slice().sort());
+    });
+
+    it("6.3 dev-modules/flutter-preview.md §Frozen Contract 应有 9 个路径", () => {
+      // dev-modules §Frozen Contract 把 9 路径拆成两个 fenced block (本模块 4 + 跨模块 5)
+      const paths = extractPathsFromDocSection(
+        "docs/dev-modules/flutter-preview.md",
+        /^## Frozen Contract \(ADR-0009\)/m
+      );
+      expect(
+        paths.length,
+        `dev-modules §Frozen Contract 期望 9 个路径 (分两个 block), 实际 ${paths.length}: ${JSON.stringify(paths)}`
+      ).toBe(EXPECTED_FROZEN_PATHS.length);
+      expect(
+        [...paths].sort(),
+        "dev-modules §Frozen Contract 路径列表应与 EXPECTED_FROZEN_PATHS 一致"
+      ).toEqual([...EXPECTED_FROZEN_PATHS].slice().sort());
+    });
+  });
 });
