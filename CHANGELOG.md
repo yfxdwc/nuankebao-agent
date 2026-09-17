@@ -2,6 +2,18 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (graph UI 自查, 2026-09-17 主人反馈「ui一堆错误」)
+
+- **`flutter_app/lib/modules/presentation/graph/widgets/franchise_tree_painter.dart`** — 姓名 maxWidth 100 → 220 (=`TreeLayout.minNodeSpacing` = 220). 真实数据 (2-3 字中文名) 不再被截, 测试数据 `SeedTest-XXX` 多保留可读字符.
+- **`flutter_app/lib/modules/customer/screens/customers_page.dart`** — 4 处 UI 优化:
+  1. FAB 在 graph 视图下隐藏 (`floatingActionButton: _viewMode == _CustomerViewMode.list ? BigFab(...) : null`). graph 主要用来查看关系, 添加走列表视图 FAB 更顺手
+  2. graph 视图右下周加「回到全景」小按钮 (圆角白底, 半透明) — user 缩放/拖动后一键回 fit 初始状态
+  3. auto-fit 策略改用 outer Transform (同步, 不靠 post-frame callback). `_initialFitScale` 缓存在 state. `_resetGraphView` 重置 outer Transform + 清 InteractiveViewer 内部 transform
+  4. fit 算法从 `min(scaleX, scaleY)` 改为 `scaleX * 0.98` (fit-to-width 优先). 原因: 4 层二叉树宽 1760 / 高仅 696, fit-to-min 会让树在 360px 宽手机屏上横向溢出 3.6x → user 看不到右半边子树. fit-to-width 让根 + 同层节点 horizontal visible, 垂直可滚看不同层级
+- **changelog 添加**: 本节
+
+**验证**: chromium 截图 → 「回到全景」可见 / 「SeedTest-陈大壮」等名字不再截断 / root (id=75, 主人=SeedTest-dev用户) 在 canvas 顶端以绿色 (`#4A7C59` AppTheme.primary) 渲染, child 紫色 (`#8E5BA8` AppTheme.franchisee). build 产物已同步到 `public/app/` (`main.dart.js` 04:51 后).
+
 ## [Unreleased]
 
 ### 🌲 加盟树深度放宽 ≤3 → ≤4 (ADR-0010, 主人 override)
