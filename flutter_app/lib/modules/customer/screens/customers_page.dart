@@ -474,7 +474,6 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   ///   折中: 取 max(scaleX, scaleY*0.6) — 优先保证横向 fit, 允许垂直必要时缩小一点
   double _computeFitScale(Size viewport, Size canvas) {
     final scaleX = viewport.width / canvas.width;
-    final scaleY = viewport.height / canvas.height;
     // 水平为主: 让所有同层节点可见, 垂直允许上下滚
     final fit = math.max(0.15, scaleX * 0.98);
     return fit;
