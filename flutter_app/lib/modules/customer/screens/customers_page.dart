@@ -171,10 +171,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           ),
         ],
       ),
-      floatingActionButton: BigFab(
-        onPressed: () => context.push('/customers/new'),
-        tooltip: '添加客户',
-      ),
+      // fix-graph-ui (2026-09-17): graph 视图下隐藏 FAB (FAB 会遮右子节点;
+      //   graph 主要用来查看关系, 添加客户走列表视图 FAB 更顺手)
+      floatingActionButton: _viewMode == _CustomerViewMode.list
+          ? BigFab(
+              onPressed: () => context.push('/customers/new'),
+              tooltip: '添加客户',
+            )
+          : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
@@ -256,6 +260,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         // 计算画布尺寸 + 节点坐标
         const depth = 3;
         final canvasSize = TreeLayout.computeCanvasSize(tree, depth);
+        // fix-graph-ui (2026-09-17): 缓存 canvasSize 给 reset 用 (不能每次重算, 保持当前 tree 一致)
+        _lastCanvasSize = canvasSize;
         final positions = TreeLayout.computePositions(tree, canvasSize);
         final searchMatchedIds = searchQuery.isEmpty
             ? null
