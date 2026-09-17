@@ -145,7 +145,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                         },
                       ),
               ),
-              onChanged: (v) => setState(() => _search = v),
+              onChanged: (v) {
+                setState(() => _search = v);
+                // 图谱默认只显示局部, 搜索命中节点往往在屏外 → 自动挪到屏幕中心
+                if (_viewMode == _CustomerViewMode.graph) _focusOnSearchMatch(v);
+              },
             ),
           ),
           // 过滤 chip (列表视图下; 图谱视图不需要 — 搜索已可定位)
@@ -479,6 +483,36 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     final sx = viewport.width / canvasSize.width;
     final sy = viewport.height / canvasSize.height;
     return math.max(0.05, math.min(sx, sy) * 0.96);
+  }
+
+  /// 深度优先找第一个名字命中 query 的节点
+  FranchiseeTreeNode? _firstMatchNode(FranchiseeTreeNode node, String lowerQuery) {
+    if (node.name.toLowerCase().contains(lowerQuery)) return node;
+    for (final child in node.children) {
+      final hit = _firstMatchNode(child, lowerQuery);
+      if (hit != null) return hit;
+    }
+    return null;
+  }
+
+  /// 搜索时把第一个命中节点挪到屏幕中心 (1:1) — 否则高亮节点在屏外, user 看不到
+  void _focusOnSearchMatch(String query) {
+    final lower = query.trim().toLowerCase();
+    if (lower.isEmpty) return;
+    final viewport = _graphViewport;
+    final canvasSize = _graphCanvasSize;
+    if (viewport == null || canvasSize == null) return;
+    final tree = ref.read(myFranchiseeTreeProvider(3)).valueOrNull as FranchiseeTreeNode?;
+    if (tree == null) return;
+    final hit = _firstMatchNode(tree, lower);
+    if (hit == null) return;
+    final center = TreeLayout.computePositions(tree, canvasSize)[hit.id];
+    if (center == null) return;
+    setState(() {
+      _graphTransformController.value = Matrix4.identity()
+        ..translate(viewport.width / 2 - center.dx, viewport.height / 2 - center.dy)
+        ..scale(1.0);
+    });
   }
 
   /// 回到「我」(初始可读视图)
