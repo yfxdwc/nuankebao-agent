@@ -341,9 +341,10 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
       );
     }
 
-    // 计算画布大小
-    final canvasSize = TreeLayout.computeCanvasSize(tree, _depth);
-    final positions = TreeLayout.computePositions(tree, canvasSize);
+    // 计算画布大小 (v2 双主线布局: 两条主线平行直下 + 侧枝外侧展开)
+    final layout = TreeLayout.compute(tree, maxDepth: _depth);
+    final canvasSize = layout.canvasSize;
+    final positions = layout.positions;
 
     // 搜索匹配集合 (空查询 → null, painter 不参与高亮)
     final q = _search.trim();
@@ -383,7 +384,8 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
                   painter: FranchiseTreePainter(
                     root: tree,
                     positions: positions,
-                    highlightedNodeId: _highlightedNode?.id,
+                    selectedNodeId: _highlightedNode?.id,
+                    spineIds: layout.spineIds,
                     searchMatchedIds: searchMatchedIds,
                     currentUserId: tree.id,
                   ),

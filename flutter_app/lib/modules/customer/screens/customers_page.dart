@@ -55,12 +55,16 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   ///   - user 可双指缩放 / 单指拖动改 controller.value, 后续不需要重置 (persist across zoom/pan)
   final TransformationController _graphTransformController = TransformationController();
 
+  /// 底部给「回到我 / 全景」按钮预留的高度 (图区 viewport 要扣掉, 否则 fit/居中会偏)
+  static const double _graphBottomControlsHeight = 56;
+
   /// 图谱视图状态 (LayoutBuilder 每次 layout 更新, 供「回到我」/「全景」按钮复用)
   /// fix-graph-ui-v3 (2026-09-17): 替换 v2 的 outer Transform 方案 —
   ///   旧方案把 InteractiveViewer 的 viewport 整体缩放, 画布反被 constraints 压成
   ///   viewport 大小, 图谱缩在左上角一小块 (主人截图就是这个)
   Size? _graphViewport;
   Size? _graphCanvasSize;
+  double? _graphContentHeight;
   Offset? _graphRootCenter;
   bool _graphViewInitialized = false;
 
@@ -342,12 +346,16 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+                  final viewport = Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight - _graphBottomControlsHeight,
+                  );
                   final rootCenter = positions[tree.id] ??
                       Offset(canvasSize.width / 2,
                           TreeLayout.padding + TreeLayout.nodeRadius);
                   _graphViewport = viewport;
                   _graphRootCenter = rootCenter;
+                  _graphContentHeight = layout.contentHeight;
 
                   // 树结构变了 (画布尺寸变) → 重算初始视图
                   final treeChanged =
@@ -376,7 +384,12 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                       Positioned.fill(
                         child: Container(
                           color: AppTheme.bgWarm,
-                          child: InteractiveViewer(
+                          // 底部给「回到我 / 全景」按钮留一条 (图谱不钻到按钮下面)
+                          // (最下层节点的名字不再被按钮盖住)
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                                bottom: _graphBottomControlsHeight),
+                            child: InteractiveViewer(
                             // ★ 关键: 不让父级 tight constraints 把画布压成 viewport 大小
                             constrained: false,
                             transformationController: _graphTransformController,
@@ -411,6 +424,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                                 ],
                               ),
                             ),
+                          ),
                           ),
                         ),
                       ),
@@ -473,12 +487,15 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     return result;
   }
 
-  /// 「回到我」视图: 根节点 (我) 顶部居中 + 1:1 缩放 (中老年看得清名字)
+  /// 「回到我」视图: 根节点 (我) 顶部居中 + 竖直能放下整棵树的可读缩放 (上限 1:1)
   Matrix4 _focusRootMatrix(Size viewport, Size canvasSize, Offset rootCenter) {
-    const scale = 1.0;
+    const topMargin = 20.0;
+    final contentHeight = _graphContentHeight ?? canvasSize.height;
+    final fit = (viewport.height - topMargin - 8) / contentHeight;
+    // 0.5 下限: 再小就没法读了; 1.0 上限: 不放大超过 1:1
+    final scale = math.min(1.0, math.max(0.5, fit));
     final dx = viewport.width / 2 - rootCenter.dx * scale;
-    // 根节点圆顶部留 24px (够悬浮, 又不浪费屏幕)
-    final dy = 24 - (rootCenter.dy - TreeLayout.nodeRadius) * scale;
+    final dy = topMargin - (rootCenter.dy - TreeLayout.nodeRadius) * scale;
     return Matrix4.identity()
       ..translate(dx, dy)
       ..scale(scale);

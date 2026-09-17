@@ -2,6 +2,44 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (graph 双主线「对碰」布局 + 单击/长按交互, 2026-09-17 主人拍板)
+
+**主人拍板** (2026-09-17): 「从「我」开始, 左右两条主线最长的线平等, 其他节点往这两条线的
+外侧分裂, 我的 2 条主线始终保持自上而下的平行。主线的左右节点保持成对排列（对碰奖视角）。
+跳转加盟商详情由 单击节点 改为 长按节点, 单击节点触发：突显当前节点, 并高亮当前节点到「我」
+的整条线, 同时弱化其他节点」
+
+- **`flutter_app/lib/modules/presentation/graph/widgets/franchise_tree_painter.dart`** — `TreeLayout`
+  重写为双主线布局 (`TreeLayout.compute` → `TreeLayoutResult`):
+  1. 根 = 中轴顶部; 左腿/右腿各一条**主线**, 严格竖直平行 (列 x = ±90, 中轴 0)
+  2. 同侧子节点续主线 (同侧断了用另一侧接, 主线不断); 另一侧 = 侧枝, 往**外侧**一列
+     (列距 180), 侧枝内部再递归 (自己的主线 + 再外侧)
+  3. `spineIds` (两条主线节点集合) 随布局返回 → painter 把主线连线画粗 (3.0 / 0.7 不透明)
+  4. 左右主线同层节点同 y = 成对排列 (对碰奖视角)
+  5. 坐标平移到画布 [0, width] (左腿 x 原本是负数, 会跑到 SizedBox 外 → 点击命中失效)
+  6. 名字 maxWidth 220 → 160 (列距 180, 相邻列不串行)
+- **`franchise_tree_page.dart`** (deprecated 页, 不在路由) — 同步到新 API (`compute` /
+  `selectedNodeId` / `spineIds`), 修 analyze 报错
+- **`franchise_tree_painter.dart`** — painter 高亮模型重构:
+  - 删 `highlightedNodeId`; 新增 `selectedNodeId` / `pathIds` / `spineIds`
+  - 连线: 选中路径 (accent 4.5) > 搜索命中 (accent 3.5) > 主线 (深绿 3.0) > 普通 (2.0);
+    有高亮时其余连线淡化 (0.12)
+  - 节点: 选中 = accent 光晕 + 5px 环; 路径上 = 3px 环; 非高亮节点淡化
+- **`flutter_app/lib/modules/customer/screens/customers_page.dart`** — 交互改版:
+  - **单击节点** = 选中: 突显该节点 + 高亮 它→「我」的整条线 (`_pathIdsTo` DFS 求路径) +
+    其余淡化; 再点同一节点取消; 点空白画布取消 (`_clearSelection`)
+  - **长按节点** = `context.push('/franchisees/<id>')` (原单击行为)
+  - 提示条文案 → 「单击看线 · 长按进详情」(交互变了, 提示必须跟着变)
+
+**验证** (dev server :8080 + chromium 截图 + 像素/语义校验):
+- 默认视图: 根居中, 左右主线 x=106 / 287 两条**竖直平行**列, 每层成对 (y=395/535/672)
+- 「全景」: 15 节点全部在视口内, 位置与设计一致 (主线两列 + 左右各 3 列外侧展开:
+  左侧 x=30/78/125, 右侧 x=268/315/362)
+- 单击最左最深节点: accent 像素 0 → 4122 (路径 + 环), 非路径节点淡化 (faded 像素 17311)
+- 点空白: accent 回到 0, 淡化回到基线 → 取消选中生效
+- 长按节点: 跳到加盟商详情页 (语义树变为详情页结构)
+- `flutter analyze lib` 0 error
+
 ### Fixed (graph UI v3 — 治本渲染, 2026-09-17 主人二次反馈「ui一堆错误」)
 
 > 上一节 (v2) 只改了 maxWidth / fit 系数, **没解决渲染根因**: 主人截图里图谱仍是

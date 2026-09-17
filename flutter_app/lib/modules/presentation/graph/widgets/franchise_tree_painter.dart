@@ -39,6 +39,9 @@ class TreeLayoutResult {
   final int leftColumns;
   final int rightColumns;
 
+  /// 内容总高度 (根圆顶 → 最下层名字底) — 「回到我」算初始缩放用
+  final double contentHeight;
+
   final Size canvasSize;
 
   const TreeLayoutResult({
@@ -48,6 +51,7 @@ class TreeLayoutResult {
     required this.spineIds,
     required this.leftColumns,
     required this.rightColumns,
+    required this.contentHeight,
     required this.canvasSize,
   });
 }
@@ -146,6 +150,8 @@ class TreeLayout {
       spineIds: spine,
       leftColumns: leftColumns,
       rightColumns: rightColumns,
+      // 内容高度: 根圆顶 → 最下层「左线/右线」标签底 (含名字 16pt + 标签 11pt)
+      contentHeight: maxDepthSeen * levelHeight + nodeSize + 56,
       canvasSize: canvasSize,
     );
   }
