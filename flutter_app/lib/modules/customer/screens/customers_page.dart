@@ -347,29 +347,37 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                       Positioned.fill(
                         child: Container(
                           color: AppTheme.bgWarm,
-                          child: InteractiveViewer(
-                            transformationController: _graphTransformController,
-                            panEnabled: true,
-                            scaleEnabled: true,
-                            minScale: 0.1,
-                            maxScale: 5.0,
-                            boundaryMargin: const EdgeInsets.all(80),
-                            child: SizedBox(
-                              width: canvasSize.width,
-                              height: canvasSize.height,
-                              child: Stack(
-                                children: [
-                                  CustomPaint(
-                                    size: canvasSize,
-                                    painter: FranchiseTreePainter(
-                                      root: tree,
-                                      positions: positions,
-                                      searchMatchedIds: searchMatchedIds,
-                                      currentUserId: tree.id,
+                          // 外层 Transform 提供 initial fit (同步应用, 不靠 post-frame callback)
+                          // InteractiveViewer 内部保持 identity (canvas 全尺寸)
+                          // user pan/zoom 乘上外层 fit = 净效果一致
+                          // (InteractiveViewer 自己不会主动去 fit, 必须乘上外层才能跟 viewport 匹)
+                          child: Transform(
+                            transform: Matrix4.identity()..scale(fitScale),
+                            alignment: Alignment.topLeft,
+                            child: InteractiveViewer(
+                              transformationController: _graphTransformController,
+                              panEnabled: true,
+                              scaleEnabled: true,
+                              minScale: 0.5,
+                              maxScale: 8.0,
+                              boundaryMargin: const EdgeInsets.all(80),
+                              child: SizedBox(
+                                width: canvasSize.width,
+                                height: canvasSize.height,
+                                child: Stack(
+                                  children: [
+                                    CustomPaint(
+                                      size: canvasSize,
+                                      painter: FranchiseTreePainter(
+                                        root: tree,
+                                        positions: positions,
+                                        searchMatchedIds: searchMatchedIds,
+                                        currentUserId: tree.id,
+                                      ),
                                     ),
-                                  ),
-                                  ..._buildHitareas(tree, positions),
-                                ],
+                                    ..._buildHitareas(tree, positions),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
