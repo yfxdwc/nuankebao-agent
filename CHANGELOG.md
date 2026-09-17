@@ -25,15 +25,25 @@
   姓名 / (我) / 左线右线 标签加画布同色底色块 — 父→子连线从圆底中心出发会穿过标签文字,
   垫底后连线从文字背后过 (不再穿字).
 
-**验证** (dev server :8080 + 真 Flutter web UI, chromium 截图 + 像素/语义校验):
+**验证** (dev server :8080 + 生产 build `/app/` on :3003, chromium 截图 + 像素/语义校验):
 - 默认视图: 根节点绿色 88px 顶部居中 (logical y≈253), 名字可读; 右下两按钮坐标点击均生效
 - 「全景」: 15 节点全部落在视口内 (19px/节点), 无越界 / 无裁剪
+- 搜索: 输入命中名字 → 相机自动把命中节点移到视口中心 (1:1), 其余节点淡化
 - AppBar 切换按钮: 文字单行 (像素测量行高 14pt, 修复前是竖排两行)
+- 姓名底色块: 连线不再穿过名字 (视觉对比 crop-before / crop-after 确认)
 - `flutter analyze` 0 issue; `flutter test` 余下 2 个失败与本次无关 (api_client_test 旧 import 路径 +
   widget_test `Uri.base.origin` 在测试环境报错), 均为历史遗留
 
 **⚠ 预览框架 freeze (§9 / ADR-0009)**: 本次同步 `public/app/` (Flutter web 编译产物) 属
 「业务改动需要 preview 联动」, 主人 review 时按 `[preview-bypass]` 处理.
+`public/app/version.json` → `0.2.4#5` (SW hash 已更新, 主人侧需 Ctrl+Shift+R).
+
+**⚠ 踩坑记录 (build 缓存 stale)**: `flutter build web --release` 的增量编译有 race —
+如果在 dart2js 编译期间改 .dart 源文件, kernel (`app.dill`) 可能仍是旧产物, 而 flutter 的
+filecache 已记下新 mtime → 之后所有 build 都复用 stale kernel 且不报错.
+本次踩到 (search-focus 代码没进 build), 解法: `rm -rf .dart_tool/flutter_build` 全量重编.
+另: `tools/build-flutter-web.sh --auto` 在 `set -euo pipefail` 下 `EXPECTED_IP=$(echo "" | grep ...)`
+会静默退出 (grep 无匹配 exit 1) → 同步 public/app 步根本不跑. 待主人拍板修 (该文件在 preview freeze 清单里).
 
 ### Fixed (graph UI 自查 v2, 2026-09-17 — 部分被 v3 取代)
 
