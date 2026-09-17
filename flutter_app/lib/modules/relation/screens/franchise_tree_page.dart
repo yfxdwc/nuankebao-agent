@@ -308,6 +308,15 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
   }
 
   /// 递归遍历全树, 返回名字 contains(query) 的节点 id 集合
+  /// 拍平树 (给 painter 的 relations map 用)
+  List<FranchiseeTreeNode> _flatten(FranchiseeTreeNode node) {
+    final out = <FranchiseeTreeNode>[node];
+    for (final c in node.children) {
+      out.addAll(_flatten(c));
+    }
+    return out;
+  }
+
   Set<String> _collectMatches(FranchiseeTreeNode node, String lowerQuery) {
     final result = <String>{};
     if (node.name.toLowerCase().contains(lowerQuery)) result.add(node.id);
@@ -386,6 +395,11 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
                     positions: positions,
                     selectedNodeId: _highlightedNode?.id,
                     spineIds: layout.spineIds,
+                    aLineIds: layout.aLineIds,
+                    bLineIds: layout.bLineIds,
+                    relations: {
+                      for (final n in _flatten(tree)) n.id: n.relation,
+                    },
                     searchMatchedIds: searchMatchedIds,
                     currentUserId: tree.id,
                   ),

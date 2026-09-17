@@ -157,8 +157,11 @@ class _FranchiseNodeSheet extends StatelessWidget {
   }
 
   String _positionLabel(FranchiseeTreeNode node) {
-    if (node.placementSide == null) return '顶级加盟商';
-    return '第 ${node.placementDepth} 层 · ${node.placementSide == 'left' ? '左线' : '右线'}';
+    // A线/B线 命名 (主人 2026-09-17 拍: 左线→A线, 右线→B线) + 关系三维区分
+    final relation = node.relation.label;
+    if (node.placementSide == null) return '顶级加盟商 · $relation';
+    final line = node.placementSide == 'left' ? 'A线' : 'B线';
+    return '第 ${node.placementDepth} 层 · $line · $relation';
   }
 
   Widget _actionTile(
