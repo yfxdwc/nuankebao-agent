@@ -46,6 +46,9 @@ class TreeLayoutResult {
   /// 内容总高度 (根圆顶 → 最下层名字底) — 「回到我」算初始缩放用
   final double contentHeight;
 
+  /// 实际列间距 (列多时会压缩 < columnWidth, 允许相邻节点一定重叠)
+  final double columnPitch;
+
   final Size canvasSize;
 
   const TreeLayoutResult({
@@ -58,6 +61,7 @@ class TreeLayoutResult {
     required this.leftColumns,
     required this.rightColumns,
     required this.contentHeight,
+    required this.columnPitch,
     required this.canvasSize,
   });
 }
@@ -67,13 +71,42 @@ class TreeLayoutResult {
 // ============================================
 
 class TreeLayout {
-  static const double nodeRadius = 44;       // 节点半径 (88pt 直径)
-  static const double nodeSize = 88;         // 节点直径
-  static const double levelHeight = 140;     // 层间距 (上下)
-  static const double columnWidth = 180;     // 列间距 (外侧展开)
-  static const double spineOffset = 90;      // 中轴 → 主线列距离 (左右主线相距 180)
-  static const double padding = 40;          // 画布边距
-  static const double labelMaxWidth = 160;   // 名字最大宽 (列距 - 20, 不左右串行)
+  static const double nodeRadius = 44;       // 主线节点半径 (88pt 直径)
+  static const double nodeSize = 88;         // 主线节点直径
+  // fix-graph-compact (2026-09-17 主人拍): 节点上百也能看 — 外侧压紧 + 允许重叠 + 虚化
+  static const double levelHeight = 122;     // 层间距 (140 → 122, 上下压紧)
+  static const double columnWidth = 104;     // 列间距 (180 → 104, 外侧压紧, 允许相邻轻微重叠)
+  static const double spineOffset = 84;      // 中轴 → 主线列距离
+  static const double padding = 28;          // 画布边距
+  static const double labelMaxWidth = 150;   // 主线名字最大宽
+
+  /// 外侧第 [col] 列节点半径 (越外侧越小 → 前后立体)
+  static double radiusForColumn(int col) {
+    if (col <= 0) return nodeRadius;
+    if (col == 1) return 33;
+    if (col == 2) return 27;
+    return 23;
+  }
+
+  /// 外侧第 [col] 列名字最大宽 (允许相邻轻微重叠)
+  static double labelMaxWidthForColumn(int col) =>
+      col <= 0 ? labelMaxWidth : columnWidth - 6;
+
+  /// 外侧第 [col] 列整体透明度 (主线 1.0 → 越外侧越虚化)
+  static double alphaForColumn(int col) {
+    if (col <= 0) return 1.0;
+    if (col == 1) return 0.92;
+    if (col == 2) return 0.78;
+    return 0.64;
+  }
+
+  /// 外侧节点松弛 (主人: 可不对齐 + 一点斥力/弹簧)。主线严格不动。
+  static const int _relaxIterations = 32;
+
+  /// 列很多时的目标半宽 (超过就把列距压缩, 允许相邻节点一定比例重叠)
+  static const double targetHalfWidth = 760;
+  /// 最小压缩比 (0.42 → 相邻列最多压到 44px, 允许 50%+ 重叠)
+  static const double minPitchRatio = 0.42;
 
   /// 计算双主线布局
   ///
@@ -88,6 +121,7 @@ class TreeLayout {
     final spine = <String>{};
     final aLine = <String>{};
     final bLine = <String>{};
+    final parents = <String, String>{};
 
     double yOf(int depth) => padding + nodeRadius + depth * levelHeight;
 
@@ -105,6 +139,7 @@ class TreeLayout {
     if (leftHead != null) {
       leftNext = _layoutChain(
         leftHead,
+        parentId: root.id,
         side: 'left',
         sign: -1,
         startDepth: 1,
@@ -116,11 +151,13 @@ class TreeLayout {
         depths: depths,
         spine: spine,
         legIds: aLine,
+        parents: parents,
       );
     }
     if (rightHead != null) {
       rightNext = _layoutChain(
         rightHead,
+        parentId: root.id,
         side: 'right',
         sign: 1,
         startDepth: 1,
@@ -132,6 +169,7 @@ class TreeLayout {
         depths: depths,
         spine: spine,
         legIds: bLine,
+        parents: parents,
       );
     }
 
@@ -140,10 +178,37 @@ class TreeLayout {
     final maxColumn = math.max(leftColumns, rightColumns);
     final maxDepthSeen = depths.values.fold<int>(0, math.max);
 
-    final halfWidth = spineOffset + maxColumn * columnWidth + nodeRadius + padding;
+    // 列很多 → 压缩列距 (允许一定比例重叠): 主人 2026-09-17「上百节点也要能看」
+    final neededHalfWidth = spineOffset + maxColumn * columnWidth + 80;
+    final pitch = neededHalfWidth <= targetHalfWidth
+        ? columnWidth
+        : math.max(
+            columnWidth * minPitchRatio,
+            columnWidth * targetHalfWidth / neededHalfWidth,
+          );
+
+    // 用最终 pitch 重排 x (根恒在中轴 0)
+    for (final id in positions.keys.toList()) {
+      final col = columns[id] ?? 0;
+      final sign = aLine.contains(id)
+          ? -1.0
+          : (bLine.contains(id) ? 1.0 : 0.0);
+      positions[id] = Offset(sign * (spineOffset + col * pitch), positions[id]!.dy);
+    }
+
+    final halfWidth = spineOffset + maxColumn * pitch + nodeRadius + padding;
     final canvasSize = Size(
       math.max(400, halfWidth * 2),
       padding * 2 + (maxDepthSeen + 1) * levelHeight + nodeSize,
+    );
+
+    // 外侧节点松弛: 允许不对齐 + 轻微重叠 (主线严格竖直不动)
+    _relax(
+      positions: positions,
+      columns: columns,
+      depths: depths,
+      parents: parents,
+      pitch: pitch,
     );
 
     // 坐标从「中轴 = 0」平移到画布坐标系 [0, width]
@@ -164,6 +229,7 @@ class TreeLayout {
       rightColumns: rightColumns,
       // 内容高度: 根圆顶 → 最下层「A线/B线」标签底 (含名字 16pt + 标签 11pt)
       contentHeight: maxDepthSeen * levelHeight + nodeSize + 56,
+      columnPitch: pitch,
       canvasSize: canvasSize,
     );
   }
@@ -177,6 +243,7 @@ class TreeLayout {
   ///   - 同侧断了但有另一侧 → 另一侧接主线 (主线不断)
   static int _layoutChain(
     FranchiseeTreeNode start, {
+    required String parentId,
     required String side,
     required double sign,
     required int startDepth,
@@ -188,6 +255,7 @@ class TreeLayout {
     required Map<String, int> depths,
     required Set<String> spine,
     required Set<String> legIds,
+    required Map<String, String> parents,
   }) {
     final otherSide = side == 'left' ? 'right' : 'left';
     final x = sign * (spineOffset + column * columnWidth);
@@ -195,6 +263,7 @@ class TreeLayout {
     var node = start;
     var depth = startDepth;
     var next = nextFree;
+    var parentOfCurrent = parentId;
 
     while (depth <= maxDepth) {
       positions[node.id] = Offset(
@@ -205,6 +274,7 @@ class TreeLayout {
       depths[node.id] = depth;
       spine.add(node.id);
       legIds.add(node.id);
+      parents[node.id] = parentOfCurrent;
 
       final same = _childOn(node, side);
       final other = _childOn(node, otherSide);
@@ -214,6 +284,7 @@ class TreeLayout {
           // 另一侧 = 侧枝 → 外侧一列, 它的子树再往更外侧
           next = _layoutChain(
             other,
+            parentId: node.id,
             side: side,
             sign: sign,
             startDepth: depth + 1,
@@ -225,11 +296,14 @@ class TreeLayout {
             depths: depths,
             spine: spine,
             legIds: legIds,
+            parents: parents,
           );
         }
+        parentOfCurrent = node.id;
         node = same;
       } else if (other != null) {
         // 同侧没有 → 另一侧接主线 (保持一条直线往下)
+        parentOfCurrent = node.id;
         node = other;
       } else {
         break; // 叶子, 主线到此结束
@@ -238,6 +312,83 @@ class TreeLayout {
     }
 
     return next;
+  }
+
+  /// 外侧节点松弛: 斥力 (防叠死, 允许轻微重叠) + 弹簧 (回父节点 / 回初始格位)
+  /// 主线 (col == 0) 与根严格不动 → 两条主线始终竖直平行 + 同层成对
+  static void _relax({
+    required Map<String, Offset> positions,
+    required Map<String, int> columns,
+    required Map<String, int> depths,
+    required Map<String, String> parents,
+    required double pitch,
+  }) {
+    if (positions.length < 3) return;
+
+    // 按层分桶: 只跟上下 2 层内的节点互斥 (省算力, 上百节点也快)
+    final byDepth = <int, List<String>>{};
+    for (final id in positions.keys) {
+      byDepth.putIfAbsent(depths[id] ?? 0, () => []).add(id);
+    }
+    final anchors = Map<String, Offset>.from(positions);
+
+    for (var iter = 0; iter < _relaxIterations; iter++) {
+      final delta = <String, Offset>{};
+      for (final entry in byDepth.entries) {
+        final depth = entry.key;
+        for (final id in entry.value) {
+          final col = columns[id] ?? 0;
+          if (col == 0) continue; // 主线不动
+          final pa = positions[id]!;
+          final ra = radiusForColumn(col);
+          var d = Offset.zero;
+
+          // 斥力: 只和 ±2 层内的邻居比
+          for (var dd = depth - 2; dd <= depth + 2; dd++) {
+            final list = byDepth[dd];
+            if (list == null) continue;
+            for (final other in list) {
+              if (identical(other, id)) continue;
+              final pb = positions[other]!;
+              final rb = radiusForColumn(columns[other] ?? 0);
+              // 允许轻微重叠: 只推开到 minGap (压缩后用更小的 gap, 别把列又撑开)
+              final minGap = math.min(ra + rb + 4, pitch * 0.9);
+              var diff = pa - pb;
+              var dist = diff.distance;
+              if (dist >= minGap) continue;
+              if (dist < 0.01) {
+                diff = const Offset(1, 0.5);
+                dist = 1;
+              }
+              d += (diff / dist) * ((minGap - dist) * 0.32);
+            }
+          }
+
+          // 弹簧: 回父节点 (保持树形)
+          final parentId = parents[id];
+          final parentPos = parentId == null ? null : positions[parentId];
+          if (parentPos != null) {
+            d += (parentPos - pa) * 0.02;
+          }
+          // 弹簧: 回初始格位 (保持整体扇形)
+          d += (anchors[id]! - pa) * 0.07;
+
+          if (d.distance > 5) d = d / d.distance * 5;
+          delta[id] = d;
+        }
+      }
+
+      for (final e in delta.entries) {
+        final id = e.key;
+        final anchor = anchors[id]!;
+        final p = positions[id]! + e.value;
+        // 夹紧: 不串列 (x ±0.38 列距), 不跳出本层 (y ±0.32 层高)
+        positions[id] = Offset(
+          p.dx.clamp(anchor.dx - pitch * 0.38, anchor.dx + pitch * 0.38),
+          p.dy.clamp(anchor.dy - levelHeight * 0.32, anchor.dy + levelHeight * 0.32),
+        );
+      }
+    }
   }
 
   /// 取某侧的子节点
@@ -289,9 +440,22 @@ class FranchiseTreePainter extends CustomPainter {
   /// 筛选命中节点 id (null = 无筛选; 非空 = 只亮这些, 其余淡化)
   final Set<String>? filterIds;
 
+  /// 节点 id → 列号 (0=主线; 越外侧半径越小 / 越虚化 → 前后立体)
+  final Map<String, int> columns;
+
+  /// 当前视图缩放 (页面从 TransformationController 传):
+  ///   缩小看全局时少画外侧名字/角标, 放大看细节时补上
+  final double scale;
+
+  /// 实际列间距 (列多时压缩): 外侧名字宽度跟着收, 允许相邻轻微重叠
+  final double columnPitch;
+
   FranchiseTreePainter({
     required this.root,
     required this.positions,
+    this.columns = const {},
+    this.scale = 1.0,
+    this.columnPitch = TreeLayout.columnWidth,
     this.searchMatchedIds,
     this.currentUserId,
     this.selectedNodeId,
@@ -322,10 +486,30 @@ class FranchiseTreePainter extends CustomPainter {
       _isSearchHit(id) ||
       _isFilterHit(id);
 
+  int _columnOf(String id) => columns[id] ?? 0;
+
+  /// 按列给颜色上透明度 (越外侧越虚化)
+  Color _tint(Color c, int col, [double extra = 1.0]) =>
+      c.withOpacity((TreeLayout.alphaForColumn(col) * extra).clamp(0.0, 1.0));
+
   @override
   void paint(Canvas canvas, Size size) {
     _drawEdges(canvas, root);
-    _drawNodes(canvas, root);
+
+    // 前后立体: 外侧列先画 (在底层), 主线最后画 (在最上层)
+    final nodes = <FranchiseeTreeNode>[];
+    void collect(FranchiseeTreeNode n) {
+      nodes.add(n);
+      for (final c in n.children) {
+        collect(c);
+      }
+    }
+
+    collect(root);
+    nodes.sort((a, b) => _columnOf(b.id).compareTo(_columnOf(a.id)));
+    for (final n in nodes) {
+      _drawNode(canvas, n);
+    }
   }
 
   void _drawEdges(Canvas canvas, FranchiseeTreeNode node) {
@@ -385,7 +569,7 @@ class FranchiseTreePainter extends CustomPainter {
     }
   }
 
-  void _drawNodes(Canvas canvas, FranchiseeTreeNode node) {
+  void _drawNode(Canvas canvas, FranchiseeTreeNode node) {
     final pos = positions[node.id];
     if (pos == null) return;
 
@@ -409,10 +593,6 @@ class FranchiseTreePainter extends CustomPainter {
       lineColor: _lineColorOf(node.id, isCurrentUser),
     );
     _drawNodeLabel(canvas, pos, node, isCurrentUser, isFaded);
-
-    for (final child in node.children) {
-      _drawNodes(canvas, child);
-    }
   }
 
   /// 节点颜色: 我=绿, A线=深蓝, B线=紫
@@ -433,15 +613,19 @@ class FranchiseTreePainter extends CustomPainter {
     required FranchiseeRelation relation,
     required Color lineColor,
   }) {
+    final col = _columnOf(node.id);
+    final radius = TreeLayout.radiusForColumn(col);
     // 直推 = 实心; 非直推 = 空心 (浅底 + 描边). 我 = 实心
     final isDirect = isCurrentUser || relation == FranchiseeRelation.direct;
     final isUpline = relation == FranchiseeRelation.upline;
+    final fillAlpha = isFaded ? 0.35 : 1.0;
+    final ringAlpha = isFaded ? 0.3 : 1.0;
 
     // 1. 光晕 (选中最亮, 路径/搜索次之)
     if (isSelected) {
       canvas.drawCircle(
         center,
-        TreeLayout.nodeRadius + 10,
+        radius + 10,
         Paint()
           ..color = AppTheme.accent.withOpacity(0.45)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
@@ -449,42 +633,39 @@ class FranchiseTreePainter extends CustomPainter {
     } else if (isOnPath) {
       canvas.drawCircle(
         center,
-        TreeLayout.nodeRadius + 6,
+        radius + 6,
         Paint()
           ..color = AppTheme.accent.withOpacity(0.3)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
       );
     }
 
-    // 2. 主圆
-    final Color fillColor;
-    if (isFaded) {
-      fillColor = lineColor.withOpacity(isDirect ? 0.35 : 0.12);
-    } else {
-      fillColor = isDirect ? lineColor : lineColor.withOpacity(0.16);
-    }
-    canvas.drawCircle(center, TreeLayout.nodeRadius, Paint()..color = fillColor);
+    // 2. 主圆 (越外侧越虚化: _tint 已按列乘透明度)
+    final fillColor = isDirect
+        ? _tint(lineColor, col, fillAlpha)
+        : _tint(lineColor, col, 0.16 * fillAlpha);
+    canvas.drawCircle(center, radius, Paint()..color = fillColor);
 
     // 2.1 空心描边 (非直推)
     if (!isDirect) {
       canvas.drawCircle(
         center,
-        TreeLayout.nodeRadius - 1.75,
+        radius - 1.6,
         Paint()
-          ..color = isFaded ? lineColor.withOpacity(0.3) : lineColor.withOpacity(0.9)
-          ..strokeWidth = 3.5
+          ..color = _tint(lineColor, col, 0.9 * ringAlpha)
+          ..strokeWidth = math.max(2.0, radius * 0.09)
           ..style = PaintingStyle.stroke,
       );
     }
 
-    // 2.2 上级引荐: 额外细外环 (远看/全景也能区分)
+    // 2.2 上级引荐: 额外细外环
     if (isUpline) {
       canvas.drawCircle(
         center,
-        TreeLayout.nodeRadius + 6,
+        radius + 5,
         Paint()
-          ..color = isFaded ? lineColor.withOpacity(0.2) : lineColor.withOpacity(0.55)
-          ..strokeWidth = 2
+          ..color = _tint(lineColor, col, 0.55 * ringAlpha)
+          ..strokeWidth = 1.8
           ..style = PaintingStyle.stroke,
       );
     }
@@ -493,7 +674,7 @@ class FranchiseTreePainter extends CustomPainter {
     if (isDirect) {
       canvas.drawCircle(
         center,
-        TreeLayout.nodeRadius - 4,
+        radius - 4,
         Paint()..color = Colors.white.withOpacity(isFaded ? 0.1 : 0.2),
       );
     }
@@ -502,7 +683,7 @@ class FranchiseTreePainter extends CustomPainter {
     if (isSelected) {
       canvas.drawCircle(
         center,
-        TreeLayout.nodeRadius + 5,
+        radius + 5,
         Paint()
           ..color = AppTheme.accent
           ..strokeWidth = 5
@@ -511,7 +692,7 @@ class FranchiseTreePainter extends CustomPainter {
     } else if (isOnPath && !isFaded) {
       canvas.drawCircle(
         center,
-        TreeLayout.nodeRadius + 4,
+        radius + 4,
         Paint()
           ..color = AppTheme.accent.withOpacity(0.85)
           ..strokeWidth = 3
@@ -525,10 +706,10 @@ class FranchiseTreePainter extends CustomPainter {
       text: TextSpan(
         text: initial,
         style: TextStyle(
-          fontSize: 32,
+          fontSize: math.max(12, radius * 0.72),
           color: isFaded
-              ? lineColor.withOpacity(0.5)
-              : (isDirect ? Colors.white : lineColor),
+              ? _tint(lineColor, col, 0.5)
+              : (isDirect ? Colors.white : _tint(lineColor, col)),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -536,23 +717,29 @@ class FranchiseTreePainter extends CustomPainter {
     )..layout();
     tp.paint(canvas, Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
 
-    // 6. 角标: 直推「直」(橙) / 上级引荐「上」(灰); 下级引荐 (多数) 不加角标
-    if (!isFaded && !isCurrentUser) {
+    // 6. 角标: 直推「直」(橙) / 上级引荐「上」(灰); 缩小看全局时不画 (减噪)
+    if (!isFaded && !isCurrentUser && scale >= 0.5) {
       if (relation == FranchiseeRelation.direct) {
-        _drawBadge(canvas, center, '直', AppTheme.accent);
+        _drawBadge(canvas, center, '直', AppTheme.accent, radius);
       } else if (isUpline) {
-        _drawBadge(canvas, center, '上', AppTheme.badgeNeutral);
+        _drawBadge(canvas, center, '上', AppTheme.badgeNeutral, radius);
       }
     }
   }
 
   /// 节点右上角小角标 (圆形 + 1 字)
-  void _drawBadge(Canvas canvas, Offset center, String text, Color color) {
+  void _drawBadge(
+    Canvas canvas,
+    Offset center,
+    String text,
+    Color color,
+    double nodeRadius,
+  ) {
     final badgeCenter = Offset(
-      center.dx + TreeLayout.nodeRadius * 0.74,
-      center.dy - TreeLayout.nodeRadius * 0.74,
+      center.dx + nodeRadius * 0.76,
+      center.dy - nodeRadius * 0.76,
     );
-    const double badgeRadius = 13;
+    final badgeRadius = math.max(8.0, nodeRadius * 0.32);
     canvas.drawCircle(
       badgeCenter,
       badgeRadius,
@@ -562,8 +749,8 @@ class FranchiseTreePainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
-        style: const TextStyle(
-          fontSize: 14,
+        style: TextStyle(
+          fontSize: math.max(9, badgeRadius * 1.05),
           color: Colors.white,
           fontWeight: FontWeight.w700,
         ),
@@ -583,17 +770,32 @@ class FranchiseTreePainter extends CustomPainter {
     bool isCurrentUser,
     bool isFaded,
   ) {
-    // 姓名 (圆下方)
-    // maxWidth = labelMaxWidth (列距 180 - 20): 相邻列名字不串行, 长名截断
+    final col = _columnOf(node.id);
+    final radius = TreeLayout.radiusForColumn(col);
+
+    // 缩小看全局时: 外侧名字先省掉 (减噪); 主线/选中/搜索命中始终画
+    final isSelected = selectedNodeId != null && node.id == selectedNodeId;
+    final alwaysShow =
+        col == 0 || isSelected || pathIds.contains(node.id) || _isSearchHit(node.id);
+    if (!alwaysShow) {
+      final minScale = col == 1 ? 0.34 : 0.58;
+      if (scale < minScale) return;
+    }
+
+    // 姓名 (圆下方): 字号/宽度随列缩小, 允许相邻轻微重叠
+    final fontSize = math.max(
+      11.0,
+      16.0 * (radius / TreeLayout.nodeRadius).clamp(0.7, 1.0),
+    );
     final name = node.name;
     final tpName = TextPainter(
       text: TextSpan(
         text: name,
         style: TextStyle(
-          fontSize: 16,
+          fontSize: fontSize,
           color: isFaded
-              ? AppTheme.textPrimary.withOpacity(0.4)
-              : AppTheme.textPrimary,
+              ? AppTheme.textPrimary.withOpacity(0.35)
+              : _tint(AppTheme.textPrimary, col),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -601,18 +803,27 @@ class FranchiseTreePainter extends CustomPainter {
       maxLines: 1,
       ellipsis: '…',
       textDirection: TextDirection.ltr,
-    )..layout(maxWidth: TreeLayout.labelMaxWidth);
-    final nameTop = center.dy + TreeLayout.nodeRadius + 8;
+    )..layout(
+        maxWidth: math.max(
+          44.0,
+          math.min(
+            TreeLayout.labelMaxWidthForColumn(col),
+            col == 0 ? TreeLayout.labelMaxWidth : columnPitch - 4,
+          ),
+        ),
+      );
+    final nameTop = center.dy + radius + 6;
     // 名字底色 — 父→子连线从圆底中心向下画, 用画布同色块垫在文字下面 (连线从背后过)
     _drawLabelBackground(
       canvas,
       Rect.fromLTWH(
-        center.dx - tpName.width / 2 - 5,
+        center.dx - tpName.width / 2 - 4,
         nameTop - 2,
-        tpName.width + 10,
+        tpName.width + 8,
         tpName.height + 4,
       ),
       isFaded,
+      col,
     );
     tpName.paint(canvas, Offset(center.dx - tpName.width / 2, nameTop));
 
@@ -631,22 +842,23 @@ class FranchiseTreePainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      final meTop = center.dy + TreeLayout.nodeRadius + 30;
+      final meTop = center.dy + radius + 28;
       _drawLabelBackground(
         canvas,
         Rect.fromLTWH(
-          center.dx - tpMe.width / 2 - 5,
+          center.dx - tpMe.width / 2 - 4,
           meTop - 2,
-          tpMe.width + 10,
+          tpMe.width + 8,
           tpMe.height + 4,
         ),
         isFaded,
+        col,
       );
       tpMe.paint(canvas, Offset(center.dx - tpMe.width / 2, meTop));
     }
 
-    // 位置标签 (左/右) — 子节点名字下方
-    if (node.placementSide != null) {
+    // 位置标签 (A线/B线) — 只在主线列画 (外侧节点太小, 画了更乱)
+    if (node.placementSide != null && col == 0) {
       final tpSide = TextPainter(
         text: TextSpan(
           text: node.placementSide == 'left' ? '← A线' : 'B线 →',
@@ -664,26 +876,33 @@ class FranchiseTreePainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      final sideTop = center.dy + TreeLayout.nodeRadius + 48;
+      final sideTop = center.dy + radius + 44;
       _drawLabelBackground(
         canvas,
         Rect.fromLTWH(
-          center.dx - tpSide.width / 2 - 5,
+          center.dx - tpSide.width / 2 - 4,
           sideTop - 2,
-          tpSide.width + 10,
+          tpSide.width + 8,
           tpSide.height + 4,
         ),
         isFaded,
+        col,
       );
       tpSide.paint(canvas, Offset(center.dx - tpSide.width / 2, sideTop));
     }
   }
 
   /// 标签底色 (盖住从圆底穿过的父子连线; 跟画布同色)
-  void _drawLabelBackground(Canvas canvas, Rect rect, bool isFaded) {
+  void _drawLabelBackground(
+    Canvas canvas,
+    Rect rect,
+    bool isFaded,
+    int col,
+  ) {
+    final a = (isFaded ? 0.6 : 0.9) * (col == 0 ? 1.0 : 0.85);
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-      Paint()..color = AppTheme.bgWarm.withOpacity(isFaded ? 0.6 : 0.9),
+      RRect.fromRectAndRadius(rect, const Radius.circular(5)),
+      Paint()..color = AppTheme.bgWarm.withOpacity(a),
     );
   }
 

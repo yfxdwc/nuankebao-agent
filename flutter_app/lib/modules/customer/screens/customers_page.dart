@@ -454,24 +454,36 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                                   GestureDetector(
                                     onTap: _clearSelection,
                                     behavior: HitTestBehavior.opaque,
-                                    child: CustomPaint(
-                                      size: canvasSize,
-                                      painter: FranchiseTreePainter(
-                                        root: tree,
-                                        positions: positions,
-                                        searchMatchedIds: searchMatchedIds,
-                                        currentUserId: tree.id,
-                                        selectedNodeId: _selectedNodeId,
-                                        pathIds: _graphPathIds,
-                                        spineIds: layout.spineIds,
-                                        aLineIds: layout.aLineIds,
-                                        bLineIds: layout.bLineIds,
-                                        relations: relations,
-                                        filterIds: filterIds,
-                                      ),
+                                    // 监听缩放: 缩小看全局时少画外侧名字/角标 (减噪)
+                                    child: ValueListenableBuilder<Matrix4>(
+                                      valueListenable: _graphTransformController,
+                                      builder: (context, matrix, _) {
+                                        final scale =
+                                            matrix.getMaxScaleOnAxis();
+                                        return CustomPaint(
+                                          size: canvasSize,
+                                          painter: FranchiseTreePainter(
+                                            root: tree,
+                                            positions: positions,
+                                            columns: layout.columns,
+                                            scale: scale,
+                                            columnPitch: layout.columnPitch,
+                                            searchMatchedIds: searchMatchedIds,
+                                            currentUserId: tree.id,
+                                            selectedNodeId: _selectedNodeId,
+                                            pathIds: _graphPathIds,
+                                            spineIds: layout.spineIds,
+                                            aLineIds: layout.aLineIds,
+                                            bLineIds: layout.bLineIds,
+                                            relations: relations,
+                                            filterIds: filterIds,
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
-                                  ..._buildHitareas(tree, tree, positions),
+                                  ..._buildHitareas(
+                                      tree, tree, positions, layout.columns),
                                 ],
                               ),
                             ),
@@ -812,17 +824,20 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     FranchiseeTreeNode root,
     FranchiseeTreeNode node,
     Map<String, Offset> positions,
+    Map<String, int> columns,
   ) {
     final widgets = <Widget>[];
     final pos = positions[node.id];
     if (pos == null) return widgets;
+    // 外侧节点更小 (前后立体), 点击区跟着半径走
+    final radius = TreeLayout.radiusForColumn(columns[node.id] ?? 0);
     widgets.add(
       Positioned(
-        left: pos.dx - TreeLayout.nodeRadius,
-        top: pos.dy - TreeLayout.nodeRadius,
-        width: TreeLayout.nodeSize,
+        left: pos.dx - radius,
+        top: pos.dy - radius,
+        width: radius * 2,
         // 圆下方到名字/A线B线标签都算可点 (中老年手指粗, 别只让圆圈可点)
-        height: TreeLayout.nodeSize + 44,
+        height: radius * 2 + 44,
         child: GestureDetector(
           onTap: () => _selectNode(root, node),
           onLongPress: () => context.push('/franchisees/${node.id}'),
@@ -832,7 +847,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       ),
     );
     for (final child in node.children) {
-      widgets.addAll(_buildHitareas(root, child, positions));
+      widgets.addAll(_buildHitareas(root, child, positions, columns));
     }
     return widgets;
   }
