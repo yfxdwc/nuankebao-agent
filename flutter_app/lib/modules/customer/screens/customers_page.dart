@@ -348,28 +348,23 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     ),
             ),
             // 图例 + 快捷筛选 (点 chip = 只看这一类, 再点取消)
-            SizedBox(
-              height: 52,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+            // Wrap 两行: 6 个 chip 一屏全见 (横向滚动的第 5/6 个会被看成"被裁掉")
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
                 children: [
                   _graphFilterChip(_GraphFilter.none, '全部', null, stats.total),
-                  const SizedBox(width: 8),
                   _graphFilterChip(
                       _GraphFilter.aLine, 'A线', AppTheme.franchiseeA, stats.aLine),
-                  const SizedBox(width: 8),
                   _graphFilterChip(
                       _GraphFilter.bLine, 'B线', AppTheme.franchiseeB, stats.bLine),
-                  const SizedBox(width: 8),
                   _graphFilterChip(_GraphFilter.direct, '直推', AppTheme.accent,
-                      stats.direct,
-                      hollow: false),
-                  const SizedBox(width: 8),
+                      stats.direct),
                   _graphFilterChip(_GraphFilter.downline, '下级引荐',
                       AppTheme.franchiseeB, stats.downline,
                       hollow: true),
-                  const SizedBox(width: 8),
                   _graphFilterChip(_GraphFilter.upline, '上级引荐',
                       AppTheme.badgeNeutral, stats.upline,
                       hollow: true, outerRing: true),
@@ -579,7 +574,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       labelStyle: TextStyle(
         color: selected ? Colors.white : AppTheme.textPrimary,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
       ),
     );
@@ -592,23 +589,23 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     bool outerRing = false,
   }) {
     return SizedBox(
-      width: 26,
-      height: 26,
+      width: 22,
+      height: 22,
       child: Stack(
         alignment: Alignment.center,
         children: [
           if (outerRing)
             Container(
-              width: 26,
-              height: 26,
+              width: 22,
+              height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: color.withOpacity(0.55), width: 1.5),
               ),
             ),
           Container(
-            width: 18,
-            height: 18,
+            width: 16,
+            height: 16,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: hollow ? color.withOpacity(0.16) : color,
@@ -832,10 +829,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: Material(
+    return Material(
       color: Colors.white.withOpacity(0.9),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
@@ -863,7 +857,6 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           ),
         ),
       ),
-      ),
     );
   }
 
@@ -883,7 +876,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         left: pos.dx - TreeLayout.nodeRadius,
         top: pos.dy - TreeLayout.nodeRadius,
         width: TreeLayout.nodeSize,
-        // 圆下方到名字/左线右线标签都算可点 (中老年手指粗, 别只让圆圈可点)
+        // 圆下方到名字/A线B线标签都算可点 (中老年手指粗, 别只让圆圈可点)
         height: TreeLayout.nodeSize + 44,
         child: GestureDetector(
           onTap: () => _selectNode(root, node),

@@ -2,6 +2,46 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (图谱节点三维区分 + 筛选统计, 2026-09-17 主人拍板)
+
+**主人拍板** (ask_user 7706f602): ① A线=深蓝 #2B6CB0 / B线=紫 #8E5BA8
+② 直推=实心 + 「直」角标, 非直推=空心 ③ 关系细分三级 (直推/下级引荐/上级引荐, 含后端改造)
+④ 筛选+统计本期做 ⑤ 主线不绑直推
+
+**后端 (新增 placement 二叉树视图 + relation)**
+- **`src/lib/db/queries/franchisee.ts`**
+  - `TreeNode` 加 `referrerId` + `relation` (`root|direct|downline|upline`), `classifyRelation` 统一判定
+  - 新增 `getPlacementTree(rootId, depth)` — 按 `placement_path` 精确连父子 (真二叉树)
+    - 为什么必须换: 「上级引荐、但放在我下线」的人 `referrer_id` 不是我 → 旧推荐树 (按 referrer_id 连)
+      里根本看不到; 二叉树能看到, 并能标成「上级引荐」
+- **`src/app/api/franchisees/me/tree/route.ts`** — 加 `?mode=referrer|placement`
+  (默认 referrer = 冻结的 web admin 行为不变); 空树响应补 `relation: root`
+- **Flutter** `FranchiseeService.getMyTree(mode:)` 默认 `placement`; `myFranchiseeTreeProvider` 走 placement
+
+**前端 (三维区分 + 图例筛选 + 统计)**
+- **`core/models/franchisee.dart`** — `FranchiseeRelation` enum (`label`: 我/直推/下级引荐/上级引荐)
+  + `FranchiseeTreeNode.referrerId/relation`
+- **`core/theme/app_theme.dart`** — `franchiseeA` (A线深蓝) / `franchiseeB` (B线紫) / `badgeNeutral`
+- **`TreeLayoutResult`** — 加 `aLineIds` / `bLineIds` (整条腿, 含侧枝)
+- **`franchise_tree_painter.dart`**
+  - 节点色 = A线蓝 / B线紫 / 我绿; 填充 = 关系: **直推实心 + 橙「直」角标**,
+    **下级引荐空心** (浅底+描边), **上级引荐空心 + 细外环 + 灰「上」角标**
+  - 侧别小标签 `← 左线/右线 →` → `← A线 / B线 →`
+  - 新增 `filterIds` (筛选时只亮命中, 其余淡化)
+- **`customers_page.dart`**
+  - **图例 = 筛选 chips** (Wrap 两行, 6 个一屏全见): `全部 14 / A线 7 / B线 7 / 直推 2 / 下级引荐 12 / 上级引荐 0`
+    点 chip = 只看这一类 (其余淡化), 再点取消
+  - 选中节点时信息条 → `SeedTest-陈大壮 · A线 · 下级引荐 · 第2层` + × 取消
+  - 无障碍: 筛选 chips + 「回到我/全景」加 `Semantics(label)` (Flutter web 语义树原来这些是空 label)
+- **`franchise_node_sheet.dart` / deprecated `franchise_tree_page.dart`** — 同步 A/B 线 + relation 文案 / 参数
+
+**验证**
+- `npx tsc --noEmit` 0 error; API 实测: placement 树 15 节点 relation 正确 (2 直推 / 12 下级引荐 / 0 上级);
+  临时把 83 的 referrer_id 改成不在我子树的值 → relation 变 `upline`, 复原 → `downline` ✓
+- dev server 截图 + 像素校验: A线实心/空心、B线实心/空心、直推橙色角标都在; 点「直推」chip → 只有 2 个直推节点亮,
+  其余全部淡化; 点「A线」chip → B线整体淡化 ✓
+- 6 个 chip 一屏全见 (语义坐标 25..368 < 393), 不再有"被裁掉"的观感
+
 ### Changed (graph 双主线「对碰」布局 + 单击/长按交互, 2026-09-17 主人拍板)
 
 **主人拍板** (2026-09-17): 「从「我」开始, 左右两条主线最长的线平等, 其他节点往这两条线的

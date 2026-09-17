@@ -74,7 +74,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            '请选择位置 (左/右线)',
+            '请选择位置 (A线/B线)',
             style: TextStyle(fontSize: AppTheme.fontMd),
           ),
         ),
@@ -289,7 +289,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
             ),
             const SizedBox(width: 12),
             Text(
-              '位置: ${_selectedSide == 'left' ? '左线' : '右线'}',
+              '位置: ${_selectedSide == 'left' ? 'A线' : 'B线'}',
               style: const TextStyle(
                 fontSize: AppTheme.fontMd,
                 fontWeight: FontWeight.w600,
@@ -306,7 +306,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '位置 (左/右线) *',
+          '位置 (A线/B线) *',
           style: TextStyle(
             fontSize: AppTheme.fontMd,
             fontWeight: FontWeight.w600,
@@ -315,9 +315,9 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
         const SizedBox(height: 8),
         Row(
           children: [
-            Expanded(child: _sideButton('左线', 'left', Icons.arrow_back)),
+            Expanded(child: _sideButton('A线', 'left', Icons.arrow_back)),
             const SizedBox(width: 8),
-            Expanded(child: _sideButton('右线', 'right', Icons.arrow_forward)),
+            Expanded(child: _sideButton('B线', 'right', Icons.arrow_forward)),
           ],
         ),
       ],

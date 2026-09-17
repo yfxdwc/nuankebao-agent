@@ -121,7 +121,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
               context,
               icon: Icons.arrow_back,
               iconColor: AppTheme.primary,
-              label: '加到左线',
+              label: '加到A线',
               onTap: () {
                 Navigator.of(context).pop();
                 context.push('/franchisees/new?parentId=${node.id}&sideHint=left');
@@ -132,7 +132,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
               context,
               icon: Icons.arrow_forward,
               iconColor: AppTheme.franchisee,
-              label: '加到右线',
+              label: '加到B线',
               onTap: () {
                 Navigator.of(context).pop();
                 context.push('/franchisees/new?parentId=${node.id}&sideHint=right');

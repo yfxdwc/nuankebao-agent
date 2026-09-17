@@ -185,7 +185,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             _row('层级', f.placementDepth == 0 ? '顶级 (root)' : '第 ${f.placementDepth} 层'),
-            _row('位置', f.placementSide == null ? '顶级' : (f.placementSide == 'left' ? '左线' : '右线')),
+            _row('位置', f.placementSide == null ? '顶级' : (f.placementSide == 'left' ? 'A线' : 'B线')),
             _row('路径', f.placementPath.isEmpty ? '(顶级)' : f.placementPath),
             _row('加入时间', f.joinedAt != null
                 ? '${f.joinedAt!.year}-${f.joinedAt!.month.toString().padLeft(2, '0')}-${f.joinedAt!.day.toString().padLeft(2, '0')}'

@@ -162,7 +162,7 @@ class TreeLayout {
       bLineIds: bLine,
       leftColumns: leftColumns,
       rightColumns: rightColumns,
-      // 内容高度: 根圆顶 → 最下层「左线/右线」标签底 (含名字 16pt + 标签 11pt)
+      // 内容高度: 根圆顶 → 最下层「A线/B线」标签底 (含名字 16pt + 标签 11pt)
       contentHeight: maxDepthSeen * levelHeight + nodeSize + 56,
       canvasSize: canvasSize,
     );
