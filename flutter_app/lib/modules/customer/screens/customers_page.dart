@@ -55,10 +55,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   ///   - user 可双指缩放 / 单指拖动改 controller.value, 后续不需要重置 (persist across zoom/pan)
   final TransformationController _graphTransformController = TransformationController();
 
-  /// 是否已 auto-fit 过 (避免 build 重跑时反复 reset)
-  /// fix-graph-ui (2026-09-17 v2): 改用 _initialFitScale, 这个字段保留占位未来再用
-  // ignore: unused_field
-  bool _graphAutoFitApplied = false;
+  /// 图谱视图状态 (LayoutBuilder 每次 layout 更新, 供「回到我」/「全景」按钮复用)
+  /// fix-graph-ui-v3 (2026-09-17): 替换 v2 的 outer Transform 方案 —
+  ///   旧方案把 InteractiveViewer 的 viewport 整体缩放, 画布反被 constraints 压成
+  ///   viewport 大小, 图谱缩在左上角一小块 (主人截图就是这个)
+  Size? _graphViewport;
+  Size? _graphCanvasSize;
+  Offset? _graphRootCenter;
+  bool _graphViewInitialized = false;
 
   @override
   void didChangeDependencies() {
@@ -290,7 +294,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   Expanded(
                     child: Text(
                       searchQuery.isEmpty
-                          ? '点击节点进详情 · 我 (绿) 是根节点 · 加盟客户 2 线图谱'
+                          ? '点节点看详情 · 双指缩放 · 拖动看全图'
                           : (matchCount > 0
                               ? '匹配 $matchCount 位加盟客户 · 其余淡化'
                               : '没有匹配「$searchQuery」'),
@@ -303,7 +307,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     ),
                   ),
                   Text(
-                    '${_countDescendants(tree)} 位加盟客户',
+                    // 减 1: 根节点是「我」, 不算加盟客户
+                    '${_countDescendants(tree) - 1} 位加盟客户',
                     style: const TextStyle(
                       fontSize: AppTheme.fontSm,
                       color: AppTheme.primaryDark,
@@ -314,107 +319,101 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
               ),
             ),
             // 图谱本体 (复用 modules/presentation/graph 的 painter)
-            // AGENTS §3 fix-graph-zoom-pan (2026-09-16): 用 InteractiveViewer 替代嵌套 SingleChildScrollView
-            //   v2 加 auto-fit initial scale (LayoutBuilder + TransformationController): user 一进页面看全树
-            //   - minScale 0.1 (允许 31 节点 depth-4 树 fit 进手机屏幕)
-            //   - maxScale 3.0 (细节看 zoom)
-            //   - boundaryMargin 80 预留 pan 边界空间
-            //   - hitarea (Positioned GestureDetector) 仍可接收 tap
-            // fix-graph-ui (2026-09-17): 改 auto-fit 策略
-            //   旧 (v2): LayoutBuilder 里 addPostFrameCallback 设 controller.value → InteractiveViewer 重建
-            //     问题: 首次 frame InteractiveViewer 用 identity matrix → 看到 1760x696 原始画布在左上角
-            //          然后 post-frame 回调改 controller → InteractiveViewer 重建应用 scale
-            //          这个状态间会看到「左上角小截屏」闪烁
-            //   新: 用 _initialFitScale 在 state 缓存, 在 LayoutBuilder 同步计算并应用到外层 Transform
-            //     - InteractiveViewer 内部保持 identity (canvas 全尺寸)
-            //     - 外层 Transform scale(initialFit) 把整个 InteractiveViewer 压到 viewport
-            //     - user pan/zoom InteractiveViewer = 在 InteractiveViewer 内相对当前显示
-            //       (InteractiveViewer 自己的 transform * 外层 Transform = 净效果一致)
-            //   - 不再需要 post-frame callback, 不再需要 TransformationController 设值 (用户 pan/zoom 不影响外层)
-            //     但保留 TransformationController 给「回到全景」按钮复位用
+            // fix-graph-ui-v3 (2026-09-17, 主人反馈「ui一堆错误」): 重写初始视图方案
+            //   v2 两个致命 bug:
+            //     1) InteractiveViewer 默认 constrained:true → SizedBox(1760x696) 被父级 tight
+            //        constraints 压成 viewport 大小, 画布只剩左上角一小块, 根节点直接看不见
+            //     2) 外层 Transform 缩放的是 InteractiveViewer 的 viewport (已被裁到 393x571),
+            //        不是画布 → 图谱变成左上角一团 (节点约 19px, 名字根本看不清)
+            //   本版:
+            //     - constrained:false → 画布保持原始尺寸, InteractiveViewer 当取景框
+            //     - 初始视图 = 「回到我」: 根节点 (我) 顶部居中 + 1:1 (中老年看得清名字)
+            //     - 右下角「回到我」/「全景」两个按钮, user 随时找回
+            //     - boundaryMargin = infinity: 让 minScale 生效 (finite margin 会算出一个
+            //       约 0.56 的下限, 全景 0.2x 会被 gesture 强行弹回)
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // 同步算 fit scale (缓存到 state, 避免重复算)
-                  _initialFitScale ??= _computeFitScale(
-                    Size(constraints.maxWidth, constraints.maxHeight),
-                    canvasSize,
-                  );
-                  final fitScale = _initialFitScale!;
+                  final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+                  final rootCenter = positions[tree.id] ??
+                      Offset(canvasSize.width / 2,
+                          TreeLayout.padding + TreeLayout.nodeRadius);
+                  _graphViewport = viewport;
+                  _graphRootCenter = rootCenter;
+
+                  // 树结构变了 (画布尺寸变) → 重算初始视图
+                  final treeChanged =
+                      _graphCanvasSize != null && _graphCanvasSize != canvasSize;
+                  _graphCanvasSize = canvasSize;
+                  if (!_graphViewInitialized || treeChanged) {
+                    _graphViewInitialized = true;
+                    final matrix =
+                        _focusRootMatrix(viewport, canvasSize, rootCenter);
+                    if (treeChanged) {
+                      // InteractiveViewer 已挂载, build 期间不能动 controller → 下一帧设
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        _graphTransformController.value = matrix;
+                      });
+                    } else {
+                      // 首次 layout: InteractiveViewer 还没建 (无 listener), 同步设
+                      _graphTransformController.value = matrix;
+                    }
+                  }
 
                   return Stack(
                     children: [
                       Positioned.fill(
                         child: Container(
                           color: AppTheme.bgWarm,
-                          // 外层 Transform 提供 initial fit (同步应用, 不靠 post-frame callback)
-                          // InteractiveViewer 内部保持 identity (canvas 全尺寸)
-                          // user pan/zoom 乘上外层 fit = 净效果一致
-                          // (InteractiveViewer 自己不会主动去 fit, 必须乘上外层才能跟 viewport 匹)
-                          child: Transform(
-                            transform: Matrix4.identity()..scale(fitScale),
-                            alignment: Alignment.topLeft,
-                            child: InteractiveViewer(
-                              transformationController: _graphTransformController,
-                              panEnabled: true,
-                              scaleEnabled: true,
-                              minScale: 0.5,
-                              maxScale: 8.0,
-                              boundaryMargin: const EdgeInsets.all(80),
-                              child: SizedBox(
-                                width: canvasSize.width,
-                                height: canvasSize.height,
-                                child: Stack(
-                                  children: [
-                                    CustomPaint(
-                                      size: canvasSize,
-                                      painter: FranchiseTreePainter(
-                                        root: tree,
-                                        positions: positions,
-                                        searchMatchedIds: searchMatchedIds,
-                                        currentUserId: tree.id,
-                                      ),
+                          child: InteractiveViewer(
+                            // ★ 关键: 不让父级 tight constraints 把画布压成 viewport 大小
+                            constrained: false,
+                            transformationController: _graphTransformController,
+                            panEnabled: true,
+                            scaleEnabled: true,
+                            minScale: _fitScale(viewport, canvasSize) * 0.9,
+                            maxScale: 3.0,
+                            boundaryMargin: const EdgeInsets.all(double.infinity),
+                            child: SizedBox(
+                              width: canvasSize.width,
+                              height: canvasSize.height,
+                              child: Stack(
+                                children: [
+                                  CustomPaint(
+                                    size: canvasSize,
+                                    painter: FranchiseTreePainter(
+                                      root: tree,
+                                      positions: positions,
+                                      searchMatchedIds: searchMatchedIds,
+                                      currentUserId: tree.id,
                                     ),
-                                    ..._buildHitareas(tree, positions),
-                                  ],
-                                ),
+                                  ),
+                                  ..._buildHitareas(tree, positions),
+                                ],
                               ),
                             ),
                           ),
                         ),
                       ),
-                      // 右下角「回到全景」按钮 (用户缩放/拖动后找回根节点)
+                      // 右下角: 「回到我」(根节点居中 1:1) / 「全景」(整树 fit)
                       Positioned(
                         right: 12,
                         bottom: 12,
-                        child: Material(
-                          color: Colors.white.withOpacity(0.85),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            side: BorderSide(color: AppTheme.primary.withOpacity(0.4), width: 1),
-                          ),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(20),
-                            onTap: _resetGraphView,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.center_focus_strong, size: 18, color: AppTheme.primaryDark),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '回到全景',
-                                    style: TextStyle(
-                                      fontSize: AppTheme.fontSm,
-                                      color: AppTheme.primaryDark,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                        child: Row(
+                          children: [
+                            _graphControlButton(
+                              icon: Icons.my_location,
+                              label: '回到我',
+                              onTap: _focusGraphView,
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            _graphControlButton(
+                              icon: Icons.zoom_out_map,
+                              label: '全景',
+                              onTap: _fitGraphView,
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -456,31 +455,93 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     return result;
   }
 
-  /// 重置图谱视图 (回到全景 = 重新算 outer Transform fit scale + 清 InteractiveViewer 内部 pan/zoom)
-  /// fix-graph-ui (2026-09-17 v2): 配合外层 Transform + 右下角「回到全景」按钮
-  void _resetGraphView() {
-    if (!mounted) return;
+  /// 「回到我」视图: 根节点 (我) 顶部居中 + 1:1 缩放 (中老年看得清名字)
+  Matrix4 _focusRootMatrix(Size viewport, Size canvasSize, Offset rootCenter) {
+    const scale = 1.0;
+    final dx = viewport.width / 2 - rootCenter.dx * scale;
+    // 根节点圆顶部留 24px (够悬浮, 又不浪费屏幕)
+    final dy = 24 - (rootCenter.dy - TreeLayout.nodeRadius) * scale;
+    return Matrix4.identity()
+      ..translate(dx, dy)
+      ..scale(scale);
+  }
+
+  /// 「全景」视图: 整棵树 fit 进 viewport (居中)
+  Matrix4 _fitTreeMatrix(Size viewport, Size canvasSize) {
+    final scale = _fitScale(viewport, canvasSize);
+    final dx = (viewport.width - canvasSize.width * scale) / 2;
+    final dy = (viewport.height - canvasSize.height * scale) / 2;
+    return Matrix4.identity()
+      ..translate(dx, dy)
+      ..scale(scale);
+  }
+
+  /// 整棵树 fit 进 viewport 的缩放比 (含 4% 边距, 下限 0.05 防除零)
+  double _fitScale(Size viewport, Size canvasSize) {
+    final sx = viewport.width / canvasSize.width;
+    final sy = viewport.height / canvasSize.height;
+    return math.max(0.05, math.min(sx, sy) * 0.96);
+  }
+
+  /// 回到「我」(初始可读视图)
+  void _focusGraphView() {
+    final viewport = _graphViewport;
+    final canvasSize = _graphCanvasSize;
+    final rootCenter = _graphRootCenter;
+    if (viewport == null || canvasSize == null || rootCenter == null) return;
     setState(() {
-      _initialFitScale = null; // 触发 LayoutBuilder 重算
-      _graphTransformController.value = Matrix4.identity(); // 清 InteractiveViewer 内部 pan/zoom
+      _graphTransformController.value =
+          _focusRootMatrix(viewport, canvasSize, rootCenter);
     });
   }
 
-  /// 计算 auto-fit scale
-  /// fix-graph-ui (2026-09-17): 优先 fit-to-width (水平让所有兄弟节点可见)
-  ///   原因: 4 层二叉树 (15 节点) 宽 1760, 高仅 696. fit-to-height 会让树在手机屏上
-  ///   横向溢出 (1397/393=3.6x), 用户看不到右半边的子树
-  ///   fit-to-width 横向正好, 垂直剩下的 397px 给 user 滚动看不同层级
-  ///   折中: 取 max(scaleX, scaleY*0.6) — 优先保证横向 fit, 允许垂直必要时缩小一点
-  double _computeFitScale(Size viewport, Size canvas) {
-    final scaleX = viewport.width / canvas.width;
-    // 水平为主: 让所有同层节点可见, 垂直允许上下滚
-    final fit = math.max(0.15, scaleX * 0.98);
-    return fit;
+  /// 缩到全景 (整棵树可见)
+  void _fitGraphView() {
+    final viewport = _graphViewport;
+    final canvasSize = _graphCanvasSize;
+    if (viewport == null || canvasSize == null) return;
+    setState(() {
+      _graphTransformController.value =
+          _fitTreeMatrix(viewport, canvasSize);
+    });
   }
 
-  /// 缓存 LayoutBuilder 算的 fitScale (reset 时清掉重算)
-  double? _initialFitScale;
+  /// 图谱右下角控制按钮 (回到我 / 全景)
+  Widget _graphControlButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white.withOpacity(0.9),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: AppTheme.primary.withOpacity(0.4), width: 1),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: AppTheme.primaryDark),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.primaryDark,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   /// 节点点击 hit area (走 franchisee 详情)
   List<Widget> _buildHitareas(
@@ -495,7 +556,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         left: pos.dx - TreeLayout.nodeRadius,
         top: pos.dy - TreeLayout.nodeRadius,
         width: TreeLayout.nodeSize,
-        height: TreeLayout.nodeSize,
+        // 圆下方到名字/左线右线标签都算可点 (中老年手指粗, 别只让圆圈可点)
+        height: TreeLayout.nodeSize + 44,
         child: GestureDetector(
           onTap: () => context.push('/franchisees/${node.id}'),
           behavior: HitTestBehavior.opaque,
