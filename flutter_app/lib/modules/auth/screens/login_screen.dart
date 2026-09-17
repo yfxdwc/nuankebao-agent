@@ -53,7 +53,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (state.error != null) {
         if (mounted) _showError(state.error!);
       } else if (state.isLoggedIn) {
-        if (mounted) context.go('/dashboard');
+        // fix-route: /dashboard 已删 (router 只留 客户/我的 两 tab) → 登录后回客户页
+        if (mounted) context.go('/customers');
       }
     } catch (e) {
       if (mounted) _showError('登录异常: $e');

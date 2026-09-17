@@ -23,6 +23,9 @@ class Franchisee {
   final int placementDepth;
 
   final bool isActive;
+
+  /// 备注 (建树时写, 编辑页可改)
+  final String? notes;
   final DateTime? joinedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -36,6 +39,7 @@ class Franchisee {
     this.placementPath = '',
     this.placementDepth = 0,
     this.isActive = true,
+    this.notes,
     this.joinedAt,
     this.createdAt,
     this.updatedAt,
@@ -51,6 +55,7 @@ class Franchisee {
       placementPath: (json['placementPath'] as String?) ?? '',
       placementDepth: (json['placementDepth'] as num?)?.toInt() ?? 0,
       isActive: json['isActive'] as bool? ?? true,
+      notes: json['notes'] as String?,
       joinedAt: json['joinedAt'] != null ? DateTime.tryParse(json['joinedAt'].toString()) : null,
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) : null,
       updatedAt: json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt'].toString()) : null,

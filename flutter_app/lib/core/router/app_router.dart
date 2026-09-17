@@ -15,6 +15,7 @@ import '../../modules/auth/screens/login_screen.dart';
 import '../../modules/customer/screens/customers_page.dart';
 import '../../modules/relation/screens/franchisee_detail_page.dart';
 import '../../modules/relation/screens/add_franchisee_page.dart';
+import '../../modules/relation/screens/edit_franchisee_page.dart';
 import '../../screens/profile_page.dart';
 import '../../modules/wellness/screens/wellness_record_form_page.dart';
 import '../../modules/wellness/screens/wellness_record_detail_page.dart';
@@ -24,6 +25,41 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: '/login',
+    // fix-route (2026-09-17): 未知路由兜底 — 以前直接抛 GoException 红屏,
+    // 现在给一个「页面不存在 + 回客户页」的友好页 (缺路由时不再吓到主人/销售)
+    errorBuilder: (context, state) => Scaffold(
+      appBar: AppBar(title: const Text('页面不存在'), toolbarHeight: 64),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.explore_off_outlined,
+                size: 56,
+                color: Color(0xFF4A4A4A),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '找不到这个页面\n${state.uri}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Color(0xFF4A4A4A)),
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () => context.go('/customers'),
+                icon: const Icon(Icons.home_outlined, size: 22),
+                label: const Text('回客户页', style: TextStyle(fontSize: 18)),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(200, 56),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
     redirect: (context, state) {
       final isLoggedIn = authState.isLoggedIn;
       final isLoginRoute = state.matchedLocation == '/login';
@@ -120,6 +156,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/franchisees/:id',
         name: 'franchisee-detail',
         builder: (context, state) => FranchiseeDetailPage(
+          franchiseeId: state.pathParameters['id']!,
+        ),
+      ),
+      // 编辑加盟商 (只改 姓名/手机号/备注/启用; 推荐人+位置 建树后不可改)
+      // fix-route (2026-09-17 主人报: GoException no routes for /franchisees/81/edit)
+      GoRoute(
+        path: '/franchisees/:id/edit',
+        name: 'franchisee-edit',
+        builder: (context, state) => EditFranchiseePage(
           franchiseeId: state.pathParameters['id']!,
         ),
       ),

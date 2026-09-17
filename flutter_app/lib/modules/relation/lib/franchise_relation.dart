@@ -108,6 +108,9 @@ class FranchiseRelationSystem implements RelationSystem {
           'referrerId': f.referrerId,
           'placementSide': f.placementSide,
           'placementDepth': f.placementDepth,
+          // fix-route (2026-09-17): 详情页「路径」一直显示 (顶级) — 这里漏映射了
+          'placementPath': f.placementPath,
+          if (f.notes != null) 'notes': f.notes,
           'isActive': f.isActive,
           if (f.joinedAt != null) 'joinedAt': f.joinedAt!.toIso8601String(),
         },

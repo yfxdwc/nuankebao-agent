@@ -13,10 +13,10 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../lib/relation_system.dart';
 import '../lib/relation_system_provider.dart';
 import '../lib/franchise_relation.dart';
 import '../lib/relation_node.dart';
+import '../lib/franchisee_detail_provider.dart';
 import '../../../core/widgets/franchise_chip.dart';
 
 class FranchiseeDetailPage extends ConsumerWidget {
@@ -25,7 +25,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncFranchisee = ref.watch(_franchiseeProvider(franchiseeId));
+    final asyncFranchisee = ref.watch(franchiseeDetailProvider(franchiseeId));
 
     return Scaffold(
       appBar: AppBar(
@@ -137,7 +137,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
   }
 
   Widget _referrerCard(BuildContext context, WidgetRef ref, String referrerId) {
-    final asyncReferrer = ref.watch(_franchiseeProvider(referrerId));
+    final asyncReferrer = ref.watch(franchiseeDetailProvider(referrerId));
     return asyncReferrer.maybeWhen(
       data: (r) {
         return Card(
@@ -311,34 +311,4 @@ class FranchiseeDetailPage extends ConsumerWidget {
       }
     }
   }
-}
-
-final _franchiseeProvider = FutureProvider.family<Franchisee, String>(
-  // v0.1.3 Phase 6.5: 走 RelationSystem 接口 (不再直接调 FranchiseeService)
-  (ref, id) async {
-    final system = ref.watch(relationSystemProvider);
-    final node = await system.getNode(id);
-    if (node == null) {
-      throw Exception('加盟商 $id 不存在');
-    }
-    // 将 RelationNode 转为 UI 需要的 Franchisee (向后兼容)
-    return _nodeToFranchisee(node);
-  },
-);
-
-// RelationNode → Franchisee 转换 (适配层, UI 兼容)
-Franchisee _nodeToFranchisee(RelationNode node) {
-  return Franchisee(
-    id: node.id,
-    name: node.name,
-    phone: node.metadata['phone'] as String? ?? '',
-    referrerId: node.metadata['referrerId'] as String?,
-    placementSide: node.metadata['placementSide'] as String?,
-    placementPath: node.metadata['placementPath'] as String? ?? '',
-    placementDepth: (node.metadata['placementDepth'] as num?)?.toInt() ?? 0,
-    isActive: node.metadata['isActive'] as bool? ?? true,
-    joinedAt: node.metadata['joinedAt'] != null
-        ? DateTime.tryParse(node.metadata['joinedAt'] as String)
-        : null,
-  );
 }

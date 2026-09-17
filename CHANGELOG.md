@@ -2,6 +2,40 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (加盟商编辑页路由缺失 + 路由兜底, 2026-09-17 主人报)
+
+**主人报**: 「修复加盟商详情的编辑页面, 当前报错: `GoException: no routes for location: /franchisees/81/edit`」
+
+- **根因**: `franchisee_detail_page.dart` 的「编辑」按钮 push `/franchisees/:id/edit`, 但 `app_router.dart`
+  只注册了 `/franchisees/:id` 和 `/franchisees/new` → 命中不到路由直接抛 GoException
+- **修复**:
+  1. 新增页面 **`modules/relation/screens/edit_franchisee_page.dart`** (姓名 / 手机号 / 备注 / 启用开关)
+     - 推荐人 + 位置**只读**并显式提示「不可修改」—— 后端 `UpdateFranchiseeSchema` 也只收
+       name/phone/notes/isActive (二叉树 placement_path 是物化路径, 改位置 = 先软删再加)
+     - 保存后 invalidate `myFranchiseeTreeProvider` + `franchiseesProvider`, 回详情页
+  2. `app_router.dart` 注册 `/franchisees/:id/edit` (`name: 'franchisee-edit'`)
+  3. **兜底 `errorBuilder`**: 未知路由不再红屏抛 GoException, 改为「页面不存在 + 回客户页」友好页
+- **顺手全仓扫同类问题** (AGENTS §3「单点问题修一处后必全仓扫一遍」):
+  - `login_screen.dart`: 登录成功 `context.go('/dashboard')` → 该路由早已删除 →
+    改 `go('/customers')` (两 tab 后正确落点)
+  - `franchise_relation.dart`: `_toRelationNode` 漏映射 `placementPath` → 详情页「路径」永远显示
+    `(顶级)` (实际 R.R.); 顺带补 `notes` 映射
+  - `Franchisee` model 补 `notes` 字段解析 (后端 GET 一直返回, Flutter 之前丢了)
+  - 其余 `/ai` `/follow-ups` `/interactions` `/reports` 引用只在 `lib/_deprecated/**` (死代码, 不编译)
+
+- **详情页数据刷新**: `franchisee_detail_page` 的私有 `_franchiseeProvider` 提到共享
+  `modules/relation/lib/franchisee_detail_provider.dart` (→ `franchiseeDetailProvider`),
+  编辑保存后 invalidate 它 —— 否则 pop 回详情页还显示旧名字
+
+**验证**
+- API: `PATCH /api/franchisees/81` 改 name/notes → 200 生效; 传 `placementSide` → 200 但**位置不变**
+  (Zod 静默丢弃未知字段 ✓ 二叉树结构安全)
+- dev server: `#/franchisees/81` → 点「编辑」→ 编辑页渲染正常 (4 字段 + 只读卡 + 保存按钮),
+  无 GoException; 详情页「路径」已正确显示 `R.R.`
+- **生产 build 全流程**: 详情页 → 点编辑 → 改名 → 点「保存修改」→ 自动回详情页且**显示新名字** ✓
+  (测试后已把 81 名字还原), GoException 计数 0
+- 未知路由兜底: `#/no-such-page` → 显示「页面不存在 / 找不到这个页面 no-such-page / 回客户页」✓ 不再红屏
+
 ### Changed (图谱紧凑布局 — 上百节点可用, 2026-09-17 主人拍板)
 
 **主人拍板**: 「当前仅十几个节点就展开得左右宽度很宽, 如果总节点数百个时根本没法查看。
