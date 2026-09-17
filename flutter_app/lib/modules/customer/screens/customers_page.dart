@@ -56,6 +56,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   final TransformationController _graphTransformController = TransformationController();
 
   /// 是否已 auto-fit 过 (避免 build 重跑时反复 reset)
+  /// fix-graph-ui (2026-09-17 v2): 改用 _initialFitScale, 这个字段保留占位未来再用
+  // ignore: unused_field
   bool _graphAutoFitApplied = false;
 
   @override
@@ -260,8 +262,6 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         // 计算画布尺寸 + 节点坐标
         const depth = 3;
         final canvasSize = TreeLayout.computeCanvasSize(tree, depth);
-        // fix-graph-ui (2026-09-17): 缓存 canvasSize 给 reset 用 (不能每次重算, 保持当前 tree 一致)
-        _lastCanvasSize = canvasSize;
         final positions = TreeLayout.computePositions(tree, canvasSize);
         final searchMatchedIds = searchQuery.isEmpty
             ? null
@@ -320,56 +320,61 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             //   - maxScale 3.0 (细节看 zoom)
             //   - boundaryMargin 80 预留 pan 边界空间
             //   - hitarea (Positioned GestureDetector) 仍可接收 tap
-            // fix-graph-ui (2026-09-17): 加 Stack 套 reset button (回到全景) + InteractiveViewer
-            //   - InteractiveViewer 撑满 Expanded 区域
-            //   - 右下角浮一个小型 "回到全景" 按钮 (透明背景, 圆角, 半透明白底)
-            //   - 不再需要 bottom padding 给 FAB: FAB 在列表视图下有效, graph 视图下不显示
-            //     (FAB 在 graph 视图会遮右子节点, 且 graph 主要用来查看关系, 添加走列表视图)
+            // fix-graph-ui (2026-09-17): 改 auto-fit 策略
+            //   旧 (v2): LayoutBuilder 里 addPostFrameCallback 设 controller.value → InteractiveViewer 重建
+            //     问题: 首次 frame InteractiveViewer 用 identity matrix → 看到 1760x696 原始画布在左上角
+            //          然后 post-frame 回调改 controller → InteractiveViewer 重建应用 scale
+            //          这个状态间会看到「左上角小截屏」闪烁
+            //   新: 用 _initialFitScale 在 state 缓存, 在 LayoutBuilder 同步计算并应用到外层 Transform
+            //     - InteractiveViewer 内部保持 identity (canvas 全尺寸)
+            //     - 外层 Transform scale(initialFit) 把整个 InteractiveViewer 压到 viewport
+            //     - user pan/zoom InteractiveViewer = 在 InteractiveViewer 内相对当前显示
+            //       (InteractiveViewer 自己的 transform * 外层 Transform = 净效果一致)
+            //   - 不再需要 post-frame callback, 不再需要 TransformationController 设值 (用户 pan/zoom 不影响外层)
+            //     但保留 TransformationController 给「回到全景」按钮复位用
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // 首次拿到 size 后 auto-fit (post-frame, 避免 build 期间 setState)
-                  if (!_graphAutoFitApplied) {
-                    final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
-                    final scaleX = viewportSize.width / canvasSize.width;
-                    final scaleY = viewportSize.height / canvasSize.height;
-                    // fit 选 min + 加 10% padding, 但不低于 0.1
-                    final fitScale = math.max(0.1, math.min(scaleX, scaleY) * 0.95);
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      // 防御: widget 已 dispose 则不设 (route 切换时 callback 可能晚到)
-                      if (!mounted) return;
-                      _graphTransformController.value = Matrix4.identity()..scale(fitScale);
-                      setState(() => _graphAutoFitApplied = true);
-                    });
-                  }
+                  // 同步算 fit scale (缓存到 state, 避免重复算)
+                  _initialFitScale ??= _computeFitScale(
+                    Size(constraints.maxWidth, constraints.maxHeight),
+                    canvasSize,
+                  );
+                  final fitScale = _initialFitScale!;
+
                   return Stack(
                     children: [
                       Positioned.fill(
                         child: Container(
                           color: AppTheme.bgWarm,
-                          child: InteractiveViewer(
-                            transformationController: _graphTransformController,
-                            panEnabled: true,
-                            scaleEnabled: true,
-                            minScale: 0.1,
-                            maxScale: 3.0,
-                            boundaryMargin: const EdgeInsets.all(80),
-                            child: SizedBox(
-                              width: canvasSize.width,
-                              height: canvasSize.height,
-                              child: Stack(
-                                children: [
-                                  CustomPaint(
-                                    size: canvasSize,
-                                    painter: FranchiseTreePainter(
-                                      root: tree,
-                                      positions: positions,
-                                      searchMatchedIds: searchMatchedIds,
-                                      currentUserId: tree.id,
+                          clipBehavior: Clip.hardEdge,
+                          child: Transform(
+                            transform: Matrix4.identity()..scale(fitScale),
+                            alignment: Alignment.topLeft,
+                            child: InteractiveViewer(
+                              transformationController: _graphTransformController,
+                              panEnabled: true,
+                              scaleEnabled: true,
+                              minScale: 0.5,
+                              maxScale: 5.0,
+                              boundaryMargin: const EdgeInsets.all(80),
+                              child: SizedBox(
+                                width: canvasSize.width,
+                                height: canvasSize.height,
+                                child: Stack(
+                                  children: [
+                                    CustomPaint(
+                                      size: canvasSize,
+                                      painter: FranchiseTreePainter(
+                                        root: tree,
+                                        positions: positions,
+                                        searchMatchedIds: searchMatchedIds,
+                                        currentUserId: tree.id,
+                                      ),
                                     ),
-                                  ),
-                                  ..._buildHitareas(tree, positions),
-                                ],
+                                    ..._buildHitareas(tree, positions),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -448,33 +453,25 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     return result;
   }
 
-  /// 重置图谱视图 (回到全景 = auto-fit scale + 居中)
-  /// fix-graph-ui (2026-09-17): 配合 Stack 右下角「回到全景」按钮
+  /// 重置图谱视图 (回到全景 = 重新算 outer Transform fit scale + 清 InteractiveViewer 内部 pan/zoom)
+  /// fix-graph-ui (2026-09-17 v2): 配合外层 Transform + 右下角「回到全景」按钮
   void _resetGraphView() {
     if (!mounted) return;
-    final viewportSize = (context.findRenderObject() as RenderBox?)?.size ?? Size.zero;
-    if (viewportSize == Size.zero) return;
-    // 触发 LayoutBuilder 重建拿新 constraints, 重新算 fit scale
-    setState(() => _graphAutoFitApplied = false);
-    // 让 LayoutBuilder 下一帧重算 + 应用新 transform
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      // 直接重新计算并应用, 不依赖 LayoutBuilder 的 if 分支
-      // (LayoutBuilder 这时 _graphAutoFitApplied=false 会重算, 但 callback 链太长)
-      // 这里保险: 直接套用 fit-to-width 简化计算 (水平优先, 保证根节点可见)
-      final viewport = (context.findRenderObject() as RenderBox).size;
-      final canvasSize = _lastCanvasSize; // 缓存上次 LayoutBuilder 算的 canvas size
-      if (canvasSize == null || canvasSize.isEmpty) return;
-      final scaleX = viewport.width / canvasSize.width;
-      final scaleY = viewport.height / canvasSize.height;
-      final fitScale = math.max(0.1, math.min(scaleX, scaleY) * 0.95);
-      _graphTransformController.value = Matrix4.identity()..scale(fitScale);
-      setState(() => _graphAutoFitApplied = true);
+    setState(() {
+      _initialFitScale = null; // 触发 LayoutBuilder 重算
+      _graphTransformController.value = Matrix4.identity(); // 清 InteractiveViewer 内部 pan/zoom
     });
   }
 
-  /// 缓存 LayoutBuilder 算的 canvasSize (reset 用)
-  Size? _lastCanvasSize;
+  /// 计算 auto-fit scale (取 min 让两边都 fit, 加 5% padding)
+  double _computeFitScale(Size viewport, Size canvas) {
+    final scaleX = viewport.width / canvas.width;
+    final scaleY = viewport.height / canvas.height;
+    return math.max(0.1, math.min(scaleX, scaleY) * 0.95);
+  }
+
+  /// 缓存 LayoutBuilder 算的 fitScale (reset 时清掉重算)
+  double? _initialFitScale;
 
   /// 节点点击 hit area (走 franchisee 详情)
   List<Widget> _buildHitareas(
