@@ -283,6 +283,8 @@ class FranchiseTreePainter extends CustomPainter {
     bool isFaded,
   ) {
     // 姓名 (圆下方)
+    // maxWidth 取 nodeSize (220px) — 真实数据 3-4 字中文名 (~56-72px) 不会截断;
+    // 测试长名 "SeedTest-XXX" 仍会截但保留更多可见字符
     final name = node.name;
     final tpName = TextPainter(
       text: TextSpan(
@@ -299,13 +301,13 @@ class FranchiseTreePainter extends CustomPainter {
       maxLines: 1,
       ellipsis: '…',
       textDirection: TextDirection.ltr,
-    )..layout(maxWidth: 100);
+    )..layout(maxWidth: TreeLayout.minNodeSpacing);
     tpName.paint(
       canvas,
-      Offset(center.dx - tpName.width / 2, center.dy + TreeLayout.nodeRadius + 6),
+      Offset(center.dx - tpName.width / 2, center.dy + TreeLayout.nodeRadius + 8),
     );
 
-    // "我" 标记 (根节点)
+    // "我" 标记 (根节点) — 根节点名字下方
     if (isCurrentUser) {
       final tpMe = TextPainter(
         text: TextSpan(
@@ -322,11 +324,13 @@ class FranchiseTreePainter extends CustomPainter {
       )..layout();
       tpMe.paint(
         canvas,
-        Offset(center.dx - tpMe.width / 2, center.dy + TreeLayout.nodeRadius + 26),
+        Offset(center.dx - tpMe.width / 2, center.dy + TreeLayout.nodeRadius + 30),
       );
     }
 
-    // 位置标签 (左/右)
+    // 位置标签 (左/右) — 子节点名字下方
+    // fix-graph-ui (2026-09-17): 原来 +44 跟 (我) (+26) 重叠, 改为 +48
+    //   跟 (我) 互斥 (根无 placementSide, 子无 isCurrentUser), 但留 padding 给字号波动
     if (node.placementSide != null) {
       final tpSide = TextPainter(
         text: TextSpan(
@@ -347,7 +351,7 @@ class FranchiseTreePainter extends CustomPainter {
       )..layout();
       tpSide.paint(
         canvas,
-        Offset(center.dx - tpSide.width / 2, center.dy + TreeLayout.nodeRadius + 44),
+        Offset(center.dx - tpSide.width / 2, center.dy + TreeLayout.nodeRadius + 48),
       );
     }
   }

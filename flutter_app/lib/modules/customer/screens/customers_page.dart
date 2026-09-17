@@ -314,6 +314,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             //   - maxScale 3.0 (细节看 zoom)
             //   - boundaryMargin 80 预留 pan 边界空间
             //   - hitarea (Positioned GestureDetector) 仍可接收 tap
+            // fix-graph-ui (2026-09-17): 加 Stack 套 reset button (回到全景) + InteractiveViewer
+            //   - InteractiveViewer 撑满 Expanded 区域
+            //   - 右下角浮一个小型 "回到全景" 按钮 (透明背景, 圆角, 半透明白底)
+            //   - 不再需要 bottom padding 给 FAB: FAB 在列表视图下有效, graph 视图下不显示
+            //     (FAB 在 graph 视图会遮右子节点, 且 graph 主要用来查看关系, 添加走列表视图)
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -325,38 +330,80 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     // fit 选 min + 加 10% padding, 但不低于 0.1
                     final fitScale = math.max(0.1, math.min(scaleX, scaleY) * 0.95);
                     WidgetsBinding.instance.addPostFrameCallback((_) {
+                      // 防御: widget 已 dispose 则不设 (route 切换时 callback 可能晚到)
+                      if (!mounted) return;
                       _graphTransformController.value = Matrix4.identity()..scale(fitScale);
                       setState(() => _graphAutoFitApplied = true);
                     });
                   }
-                  return Container(
-                    color: AppTheme.bgWarm,
-                    child: InteractiveViewer(
-                      transformationController: _graphTransformController,
-                      panEnabled: true,
-                      scaleEnabled: true,
-                      minScale: 0.1,
-                      maxScale: 3.0,
-                      boundaryMargin: const EdgeInsets.all(80),
-                      child: SizedBox(
-                        width: canvasSize.width,
-                        height: canvasSize.height,
-                        child: Stack(
-                          children: [
-                            CustomPaint(
-                              size: canvasSize,
-                              painter: FranchiseTreePainter(
-                                root: tree,
-                                positions: positions,
-                                searchMatchedIds: searchMatchedIds,
-                                currentUserId: tree.id,
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Container(
+                          color: AppTheme.bgWarm,
+                          child: InteractiveViewer(
+                            transformationController: _graphTransformController,
+                            panEnabled: true,
+                            scaleEnabled: true,
+                            minScale: 0.1,
+                            maxScale: 3.0,
+                            boundaryMargin: const EdgeInsets.all(80),
+                            child: SizedBox(
+                              width: canvasSize.width,
+                              height: canvasSize.height,
+                              child: Stack(
+                                children: [
+                                  CustomPaint(
+                                    size: canvasSize,
+                                    painter: FranchiseTreePainter(
+                                      root: tree,
+                                      positions: positions,
+                                      searchMatchedIds: searchMatchedIds,
+                                      currentUserId: tree.id,
+                                    ),
+                                  ),
+                                  ..._buildHitareas(tree, positions),
+                                ],
                               ),
                             ),
-                            ..._buildHitareas(tree, positions),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                      // 右下角「回到全景」按钮 (用户缩放/拖动后找回根节点)
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: Material(
+                          color: Colors.white.withOpacity(0.85),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(color: AppTheme.primary.withOpacity(0.4), width: 1),
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: _resetGraphView,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.center_focus_strong, size: 18, color: AppTheme.primaryDark),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '回到全景',
+                                    style: TextStyle(
+                                      fontSize: AppTheme.fontSm,
+                                      color: AppTheme.primaryDark,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),
@@ -394,6 +441,34 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     }
     return result;
   }
+
+  /// 重置图谱视图 (回到全景 = auto-fit scale + 居中)
+  /// fix-graph-ui (2026-09-17): 配合 Stack 右下角「回到全景」按钮
+  void _resetGraphView() {
+    if (!mounted) return;
+    final viewportSize = (context.findRenderObject() as RenderBox?)?.size ?? Size.zero;
+    if (viewportSize == Size.zero) return;
+    // 触发 LayoutBuilder 重建拿新 constraints, 重新算 fit scale
+    setState(() => _graphAutoFitApplied = false);
+    // 让 LayoutBuilder 下一帧重算 + 应用新 transform
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // 直接重新计算并应用, 不依赖 LayoutBuilder 的 if 分支
+      // (LayoutBuilder 这时 _graphAutoFitApplied=false 会重算, 但 callback 链太长)
+      // 这里保险: 直接套用 fit-to-width 简化计算 (水平优先, 保证根节点可见)
+      final viewport = (context.findRenderObject() as RenderBox).size;
+      final canvasSize = _lastCanvasSize; // 缓存上次 LayoutBuilder 算的 canvas size
+      if (canvasSize == null || canvasSize.isEmpty) return;
+      final scaleX = viewport.width / canvasSize.width;
+      final scaleY = viewport.height / canvasSize.height;
+      final fitScale = math.max(0.1, math.min(scaleX, scaleY) * 0.95);
+      _graphTransformController.value = Matrix4.identity()..scale(fitScale);
+      setState(() => _graphAutoFitApplied = true);
+    });
+  }
+
+  /// 缓存 LayoutBuilder 算的 canvasSize (reset 用)
+  Size? _lastCanvasSize;
 
   /// 节点点击 hit area (走 franchisee 详情)
   List<Widget> _buildHitareas(
