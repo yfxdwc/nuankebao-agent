@@ -2,7 +2,40 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-### Fixed (graph UI 自查, 2026-09-17 主人反馈「ui一堆错误」)
+### Fixed (graph UI v3 — 治本渲染, 2026-09-17 主人二次反馈「ui一堆错误」)
+
+> 上一节 (v2) 只改了 maxWidth / fit 系数, **没解决渲染根因**: 主人截图里图谱仍是
+> 「左上角一小团 19px 节点 + 大半个屏幕空白」(= 只能看到画布左上角一小块被压扁的结果).
+> 本节取代 v2 的渲染方案.
+
+- **`flutter_app/lib/modules/customer/screens/customers_page.dart`** — 图谱视图重写:
+  1. `InteractiveViewer(constrained: false)` — 旧版默认 `constrained: true`, 画布 1760x696 被父级
+     tight constraints 压成 viewport 大小 → 只有画布左上角一块可见 (根节点根本不在视口里).
+  2. 删 v2 的「外层 Transform 缩 viewport」方案 — 它缩的是 InteractiveViewer 的取景框
+     (393x571), 不是画布 → 整张图被压成左上角一小团.
+  3. 初始视图 = 「回到我」: 根节点 (绿) 顶部居中 + 1:1 (名字可读, 中老年友好);
+     右下角两个按钮「回到我」(复位) /「全景」(整树 fit). `minScale` 跟随全景比例 (0.2x~3x).
+  4. `boundaryMargin: infinity` — finite margin 时 InteractiveViewer 内部会算出 ~0.56 scale 下限,
+     全景 0.2x 会被手势强行弹回.
+  5. 顶部 AppBar 的 列表/图谱 `SegmentedButton`: 去掉图标 + 去掉 compact/shrinkWrap.
+     旧版每段只有 63pt 宽, 「列表」「图谱」被挤成竖排两行 (主人截图最上面的歪字).
+  6. 提示条文案缩到单行: 「点节点看详情 · 可缩放拖动」.
+  7. 节点点击区 88x88 → 88x132 (含名字/左右线标签; 中老年手指粗, 别只让圆圈可点).
+- **`flutter_app/lib/modules/presentation/graph/widgets/franchise_tree_painter.dart`** —
+  姓名 / (我) / 左线右线 标签加画布同色底色块 — 父→子连线从圆底中心出发会穿过标签文字,
+  垫底后连线从文字背后过 (不再穿字).
+
+**验证** (dev server :8080 + 真 Flutter web UI, chromium 截图 + 像素/语义校验):
+- 默认视图: 根节点绿色 88px 顶部居中 (logical y≈253), 名字可读; 右下两按钮坐标点击均生效
+- 「全景」: 15 节点全部落在视口内 (19px/节点), 无越界 / 无裁剪
+- AppBar 切换按钮: 文字单行 (像素测量行高 14pt, 修复前是竖排两行)
+- `flutter analyze` 0 issue; `flutter test` 余下 2 个失败与本次无关 (api_client_test 旧 import 路径 +
+  widget_test `Uri.base.origin` 在测试环境报错), 均为历史遗留
+
+**⚠ 预览框架 freeze (§9 / ADR-0009)**: 本次同步 `public/app/` (Flutter web 编译产物) 属
+「业务改动需要 preview 联动」, 主人 review 时按 `[preview-bypass]` 处理.
+
+### Fixed (graph UI 自查 v2, 2026-09-17 — 部分被 v3 取代)
 
 - **`flutter_app/lib/modules/presentation/graph/widgets/franchise_tree_painter.dart`** — 姓名 maxWidth 100 → 220 (=`TreeLayout.minNodeSpacing` = 220). 真实数据 (2-3 字中文名) 不再被截, 测试数据 `SeedTest-XXX` 多保留可读字符.
 - **`flutter_app/lib/modules/customer/screens/customers_page.dart`** — 4 处 UI 优化:
