@@ -302,10 +302,21 @@ class FranchiseTreePainter extends CustomPainter {
       ellipsis: '…',
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: TreeLayout.minNodeSpacing);
-    tpName.paint(
+    final nameTop = center.dy + TreeLayout.nodeRadius + 8;
+    // fix-graph-ui-v3 (2026-09-17): 名字底色 — 父→子连线从圆底中心向下画, 正好穿过
+    // 名字/(我)/左线右线 标签. 用画布同色圆角块垫在文字下面, 让连线"从背后穿过".
+    // (中老年看图不会被穿字的线干扰)
+    _drawLabelBackground(
       canvas,
-      Offset(center.dx - tpName.width / 2, center.dy + TreeLayout.nodeRadius + 8),
+      Rect.fromLTWH(
+        center.dx - tpName.width / 2 - 5,
+        nameTop - 2,
+        tpName.width + 10,
+        tpName.height + 4,
+      ),
+      isFaded,
     );
+    tpName.paint(canvas, Offset(center.dx - tpName.width / 2, nameTop));
 
     // "我" 标记 (根节点) — 根节点名字下方
     if (isCurrentUser) {
@@ -322,9 +333,20 @@ class FranchiseTreePainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
+      final meTop = center.dy + TreeLayout.nodeRadius + 30;
+      _drawLabelBackground(
+        canvas,
+        Rect.fromLTWH(
+          center.dx - tpMe.width / 2 - 5,
+          meTop - 2,
+          tpMe.width + 10,
+          tpMe.height + 4,
+        ),
+        isFaded,
+      );
       tpMe.paint(
         canvas,
-        Offset(center.dx - tpMe.width / 2, center.dy + TreeLayout.nodeRadius + 30),
+        Offset(center.dx - tpMe.width / 2, meTop),
       );
     }
 
@@ -349,11 +371,30 @@ class FranchiseTreePainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
+      final sideTop = center.dy + TreeLayout.nodeRadius + 48;
+      _drawLabelBackground(
+        canvas,
+        Rect.fromLTWH(
+          center.dx - tpSide.width / 2 - 5,
+          sideTop - 2,
+          tpSide.width + 10,
+          tpSide.height + 4,
+        ),
+        isFaded,
+      );
       tpSide.paint(
         canvas,
-        Offset(center.dx - tpSide.width / 2, center.dy + TreeLayout.nodeRadius + 48),
+        Offset(center.dx - tpSide.width / 2, sideTop),
       );
     }
+  }
+
+  /// 标签底色 (盖住从圆底穿过的父子连线; 跟画布同色)
+  void _drawLabelBackground(Canvas canvas, Rect rect, bool isFaded) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(6)),
+      Paint()..color = AppTheme.bgWarm.withOpacity(isFaded ? 0.6 : 0.9),
+    );
   }
 
   @override

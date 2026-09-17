@@ -100,25 +100,23 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: SegmentedButton<_CustomerViewMode>(
+              // fix-graph-ui-v3 (2026-09-17): 去 icon + 去掉 compact/shrinkWrap
+              //   旧版 (icon 20 + label 14 + compact) 每个 segment 只有 63pt 宽,
+              //   "列表"/"图谱" 被挤到竖排 2 行 (字号小=图标宽度), 主人截图里就是歪的
+              //   现在纯文字 15pt + 默认密度: segment ≈54pt, 文字单行, 点击区 40pt
               segments: const [
                 ButtonSegment(
                   value: _CustomerViewMode.list,
-                  icon: Icon(Icons.view_list, size: 20),
-                  label: Text('列表', style: TextStyle(fontSize: 14)),
+                  label: Text('列表', style: TextStyle(fontSize: 15)),
                 ),
                 ButtonSegment(
                   value: _CustomerViewMode.graph,
-                  icon: Icon(Icons.account_tree_outlined, size: 20),
-                  label: Text('图谱', style: TextStyle(fontSize: 14)),
+                  label: Text('图谱', style: TextStyle(fontSize: 15)),
                 ),
               ],
               selected: {_viewMode},
               showSelectedIcon: false,
               onSelectionChanged: (s) => setState(() => _viewMode = s.first),
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
             ),
           ),
         ],
@@ -294,7 +292,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   Expanded(
                     child: Text(
                       searchQuery.isEmpty
-                          ? '点节点看详情 · 双指缩放 · 拖动看全图'
+                          ? '点节点看详情 · 可缩放拖动'
                           : (matchCount > 0
                               ? '匹配 $matchCount 位加盟客户 · 其余淡化'
                               : '没有匹配「$searchQuery」'),
