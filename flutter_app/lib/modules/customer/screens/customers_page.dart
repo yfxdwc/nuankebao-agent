@@ -347,34 +347,29 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                       Positioned.fill(
                         child: Container(
                           color: AppTheme.bgWarm,
-                          clipBehavior: Clip.hardEdge,
-                          child: Transform(
-                            transform: Matrix4.identity()..scale(fitScale),
-                            alignment: Alignment.topLeft,
-                            child: InteractiveViewer(
-                              transformationController: _graphTransformController,
-                              panEnabled: true,
-                              scaleEnabled: true,
-                              minScale: 0.5,
-                              maxScale: 5.0,
-                              boundaryMargin: const EdgeInsets.all(80),
-                              child: SizedBox(
-                                width: canvasSize.width,
-                                height: canvasSize.height,
-                                child: Stack(
-                                  children: [
-                                    CustomPaint(
-                                      size: canvasSize,
-                                      painter: FranchiseTreePainter(
-                                        root: tree,
-                                        positions: positions,
-                                        searchMatchedIds: searchMatchedIds,
-                                        currentUserId: tree.id,
-                                      ),
+                          child: InteractiveViewer(
+                            transformationController: _graphTransformController,
+                            panEnabled: true,
+                            scaleEnabled: true,
+                            minScale: 0.1,
+                            maxScale: 5.0,
+                            boundaryMargin: const EdgeInsets.all(80),
+                            child: SizedBox(
+                              width: canvasSize.width,
+                              height: canvasSize.height,
+                              child: Stack(
+                                children: [
+                                  CustomPaint(
+                                    size: canvasSize,
+                                    painter: FranchiseTreePainter(
+                                      root: tree,
+                                      positions: positions,
+                                      searchMatchedIds: searchMatchedIds,
+                                      currentUserId: tree.id,
                                     ),
-                                    ..._buildHitareas(tree, positions),
-                                  ],
-                                ),
+                                  ),
+                                  ..._buildHitareas(tree, positions),
+                                ],
                               ),
                             ),
                           ),
