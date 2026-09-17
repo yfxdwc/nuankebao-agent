@@ -246,6 +246,8 @@ class FranchiseTreePainter extends CustomPainter {
     } else {
       color = AppTheme.franchisee;
     }
+    // ignore: avoid_print
+    print('[graph-painter] node=${node.id} isCurrentUser=$isCurrentUser color=$color');
     canvas.drawCircle(
       center,
       TreeLayout.nodeRadius,
