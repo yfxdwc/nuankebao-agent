@@ -347,28 +347,34 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                       ],
                     ),
             ),
-            // 图例 + 快捷筛选 (点 chip = 只看这一类, 再点取消)
-            // Wrap 两行: 6 个 chip 一屏全见 (横向滚动的第 5/6 个会被看成"被裁掉")
+            // 筛选 (胶囊按键, 主人 2026-09-17 拍): 全部 / A线 / B线 / 直推
+            // 点 = 只看这一类 (其余淡化); 再点「全部」恢复
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _graphFilterChip(_GraphFilter.none, '全部', null, stats.total),
-                  _graphFilterChip(
-                      _GraphFilter.aLine, 'A线', AppTheme.franchiseeA, stats.aLine),
-                  _graphFilterChip(
-                      _GraphFilter.bLine, 'B线', AppTheme.franchiseeB, stats.bLine),
-                  _graphFilterChip(_GraphFilter.direct, '直推', AppTheme.accent,
-                      stats.direct),
-                  _graphFilterChip(_GraphFilter.downline, '下级引荐',
-                      AppTheme.franchiseeB, stats.downline,
-                      hollow: true),
-                  _graphFilterChip(_GraphFilter.upline, '上级引荐',
-                      AppTheme.badgeNeutral, stats.upline,
-                      hollow: true, outerRing: true),
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+              child: SegmentedButton<_GraphFilter>(
+                segments: [
+                  const ButtonSegment(
+                    value: _GraphFilter.none,
+                    label: Text('全部', style: TextStyle(fontSize: 14)),
+                  ),
+                  ButtonSegment(
+                    value: _GraphFilter.aLine,
+                    label: _filterLabel('A线', stats.aLine, AppTheme.franchiseeA),
+                  ),
+                  ButtonSegment(
+                    value: _GraphFilter.bLine,
+                    label: _filterLabel('B线', stats.bLine, AppTheme.franchiseeB),
+                  ),
+                  ButtonSegment(
+                    value: _GraphFilter.direct,
+                    label: _filterLabel('直推', stats.direct, AppTheme.accent),
+                  ),
                 ],
+                selected: {_graphFilter},
+                showSelectedIcon: false,
+                expandedInsets: EdgeInsets.zero, // 4 段平分整行宽
+                onSelectionChanged: (s) =>
+                    setState(() => _graphFilter = s.first),
               ),
             ),
             // 图谱本体 (复用 modules/presentation/graph 的 painter)
@@ -540,80 +546,19 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     return '—';
   }
 
-  /// 图例 + 快捷筛选 chip (点 = 只看这一类; 再点 = 全部)
-  Widget _graphFilterChip(
-    _GraphFilter filter,
-    String label,
-    Color? color,
-    int count, {
-    bool hollow = false,
-    bool outerRing = false,
-  }) {
-    final selected = _graphFilter == filter;
-    return Semantics(
-      button: true,
-      label: '$label $count',
-      child: FilterChip(
-      avatar: color == null
-          ? null
-          : _legendDot(color, hollow: hollow, outerRing: outerRing),
-      label: Text(
-        '$label $count',
-        style: TextStyle(
-          fontSize: AppTheme.fontXs,
-          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+  /// 胶囊按键 segment 文案 (小圆点 + 文字 + 人数)
+  Widget _filterLabel(String text, int count, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
         ),
-      ),
-      selected: selected,
-      onSelected: (_) => setState(() {
-        _graphFilter = selected ? _GraphFilter.none : filter;
-      }),
-      selectedColor: AppTheme.primary,
-      backgroundColor: Colors.white,
-      checkmarkColor: Colors.white,
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : AppTheme.textPrimary,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.compact,
-      ),
-    );
-  }
-
-  /// 图例小圆点 (跟节点样式一致: 实心 / 空心 / 空心 + 外环)
-  Widget _legendDot(
-    Color color, {
-    bool hollow = false,
-    bool outerRing = false,
-  }) {
-    return SizedBox(
-      width: 22,
-      height: 22,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (outerRing)
-            Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: color.withOpacity(0.55), width: 1.5),
-              ),
-            ),
-          Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: hollow ? color.withOpacity(0.16) : color,
-              border: hollow ? Border.all(color: color, width: 2.5) : null,
-            ),
-          ),
-        ],
-      ),
+        const SizedBox(width: 4),
+        Text('$text $count', style: const TextStyle(fontSize: 14)),
+      ],
     );
   }
 

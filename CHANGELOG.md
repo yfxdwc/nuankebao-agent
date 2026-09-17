@@ -29,8 +29,9 @@
   - 侧别小标签 `← 左线/右线 →` → `← A线 / B线 →`
   - 新增 `filterIds` (筛选时只亮命中, 其余淡化)
 - **`customers_page.dart`**
-  - **图例 = 筛选 chips** (Wrap 两行, 6 个一屏全见): `全部 14 / A线 7 / B线 7 / 直推 2 / 下级引荐 12 / 上级引荐 0`
-    点 chip = 只看这一类 (其余淡化), 再点取消
+  - **筛选 = 胶囊按键 4 段** (主人 2026-09-17 二次拍: 只要 全部 / A线 / B线 / 直推, 合成一个胶囊):
+    `全部 | ●A线 7 | ●B线 7 | ●直推 2` (带人数 + 线别色点), `SegmentedButton(expandedInsets: zero)` 4 段平分整行
+    点段 = 只看这一类 (其余淡化), 点「全部」恢复; 行高 46px (比之前 chips 两行省 28px 给画布)
   - 选中节点时信息条 → `SeedTest-陈大壮 · A线 · 下级引荐 · 第2层` + × 取消
   - 无障碍: 筛选 chips + 「回到我/全景」加 `Semantics(label)` (Flutter web 语义树原来这些是空 label)
 - **`franchise_node_sheet.dart` / deprecated `franchise_tree_page.dart`** — 同步 A/B 线 + relation 文案 / 参数
@@ -40,7 +41,7 @@
   临时把 83 的 referrer_id 改成不在我子树的值 → relation 变 `upline`, 复原 → `downline` ✓
 - dev server 截图 + 像素校验: A线实心/空心、B线实心/空心、直推橙色角标都在; 点「直推」chip → 只有 2 个直推节点亮,
   其余全部淡化; 点「A线」chip → B线整体淡化 ✓
-- 6 个 chip 一屏全见 (语义坐标 25..368 < 393), 不再有"被裁掉"的观感
+- 胶囊 4 段 (语义坐标 16..377, 各 90x40) 一屏全见; 点「直推」→ 只有 2 个节点亮其余淡化; 点「A线」→ B线整体淡化
 
 ### Changed (graph 双主线「对碰」布局 + 单击/长按交互, 2026-09-17 主人拍板)
 
