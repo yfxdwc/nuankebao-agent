@@ -317,12 +317,56 @@ export async function softDeleteFranchisee(
 // 树查询
 // ============================================
 
+export type TreeNodeRelation = "root" | "direct" | "downline" | "upline";
+
 export interface TreeNode {
   id: string;
   name: string;
   placementSide: PlacementSide | null;
   placementDepth: number;
+  /** 谁推荐加盟的 (= 直推判定源). null = 无推荐人 (root / 数据异常) */
+  referrerId: string | null;
+  /**
+   * 相对当前树 root 的关系 (客户图谱三维区分用):
+   *   root     = 我自己 (树根)
+   *   direct   = 直推 (referrerId == 我)
+   *   downline = 下级引荐 (referrerId 是我的下线 → 在我的 placement 子树里)
+   *   upline   = 上级引荐 (referrerId 不在我的子树里, 含 null 异常数据)
+   */
+  relation: TreeNodeRelation;
   children: TreeNode[];
+}
+
+interface BuildCtx {
+  rootId: string;
+  /** 不限深度的「我」的 placement 子树 id 集 (判 downline / upline 用) */
+  subtreeIds: Set<string>;
+}
+
+function classifyRelation(
+  nodeId: string,
+  referrerId: string | null,
+  ctx: BuildCtx
+): TreeNodeRelation {
+  if (nodeId === ctx.rootId) return "root";
+  if (referrerId == null) return "upline";
+  if (referrerId === ctx.rootId) return "direct";
+  return ctx.subtreeIds.has(referrerId) ? "downline" : "upline";
+}
+
+/** placement_path 最后一段 → 左/右侧 ('L.L.' → left) */
+function sideFromPath(path: string): PlacementSide | null {
+  const segs = path.split(".").filter(Boolean);
+  if (segs.length === 0) return null;
+  return segs[segs.length - 1] === "L" ? "left" : "right";
+}
+
+/** 'L.L.' → 'L.' (root 的子节点 path 的 parent = '') */
+function parentPath(path: string): string | null {
+  const segs = path.split(".").filter(Boolean);
+  if (segs.length === 0) return null;
+  segs.pop();
+  return segs.length === 0 ? "" : segs.join(".") + ".";
 }
 
 /**
@@ -372,6 +416,21 @@ export async function getFranchiseeTree(
     .orderBy(franchisee.placementPath);
 
   // 应用层剪枝到 depth 层 + 构建树
+  const rows: RawNode[] = allDescendants.map((r) => ({
+    id: r.id.toString(),
+    name: r.name,
+    placementSide: r.placementSide as PlacementSide | null,
+    placementDepth: r.placementDepth,
+    placementPath: r.placementPath,
+    referrerId: r.referrerId?.toString() ?? null,
+  }));
+  const ctx: BuildCtx = {
+    rootId: root.id.toString(),
+    subtreeIds: new Set<string>([
+      root.id.toString(),
+      ...rows.map((r) => r.id),
+    ]),
+  };
   return buildTree(
     {
       id: root.id.toString(),
@@ -381,16 +440,105 @@ export async function getFranchiseeTree(
       placementPath: root.placementPath,
       referrerId: root.referrerId?.toString() ?? null,
     },
-    allDescendants.map((r) => ({
-      id: r.id.toString(),
-      name: r.name,
-      placementSide: r.placementSide as PlacementSide | null,
-      placementDepth: r.placementDepth,
-      placementPath: r.placementPath,
-      referrerId: r.referrerId?.toString() ?? null,
-    })),
-    depth
+    rows,
+    depth,
+    ctx
   );
+}
+
+/**
+ * 以 rootId 为中心的**二叉树 (placement) 视图** — 客户图谱「对碰」布局用
+ *
+ * 与 getFranchiseeTree (推荐树, 按 referrerId 连) 的区别:
+ *   - 本函数按 placement_path 连父子 → 真正的左右两区二叉树
+ *   - 每个节点带 referrerId + relation (直推/下级引荐/上级引荐), 供图谱三维区分
+ *
+ * 为什么图谱要用 placement 树:
+ *   - 「我上级引荐、但放在我下线」的人 referrerId 不是我 → 推荐树里根本看不到;
+ *     二叉树里能看到, 并能标成「上级引荐」(主人 2026-09-17 拍板三级区分)
+ */
+export async function getPlacementTree(
+  rootId: bigint,
+  depth: number = 3
+): Promise<TreeNode | null> {
+  const [root] = await db
+    .select()
+    .from(franchisee)
+    .where(and(eq(franchisee.id, rootId), isNull(franchisee.deletedAt)))
+    .limit(1);
+
+  if (!root) return null;
+
+  // 我的 placement 子树全部节点 (不限深度) — 既用于建树, 也用于判 downline/upline
+  const rows: RawNode[] = (
+    await db
+      .select({
+        id: franchisee.id,
+        name: franchisee.name,
+        placementSide: franchisee.placementSide,
+        placementPath: franchisee.placementPath,
+        placementDepth: franchisee.placementDepth,
+        referrerId: franchisee.referrerId,
+      })
+      .from(franchisee)
+      .where(
+        and(
+          isNull(franchisee.deletedAt),
+          root.placementPath === ""
+            ? ne(franchisee.placementPath, "")
+            : like(franchisee.placementPath, root.placementPath + "%")
+        )
+      )
+      .orderBy(franchisee.placementPath)
+  ).map((r) => ({
+    id: r.id.toString(),
+    name: r.name,
+    placementSide: r.placementSide as PlacementSide | null,
+    placementDepth: r.placementDepth,
+    placementPath: r.placementPath,
+    referrerId: r.referrerId?.toString() ?? null,
+  }));
+
+  const rootRaw: RawNode = {
+    id: root.id.toString(),
+    name: root.name,
+    placementSide: root.placementSide as PlacementSide | null,
+    placementDepth: root.placementDepth,
+    placementPath: root.placementPath,
+    referrerId: root.referrerId?.toString() ?? null,
+  };
+
+  const ctx: BuildCtx = {
+    rootId: rootRaw.id,
+    subtreeIds: new Set<string>([rootRaw.id, ...rows.map((r) => r.id)]),
+  };
+
+  // path → 直接子节点 (path 精确匹配, 不是 LIKE, 避免跨层)
+  const childrenByParentPath = new Map<string, RawNode[]>();
+  for (const r of rows) {
+    const parent = parentPath(r.placementPath);
+    if (parent == null) continue;
+    const list = childrenByParentPath.get(parent);
+    if (list) list.push(r);
+    else childrenByParentPath.set(parent, [r]);
+  }
+
+  const build = (node: RawNode, depthRemaining: number): TreeNode => {
+    const rawChildren =
+      depthRemaining > 0 ? childrenByParentPath.get(node.placementPath) ?? [] : [];
+    return {
+      id: node.id,
+      name: node.name,
+      // 侧别以 path 为准 (BFS 填充节点的 placement_side 也跟 path 一致, 但 path 更可靠)
+      placementSide: sideFromPath(node.placementPath) ?? node.placementSide,
+      placementDepth: node.placementDepth,
+      referrerId: node.referrerId,
+      relation: classifyRelation(node.id, node.referrerId, ctx),
+      children: rawChildren.map((c) => build(c, depthRemaining - 1)),
+    };
+  };
+
+  return build(rootRaw, depth);
 }
 
 interface RawNode {
@@ -402,7 +550,12 @@ interface RawNode {
   referrerId: string | null;
 }
 
-function buildTree(root: RawNode, descendants: RawNode[], depthRemaining: number): TreeNode {
+function buildTree(
+  root: RawNode,
+  descendants: RawNode[],
+  depthRemaining: number,
+  ctx: BuildCtx
+): TreeNode {
   // 过滤直接子节点
   const childrenRaw = descendants.filter(
     (n) => n.referrerId === root.id
@@ -423,10 +576,12 @@ function buildTree(root: RawNode, descendants: RawNode[], depthRemaining: number
         name: c.name,
         placementSide: c.placementSide,
         placementDepth: c.placementDepth,
+        referrerId: c.referrerId,
+        relation: classifyRelation(c.id, c.referrerId, ctx),
         children: [],
       };
     }
-    return buildTree(c, descendants, depthRemaining - 1);
+    return buildTree(c, descendants, depthRemaining - 1, ctx);
   });
 
   return {
@@ -434,6 +589,8 @@ function buildTree(root: RawNode, descendants: RawNode[], depthRemaining: number
     name: root.name,
     placementSide: root.placementSide,
     placementDepth: root.placementDepth,
+    referrerId: root.referrerId,
+    relation: classifyRelation(root.id, root.referrerId, ctx),
     children,
   };
 }

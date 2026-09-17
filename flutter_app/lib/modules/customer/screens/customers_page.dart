@@ -26,6 +26,9 @@ import 'add_record_sheet.dart';
 /// 客户页视图模式: 列表 / 图谱
 enum _CustomerViewMode { list, graph }
 
+/// 图谱快捷筛选 (图例即筛选 chips; none = 全部)
+enum _GraphFilter { none, direct, downline, upline, aLine, bLine }
+
 // ============================================
 // CustomersListPage (主页: 客户列表 / 图谱)
 // ============================================
@@ -72,6 +75,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   /// fix-graph-spine (2026-09-17 主人拍): 单击 = 看线, 长按 = 跳详情
   String? _selectedNodeId;
   Set<String> _graphPathIds = const {};
+
+  /// 图谱快捷筛选 (全部 / 直推 / 下级引荐 / 上级引荐 / A线 / B线)
+  _GraphFilter _graphFilter = _GraphFilter.none;
 
   @override
   void didChangeDependencies() {
@@ -283,9 +289,17 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             ? null
             : _collectMatches(tree, searchQuery.toLowerCase());
 
+        // 三维区分 (主人 2026-09-17 拍): 线别 (A/B) × 关系 (直推/下级引荐/上级引荐)
+        final relations = _collectRelations(tree);
+        final stats = _graphStats(tree, layout);
+        final filterIds = _filterIdsFor(tree, layout);
+        final selectedNode = _selectedNodeId == null
+            ? null
+            : _findNodeById(tree, _selectedNodeId!);
+
         return Column(
           children: [
-            // 顶部提示条: 默认指引 + 搜索结果数
+            // 顶部提示条: 选中节点属性 / 搜索命中数 / 默认指引
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: searchQuery.isNotEmpty
@@ -293,40 +307,72 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                       ? AppTheme.primaryLight.withOpacity(0.5)
                       : AppTheme.danger.withOpacity(0.08))
                   : AppTheme.primaryLight.withOpacity(0.3),
-              child: Row(
+              child: (selectedNode != null && searchQuery.isEmpty)
+                  ? _buildSelectedNodeBar(selectedNode, layout)
+                  : Row(
+                      children: [
+                        Icon(
+                          searchQuery.isNotEmpty
+                              ? Icons.search
+                              : Icons.touch_app_outlined,
+                          size: 20,
+                          color: searchQuery.isNotEmpty && matchCount == 0
+                              ? AppTheme.danger
+                              : AppTheme.primaryDark,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            searchQuery.isEmpty
+                                ? '单击看线 · 长按进详情'
+                                : (matchCount > 0
+                                    ? '匹配 $matchCount 位加盟客户 · 其余淡化'
+                                    : '没有匹配「$searchQuery」'),
+                            style: TextStyle(
+                              fontSize: AppTheme.fontSm,
+                              color: searchQuery.isNotEmpty && matchCount == 0
+                                  ? AppTheme.danger
+                                  : AppTheme.primaryDark,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '共 ${stats.total} 位',
+                          style: const TextStyle(
+                            fontSize: AppTheme.fontSm,
+                            color: AppTheme.primaryDark,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            // 图例 + 快捷筛选 (点 chip = 只看这一类, 再点取消)
+            SizedBox(
+              height: 52,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  Icon(
-                    searchQuery.isNotEmpty ? Icons.search : Icons.touch_app_outlined,
-                    size: 20,
-                    color: searchQuery.isNotEmpty && matchCount == 0
-                        ? AppTheme.danger
-                        : AppTheme.primaryDark,
-                  ),
+                  _graphFilterChip(_GraphFilter.none, '全部', null, stats.total),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      searchQuery.isEmpty
-                          ? '单击看线 · 长按进详情'
-                          : (matchCount > 0
-                              ? '匹配 $matchCount 位加盟客户 · 其余淡化'
-                              : '没有匹配「$searchQuery」'),
-                      style: TextStyle(
-                        fontSize: AppTheme.fontSm,
-                        color: searchQuery.isNotEmpty && matchCount == 0
-                            ? AppTheme.danger
-                            : AppTheme.primaryDark,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    // 减 1: 根节点是「我」, 不算加盟客户
-                    '${_countDescendants(tree) - 1} 位加盟客户',
-                    style: const TextStyle(
-                      fontSize: AppTheme.fontSm,
-                      color: AppTheme.primaryDark,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  _graphFilterChip(
+                      _GraphFilter.aLine, 'A线', AppTheme.franchiseeA, stats.aLine),
+                  const SizedBox(width: 8),
+                  _graphFilterChip(
+                      _GraphFilter.bLine, 'B线', AppTheme.franchiseeB, stats.bLine),
+                  const SizedBox(width: 8),
+                  _graphFilterChip(_GraphFilter.direct, '直推', AppTheme.accent,
+                      stats.direct,
+                      hollow: false),
+                  const SizedBox(width: 8),
+                  _graphFilterChip(_GraphFilter.downline, '下级引荐',
+                      AppTheme.franchiseeB, stats.downline,
+                      hollow: true),
+                  const SizedBox(width: 8),
+                  _graphFilterChip(_GraphFilter.upline, '上级引荐',
+                      AppTheme.badgeNeutral, stats.upline,
+                      hollow: true, outerRing: true),
                 ],
               ),
             ),
@@ -417,6 +463,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                                         selectedNodeId: _selectedNodeId,
                                         pathIds: _graphPathIds,
                                         spineIds: layout.spineIds,
+                                        aLineIds: layout.aLineIds,
+                                        bLineIds: layout.bLineIds,
+                                        relations: relations,
+                                        filterIds: filterIds,
                                       ),
                                     ),
                                   ),
@@ -457,6 +507,211 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         );
       },
     );
+  }
+
+  /// 选中节点属性条 (名字 · 线别 · 关系 · 层级)
+  Widget _buildSelectedNodeBar(FranchiseeTreeNode node, TreeLayoutResult layout) {
+    final line = _lineLabelOf(node.id, layout);
+    return Row(
+      children: [
+        const Icon(Icons.account_tree_outlined, size: 20, color: AppTheme.accent),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '${node.name} · $line · ${node.relation.label} · 第${node.placementDepth}层',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: AppTheme.fontSm,
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close, size: 20),
+          tooltip: '取消选中',
+          visualDensity: VisualDensity.compact,
+          onPressed: _clearSelection,
+        ),
+      ],
+    );
+  }
+
+  /// 线别文案 (A线 / B线; 根节点不是任一线)
+  String _lineLabelOf(String nodeId, TreeLayoutResult layout) {
+    if (layout.aLineIds.contains(nodeId)) return 'A线';
+    if (layout.bLineIds.contains(nodeId)) return 'B线';
+    return '—';
+  }
+
+  /// 图例 + 快捷筛选 chip (点 = 只看这一类; 再点 = 全部)
+  Widget _graphFilterChip(
+    _GraphFilter filter,
+    String label,
+    Color? color,
+    int count, {
+    bool hollow = false,
+    bool outerRing = false,
+  }) {
+    final selected = _graphFilter == filter;
+    return Semantics(
+      button: true,
+      label: '$label $count',
+      child: FilterChip(
+      avatar: color == null
+          ? null
+          : _legendDot(color, hollow: hollow, outerRing: outerRing),
+      label: Text(
+        '$label $count',
+        style: TextStyle(
+          fontSize: AppTheme.fontXs,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
+      selected: selected,
+      onSelected: (_) => setState(() {
+        _graphFilter = selected ? _GraphFilter.none : filter;
+      }),
+      selectedColor: AppTheme.primary,
+      backgroundColor: Colors.white,
+      checkmarkColor: Colors.white,
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : AppTheme.textPrimary,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  /// 图例小圆点 (跟节点样式一致: 实心 / 空心 / 空心 + 外环)
+  Widget _legendDot(
+    Color color, {
+    bool hollow = false,
+    bool outerRing = false,
+  }) {
+    return SizedBox(
+      width: 26,
+      height: 26,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (outerRing)
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: color.withOpacity(0.55), width: 1.5),
+              ),
+            ),
+          Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: hollow ? color.withOpacity(0.16) : color,
+              border: hollow ? Border.all(color: color, width: 2.5) : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 节点 id → 关系 (后端 relation 收成 map 给 painter)
+  Map<String, FranchiseeRelation> _collectRelations(FranchiseeTreeNode node) {
+    final map = <String, FranchiseeRelation>{node.id: node.relation};
+    for (final c in node.children) {
+      map.addAll(_collectRelations(c));
+    }
+    return map;
+  }
+
+  /// 图谱统计 (共 / 直推 / 下级引荐 / 上级引荐 / A线 / B线)
+  ({
+    int total,
+    int direct,
+    int downline,
+    int upline,
+    int aLine,
+    int bLine,
+  }) _graphStats(FranchiseeTreeNode tree, TreeLayoutResult layout) {
+    var direct = 0;
+    var downline = 0;
+    var upline = 0;
+    void walk(FranchiseeTreeNode n) {
+      switch (n.relation) {
+        case FranchiseeRelation.direct:
+          direct++;
+          break;
+        case FranchiseeRelation.downline:
+          downline++;
+          break;
+        case FranchiseeRelation.upline:
+          upline++;
+          break;
+        case FranchiseeRelation.root:
+          break;
+      }
+      for (final c in n.children) {
+        walk(c);
+      }
+    }
+
+    walk(tree);
+    return (
+      total: direct + downline + upline,
+      direct: direct,
+      downline: downline,
+      upline: upline,
+      aLine: layout.aLineIds.length,
+      bLine: layout.bLineIds.length,
+    );
+  }
+
+  /// 当前筛选命中的节点 id 集合 (null = 无筛选)
+  Set<String>? _filterIdsFor(FranchiseeTreeNode tree, TreeLayoutResult layout) {
+    switch (_graphFilter) {
+      case _GraphFilter.none:
+        return null;
+      case _GraphFilter.aLine:
+        return layout.aLineIds;
+      case _GraphFilter.bLine:
+        return layout.bLineIds;
+      case _GraphFilter.direct:
+        return _idsWhere(
+            tree, (n) => n.relation == FranchiseeRelation.direct);
+      case _GraphFilter.downline:
+        return _idsWhere(
+            tree, (n) => n.relation == FranchiseeRelation.downline);
+      case _GraphFilter.upline:
+        return _idsWhere(
+            tree, (n) => n.relation == FranchiseeRelation.upline);
+    }
+  }
+
+  Set<String> _idsWhere(
+    FranchiseeTreeNode node,
+    bool Function(FranchiseeTreeNode) test,
+  ) {
+    final out = <String>{};
+    if (test(node)) out.add(node.id);
+    for (final c in node.children) {
+      out.addAll(_idsWhere(c, test));
+    }
+    return out;
+  }
+
+  /// 按 id 找节点 (选中信息条用)
+  FranchiseeTreeNode? _findNodeById(FranchiseeTreeNode node, String id) {
+    if (node.id == id) return node;
+    for (final c in node.children) {
+      final hit = _findNodeById(c, id);
+      if (hit != null) return hit;
+    }
+    return null;
   }
 
   /// 递归统计全树节点数 (含根)
@@ -577,7 +832,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return Material(
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
       color: Colors.white.withOpacity(0.9),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
@@ -604,6 +862,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -334,10 +334,18 @@ class FranchiseeService {
     return AvailablePosition.fromJson(res.data as Map<String, dynamic>);
   }
 
-  /// 以我为中心的二叉树 (Plan F3 用)
-  Future<FranchiseeTreeNode> getMyTree({int depth = 3}) async {
+  /// 以我为中心的加盟树 (Plan F3 图谱用)
+  ///
+  /// [mode]:
+  ///   - `placement` (图谱默认): 二叉树 (按 placement_path 连) + 每节点 relation
+  ///     (直推/下级引荐/上级引荐) — 「对碰」视图要的就是左右两区真二叉树
+  ///   - `referrer`: 推荐树 (按 referrer_id 连), 无 relation 语义
+  Future<FranchiseeTreeNode> getMyTree({
+    int depth = 3,
+    String mode = 'placement',
+  }) async {
     final res = await _dio.get('/franchisees/me/tree',
-        queryParameters: {'depth': depth});
+        queryParameters: {'depth': depth, 'mode': mode});
     return FranchiseeTreeNode.fromJson(res.data as Map<String, dynamic>);
   }
 }

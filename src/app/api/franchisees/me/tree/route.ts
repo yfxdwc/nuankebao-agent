@@ -1,6 +1,9 @@
 // /api/franchisees/me/tree
-// GET 以当前 user 为中心的加盟二叉树
-// Plan F1: depth 默认 3, 可选 ?depth=N (N<=10 安全限制)
+// GET 以当前 user 为中心的加盟树
+//   ?depth=N (N<=4 安全限制, ADR-0010)
+//   ?mode=referrer|placement (默认 referrer = 旧行为, 冻结的 web admin 不受影响)
+//     - referrer  : 推荐树 (按 referrer_id 连)
+//     - placement : 二叉树 (按 placement_path 连) + 每节点 relation 直推/下级引荐/上级引荐
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -8,6 +11,7 @@ import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import {
   getFranchiseeIdByUserId,
   getFranchiseeTree,
+  getPlacementTree,
 } from "@/lib/db/queries/franchisee";
 
 export async function GET(request: NextRequest) {
@@ -37,11 +41,16 @@ export async function GET(request: NextRequest) {
       placementDepth: 0,
       placementPath: "",
       referrerId: null,
+      relation: "root",
       children: [],
     });
   }
 
-  const tree = await getFranchiseeTree(fid, depth);
+  const mode = searchParams.get("mode") === "placement" ? "placement" : "referrer";
+  const tree =
+    mode === "placement"
+      ? await getPlacementTree(fid, depth)
+      : await getFranchiseeTree(fid, depth);
   if (!tree) {
     // franchiseeId 存在但记录被删/查不到 → 真正的 404 (前后端不一致)
     return NextResponse.json({ error: "Tree root not found" }, { status: 404 });

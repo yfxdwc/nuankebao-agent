@@ -120,6 +120,10 @@ final franchiseesProvider = FutureProvider<List<dynamic>>(
 // 详见 docs/adr/0007-modular-architecture.md + 关系接口边界说明
 final myFranchiseeTreeProvider = FutureProvider.family<dynamic, int>(
   (ref, depth) async {
-    return ref.watch(franchiseeServiceProvider).getMyTree(depth: depth);
+    // mode=placement: 图谱要的是「左右两区真二叉树」+ 直推/下级引荐/上级引荐 relation
+    // (referrer 推荐树看不到「上级引荐但放在我下线」的人, 见 API route 注释)
+    return ref
+        .watch(franchiseeServiceProvider)
+        .getMyTree(depth: depth, mode: 'placement');
   },
 );

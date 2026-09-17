@@ -17,6 +17,10 @@ class AppTheme {
   static const Color primaryDark = Color(0xFF2D5A3D); // 深绿 (text)
   static const Color accent = Color(0xFFE89F4D); // 暖橙 (强调)
   static const Color franchisee = Color(0xFF8E5BA8); // 加盟紫 (徽章)
+  // ---- 图谱三维区分 (主人 2026-09-17 拍板) ----
+  static const Color franchiseeA = Color(0xFF2B6CB0); // A线 (深蓝)
+  static const Color franchiseeB = Color(0xFF8E5BA8); // B线 (紫, = franchisee)
+  static const Color badgeNeutral = Color(0xFF5A5A5A); // 「上」等中性角标底
   static const Color danger = Color(0xFFB33A3A); // 警示红 (深)
   static const Color bgWarm = Color(0xFFFFFBF5); // 暖白 (主背景)
   static const Color bgCard = Colors.white; // 卡片白
