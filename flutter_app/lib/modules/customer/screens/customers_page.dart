@@ -466,11 +466,18 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     });
   }
 
-  /// 计算 auto-fit scale (取 min 让两边都 fit, 加 5% padding)
+  /// 计算 auto-fit scale
+  /// fix-graph-ui (2026-09-17): 优先 fit-to-width (水平让所有兄弟节点可见)
+  ///   原因: 4 层二叉树 (15 节点) 宽 1760, 高仅 696. fit-to-height 会让树在手机屏上
+  ///   横向溢出 (1397/393=3.6x), 用户看不到右半边的子树
+  ///   fit-to-width 横向正好, 垂直剩下的 397px 给 user 滚动看不同层级
+  ///   折中: 取 max(scaleX, scaleY*0.6) — 优先保证横向 fit, 允许垂直必要时缩小一点
   double _computeFitScale(Size viewport, Size canvas) {
     final scaleX = viewport.width / canvas.width;
     final scaleY = viewport.height / canvas.height;
-    return math.max(0.1, math.min(scaleX, scaleY) * 0.95);
+    // 水平为主: 让所有同层节点可见, 垂直允许上下滚
+    final fit = math.max(0.15, scaleX * 0.98);
+    return fit;
   }
 
   /// 缓存 LayoutBuilder 算的 fitScale (reset 时清掉重算)
