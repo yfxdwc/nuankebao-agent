@@ -64,6 +64,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   Offset? _graphRootCenter;
   bool _graphViewInitialized = false;
 
+  /// 单击选中的节点 id (选中后突显它 + 高亮 它→「我」整条线 + 其余淡化)
+  /// fix-graph-spine (2026-09-17 主人拍): 单击 = 看线, 长按 = 跳详情
+  String? _selectedNodeId;
+  Set<String> _graphPathIds = const {};
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -265,10 +270,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             ? 0
             : _countMatches(tree, searchQuery.toLowerCase());
 
-        // 计算画布尺寸 + 节点坐标
+        // 双主线「对碰」布局: 两条主线平行直下, 侧枝往外侧展开
         const depth = 3;
-        final canvasSize = TreeLayout.computeCanvasSize(tree, depth);
-        final positions = TreeLayout.computePositions(tree, canvasSize);
+        final layout = TreeLayout.compute(tree, maxDepth: depth);
+        final canvasSize = layout.canvasSize;
+        final positions = layout.positions;
         final searchMatchedIds = searchQuery.isEmpty
             ? null
             : _collectMatches(tree, searchQuery.toLowerCase());
@@ -296,7 +302,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   Expanded(
                     child: Text(
                       searchQuery.isEmpty
-                          ? '点节点看详情 · 可缩放拖动'
+                          ? '单击看线 · 长按进详情'
                           : (matchCount > 0
                               ? '匹配 $matchCount 位加盟客户 · 其余淡化'
                               : '没有匹配「$searchQuery」'),
@@ -349,6 +355,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   _graphCanvasSize = canvasSize;
                   if (!_graphViewInitialized || treeChanged) {
                     _graphViewInitialized = true;
+                    _selectedNodeId = null; // 树变了 → 清选中 (路径可能已失效)
+                    _graphPathIds = const {};
                     final matrix =
                         _focusRootMatrix(viewport, canvasSize, rootCenter);
                     if (treeChanged) {
@@ -382,16 +390,24 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                               height: canvasSize.height,
                               child: Stack(
                                 children: [
-                                  CustomPaint(
-                                    size: canvasSize,
-                                    painter: FranchiseTreePainter(
-                                      root: tree,
-                                      positions: positions,
-                                      searchMatchedIds: searchMatchedIds,
-                                      currentUserId: tree.id,
+                                  // 点空白处 = 取消选中 (点节点时 hit area 在上层, 先拿到事件)
+                                  GestureDetector(
+                                    onTap: _clearSelection,
+                                    behavior: HitTestBehavior.opaque,
+                                    child: CustomPaint(
+                                      size: canvasSize,
+                                      painter: FranchiseTreePainter(
+                                        root: tree,
+                                        positions: positions,
+                                        searchMatchedIds: searchMatchedIds,
+                                        currentUserId: tree.id,
+                                        selectedNodeId: _selectedNodeId,
+                                        pathIds: _graphPathIds,
+                                        spineIds: layout.spineIds,
+                                      ),
                                     ),
                                   ),
-                                  ..._buildHitareas(tree, positions),
+                                  ..._buildHitareas(tree, tree, positions),
                                 ],
                               ),
                             ),
@@ -506,7 +522,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     if (tree == null) return;
     final hit = _firstMatchNode(tree, lower);
     if (hit == null) return;
-    final center = TreeLayout.computePositions(tree, canvasSize)[hit.id];
+    final center = TreeLayout.compute(tree, maxDepth: 3).positions[hit.id];
     if (center == null) return;
     setState(() {
       _graphTransformController.value = Matrix4.identity()
@@ -575,8 +591,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     );
   }
 
-  /// 节点点击 hit area (走 franchisee 详情)
+  /// 节点 hit area
+  /// - 单击: 突显该节点 + 高亮 它 → 「我」整条线 (再点一下取消)
+  /// - 长按: 跳加盟商详情
   List<Widget> _buildHitareas(
+    FranchiseeTreeNode root,
     FranchiseeTreeNode node,
     Map<String, Offset> positions,
   ) {
@@ -591,16 +610,55 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         // 圆下方到名字/左线右线标签都算可点 (中老年手指粗, 别只让圆圈可点)
         height: TreeLayout.nodeSize + 44,
         child: GestureDetector(
-          onTap: () => context.push('/franchisees/${node.id}'),
+          onTap: () => _selectNode(root, node),
+          onLongPress: () => context.push('/franchisees/${node.id}'),
           behavior: HitTestBehavior.opaque,
           child: const SizedBox.expand(),
         ),
       ),
     );
     for (final child in node.children) {
-      widgets.addAll(_buildHitareas(child, positions));
+      widgets.addAll(_buildHitareas(root, child, positions));
     }
     return widgets;
+  }
+
+  /// 单击节点: 选中 (再点一下取消选中)
+  void _selectNode(FranchiseeTreeNode root, FranchiseeTreeNode node) {
+    setState(() {
+      if (_selectedNodeId == node.id) {
+        _selectedNodeId = null;
+        _graphPathIds = const {};
+      } else {
+        _selectedNodeId = node.id;
+        _graphPathIds = _pathIdsTo(root, node.id) ?? {node.id};
+      }
+    });
+  }
+
+  /// 取消选中 (点空白画布)
+  void _clearSelection() {
+    if (_selectedNodeId == null) return;
+    setState(() {
+      _selectedNodeId = null;
+      _graphPathIds = const {};
+    });
+  }
+
+  /// 根 → 目标节点 的路径 id 集合 (含两端); 找不到返回 null
+  Set<String>? _pathIdsTo(FranchiseeTreeNode root, String targetId) {
+    final path = <String>[];
+    bool dfs(FranchiseeTreeNode n) {
+      path.add(n.id);
+      if (n.id == targetId) return true;
+      for (final c in n.children) {
+        if (dfs(c)) return true;
+      }
+      path.removeLast();
+      return false;
+    }
+
+    return dfs(root) ? path.toSet() : null;
   }
 
   Widget _buildChip(_CustomerFilter f, String label) {
