@@ -1,0 +1,229 @@
+// 「我的」页 widget 测试
+//
+// 关注点 (跟目标用户强相关):
+//   1. 资料/加盟/数据/设置四块都渲染出来 (文字对不对)
+//   2. 未加盟 / 统计缺失 / 账号资料不全 这三种空态**不崩、不空白**
+//   3. 窄屏 (320) + 特大字号 (1.3) 下不溢出 (中老年用户就是这样用的)
+//
+// 不测: 网络请求 (provider 直接 override 成假数据), 弹层里的平台能力 (package_info 等)
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nuankebao/core/models/me.dart';
+import 'package:nuankebao/core/providers/service_providers.dart';
+import 'package:nuankebao/core/providers/settings_provider.dart';
+import 'package:nuankebao/screens/profile_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+MeProfile _fullProfile() => MeProfile.fromJson({
+      'user': {
+        'id': '1',
+        'name': 'SeedTest-dev用户',
+        'role': 'sales',
+        'roleLabel': '销售员',
+        'isActive': true,
+        'createdAt': '2026-09-16T11:37:31.156Z',
+        'hasUserRecord': true,
+      },
+      'phone': {'full': '13800138000', 'masked': '138****8000'},
+      'store': {'id': '3', 'name': '城南店'},
+      'franchisee': {
+        'id': '75',
+        'name': '宋一鸣',
+        'phone': {'full': '13900000175', 'masked': '139****0175'},
+        'isActive': true,
+        'notes': 'A 线负责人',
+        'joinedAt': '2026-09-16T11:37:26.315Z',
+        'placement': {
+          'side': 'left',
+          'sideLabel': 'A 线 (左)',
+          'depth': 1,
+          'depthLabel': '第 1 层',
+          'path': 'L.',
+        },
+        'referrer': {
+          'id': '70',
+          'name': '王总',
+          'phone': {'full': '13700000070', 'masked': '137****0070'},
+        },
+        'downline': {'total': 2, 'left': 1, 'right': 1, 'unknown': 0},
+      },
+      'stats': {
+        'customerCount': 47,
+        'thisMonthVisits': 13,
+        'pendingFollowUps': 6,
+        'totalInteractions': 2,
+        'newCustomersThisMonth': 47,
+      },
+      'dev': {'authSkipped': false, 'sessionUserId': '1'},
+    });
+
+Future<ProviderContainer> _container(MeProfile profile) async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  final container = ProviderContainer(overrides: [
+    sharedPreferencesProvider.overrideWithValue(prefs),
+    meProfileProvider.overrideWith((ref) async => profile),
+  ]);
+  addTearDown(container.dispose);
+  return container;
+}
+
+Future<void> _pumpProfile(
+  WidgetTester tester,
+  ProviderContainer container, {
+  double width = 393,
+  double fontScale = 1.0,
+}) async {
+  tester.view.physicalSize = Size(width * 3, 852 * 3);
+  tester.view.devicePixelRatio = 3.0;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(fontScale)),
+          child: child!,
+        ),
+        home: const ProfilePage(),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('个人资料: 姓名/账号/角色/门店/手机号打码 都显示', (tester) async {
+    final container = await _container(_fullProfile());
+    await _pumpProfile(tester, container);
+
+    expect(find.text('宋一鸣'), findsWidgets); // 加盟名 = 主标题
+    expect(find.text('账号: SeedTest-dev用户'), findsOneWidget);
+    expect(find.text('销售员'), findsOneWidget);
+    expect(find.text('城南店'), findsOneWidget);
+    expect(find.text('138****8000'), findsOneWidget); // 默认打码, 不露全号
+    expect(find.text('13800138000'), findsNothing);
+    expect(find.text('编辑我的资料'), findsOneWidget);
+  });
+
+  testWidgets('加盟身份: 编号/位置/层级/上级/加入时间/下线数', (tester) async {
+    final container = await _container(_fullProfile());
+    await _pumpProfile(tester, container);
+
+    expect(find.text('我的加盟身份'), findsOneWidget);
+    expect(find.text('编号 #75'), findsOneWidget);
+    expect(find.text('A 线 (左)'), findsOneWidget);
+    expect(find.text('第 1 层'), findsOneWidget);
+    expect(find.textContaining('王总'), findsOneWidget);
+    expect(find.text('2026-09-16'), findsOneWidget);
+    expect(find.text('2 人 (A线 1 · B线 1)'), findsOneWidget);
+    expect(find.text('A 线负责人'), findsOneWidget);
+  });
+
+  testWidgets('数据概览: 5 个数字 + 加盟网络入口', (tester) async {
+    final container = await _container(_fullProfile());
+    await _pumpProfile(tester, container);
+
+    expect(find.text('数据概览'), findsOneWidget);
+    expect(find.text('47'), findsNWidgets(2)); // 客户 / 本月新增
+    expect(find.text('6'), findsOneWidget); // 待办
+    expect(find.text('13'), findsOneWidget); // 本月拜访
+    expect(find.text('2 次'), findsOneWidget); // 累计互动
+    expect(find.text('我的加盟网络'), findsOneWidget);
+  });
+
+  testWidgets('系统设置: 显示与存储 + 账号与安全 + 关于与帮助', (tester) async {
+    final container = await _container(_fullProfile());
+    await _pumpProfile(tester, container);
+
+    // 显示与存储 (字号档位)
+    expect(find.text('显示与存储'), findsOneWidget);
+    expect(find.text('标准'), findsOneWidget);
+    expect(find.text('大'), findsOneWidget);
+    expect(find.text('特大'), findsOneWidget);
+    expect(find.text('清理图片缓存'), findsOneWidget);
+
+    // 账号与安全
+    expect(find.text('账号与安全'), findsOneWidget);
+    expect(find.text('30 天 (期间不用重复登录)'), findsOneWidget);
+    expect(find.text('#1 · 销售员'), findsOneWidget);
+
+    // 关于与帮助
+    expect(find.text('关于与帮助'), findsOneWidget);
+    expect(find.text('检查更新'), findsOneWidget);
+    expect(find.text('使用帮助 / 数据安全'), findsOneWidget);
+    expect(find.text('网络自检'), findsOneWidget);
+
+    // 退出登录
+    expect(find.text('退出登录'), findsOneWidget);
+  });
+
+  testWidgets('点「特大」→ 字号设置真被改掉', (tester) async {
+    final container = await _container(_fullProfile());
+    await _pumpProfile(tester, container);
+
+    await tester.tap(find.text('特大'));
+    await tester.pumpAndSettle();
+
+    expect(container.read(settingsProvider).fontSize, AppFontSize.xlarge);
+  });
+
+  testWidgets('未加盟: 给说明而不是空白/报错', (tester) async {
+    final container = await _container(MeProfile.fromJson({
+      'user': {'id': '9', 'name': '李四', 'roleLabel': '销售员'},
+      'phone': {'full': '13700137000', 'masked': '137****7000'},
+      'franchisee': null,
+      'stats': {
+        'customerCount': 3,
+        'thisMonthVisits': 1,
+        'pendingFollowUps': 0,
+        'totalInteractions': 0,
+        'newCustomersThisMonth': 1,
+      },
+    }));
+    await _pumpProfile(tester, container);
+
+    expect(find.text('还没绑定加盟关系'), findsOneWidget);
+    expect(find.text('未加盟'), findsOneWidget);
+    expect(find.text('编辑我的资料'), findsNothing); // 没加盟就没得改
+    expect(find.text('李四'), findsWidgets);
+  });
+
+  testWidgets('统计缺失 (stats=null): 给提示不崩', (tester) async {
+    final container = await _container(MeProfile.fromJson({
+      'user': {'id': '1', 'name': '张三', 'roleLabel': '销售员'},
+      'stats': null,
+    }));
+    await _pumpProfile(tester, container);
+
+    expect(find.textContaining('没拿到统计数据'), findsOneWidget);
+  });
+
+  testWidgets('账号资料不全 (dev mock): 明确提示', (tester) async {
+    final container = await _container(MeProfile.fromJson({
+      'user': {
+        'id': '1',
+        'name': '开发测试',
+        'roleLabel': '销售员',
+        'hasUserRecord': false,
+      },
+    }));
+    await _pumpProfile(tester, container);
+
+    expect(find.textContaining('账号资料还没建全'), findsOneWidget);
+  });
+
+  testWidgets('窄屏 320 + 特大字号 1.3: 不溢出', (tester) async {
+    final container = await _container(_fullProfile());
+    await _pumpProfile(tester, container, width: 320, fontScale: 1.3);
+
+    // 溢出会让 test framework 直接 fail (RenderFlex overflowed 是异常)
+    expect(find.text('我的加盟身份'), findsOneWidget);
+    expect(find.text('关于与帮助'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
