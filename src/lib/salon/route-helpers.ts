@@ -10,7 +10,7 @@ import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { z } from "zod";
 
-export type RouteSession = Awaited<ReturnType<typeof auth>>;
+export type RouteSession = { user?: { id?: string } } | null;
 
 export type AuthOk = { ok: true; userId: bigint; session: RouteSession };
 export type AuthFail = { ok: false; response: NextResponse };
@@ -21,7 +21,7 @@ export type AuthFail = { ok: false; response: NextResponse };
  * - dev DEV_SKIP_AUTH=1 无 session → userId = 0 (与 follow-ups 等既有 route 同口径)
  */
 export async function requireUserId(): Promise<AuthOk | AuthFail> {
-  const session = await auth();
+  const session = (await auth()) as unknown as RouteSession;
   if (!isAuthSkipped() && !session?.user?.id) {
     return {
       ok: false,

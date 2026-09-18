@@ -46,6 +46,13 @@
 **验证**
 
 - `npx vitest run tests/profile-avatar.test.ts`: 12 pass (外链/穿越/未知 preset/超长/非字符串 全被拒)
+- Flutter `test/user_avatar_test.dart`: 7 pass (8 个候选逐个画出对应图标 / 默认首字 / 脏值退回首字 /
+  上传路径退回首字 / presetOf + absoluteAvatarUrl)
+- **真浏览器 E2E** (现网 bundle `public/app` + 真 API; 另一个 session 的 rebuild 已带入本轮改动):
+  头部语义 = `我的头像, 点击可更换` + `杨`(首字) + `换头像` + `显示完整手机号` + `复制手机号` + `编辑我的资料`;
+  点「换头像」→ 弹层 12 项全中: `换个头像 ✓ 拍一张 ✓ 从相册选 ✓ 绿叶 ✓ 花朵 ✓ 喝茶 ✓ 静心 ✓ 爱心 ✓
+  暖阳 ✓ 养生 ✓ 清泉 ✓ 恢复默认头像 ✓`; `pageerrors: none`
+  (截图 `/tmp/av-e2e-profile.png` + `/tmp/av-e2e-sheet.png`)
 - `curl PATCH /api/me`: `preset:leaf` ✓ / 外链 400 ✓ / `preset:hacker` 400 ✓ / 多字段 400 ✓ /
   `/uploads/../../etc/passwd.jpg` 400 ✓ / `null` 恢复默认 ✓; `GET /api/me` 回读一致 ✓
 - 审计日志实测有行: `user | UPDATE | user_id=1 | ip=127.0.0.1 | {"avatar_url":"preset:leaf"}`
