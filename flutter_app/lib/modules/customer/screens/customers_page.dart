@@ -167,22 +167,35 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
               },
             ),
           ),
-          // 过滤 chip (列表视图下; 图谱视图不需要 — 搜索已可定位)
+          // 筛选 (胶囊按键, 主人 2026-09-18 拍): 全部 / 加盟 / 普通 / 种子
+          // 4 段平分整行宽, 选中 = 主题色实心; 跟图谱筛选 (全部/A线/B线/直推) 视觉一致
+          // 旧版 = 横向 ListView + FilterChip (可左右滚, 右侧留半截, 不够整齐)
           if (_viewMode == _CustomerViewMode.list)
-            SizedBox(
-              height: 56,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  _buildChip(_CustomerFilter.all, '全部'),
-                  const SizedBox(width: 8),
-                  _buildChip(_CustomerFilter.franchisee, '🟣 加盟'),
-                  const SizedBox(width: 8),
-                  _buildChip(_CustomerFilter.normal, '🟢 普通'),
-                  const SizedBox(width: 8),
-                  _buildChip(_CustomerFilter.seed, '🌱 种子'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: SegmentedButton<_CustomerFilter>(
+                segments: const [
+                  ButtonSegment(
+                    value: _CustomerFilter.all,
+                    label: Text('全部', style: TextStyle(fontSize: 14)),
+                  ),
+                  ButtonSegment(
+                    value: _CustomerFilter.franchisee,
+                    label: Text('🟣 加盟', style: TextStyle(fontSize: 14)),
+                  ),
+                  ButtonSegment(
+                    value: _CustomerFilter.normal,
+                    label: Text('🟢 普通', style: TextStyle(fontSize: 14)),
+                  ),
+                  ButtonSegment(
+                    value: _CustomerFilter.seed,
+                    label: Text('🌱 种子', style: TextStyle(fontSize: 14)),
+                  ),
                 ],
+                selected: {_filter},
+                showSelectedIcon: false,
+                expandedInsets: EdgeInsets.zero, // 4 段平分整行宽
+                onSelectionChanged: (s) => setState(() => _filter = s.first),
               ),
             ),
 
@@ -888,28 +901,6 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     }
 
     return dfs(root) ? path.toSet() : null;
-  }
-
-  Widget _buildChip(_CustomerFilter f, String label) {
-    final selected = _filter == f;
-    return FilterChip(
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: AppTheme.fontSm,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-        ),
-      ),
-      selected: selected,
-      onSelected: (_) => setState(() => _filter = f),
-      selectedColor: AppTheme.primary,
-      backgroundColor: Colors.white,
-      checkmarkColor: Colors.white,
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : AppTheme.textPrimary,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-    );
   }
 
   List<Customer> _applyFilter(List<Customer> all) {
