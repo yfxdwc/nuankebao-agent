@@ -105,7 +105,7 @@ void main() {
     expect(find.text('账号: SeedTest-dev用户'), findsOneWidget);
     expect(find.text('销售员'), findsOneWidget);
     expect(find.text('城南店'), findsOneWidget);
-    expect(find.text('138****8000'), findsOneWidget); // 默认打码, 不露全号
+    expect(find.text('138****8000'), findsWidgets); // 头部 + 账号与安全 两处都打码
     expect(find.text('13800138000'), findsNothing);
     expect(find.text('编辑我的资料'), findsOneWidget);
   });
