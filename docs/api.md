@@ -447,6 +447,80 @@ multipart/form-data, file=...
 
 ---
 
+## 13. 我的 / 版本 (Flutter 「我的」页)
+
+### `GET /api/me`
+当前登录者的完整资料 (账号 + 加盟身份 + 门店 + 数据概览)。
+Flutter 「我的」页首屏一次拉完, 只有一个 loading。
+
+**响应**:
+```json
+{
+  "user": {
+    "id": "1", "name": "张三", "role": "sales", "roleLabel": "销售员",
+    "isActive": true, "createdAt": "2026-09-16T11:37:31.156Z",
+    "hasUserRecord": true
+  },
+  "phone": { "full": "13800138000", "masked": "138****8000" },
+  "store": { "id": "3", "name": "城南店" },
+  "franchisee": {
+    "id": "75", "name": "宋一鸣",
+    "phone": { "full": "13900000175", "masked": "139****0175" },
+    "isActive": true, "notes": "A 线负责人",
+    "joinedAt": "2026-09-16T11:37:26.315Z",
+    "placement": { "side": "left", "sideLabel": "A 线 (左)", "depth": 1, "depthLabel": "第 1 层", "path": "L." },
+    "referrer": { "id": "70", "name": "王总", "phone": { "full": "13700000070", "masked": "137****0070" } },
+    "downline": { "total": 2, "left": 1, "right": 1, "unknown": 0 }
+  },
+  "stats": {
+    "customerCount": 47, "thisMonthVisits": 13, "pendingFollowUps": 6,
+    "totalInteractions": 2, "newCustomersThisMonth": 47
+  },
+  "dev": { "authSkipped": false, "sessionUserId": "1" }
+}
+```
+
+**可空块** (客户端必须分块渲染, 不能假设一定有):
+
+| 字段 | null 的含义 |
+|---|---|
+| `user` | 没查到账号行 (dev mock 登录) |
+| `phone` | 账号没绑手机号 |
+| `store` | 账号没设默认门店 (多数账号如此) |
+| `franchisee` | **未加盟** (合法状态, 不是错误); 软删加盟商也走这支 |
+| `stats` | dev 空 session (没有「我」, 不查统计) |
+
+**口径边界**:
+- `stats` 跟**客户列表**同一口径 (全库非软删), 不含行级过滤 ——
+  客户列表还没接 RBAC, 两块对不上就是页面自己打自己脸。
+  切换点在 `src/lib/db/queries/dashboard.ts` 的 `getStatsOverview(ctx)` (传 ctx 即收紧)
+- `phone` 同时给 full + masked: masked 给默认展示, full 只在用户点"显示"时用 (自己的号)
+- 不返回任何金额/业绩字段 (ADR-0006 边界)
+
+### `GET /api/app-version`
+服务器版本 + 可下载安装包元数据 (Flutter 「检查更新」)。
+
+**响应**:
+```json
+{
+  "version": "0.2.2",
+  "buildNumber": 3,
+  "apk": {
+    "sizeBytes": 23293494,
+    "mtimeLocal": "2026-09-05 05:46:36",
+    "md5": "3ae567b7680b78a177e7e4c5d5d3b8a5",
+    "downloadPath": "/api/apk-download",
+    "downloadUrl": "http://127.0.0.1:3003/api/apk-download"
+  }
+}
+```
+
+- `version` / `buildNumber` 来自 `flutter_app/pubspec.yaml` 的 `version:` (APK versionName 的真源)
+- `apk: null` = 服务器上没有可下载的包 (纯 web 部署), 客户端只显示当前版本
+- 客户端比对 `package_info_plus` 的本机版本 → 服务器更新才提示 (不做强制升级)
+
+---
+
 ## 错误码
 
 | 状态 | 含义 |
