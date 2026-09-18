@@ -12,7 +12,7 @@ import {
   type NewFranchisee,
   type PlacementSide,
 } from "@/lib/db/schema";
-import { eq, isNull, and, desc, sql, ilike, or, ne, like, type SQL } from "drizzle-orm";
+import { eq, isNull, and, desc, sql, ilike, or, ne, like, inArray, type SQL } from "drizzle-orm";
 import {
   encryptField,
   decryptField,
@@ -352,6 +352,16 @@ export interface TreeNode {
    */
   relation: TreeNodeRelation;
   children: TreeNode[];
+  /**
+   * 该节点是否有下级 (全深度真值, 不受本次 depth 限制) — 图谱懒加载用 (ADR-0011):
+   *   true + children=[] → 前端显示「展开下级」按钮, 点了再请求子级
+   */
+  hasChildren: boolean;
+  /**
+   * 仅树根节点有: 我的下级**全深度总数** (不受 depth 影响)
+   * — 图谱顶部「共 N 位」用这个, 避免懒加载后数字缩水
+   */
+  totalDescendants?: number;
 }
 
 interface BuildCtx {
@@ -541,8 +551,8 @@ export async function getPlacementTree(
   }
 
   const build = (node: RawNode, depthRemaining: number): TreeNode => {
-    const rawChildren =
-      depthRemaining > 0 ? childrenByParentPath.get(node.placementPath) ?? [] : [];
+    const allChildren = childrenByParentPath.get(node.placementPath) ?? [];
+    const rawChildren = depthRemaining > 0 ? allChildren : [];
     return {
       id: node.id,
       name: node.name,
@@ -552,10 +562,100 @@ export async function getPlacementTree(
       referrerId: node.referrerId,
       relation: classifyRelation(node.id, node.referrerId, ctx),
       children: rawChildren.map((c) => build(c, depthRemaining - 1)),
+      // 全深度真值: 本次没取到的子级也算「有下级」→ 前端才知道能不能展开
+      hasChildren: allChildren.length > 0,
     };
   };
 
-  return build(rootRaw, depth);
+  const tree = build(rootRaw, depth);
+  // 树根带全深度下级总数 (懒加载后顶部「共 N 位」不缩水)
+  tree.totalDescendants = rows.length;
+  return tree;
+}
+
+/**
+ * 懒加载: 取某节点的直接子级 (ADR-0011, 主人 2026-09-18 拍「按需展开」)
+ *
+ * - 权限: children 必须在我 (viewerFranchiseeId) 的 placement 子树里, 否则返回空
+ *   (客户页图谱只展示我的下线; 前端不会请求别人的子树, 这里是服务端兼底)
+ * - relation: referrerId == 我 → 'direct', 否则 'downline' (子树内只可能是这两种)
+ * - 软删节点不计入
+ * - 每级自带 hasChildren, 前端知道下一层能否再展开
+ */
+export async function getFranchiseeChildren(
+  nodeId: bigint,
+  viewerFranchiseeId: bigint | null
+): Promise<TreeNode[] | null> {
+  const [node] = await db
+    .select()
+    .from(franchisee)
+    .where(and(eq(franchisee.id, nodeId), isNull(franchisee.deletedAt)))
+    .limit(1);
+  if (!node) return null;
+
+  // 越权拉底: node 必须在我子树里 (或者就是我)
+  if (viewerFranchiseeId === null) return [];
+  const [me] = await db
+    .select()
+    .from(franchisee)
+    .where(and(eq(franchisee.id, viewerFranchiseeId), isNull(franchisee.deletedAt)))
+    .limit(1);
+  if (!me) return [];
+
+  const inMySubtree =
+    node.id === me.id ||
+    (me.placementPath === ""
+      ? node.placementPath !== ""
+      : node.placementPath.startsWith(me.placementPath));
+  if (!inMySubtree) return [];
+
+  const children = await db
+    .select({
+      id: franchisee.id,
+      name: franchisee.name,
+      placementSide: franchisee.placementSide,
+      placementPath: franchisee.placementPath,
+      placementDepth: franchisee.placementDepth,
+      referrerId: franchisee.referrerId,
+    })
+    .from(franchisee)
+    .where(
+      and(
+        eq(franchisee.referrerId, nodeId),
+        isNull(franchisee.deletedAt)
+      )
+    )
+    .orderBy(franchisee.placementPath);
+
+  // 一次查完下一层, 标 hasChildren (避免 N+1)
+  const childIds = children.map((c) => c.id);
+  const grandchildRows =
+    childIds.length === 0
+      ? []
+      : await db
+          .select({ referrerId: franchisee.referrerId })
+          .from(franchisee)
+          .where(
+            and(
+              inArray(franchisee.referrerId, childIds),
+              isNull(franchisee.deletedAt)
+            )
+          );
+  const hasGrandchild = new Set(
+    grandchildRows.map((r) => r.referrerId?.toString() ?? "")
+  );
+
+  return children.map((c) => ({
+    id: c.id.toString(),
+    name: c.name,
+    placementSide: (sideFromPath(c.placementPath) ??
+      c.placementSide) as PlacementSide | null,
+    placementDepth: c.placementDepth,
+    referrerId: c.referrerId?.toString() ?? null,
+    relation: c.referrerId?.toString() === me.id.toString() ? "direct" : "downline",
+    children: [],
+    hasChildren: hasGrandchild.has(c.id.toString()),
+  }));
 }
 
 interface RawNode {
@@ -596,6 +696,8 @@ function buildTree(
         referrerId: c.referrerId,
         relation: classifyRelation(c.id, c.referrerId, ctx),
         children: [],
+        // 推荐树模式也标全深度真值 (该节点是否还有更低层下级)
+        hasChildren: descendants.some((d) => d.referrerId === c.id),
       };
     }
     return buildTree(c, descendants, depthRemaining - 1, ctx);
@@ -609,6 +711,7 @@ function buildTree(
     referrerId: root.referrerId,
     relation: classifyRelation(root.id, root.referrerId, ctx),
     children,
+    hasChildren: descendants.some((d) => d.referrerId === root.id),
   };
 }
 

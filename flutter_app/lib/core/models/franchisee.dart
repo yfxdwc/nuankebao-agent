@@ -116,6 +116,13 @@ class FranchiseeTreeNode {
   final FranchiseeRelation relation;
   final List<FranchiseeTreeNode> children;
 
+  /// 该节点是否有下级 (**全深度真值**, 不受本次请求 depth 限制) — ADR-0011 懒加载
+  /// true + children.isEmpty = 还没展开, 前端给「展开下级」入口
+  final bool hasChildren;
+
+  /// 仅树根有: 我的下级全深度总数 (不受 depth 影响; 顶部「共 N 位」用)
+  final int? totalDescendants;
+
   FranchiseeTreeNode({
     required this.id,
     required this.name,
@@ -124,6 +131,8 @@ class FranchiseeTreeNode {
     required this.placementDepth,
     this.relation = FranchiseeRelation.root,
     required this.children,
+    this.hasChildren = false,
+    this.totalDescendants,
   });
 
   factory FranchiseeTreeNode.fromJson(Map<String, dynamic> json) {
@@ -137,6 +146,23 @@ class FranchiseeTreeNode {
       children: ((json['children'] as List?) ?? [])
           .map((e) => FranchiseeTreeNode.fromJson(e as Map<String, dynamic>))
           .toList(),
+      hasChildren: json['hasChildren'] as bool? ?? false,
+      totalDescendants: (json['totalDescendants'] as num?)?.toInt(),
+    );
+  }
+
+  /// 拷贝 + 替换 children (懒加载合并用; 不 mutate 原对象, 保持 provider 树干净)
+  FranchiseeTreeNode copyWith({List<FranchiseeTreeNode>? children, bool? hasChildren}) {
+    return FranchiseeTreeNode(
+      id: id,
+      name: name,
+      referrerId: referrerId,
+      placementSide: placementSide,
+      placementDepth: placementDepth,
+      relation: relation,
+      children: children ?? this.children,
+      hasChildren: hasChildren ?? this.hasChildren,
+      totalDescendants: totalDescendants,
     );
   }
 }

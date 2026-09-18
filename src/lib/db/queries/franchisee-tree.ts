@@ -34,8 +34,9 @@ export interface PlaceResult {
  *
  * 边界:
  *   - referrerId 必须存在 (调用方保证)
- *   - 二叉树深度上限 4 层 (主人 2026-09-16 override, ADR-0010)
- *     历史: 3 层 → 4 层 (test data 单 tree 31 节点需求, dev/test only)
+ *   - 层级**不限** (ADR-0011, 主人 2026-09-18 拍: 「层级不应该做限制, 理论上可以无限层级」)
+ *     历史: ADR-0006 ≤3 层 (合规保守) → ADR-0010 ≤4 (dev seed 需求) → ADR-0011 不限
+ *   - 运维手闸: env FRANCHISEE_MAX_DEPTH=7 可临时重新封顶 (默认 0 = 不限)
  *   - 返回 fallback=true 让 frontend 提示"已自动放到 XXX"
  */
 export async function placeNewFranchisee(
@@ -43,12 +44,12 @@ export async function placeNewFranchisee(
   referrerId: bigint,
   sideHint?: PlacementSide
 ): Promise<PlaceResult> {
-  // ADR-0010: 主人 2026-09-16 override, ≤4 层硬约束 (dev/test seed data)
-  //   - 目的: 1 个 tree 装 31 节点 (1+2+4+8+16), 满足主人「30+ 加盟商」需求
-  //   - 边界: referrer depth >= 4 不能添加下线 (depth 4 节点不允许有子)
-  //   - 风险: ADR-0006 合规边界放宽 1 层, 仍 < 5 (《禁止传销条例》实务解读 5+ 才入刑)
-  //   - 回滚: 删 ADR-0010 + 把 4 改回 3 (1 行). depth=4 节点保留可查, 但不能再加子
-  const MAX_DEPTH = 4; // ADR-0010 override; revert: 改回 3
+  // ADR-0011 (主人 2026-09-18 拍): 层级不限
+  //   - 原本 ADR-0010 硬限 4 层; 主人指出「层级理论上可以无限」→ 去掉业务上限
+  //   - 合规依据见 ADR-0006 (关系展示/客户维护, 不做团队计酬/入门费/拉人头返利 →
+  //     层级深度本身不构成《禁止传销条例》意义上的传销)
+  //   - 仍需拦超深数据用 env 手闸 (FRANCHISEE_MAX_DEPTH), 默认 0=不限
+  const MAX_DEPTH = Number(process.env.FRANCHISEE_MAX_DEPTH ?? "0") || 0;
   const [ref] = await tx
     .select({ id: franchisee.id, depth: franchisee.placementDepth })
     .from(franchisee)
@@ -64,9 +65,9 @@ export async function placeNewFranchisee(
     throw new Error(`Referrer not found: ${referrerId}`);
   }
 
-  if (ref.depth >= MAX_DEPTH) {
+  if (MAX_DEPTH > 0 && ref.depth >= MAX_DEPTH) {
     throw new Error(
-      `加盟树深度上限 ${MAX_DEPTH} 层, 不能再添加下线 (ADR-0010 主人 override, referrer depth=${ref.depth})`
+      `加盟树深度上限 ${MAX_DEPTH} 层 (运维手闸 FRANCHISEE_MAX_DEPTH), referrer depth=${ref.depth}`
     );
   }
 
@@ -90,9 +91,8 @@ export async function placeNewFranchisee(
   }
 
   // 2. Fallback: BFS 左优先
-  //   Bug fix (2026-09-16, task seed-test-data): 只检查 input.referrerId depth 不足
-  //   BFS 下降到的节点 也需 depth < MAX_DEPTH — 否则叶子节点 (depth=MAX) 被当 parent,
-  //   newDepth = MAX+1 > MAX_DEPTH 超限. 修法: 不把 depth >= MAX_DEPTH 的子节点 push 进 queue.
+  //   ADR-0011: 不再按层剪枝 (层级不限) → BFS 会一直下降到第一个空位
+  //   (历史 ADR-0010 曾跳过 depth >= MAX_DEPTH 的子节点; 现仅在运维手闸开启时跳过)
   const queue: bigint[] = [referrerId];
   while (queue.length > 0) {
     const parentId = queue.shift()!;
@@ -119,15 +119,17 @@ export async function placeNewFranchisee(
       return { parentId, side: "right", fallback: !!sideHint };
     }
 
-    // 左右都满, 递归下一层. 跳过 depth >= MAX_DEPTH 的子节点 (它们是叶子, 不能当 parent).
+    // 左右都满 → 继续下降 (层级不限; MAX_DEPTH > 0 时按手闸剪枝)
     for (const child of children) {
-      if ((child as any).depth < MAX_DEPTH) {
+      if (MAX_DEPTH === 0 || (child as any).depth < MAX_DEPTH) {
         queue.push((child as any).id);
       }
     }
   }
 
   throw new Error(
-    "placeNewFranchisee: No available position (should never happen)"
+    MAX_DEPTH > 0
+      ? `加盟树已达运维手闸上限 ${MAX_DEPTH} 层 (FRANCHISEE_MAX_DEPTH), 找不到空位`
+      : "placeNewFranchisee: No available position (should never happen)"
   );
 }

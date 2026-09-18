@@ -364,13 +364,28 @@ class FranchiseeService {
   ///   - `placement` (图谱默认): 二叉树 (按 placement_path 连) + 每节点 relation
   ///     (直推/下级引荐/上级引荐) — 「对碰」视图要的就是左右两区真二叉树
   ///   - `referrer`: 推荐树 (按 referrer_id 连), 无 relation 语义
+  ///
+  /// [depth] = 「本次取多少层」的载荷旋钮 (不是业务层级上限, ADR-0011: 层级不限)
+  ///   图谱改懒加载后只请求 1-2 层, 其余点节点展开 (见 getChildren)
   Future<FranchiseeTreeNode> getMyTree({
-    int depth = 3,
+    int depth = 2,
     String mode = 'placement',
   }) async {
     final res = await _dio.get('/franchisees/me/tree',
         queryParameters: {'depth': depth, 'mode': mode});
     return FranchiseeTreeNode.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 懒加载: 取某个节点的**直接子级** (ADR-0011, 主人 2026-09-18 拍「按需展开」)
+  ///
+  /// 层级不限后全量拉树会爆 JSON (满二叉 16 层 = 13 万节点) → 图谱先画 1-2 层,
+  /// 用户点节点展开时一次只拉一级 (GET /api/franchisees/:id/children)
+  Future<List<FranchiseeTreeNode>> getChildren(String nodeId) async {
+    final res = await _dio.get('/franchisees/$nodeId/children');
+    final items = (res.data['children'] as List?) ?? [];
+    return items
+        .map((e) => FranchiseeTreeNode.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }
 

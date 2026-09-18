@@ -2,6 +2,58 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (加盟树层级**不限** + 图谱懒加载 + 补写 ADR-0006, 2026-09-18 主人拍)
+
+**主人问**: 「层级超过 4 层时（ADR-0010 上限）？我没理解这个限制，层级不应该做限制，理论上是可以无限层级的」
+
+**核实结论** (主人判断正确):
+- 数据模型**确实不限层** (`placement_path` 物化路径, 子树查询与层级无关); 只有 3 处人为上限:
+  服务层 `franchisee-tree.ts MAX_DEPTH = 4` (**硬拦**) + 接口层 `Math.min(depth, 4)` +
+  `schema.ts` 一个**从未 migrate 的 CHECK 注释** (DB 物理无约束)
+- 该上限是**合规保守值** (ADR-0006 初值 ≤3 → ADR-0010 缓到 ≤4, 仅为 dev seed 能造 31 位),
+  **不是技术限制** → 主人拍板取消
+- ⚠ 我上一版 CHANGELOG 「层级 >4 时数字会对不上」**是错的** (第 5 层根本建不出来, 实测 400);
+  已更正 (commit `f629119`)
+
+**落地 (主人三件拍板: 层级不限 / 图谱懒加载 / 补写 ADR-0006)**
+
+1. **服务层取消上限** (`src/lib/db/queries/franchisee-tree.ts`):
+   - `MAX_DEPTH = Number(env.FRANCHISEE_MAX_DEPTH ?? 0)` → `0` = **不限** (保留运维手闸)
+   - BFS 不再按层剪枝 (只在手闸 >0 时剪); 错误文案分「手闸封顶 / 不可能发生」两种
+2. **接口层** (`src/app/api/franchisees/me/tree/route.ts`):
+   - `depth` 语义从「业务层级上限」改为「**单次请求载荷旋钮**」, 上闸 16 层 (防超大 JSON), 默认 2
+   - 树节点新增 `hasChildren` (全深度真值) + 根节点 `totalDescendants` (我的下级全深度总数)
+3. **新增懒加载端点** `GET /api/franchisees/:id/children`:
+   - 只取直接子级 (带 `hasChildren`), 载荷 O(子级数); 越权拉底 (非我子树 → 空); 软删不计
+   - `getFranchiseeChildren(nodeId, viewerFranchiseeId)` — 一次查完下一层标 hasChildren (无 N+1)
+4. **Flutter 图谱懒加载** (主人选「按需展开」):
+   - 初始只请求 2 层 (`_graphInitialDepth = 2`); 选中节点 → 顶部信息条出「展开下级」/「收起」
+   - `_lazyChildren` 缓存 + `_withLazyChildren()` 递归合并 (不 mutate provider 对象);
+     `FranchiseeTreeNode.copyWith` + `hasChildren` + `totalDescendants`
+   - 顶部计数改为 **`共 N 位 (服务端全深度) · 已展开 M`** → 懒加载不会让数字缩水
+   - 顺手修 2 个 UX 嘢: (a) 树变化时不再无脑清选中 (节点还在就保留 → 展开后能直接看到「收起」);
+     (b) 展开/收起**不重置相机** (否则每展开一个深节点就被弹回根部)
+   - 顺手修图谱筛选胶囊窄屏/3 位数溢出 (圆点 10→8, 字号 14→13, 文本 Flexible+ellipsis)
+5. **文档**: 补写缺失的 [ADR-0006 加盟体系 + 合规边界](./adr/0006-franchise-boundary.md) (引用了多年但文件不存在);
+   新增 [ADR-0011 加盟树层级不限](./adr/0011-unlimited-franchise-depth.md); ADR-0010 标 Superseded; INDEX 同步
+
+**验证**
+- 后端实测 (dev 库): `POST /api/franchisees {referrerId: 90(depth=4)}` → **201**, `placementPath=L.L.L.L.L.`, depth=5 ✓
+  (改前同样请求 = 400「深度上限 4 层」); 新加盟商自动生成客户档案 → 列表「加盟」31 == 图谱 `totalDescendants` 31 ✓
+- 懒加载端点: `GET /api/franchisees/90/children` → `[{SeedTest-五层验证, depth 5, hasChildren=false}]` ✓
+- widget golden: 图谱初始只请 2 层 (断言 `depth == 2`) + 顶部「共 30 位 · 已展开 6」+ 无溢出 ✓
+- **真浏览器 E2E** (playwright + 隧道 + build 后 /app + 真后端; 截图 `lazy-*.png`):
+  · 初始 `GET .../me/tree?depth=2` 200, 页面 `共 31 位 · 已展开 6` ✓
+  · 点第 2 层节点 → 信息条 `陈大壮 · A线 · 下级引荐 · 第2层` + 「展开下级」✓
+  · 点展开 → `GET /api/franchisees/78/children` 200 → 按钮变「收起」; 取消选中后 `共 31 位 · 已展开 8` ✓
+  · 点收起 → `共 31 位 · 已展开 6` ✓ (完整展开/收起循环)
+- `npx tsc --noEmit` 0 error; vitest 25 例 (customer-type 6 + preview snapshot 19) ✓
+
+**public/app 重新 build** (`--auto`); 主人浏览器需 Ctrl+Shift+R 硬刷新。
+
+**遗留 (已记 ADR-0011 §Follow-up)**: 万级节点网络的按层分页/虚拟化 (P2); DB CHECK 兜底 (P3);
+对外商用前请律师复核 ADR-0006 §2 合规口径 (P2)。
+
 ### Fixed (列表「加盟」与图谱对齐 = 打通加盟商↔客户档案 + 胶囊计数 + 图谱深度 4, 2026-09-18 主人拍)
 
 **主人报**: 「图谱页和列表页中的数据不是同源的吗？当前列表页加盟客户为 0，而图谱页只有 14 个加盟客户」

@@ -43,8 +43,19 @@ class CustomersListPage extends ConsumerStatefulWidget {
 }
 
 class _CustomersListPageState extends ConsumerState<CustomersListPage> {
-  /// 图谱请求/布局深度 (ADR-0010 硬上限 4) — 跟列表「加盟」胶囊口径保持同一个数
-  static const int _graphDepth = 4;
+  /// 图谱初始取层数 (载荷旋钮, **不是** 层级上限 —— ADR-0011: 层级不限)
+  ///   其余层级走懒加载: 用户选中某节点 → 点「展开下级」才拉一级 (GET :id/children)
+  static const int _graphInitialDepth = 2;
+
+  /// 布局深度上限 (纯布局保护; 实际节点由懒加载决定)
+  static const int _graphLayoutMaxDepth = 12;
+
+  /// 已展开节点的子级缓存 (nodeId → children); 用于合并展示树 + 再展开走缓存
+  final Map<String, List<FranchiseeTreeNode>> _lazyChildren = {};
+  /// 正在拉子级的节点 id (按钮 loading + 防重入)
+  final Set<String> _loadingChildren = {};
+  /// 本次树变化是否由懒加载展开/收起引起 → 保留用户当前视窗 (不弹回根部)
+  bool _keepCameraOnTreeChange = false;
 
   final _searchController = TextEditingController();
   String _search = '';
@@ -114,15 +125,12 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     final typeCounts = ref
         .watch(customerTypeCountsProvider(_search.isEmpty ? null : _search))
         .valueOrNull;
-    // 图谱 tab 数据源: 加盟客户的 2 线图谱 (复用 franchisee/me/tree)
+    // 图谱 tab 数据源: 我的加盟树 (placement 二叉树)
     //
-    // ★ 深度 = 4 (ADR-0010 硬上限), 主人 2026-09-18 拍:
-    //   列表胶囊「加盟」口径 = 我的下级加盟商 (**全深度**, 见后端 myDownlineFranchiseeSql),
-    //   图谱原先只请 depth=3 → 画 14 位, 列表却有 30 位 → 又是“两边对不上”.
-    //   本 seed 数据是 5 层满二叉树 (1+2+4+8+16=31) → depth=4 刚好画全
-    //   (将来层级更深时, 图谱仍受 ADR-0010 ≤4 限制, 胶囊数字会大于画面节点数 — 已知,
-    //    真要一致得改 ADR-0010 或分页加载)
-    final asyncTree = ref.watch(myFranchiseeTreeProvider(_graphDepth));
+    // ★ 层级不限 + 懒加载 (ADR-0011, 主人 2026-09-18 拍):
+    //   旧版硬限 4 层 → 现在只请初始 2 层 (载荷 O(前两层)), 深节点由用户展开
+    //   (「上限」本身已从服务层去掉 —— 第 5 层、第 6 层都能建)
+    final asyncTree = ref.watch(myFranchiseeTreeProvider(_graphInitialDepth));
 
     return Scaffold(
       appBar: AppBar(
@@ -292,18 +300,20 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       ),
       data: (raw) {
         // myFranchiseeTreeProvider 返回 dynamic (兼容关系接口迁移期), 这里 cast
-        final tree = raw as FranchiseeTreeNode?;
+        // ★ 懒加载合并: 把已展开节点的子级接回展示树 (不动 provider 里的对象)
+        final rawTree = raw as FranchiseeTreeNode?;
+        final tree = rawTree == null ? null : _withLazyChildren(rawTree);
 
         // ★ 业务空状态 (非错误, 不走 ErrorState):
         //   - tree == null: 后端 404 真错误 (franchiseeId 存在但记录被删)
         //   - id == "0" / name == "未加盟": user 没加盟关系 (dev mode / 普通用户)
-        //   - _countDescendants(tree) <= 1: 只有自己没下线 (加盟了但没发展)
-        if (tree == null ||
-            tree.id == '0' ||
-            tree.name == '未加盟' ||
-            _countDescendants(tree) <= 1) {
-          final isUnaffiliated =
-              tree == null || tree.id == '0' || tree.name == '未加盟';
+        //   - 没有下级: 加盟了但没发展 (totalDescendants 是服务端全深度真值,
+        //     不能拿 _countDescendants 比 — 懒加载后本地只加载了前两层)
+        final isUnaffiliated =
+            tree == null || tree.id == '0' || tree.name == '未加盟';
+        final hasDownline = tree != null &&
+            ((tree.totalDescendants ?? (_countDescendants(tree) - 1)) > 0);
+        if (isUnaffiliated || !hasDownline) {
           return EmptyState(
             icon: Icons.account_tree_outlined,
             title: isUnaffiliated
@@ -323,8 +333,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             : _countMatches(tree, searchQuery.toLowerCase());
 
         // 双主线「对碰」布局: 两条主线平行直下, 侧枝往外侧展开
-        const depth = _graphDepth;
-        final layout = TreeLayout.compute(tree, maxDepth: depth);
+        // ADR-0011: 层数不限 → 布局深度给足, 实际节点由懒加载合并进来
+        final layout = TreeLayout.compute(tree, maxDepth: _graphLayoutMaxDepth);
         final canvasSize = layout.canvasSize;
         final positions = layout.positions;
         final searchMatchedIds = searchQuery.isEmpty
@@ -366,7 +376,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                         Expanded(
                           child: Text(
                             searchQuery.isEmpty
-                                ? '单击看线 · 长按进详情'
+                                ? (_countDescendants(tree) - 1 <
+                                        (tree.totalDescendants ?? 0)
+                                    ? '单击看线 · 选中后可展开下级'
+                                    : '单击看线 · 长按进详情')
                                 : (matchCount > 0
                                     ? '匹配 $matchCount 位加盟客户 · 其余淡化'
                                     : '没有匹配「$searchQuery」'),
@@ -379,7 +392,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                           ),
                         ),
                         Text(
-                          '共 ${stats.total} 位',
+                          // 共 N = 服务端全深度真值 (懒加载不缩水); 已展开 M = 当前画布上的下级数
+                          (tree.totalDescendants ?? stats.total) >
+                                  (_countDescendants(tree) - 1)
+                              ? '共 ${tree.totalDescendants ?? stats.total} 位 · 已展开 ${_countDescendants(tree) - 1}'
+                              : '共 ${tree.totalDescendants ?? stats.total} 位',
                           style: const TextStyle(
                             fontSize: AppTheme.fontSm,
                             color: AppTheme.primaryDark,
@@ -452,16 +469,28 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   _graphCanvasSize = canvasSize;
                   if (!_graphViewInitialized || treeChanged) {
                     _graphViewInitialized = true;
-                    _selectedNodeId = null; // 树变了 → 清选中 (路径可能已失效)
-                    _graphPathIds = const {};
+                    // 树变了 (懒加载展开/收起) 不无脑清选中:
+                    //   选中的节点还在 → 保留选中 + 重算路径 (这样展开后能直接看到「收起」)
+                    //   节点没了 → 才清 (路径失效)
+                    if (_selectedNodeId != null &&
+                        _findNodeById(tree, _selectedNodeId!) == null) {
+                      _selectedNodeId = null;
+                      _graphPathIds = const {};
+                    }
                     final matrix =
                         _focusRootMatrix(viewport, canvasSize, rootCenter);
                     if (treeChanged) {
-                      // InteractiveViewer 已挂载, build 期间不能动 controller → 下一帧设
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!mounted) return;
-                        _graphTransformController.value = matrix;
-                      });
+                      // 懒加载引起的树变化 (展开/收起) → 不重置相机,
+                      // 否则用户每展开一个深节点就被弹回根部 (很难用)
+                      if (_keepCameraOnTreeChange) {
+                        _keepCameraOnTreeChange = false;
+                      } else {
+                        // InteractiveViewer 已挂载, build 期间不能动 controller → 下一帧设
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          _graphTransformController.value = matrix;
+                        });
+                      }
                     } else {
                       // 首次 layout: InteractiveViewer 还没建 (无 listener), 同步设
                       _graphTransformController.value = matrix;
@@ -567,6 +596,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   /// 选中节点属性条 (名字 · 线别 · 关系 · 层级)
   Widget _buildSelectedNodeBar(FranchiseeTreeNode node, TreeLayoutResult layout) {
     final line = _lineLabelOf(node.id, layout);
+    final childrenLoaded = _lazyChildren.containsKey(node.id);
+    final loading = _loadingChildren.contains(node.id);
+    final canExpand =
+        node.hasChildren && node.children.isEmpty && !childrenLoaded;
     return Row(
       children: [
         const Icon(Icons.account_tree_outlined, size: 20, color: AppTheme.accent),
@@ -583,6 +616,30 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             ),
           ),
         ),
+        // 懒加载 (ADR-0011): 有下级 + 未展开 → 「展开」; 展开了 → 「收起」
+        if (loading)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else if (canExpand)
+          TextButton.icon(
+            onPressed: () => _expandNode(node),
+            icon: const Icon(Icons.unfold_more, size: 20),
+            label: const Text('展开下级', style: TextStyle(fontSize: 14)),
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+          )
+        else if (childrenLoaded)
+          TextButton.icon(
+            onPressed: () => _collapseNode(node),
+            icon: const Icon(Icons.unfold_less, size: 20),
+            label: const Text('收起', style: TextStyle(fontSize: 14)),
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+          ),
         IconButton(
           icon: const Icon(Icons.close, size: 20),
           tooltip: '取消选中',
@@ -590,6 +647,48 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           onPressed: _clearSelection,
         ),
       ],
+    );
+  }
+
+  /// 懒加载: 拉某个节点的直接子级并缓入 (ADR-0011)
+  Future<void> _expandNode(FranchiseeTreeNode node) async {
+    if (_loadingChildren.contains(node.id)) return;
+    setState(() => _loadingChildren.add(node.id));
+    try {
+      final children =
+          await ref.read(franchiseeServiceProvider).getChildren(node.id);
+      if (!mounted) return;
+      setState(() {
+        _lazyChildren[node.id] = children;
+        _loadingChildren.remove(node.id);
+        _keepCameraOnTreeChange = true; // 展开不重置视窗
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingChildren.remove(node.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('展开失败: $e')),
+      );
+    }
+  }
+
+  /// 收起 (只清本地展开缓存; 服务端不动)
+  void _collapseNode(FranchiseeTreeNode node) {
+    setState(() {
+      _lazyChildren.remove(node.id);
+      _keepCameraOnTreeChange = true; // 收起也不重置视窗
+    });
+  }
+
+  /// 把已展开的子级合并进展示树 (递归拷贝, 不 mutate provider 对象)
+  FranchiseeTreeNode _withLazyChildren(FranchiseeTreeNode node) {
+    final loaded = _lazyChildren[node.id];
+    final base = loaded ?? node.children;
+    if (base.isEmpty) return node;
+    return node.copyWith(
+      children: base.map(_withLazyChildren).toList(),
+      // 展开过的节点一定“有下级” (服务端已确认), 收起后仍能再展开
+      hasChildren: node.hasChildren || loaded != null,
     );
   }
 
@@ -601,17 +700,26 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   }
 
   /// 胶囊按键 segment 文案 (小圆点 + 文字 + 人数)
+  /// 注: 圆点 8pt + 字号 13 + Flexible(ellipsis) —— 4 段平分时留余量,
+  /// 人数到 3 位数 (e.g. 「A线 123」) 或窄屏 (360pt) 也不溢出
   Widget _filterLabel(String text, int count, Color color) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 10,
-          height: 10,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(shape: BoxShape.circle, color: color),
         ),
         const SizedBox(width: 4),
-        Text('$text $count', style: const TextStyle(fontSize: 14)),
+        Flexible(
+          child: Text(
+            '$text $count',
+            style: const TextStyle(fontSize: 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
@@ -786,12 +894,12 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     final viewport = _graphViewport;
     final canvasSize = _graphCanvasSize;
     if (viewport == null || canvasSize == null) return;
-    final tree = ref.read(myFranchiseeTreeProvider(_graphDepth)).valueOrNull as FranchiseeTreeNode?;
+    final tree = ref.read(myFranchiseeTreeProvider(_graphInitialDepth)).valueOrNull as FranchiseeTreeNode?;
     if (tree == null) return;
     final hit = _firstMatchNode(tree, lower);
     if (hit == null) return;
     final center =
-        TreeLayout.compute(tree, maxDepth: _graphDepth).positions[hit.id];
+        TreeLayout.compute(tree, maxDepth: _graphLayoutMaxDepth).positions[hit.id];
     if (center == null) return;
     setState(() {
       _graphTransformController.value = Matrix4.identity()

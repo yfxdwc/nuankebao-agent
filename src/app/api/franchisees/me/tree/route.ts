@@ -24,9 +24,15 @@ export async function GET(request: NextRequest) {
   const fid = await getFranchiseeIdByUserId(userId);
 
   const { searchParams } = new URL(request.url);
-  const depth = Math.min(
-    parseInt(searchParams.get("depth") ?? "3"),
-    4 // ADR-0010: ≤4 层硬限 (主人 2026-09-16 override, dev/test seed data 需求)
+  // depth = 「本次取多少层」的**载荷旋钮**, 不是业务层级上限 (ADR-0011: 层级不限)
+  //   - 上闸 16 层: 防单个请求拉超大 JSON (满二叉 16 层 = 13 万节点); 客户图谱已改懒加载,
+  //     正常只请求 1-2 层
+  //   - 历史: ADR-0010 曾硬限 min(depth, 4) (已废)
+  const MAX_TREE_DEPTH_PER_REQUEST = 16;
+  const rawDepth = parseInt(searchParams.get("depth") ?? "2");
+  const depth = Math.max(
+    0,
+    Math.min(Number.isFinite(rawDepth) ? rawDepth : 2, MAX_TREE_DEPTH_PER_REQUEST)
   );
 
   // ★ 业务空状态 (非错误): user 没加盟关系 → 返回 200 + 空树.
@@ -50,8 +56,7 @@ export async function GET(request: NextRequest) {
   const tree =
     mode === "placement"
       ? await getPlacementTree(fid, depth)
-      : await getFranchiseeTree(fid, depth);
-  if (!tree) {
+      : await getFranchiseeTree(fid, depth);  if (!tree) {
     // franchiseeId 存在但记录被删/查不到 → 真正的 404 (前后端不一致)
     return NextResponse.json({ error: "Tree root not found" }, { status: 404 });
   }

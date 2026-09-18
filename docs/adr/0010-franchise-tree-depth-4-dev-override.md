@@ -1,7 +1,12 @@
 # ADR-0010: 加盟树深度 ≤3 → ≤4 放宽 (主人 2026-09-16 override, dev/test seed data 需求)
 
+> ⚠️ **已被 [ADR-0011](./0011-unlimited-franchise-depth.md) 取代** (2026-09-18): 主人拍板
+> 「层级不应该做限制, 理论上可以无限层级」→ 取消深度上限 + 图谱懒加载。
+> 本 ADR 保留作历史记录 (≤4 曾是从 ≤3 放宽的中间态)。
+
 **日期**: 2026-09-16
-**状态**: ✅ Accepted (主人 ask_user d234bdd4 拍板, 选 `relax-3to4`)
+**状态**: ⚠️ **Superseded by [ADR-0011](./0011-unlimited-franchise-depth.md)** (2026-09-18 主人拍「层级不限」)
+**历史状态**: ✅ Accepted (主人 ask_user d234bdd4 拍板, 选 `relax-3to4`)
 **决策者**: 主人 (虾王)
 **影响范围**: src/lib/db/queries/franchisee-tree.ts + src/app/api/franchisees/me/tree/route.ts + src/lib/db/schema.ts + 测试数据 seed
 **对应元宪法**: [`CHARTER.md`](../CHARTER.md) §3.5 治理红线 + ADR-0006 合规边界 / 《禁止传销条例》实务解读
