@@ -197,7 +197,7 @@ class TreeLayout {
     }
 
     final halfWidth = spineOffset + maxColumn * pitch + nodeRadius + padding;
-    final canvasWidth = math.max(400, halfWidth * 2);
+    final canvasWidth = math.max(400.0, halfWidth * 2);
     // 宽度兜底 (400) 生效时把内容居中, 别让根节点偏在左边
     final centerOffsetX = canvasWidth / 2 - halfWidth;
     final canvasSize = Size(

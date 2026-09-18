@@ -201,8 +201,8 @@ void main() {
     expect(layout.aLineIds.length, 3);
     // 根仍在中轴
     expect(layout.positions['root']!.dx, layout.canvasSize.width / 2);
-    // 画布仍有合理尺寸
-    expect(layout.canvasSize.width, greaterThan(400));
+    // 画布仍有合理尺寸 (400 = 最小宽度兜底)
+    expect(layout.canvasSize.width, greaterThanOrEqualTo(400));
   });
 
   test('不对称: 只有 B 线 + 单侧链 (同侧断了用另一侧接主线)', () {
