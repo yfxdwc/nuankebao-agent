@@ -149,6 +149,13 @@ export const user = pgTable(
     franchiseeId: bigint("franchisee_id", { mode: "bigint" }),
     // W5 RBAC: 默认门店 (sales 角色专用, manager 看本店)
     defaultStoreId: bigint("default_store_id", { mode: "bigint" }),
+    // 「我的」页自定义头像 (2026-09-18 主人要: 支持上传 + 候选头像)
+    //   null                = 默认 (画姓名首字)
+    //   'preset:<id>'       = 内置候选头像 (前端本地画, 不占服务器存储)
+    //   '/uploads/xxx.jpg'  = 自己上传的照片 (走 POST /api/photos)
+    // 白名单 / 格式校验在 src/lib/avatar.ts; 自改走 PATCH /api/me
+    // (user 表已挂 user_audit 触发器 → 改头像也进审计日志)
+    avatarUrl: text("avatar_url"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .default(sql`NOW()`),

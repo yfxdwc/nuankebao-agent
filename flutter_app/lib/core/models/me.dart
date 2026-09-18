@@ -48,6 +48,10 @@ class MeUser {
   /// false = 后端没查到 user 行 (dev mock 登录), 资料不全需要提示
   final bool hasUserRecord;
 
+  /// 自定义头像 (null = 默认首字 / 'preset:x' / '/uploads/x.jpg')
+  /// 解析失败/未知值 → null (UI 退回首字, 不渲染破图)
+  final String? avatarUrl;
+
   const MeUser({
     required this.id,
     required this.name,
@@ -56,6 +60,7 @@ class MeUser {
     required this.isActive,
     this.createdAt,
     this.hasUserRecord = true,
+    this.avatarUrl,
   });
 
   static MeUser? fromJson(dynamic json) {
@@ -68,9 +73,39 @@ class MeUser {
       isActive: json['isActive'] as bool? ?? true,
       createdAt: _parseDate(json['createdAt']),
       hasUserRecord: json['hasUserRecord'] as bool? ?? true,
+      avatarUrl: _parseAvatarUrl(json['avatarUrl']),
     );
   }
 }
+
+/// 头像值兜底 (只认 preset: / /uploads/, 其余当没有)
+/// 跟后端 src/lib/avatar.ts 同一套白名单 —— 客户端也要能挡住脏数据
+String? _parseAvatarUrl(dynamic raw) {
+  if (raw is! String) return null;
+  final v = raw.trim();
+  if (v.isEmpty) return null;
+  if (v.startsWith('preset:')) {
+    final id = v.substring('preset:'.length);
+    return kAvatarPresetIds.contains(id) ? 'preset:$id' : null;
+  }
+  if (v.startsWith('/uploads/') && !v.contains('..') && v.length <= 200) {
+    return v;
+  }
+  return null;
+}
+
+/// 内置候选 id 白名单 (跟后端 AVATAR_PRESETS 同步; 复制一份是为了
+/// core/models 不依赖 widgets 层 —— 模型只做校验, 不画 UI)
+const Set<String> kAvatarPresetIds = {
+  'leaf',
+  'blossom',
+  'tea',
+  'zen',
+  'heart',
+  'sun',
+  'sprout',
+  'water',
+};
 
 /// 门店 (user.default_store_id, 多数账号为空)
 class MeStore {

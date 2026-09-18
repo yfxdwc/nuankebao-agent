@@ -92,6 +92,22 @@ void main() {
       expect(p.displayName, '我');
     });
 
+    test('头像: 合法值原样解析, 脏值/外链当没有 (不渲染破图)', () {
+      String? avatarOf(dynamic raw) => MeProfile.fromJson({
+            'user': {'id': '1', 'name': '张三', 'avatarUrl': raw},
+          }).user!.avatarUrl;
+
+      expect(avatarOf('preset:leaf'), 'preset:leaf');
+      expect(avatarOf('/uploads/abc123.jpg'), '/uploads/abc123.jpg');
+      expect(avatarOf(null), isNull);
+      expect(avatarOf(''), isNull);
+      // 未知候选 / 外链 / 目录穿越 / 非字符串 → 一律当没有
+      expect(avatarOf('preset:hacker'), isNull);
+      expect(avatarOf('https://evil.example.com/a.png'), isNull);
+      expect(avatarOf('/uploads/../../etc/passwd.jpg'), isNull);
+      expect(avatarOf(123), isNull);
+    });
+
     test('dev 空 session (stats=null + authSkipped) → 不崩', () {
       final p = MeProfile.fromJson({
         'user': {'id': '0', 'name': '开发模式', 'hasUserRecord': false},

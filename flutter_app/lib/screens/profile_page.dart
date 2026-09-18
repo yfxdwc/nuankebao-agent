@@ -31,6 +31,7 @@ import '../core/providers/settings_provider.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/empty_state.dart';
 import '../core/widgets/franchise_chip.dart';
+import '../core/widgets/user_avatar.dart';
 import 'profile_sheets.dart';
 import 'profile_widgets.dart';
 
@@ -161,19 +162,64 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            CircleAvatar(
-              radius: AppTheme.avatarLg / 2,
-              backgroundColor: AppTheme.primaryLight,
-              child: Text(
-                name.isNotEmpty ? name.characters.first : '我',
-                style: const TextStyle(
-                  fontSize: 40,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.primaryDark,
+            // 头像可点: 换头像 (上传照片 / 挑候选) —— 角标用相机小圆点提示"这个能点"
+            Semantics(
+              label: '我的头像, 点击可更换',
+              button: true,
+              child: InkWell(
+                // 换头像的提示/刷新都在弹层里做完 (弹层自己 toast + invalidate provider)
+                onTap: () => showAvatarPickerSheet(
+                  context,
+                  ref,
+                  currentAvatarUrl: p.user?.avatarUrl,
+                  name: name,
+                ),
+                customBorder: const CircleBorder(),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    UserAvatar(
+                      avatarUrl: p.user?.avatarUrl,
+                      name: name,
+                      size: AppTheme.avatarLg,
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: AppTheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.photo_camera,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
+            TextButton.icon(
+              onPressed: () => showAvatarPickerSheet(
+                context,
+                ref,
+                currentAvatarUrl: p.user?.avatarUrl,
+                name: name,
+              ),
+              icon: const Icon(Icons.face_retouching_natural, size: 20),
+              label: const Text('换头像',
+                  style: TextStyle(fontSize: AppTheme.fontSm)),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.primaryDark,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            const SizedBox(height: 6),
             Text(
               name,
               textAlign: TextAlign.center,
@@ -562,7 +608,7 @@ class _DisplaySettingsCardState extends ConsumerState<_DisplaySettingsCard> {
         const Padding(
           padding: EdgeInsets.only(top: 4, bottom: 8),
           child: Text(
-            '字太小看不清楚? 选一档 (选完立即生效, 全 App 都变大)',
+            '字大看不全 / 字小看不清? 选一档 (选完立即生效, 全 App 都变)',
             style: TextStyle(
                 fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
           ),
@@ -575,11 +621,14 @@ class _DisplaySettingsCardState extends ConsumerState<_DisplaySettingsCard> {
               label: Text(
                 v.label,
                 style: TextStyle(
-                  fontSize: v == AppFontSize.xlarge
-                      ? AppTheme.fontMd + 4
-                      : v == AppFontSize.large
-                          ? AppTheme.fontMd + 2
-                          : AppTheme.fontMd,
+                  // 档位名自己就体现大小 (小 < 标准 < 大 < 特大), 不让用户看倍率数字
+                  fontSize: AppTheme.fontMd +
+                      switch (v) {
+                        AppFontSize.small => -2,
+                        AppFontSize.standard => 0,
+                        AppFontSize.large => 2,
+                        AppFontSize.xlarge => 4,
+                      },
                   fontWeight: FontWeight.w600,
                 ),
               ),

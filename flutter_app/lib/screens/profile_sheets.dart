@@ -7,11 +7,14 @@
 //
 // 异常口径 (全项目一致): 失败一律给大白话提示, 不把 DioException 原文丢给用户
 
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -19,6 +22,7 @@ import '../core/http/api_client.dart';
 import '../core/models/me.dart';
 import '../core/providers/service_providers.dart';
 import '../core/theme/app_theme.dart';
+import '../core/widgets/user_avatar.dart';
 
 // ============================================
 // 1. 编辑我的资料 (姓名 + 备注)
@@ -647,4 +651,288 @@ void _toast(BuildContext context, String msg) {
       content: Text(msg, style: const TextStyle(fontSize: AppTheme.fontMd)),
     ),
   );
+}
+
+// ============================================
+// 4. 换头像 (拍照 / 相册 / 内置候选 / 恢复默认)
+// ============================================
+// 主人要 (2026-09-18): 「用户头像要能够自定义（上传头像），增加几个候选头像
+// 供不希望用真人头像的用户选择」
+//
+// 存储策略 (为什么这么定):
+//   - 上传的照片: 走现成的 POST /api/photos → 服务器 public/uploads/xxx.jpg
+//     (不新增存储设施, 复用养生记录照片那条链路, 有体积/格式/限流校验)
+//   - 头像值落到 user.avatar_url (自建服务器上), 不是"只存这台手机":
+//     换手机/重装 App 头像还在, 同事/后台看到的也是同一个
+//   - 内置候选只存 'preset:x' 一个短字符串, 图由客户端本地画 → 不占服务器、不跑流量
+//
+// 安全边界 (服务端也有一份, 客户端只是提前拦):
+//   - 只允许本站上传路径 /uploads/xxx.(jpg|png|webp) 与 preset:x, 拒外链
+//   - 上传前本地压到 ≤512px / ≤3MB, 网络差也能传上去
+
+Future<bool> showAvatarPickerSheet(
+  BuildContext context,
+  WidgetRef ref, {
+  required String? currentAvatarUrl,
+  required String name,
+}) async {
+  var changed = false;
+  var busy = false;
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setSheetState) {
+        Future<void> apply(String? value, String okMsg) async {
+          if (busy) return;
+          setSheetState(() => busy = true);
+          try {
+            await ref.read(meServiceProvider).updateAvatar(value);
+            ref.invalidate(meProfileProvider);
+            changed = true;
+            if (ctx.mounted) {
+              Navigator.of(ctx).pop();
+              _toast(ctx, okMsg);
+            }
+          } catch (e) {
+            setSheetState(() => busy = false);
+            _toast(ctx, '没换上, 请检查网络后重试');
+          }
+        }
+
+        Future<void> pickAndUpload(ImageSource source) async {
+          if (busy) return;
+          try {
+            final file = await ImagePicker().pickImage(
+              source: source,
+              maxWidth: 512,
+              maxHeight: 512,
+              imageQuality: 85,
+            );
+            if (file == null) return; // 用户取消
+            final bytes = await file.readAsBytes();
+            if (bytes.isEmpty) {
+              _toast(ctx, '这张照片读不出来, 换一张试试');
+              return;
+            }
+            if (bytes.length > 3 * 1024 * 1024) {
+              _toast(ctx, '照片太大了 (超过 3MB), 换一张小点的');
+              return;
+            }
+            setSheetState(() => busy = true);
+            final url = await ref
+                .read(photoServiceProvider)
+                .upload(base64Encode(bytes), mimeType: _sniffImageMime(bytes));
+            await ref.read(meServiceProvider).updateAvatar(url);
+            ref.invalidate(meProfileProvider);
+            changed = true;
+            if (ctx.mounted) {
+              Navigator.of(ctx).pop();
+              _toast(ctx, '头像已换好');
+            }
+          } catch (e) {
+            setSheetState(() => busy = false);
+            _toast(ctx, '上传失败, 请检查网络后重试');
+          }
+        }
+
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '换个头像',
+                style: TextStyle(
+                  fontSize: AppTheme.fontLg,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '用自己的照片, 或者挑一个现成的 (花草茶禅, 不想露脸就用这些)',
+                style: TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 当前头像 + 拍照/相册
+              Row(
+                children: [
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      UserAvatar(
+                        avatarUrl: currentAvatarUrl,
+                        name: name,
+                        size: 72,
+                      ),
+                      if (busy)
+                        const Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.black26,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          height: AppTheme.buttonMinHeight,
+                          child: FilledButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () => pickAndUpload(ImageSource.camera),
+                            icon: const Icon(Icons.photo_camera, size: 24),
+                            label: const Text('拍一张',
+                                style: TextStyle(fontSize: AppTheme.fontMd)),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          height: AppTheme.buttonMinHeight,
+                          child: OutlinedButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () => pickAndUpload(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library, size: 24),
+                            label: const Text('从相册选',
+                                style: TextStyle(fontSize: AppTheme.fontMd)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              const Text(
+                '或者挑一个现成的',
+                style: TextStyle(
+                  fontSize: AppTheme.fontMd,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: kAvatarPresets.map((p) {
+                  final selected = currentAvatarUrl == 'preset:${p.id}';
+                  return Semantics(
+                    label: '候选头像 ${p.label}',
+                    button: true,
+                    child: InkWell(
+                      onTap: busy
+                          ? null
+                          : () => apply('preset:${p.id}', '头像已换成「${p.label}」'),
+                      borderRadius: BorderRadius.circular(40),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: selected
+                                    ? AppTheme.primary
+                                    : Colors.transparent,
+                                width: 3,
+                              ),
+                            ),
+                            padding: const EdgeInsets.all(2),
+                            child: UserAvatar(
+                              avatarUrl: 'preset:${p.id}',
+                              name: name,
+                              size: 56,
+                              showLoadingIndicator: false,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            p.label,
+                            style: TextStyle(
+                              fontSize: AppTheme.fontXs,
+                              color: selected
+                                  ? AppTheme.primaryDark
+                                  : AppTheme.textSecondary,
+                              fontWeight:
+                                  selected ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.restart_alt, size: 26),
+                title: const Text('恢复默认头像',
+                    style: TextStyle(fontSize: AppTheme.fontMd)),
+                subtitle: const Text('用姓名第一个字当头像',
+                    style: TextStyle(fontSize: AppTheme.fontXs)),
+                onTap: busy ? null : () => apply(null, '已恢复默认头像'),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+
+  return changed;
+}
+
+/// 从字节头判图片类型 (image_picker 在 web 上不改后缀, 只信后缀会传错 mime)
+String _sniffImageMime(List<int> bytes) {
+  if (bytes.length >= 8 &&
+      bytes[0] == 0x89 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x4E &&
+      bytes[3] == 0x47) {
+    return 'image/png';
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] == 0x52 && // R
+      bytes[1] == 0x49 && // I
+      bytes[2] == 0x46 && // F
+      bytes[3] == 0x46 && // F
+      bytes[8] == 0x57 && // W
+      bytes[9] == 0x45 && // E
+      bytes[10] == 0x42 && // B
+      bytes[11] == 0x50) {
+    return 'image/webp';
+  }
+  return 'image/jpeg';
 }

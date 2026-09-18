@@ -22,8 +22,9 @@
 //   - 不返回任何金额/业绩字段 (ADR-0006 边界: 纯展示, 不算钱)
 //   - 不返回其他加盟商的手机号 (只给自己的直推上级)
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { type UserRole } from "@/lib/auth/rbac";
@@ -36,6 +37,8 @@ import {
 } from "@/lib/db/queries/franchisee";
 import { getStatsOverview, type StatsOverview } from "@/lib/db/queries/dashboard";
 import { maskPhone } from "@/lib/utils";
+import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
+import { withAuditContext, getAuditContextFromRequest } from "@/lib/audit/context";
 import type { PlacementSide } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
@@ -168,6 +171,8 @@ export async function GET() {
       role,
       roleLabel: ROLE_LABELS[role] ?? "销售员",
       isActive: userRow?.isActive ?? true,
+      // 自定义头像 (null = 前端画姓名首字); 脏数据当 null 读, 不让旧值把页面搞崩
+      avatarUrl: readAvatarValue(userRow?.avatarUrl),
       createdAt: userRow?.createdAt ?? null,
       // dev mock 登录没有 user 行 → 告诉客户端"账号信息不完整", 页面给提示而不是装没事
       hasUserRecord: Boolean(userRow),
@@ -181,4 +186,75 @@ export async function GET() {
       sessionUserId: rawUserId || null,
     },
   });
+}
+
+// ============================================
+// PATCH /api/me — 自助改头像
+// ============================================
+// 为什么单独开 PATCH 而不是复用别的:
+//   「我的」页能改的东西分两类, 权限模型不一样:
+//     - 头像 / (以后) 本机偏好 → **账号自己的**: 只能改自己, 白名单字段
+//     - 姓名 / 备注            → **加盟商身份**: 走 PATCH /api/franchisees/:id (有自己的审计与 RBAC)
+//   混在一个端点里迟早会有人顺手把 name 也写进来, 那就绕过了加盟商那条路的校验
+//
+// 边界:
+//   - 只接受 avatarUrl 一个字段 (Zod strict) —— 防止客户端顺手塞别的列
+//   - 值必须过 src/lib/avatar.ts 白名单 (内置 preset / 本站上传), 拒外链
+//   - user 表挂了 user_audit 触发器 → 改头像自动进审计日志 (谁/什么时候/改成什么)
+//   - dev 空 session (DEV_SKIP_AUTH 且无 cookie) → 401, 不猜"你是 1 号"
+export async function PATCH(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { error: "未登录, 不能改头像" },
+      { status: 401 }
+    );
+  }
+
+  const rawUserId = session.user.id;
+  if (!/^\d+$/.test(rawUserId)) {
+    return NextResponse.json({ error: "账号 ID 异常" }, { status: 400 });
+  }
+  const userId = BigInt(rawUserId);
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
+  }
+
+  const parsedBody = z
+    .object({ avatarUrl: z.unknown() })
+    .strict()
+    .safeParse(body);
+  if (!parsedBody.success) {
+    return NextResponse.json(
+      { error: "只支持改 avatarUrl 这一个字段" },
+      { status: 400 }
+    );
+  }
+
+  const parsed = parseAvatarValue(parsedBody.data.avatarUrl);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.reason }, { status: 400 });
+  }
+
+  const ctx = getAuditContextFromRequest(request, session);
+  const updated = await withAuditContext(ctx, async (tx) => {
+    return await tx
+      .update(userTable)
+      .set({ avatarUrl: parsed.value, updatedAt: new Date() })
+      .where(eq(userTable.id, userId))
+      .returning({ id: userTable.id, avatarUrl: userTable.avatarUrl });
+  });
+
+  if (updated.length === 0) {
+    return NextResponse.json(
+      { error: "账号不存在 (开发模式登录没有 user 行)" },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json({ ok: true, avatarUrl: readAvatarValue(updated[0].avatarUrl) });
 }

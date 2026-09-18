@@ -43,6 +43,13 @@
       "when": 1789712817461,
       "tag": "0006_customer_birthday_allergy",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789735805473,
+      "tag": "0007_user_avatar_url",
+      "breakpoints": true
     }
   ]
 }

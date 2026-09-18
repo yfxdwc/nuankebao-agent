@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuankebao/core/models/me.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/providers/settings_provider.dart';
+import 'package:nuankebao/core/widgets/user_avatar.dart';
 import 'package:nuankebao/screens/profile_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -230,6 +231,43 @@ void main() {
     await _pumpProfile(tester, container);
 
     expect(find.textContaining('账号资料还没建全'), findsOneWidget);
+  });
+
+  testWidgets('换头像: 入口可见 + 候选头像弹层能出 8 个候选', (tester) async {
+    final container = await _container(_fullProfile());
+    await _pumpProfile(tester, container);
+
+    // 入口 (头像本身可点 + 一个显式按钮)
+    expect(find.text('换头像'), findsOneWidget);
+    expect(find.bySemanticsLabel('我的头像, 点击可更换'), findsOneWidget);
+
+    await tester.tap(find.text('换头像'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('换个头像'), findsOneWidget);
+    expect(find.text('拍一张'), findsOneWidget);
+    expect(find.text('从相册选'), findsOneWidget);
+    expect(find.text('或者挑一个现成的'), findsOneWidget);
+    for (final preset in kAvatarPresets) {
+      expect(find.text(preset.label), findsOneWidget);
+    }
+    expect(find.text('恢复默认头像'), findsOneWidget);
+  });
+
+  testWidgets('候选头像已选中时: 当前头像会被画出来 (首字 → 图标)', (tester) async {
+    final container = await _container(MeProfile.fromJson({
+      'user': {
+        'id': '1',
+        'name': '张三',
+        'roleLabel': '销售员',
+        'avatarUrl': 'preset:tea',
+      },
+      'stats': null,
+    }));
+    await _pumpProfile(tester, container);
+
+    // preset:tea → 用「喝茶」图标画, 不再画首字「张」
+    expect(find.byIcon(Icons.emoji_food_beverage), findsWidgets);
   });
 
   testWidgets('窄屏 320 + 特大字号 1.3: 滚完整页不溢出', (tester) async {

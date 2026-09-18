@@ -468,6 +468,13 @@ class MeService {
     return MeProfile.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// PATCH /api/me — 只改头像 (null = 恢复默认首字; 'preset:x'; '/uploads/x.jpg')
+  /// 服务端有白名单 + user 表审计触发器, 客户端不做二次校验
+  Future<String?> updateAvatar(String? avatarUrl) async {
+    final res = await _dio.patch('/me', data: {'avatarUrl': avatarUrl});
+    return (res.data as Map<String, dynamic>)['avatarUrl'] as String?;
+  }
+
   /// PATCH /api/franchisees/{id} — 只能改自己的姓名/备注
   /// (后端 Schema 还允许 phone / isActive, 但页面不给入口: 手机号是登录账号,
   ///  停用自己会把账号锁死 —— 这两项找管理员)

@@ -16,30 +16,32 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// 字号档位 (中老年用户最记不住"1.15 倍"这种话, 用档位名 + 样例字号)
 enum AppFontSize {
+  /// 比标准小 —— 给"屏幕小 / 眼睛还行 / 一屏想多看几行"的用户
+  /// (2026-09-18 主人要: 在标准下面再加一档「小」)
+  small,
   standard,
   large,
   xlarge;
 
   /// 倍率 —— 保守取值: AppTheme 字号本来就比 Material 默认大 (18pt vs 14pt),
-  /// 再叠太多会挤破固定高度的按钮 (56/64pt), 1.3 是实测不炸布局的上限
+  /// 再叠太多会挤破固定高度的按钮 (56/64pt), 1.3 是实测不炸布局的上限;
+  /// 0.85 (≈15.3pt) 是"小"的下限 (再小就低于本项目的可读性底线了)
   double get scale => switch (this) {
+        AppFontSize.small => 0.85,
         AppFontSize.standard => 1.0,
         AppFontSize.large => 1.15,
         AppFontSize.xlarge => 1.3,
       };
 
   String get label => switch (this) {
+        AppFontSize.small => '小',
         AppFontSize.standard => '标准',
         AppFontSize.large => '大',
         AppFontSize.xlarge => '特大',
       };
 
   /// 设置页样例文字 (让用户在选之前就看到效果)
-  String get sample => switch (this) {
-        AppFontSize.standard => '客户 王女士',
-        AppFontSize.large => '客户 王女士',
-        AppFontSize.xlarge => '客户 王女士',
-      };
+  String get sample => '客户 王女士';
 
   static AppFontSize fromName(String? raw) {
     for (final v in AppFontSize.values) {
