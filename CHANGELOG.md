@@ -319,6 +319,27 @@ version.json `0.2.11#12 → 0.2.12#13` + SW hash 已 bump (主人侧需 Ctrl+Shi
 App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视觉 QA 确认两腿长度明显不同、
 各自的列仍竖直
 
+### Added (图谱折叠策略: <50 不折叠 / ≥50 折叠 + 单击自动展开正面 3 层, 2026-09-18 主人拍)
+
+**主人拍**: 「加盟客户图谱中, 节点数低于 50 个时不要折叠。节点数大于 50 时折叠, 单击节点时,
+确保当前节点正面的 3 层都是展开的（也就是说如果被点击的节点下面三层中有被折叠的, 在被点击时展开节点）」
+
+- **`flutter_app/lib/modules/customer/screens/customers_page.dart`**:
+  - 常量: `_graphNoFoldMaxNodes = 50` / `_graphTapExpandLevels = 3` / `_graphFullDepth = 12`
+  - **< 50 不折叠**: 先按初始 2 层取一次, 拿到服务端真值 `totalDescendants`; 若 < 50 → 自动改拉
+    `depth=12` 的全树, 一次全展开 (隐藏「收起」按钮; 点节点也不再触发懒加载)
+  - **≥ 50 折叠**: 保持懒加载 (初始 2 层); **单击节点自动展开它正面 3 层** —
+    逐层 BFS: 缓存优先 → 树里已有就用树里的 → 否则 `GET /franchisees/:id/children` 拉一级
+  - 信息条: 不折叠 → 「共 N 位」; 折叠 → 「共 N 位 · 已展开 M」
+  - `_expandNode` 收敛到统一的 `_ensureChildrenLoaded` (展开按钮 / 自动展开 同一套逻辑)
+
+**验证** (dev server + Playwright 拦截 API 造数据)
+- **小树** (真实种子数据 31 节点 → `totalDescendants` 30 < 50): 先请求 `depth=2` → 自动补 `depth=12` ✓;
+  信息条「共 31 位」(无「已展开」) ✓; 画布上 31 个节点全部渲染 ✓; 无 children 请求 (不折叠) ✓
+- **大树** (合成 63 节点, `totalDescendants` 62 ≥ 50): 信息条「共 62 位 · 已展开 6」✓ (折叠生效);
+  单击第 2 层节点 → 依次请求 `n2_0/children` → `n3_0,n3_1/children` → `n4_0..n4_3/children`,
+  即**正好它正面 3 层** ✓
+
 ### Fixed (build-flutter-web.sh --auto 静默退出二次加固 + public/app 完整重建, 2026-09-18 主人拍)
 
 **主人拍**: 「public/app 现在补一次完整重建。修：早先挂着的 tools/build-flutter-web.sh --auto 静默退出 bug」
