@@ -1,5 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'me.dart' show kAvatarPresetIds;
+
 part 'customer.freezed.dart';
 part 'customer.g.dart';
 
@@ -24,6 +26,9 @@ class Customer with _$Customer {
     String? diseaseHistory,
     /// 过敏史 (2026-09-18 新增; 跟既往病史分开)
     String? allergyHistory,
+    /// 客户头像 (主人 2026-09-18 拍): null = 默认首字 / 'preset:x' / '/uploads/x.jpg'
+    /// 未知值一律当 null (UI 退回首字, 不渲染白框)
+    @JsonKey(fromJson: _parseAvatarValue) String? avatar,
     String? notes,
     /// 客户推荐人 (客户页图谱数据源), null = 无推荐人 (根/孤儿节点)
     String? referrerId,
@@ -39,6 +44,22 @@ class Customer with _$Customer {
 
   factory Customer.fromJson(Map<String, dynamic> json) =>
       _$CustomerFromJson(json);
+}
+
+/// 头像值兜底 (只认 preset: / /uploads/, 跟 user 头像同一套约定; 见 src/lib/avatar.ts)
+/// 跟 MeUser 的解析一致 —— 但那边是 private, 这里复制一份 (模型层不互相依赖逻辑)
+String? _parseAvatarValue(dynamic raw) {
+  if (raw is! String) return null;
+  final v = raw.trim();
+  if (v.isEmpty) return null;
+  if (v.startsWith('preset:')) {
+    final id = v.substring('preset:'.length);
+    return kAvatarPresetIds.contains(id) ? 'preset:$id' : null;
+  }
+  if (v.startsWith('/uploads/') && !v.contains('..') && v.length <= 200) {
+    return v;
+  }
+  return null;
 }
 
 /// 客户推荐关系图节点 (客户页图谱视图用)

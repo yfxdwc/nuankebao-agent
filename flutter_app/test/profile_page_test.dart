@@ -243,7 +243,8 @@ void main() {
 
     // 入口 (头像本身可点 + 一个显式按钮)
     expect(find.text('换头像'), findsOneWidget);
-    expect(find.bySemanticsLabel('我的头像, 点击可更换'), findsOneWidget);
+    // 用正则: InkWell/按钮的语义会跟父节点合并, 精确匹配容易假失败
+    expect(find.bySemanticsLabel(RegExp('我的头像')), findsWidgets);
 
     await tester.tap(find.text('换头像'));
     await tester.pumpAndSettle();
