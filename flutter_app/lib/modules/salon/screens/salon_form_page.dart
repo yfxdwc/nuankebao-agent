@@ -215,7 +215,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     _capacityCtrl.text = s.capacityTotal?.toString() ?? '';
     _reservedCtrl.text =
         (s.capacityReserved == 0) ? '' : s.capacityReserved.toString();
-    _feeType = _feeOptions.any((o) => o.value == s.feeType) ? s.feeType : 'free';
+    _feeType =
+        _feeOptions.any((o) => o.value == s.feeType) ? s.feeType : 'free';
     _feeAmountCtrl.text =
         s.feeAmountCents == null ? '' : _yuanText(s.feeAmountCents!);
     _feeNoteCtrl.text = s.feeNote ?? '';
@@ -248,14 +249,14 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
       ));
     }
     if (_agenda.isEmpty) _agenda.add(_AgendaRow());
-    _attendeeListVis =
-        _attendeeVisOptions.any((o) => o.value == s.visibilitySettings.attendeeList)
-            ? s.visibilitySettings.attendeeList
-            : 'all';
-    _staffContactVis =
-        _staffContactVisOptions.any((o) => o.value == s.visibilitySettings.staffContact)
-            ? s.visibilitySettings.staffContact
-            : 'all';
+    _attendeeListVis = _attendeeVisOptions
+            .any((o) => o.value == s.visibilitySettings.attendeeList)
+        ? s.visibilitySettings.attendeeList
+        : 'all';
+    _staffContactVis = _staffContactVisOptions
+            .any((o) => o.value == s.visibilitySettings.staffContact)
+        ? s.visibilitySettings.staffContact
+        : 'all';
   }
 
   // ============================================
@@ -386,8 +387,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed:
-                              _saving ? null : () => _submit('draft'),
+                          onPressed: _saving ? null : () => _submit('draft'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(0, 56),
                           ),
@@ -487,7 +487,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     return _card('主题标签', [
       const Text(
         '可多选, 最多 10 个',
-        style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+        style:
+            TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
       ),
       const SizedBox(height: 8),
       Wrap(
@@ -540,12 +541,12 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
   }
 
   void _toggleTag(String tag, bool selected) {
+    if (selected && _tags.length >= 10) {
+      _snack('最多选 10 个标签');
+      return;
+    }
     setState(() {
       if (selected) {
-        if (_tags.length >= 10) {
-          _snack('最多选 10 个标签');
-          return;
-        }
         _tags.add(tag);
       } else {
         _tags.remove(tag);
@@ -580,8 +581,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
   List<Widget> _buildStepTimePlace() {
     return [
       _card('时间', [
-        _dateTimeField('开始时间', _startAt, required: true,
-            onChanged: (v) => setState(() => _startAt = v)),
+        _dateTimeField('开始时间', _startAt,
+            required: true, onChanged: (v) => setState(() => _startAt = v)),
         _dateTimeField('结束时间', _endAt,
             onChanged: (v) => setState(() => _endAt = v)),
         _dateTimeField('报名截止时间', _regDeadlineAt,
@@ -594,9 +595,12 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         _field('停车信息', _parkingCtrl, hint: '如: 楼下地下车库, 免费 2 小时', maxLines: 2),
       ]),
       _card('怎么来', [
-        _field('公共交通指引', _transportPublicCtrl, hint: '如: 地铁 2 号线 A 口步行 300 米', maxLines: 2),
-        _field('自驾路线', _transportDrivingCtrl, hint: '如: 导航搜「XX 大厦」', maxLines: 2),
-        _field('接站安排', _transportPickupCtrl, hint: '如: 高铁站安排接站, 联系张师傅', maxLines: 2),
+        _field('公共交通指引', _transportPublicCtrl,
+            hint: '如: 地铁 2 号线 A 口步行 300 米', maxLines: 2),
+        _field('自驾路线', _transportDrivingCtrl,
+            hint: '如: 导航搜「XX 大厦」', maxLines: 2),
+        _field('接站安排', _transportPickupCtrl,
+            hint: '如: 高铁站安排接站, 联系张师傅', maxLines: 2),
       ]),
     ];
   }
@@ -650,18 +654,19 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
       _card('可见性设置', [
         _dropdownField('受邀名单谁可见', _attendeeListVis, _attendeeVisOptions,
             onChanged: (v) => setState(() => _attendeeListVis = v ?? 'all')),
-        _dropdownField('会务联系方式谁可见', _staffContactVis,
-            _staffContactVisOptions,
+        _dropdownField('会务联系方式谁可见', _staffContactVis, _staffContactVisOptions,
             onChanged: (v) => setState(() => _staffContactVis = v ?? 'all')),
         const Text(
           '选好后, 受邀者之间看不到彼此的手机号',
-          style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+          style: TextStyle(
+              fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
         ),
       ]),
       _card('最后一步', [
         const Text(
           '点「存草稿」先不公开; 点「直接发布」受邀者就能看到了',
-          style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+          style: TextStyle(
+              fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
         ),
       ]),
     ];
@@ -715,9 +720,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
               ),
               const Spacer(),
               IconButton(
-                onPressed: _saving
-                    ? null
-                    : () => setState(() => _staff.removeAt(i)),
+                onPressed:
+                    _saving ? null : () => setState(() => _staff.removeAt(i)),
                 tooltip: '删除',
                 icon: const Icon(
                   Icons.delete_outline,
@@ -730,7 +734,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
           TextField(
             controller: row.name,
             style: const TextStyle(fontSize: AppTheme.fontMd),
-            decoration: const InputDecoration(labelText: '姓名', hintText: '如: 张老师'),
+            decoration:
+                const InputDecoration(labelText: '姓名', hintText: '如: 张老师'),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -743,8 +748,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
           TextField(
             controller: row.staffRole,
             style: const TextStyle(fontSize: AppTheme.fontMd),
-            decoration:
-                const InputDecoration(labelText: '角色', hintText: '如: 主持 / 讲师 / 摄影'),
+            decoration: const InputDecoration(
+                labelText: '角色', hintText: '如: 主持 / 讲师 / 摄影'),
           ),
         ],
       ),
@@ -755,7 +760,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     return _card('日程安排', [
       const Text(
         '一条一行, 时间可写「14:00」这样的格式',
-        style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+        style:
+            TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
       ),
       const SizedBox(height: 12),
       for (int i = 0; i < _agenda.length; i++) _buildAgendaRow(i),
@@ -794,9 +800,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
               ),
               const Spacer(),
               IconButton(
-                onPressed: _saving
-                    ? null
-                    : () => setState(() => _agenda.removeAt(i)),
+                onPressed:
+                    _saving ? null : () => setState(() => _agenda.removeAt(i)),
                 tooltip: '删除',
                 icon: const Icon(
                   Icons.delete_outline,
@@ -809,13 +814,15 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
           TextField(
             controller: row.start,
             style: const TextStyle(fontSize: AppTheme.fontMd),
-            decoration: const InputDecoration(labelText: '时间', hintText: '如: 14:00'),
+            decoration:
+                const InputDecoration(labelText: '时间', hintText: '如: 14:00'),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: row.title,
             style: const TextStyle(fontSize: AppTheme.fontMd),
-            decoration: const InputDecoration(labelText: '标题', hintText: '如: 养生知识分享'),
+            decoration:
+                const InputDecoration(labelText: '标题', hintText: '如: 养生知识分享'),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -981,9 +988,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _saving
-                      ? null
-                      : () => _pickDateTime(value, onChanged),
+                  onPressed:
+                      _saving ? null : () => _pickDateTime(value, onChanged),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 56),
                   ),
@@ -996,8 +1002,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
               ),
               if (value != null)
                 IconButton(
-                  onPressed:
-                      _saving ? null : () => onChanged(null),
+                  onPressed: _saving ? null : () => onChanged(null),
                   tooltip: '清除',
                   icon: const Icon(Icons.close, size: 26),
                 ),
@@ -1026,7 +1031,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
       initialTime: TimeOfDay.fromDateTime(base),
     );
     if (time == null) return;
-    onChanged(DateTime(date.year, date.month, date.day, time.hour, time.minute));
+    onChanged(
+        DateTime(date.year, date.month, date.day, time.hour, time.minute));
   }
 
   // ============================================
@@ -1096,6 +1102,14 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
       setState(() => _step = 2);
       return false;
     }
+    if (_capacityCtrl.text.trim().isNotEmpty) {
+      final cap = _intOrNull(_capacityCtrl);
+      if (cap == null || cap < 1) {
+        _snack('总名额请填 1 以上的数字');
+        setState(() => _step = 2);
+        return false;
+      }
+    }
     return true;
   }
 
@@ -1106,8 +1120,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
       'description': _textOrNull(_descCtrl),
       'themeTags': _tags.toList(),
       'status': status,
-      if (_startAt != null)
-        'startAt': _startAt!.toUtc().toIso8601String(),
+      if (_startAt != null) 'startAt': _startAt!.toUtc().toIso8601String(),
       'endAt': _endAt?.toUtc().toIso8601String(),
       'registrationDeadlineAt': _regDeadlineAt?.toUtc().toIso8601String(),
       'locationName': _textOrNull(_locationCtrl),
@@ -1120,7 +1133,8 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
       'capacityTotal': _intOrNull(_capacityCtrl),
       'capacityReserved': _intOrNull(_reservedCtrl) ?? 0,
       'feeType': _feeType,
-      'feeAmountCents': _feeType == 'paid' ? _centsOrNull(_feeAmountCtrl) : null,
+      'feeAmountCents':
+          _feeType == 'paid' ? _centsOrNull(_feeAmountCtrl) : null,
       'feeNote': _textOrNull(_feeNoteCtrl),
       'cateringMealType': _mealType == 'unset' ? null : _mealType,
       'cateringCuisine': _textOrNull(_cuisineCtrl),
