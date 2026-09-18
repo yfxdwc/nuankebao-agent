@@ -4,7 +4,6 @@
 // 单文件 ~400 行, 易维护
 // =================================
 
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/customer.dart';

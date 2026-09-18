@@ -7,8 +7,6 @@
 //
 // 异常口径 (全项目一致): 失败一律给大白话提示, 不把 DioException 原文丢给用户
 
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 import 'package:flutter/material.dart';
