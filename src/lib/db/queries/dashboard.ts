@@ -59,31 +59,35 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 // ============================================
-// 「我的数据」 (Flutter 「我的」页)
+// 「数据概览」 (Flutter 「我的」页)
 // ============================================
 // 与 getDashboardStats 的区别 (不是同一个口径, 别混用):
-//   - getDashboardStats: **全库**汇总 (web admin 仪表盘用, 无 RBAC)
-//   - getMyStats: **当前登录者看得到的**数据 (同客户列表的 RBAC 口径)
-//     —— 「我的」页写的是「我的数据」, 给销售员看全库数字 = 误导
+//   - getDashboardStats: 4 个数字的**全库**汇总 (web admin 仪表盘用, 参数最少, 老路径不动)
+//   - getStatsOverview: 同上 + 本月新增客户; 可选传 rbacCtx 收紧到「我看得到的客户」
 //
-// 过滤口径: 一律 join customer + customerRbacFilter(ctx)
-//   (养生记录 / 互动 / 跟进任务都没有自己的 store_id, 只能从客户侧过滤)
-//   admin → filter undefined → 全量 (同旧行为); manager → 本店; sales → 自己创建 + 同店
+// ⚠️ ctx 传不传 = 页面内数字自不自洽的分水岭:
+//   Flutter 客户列表 (`GET /api/customers` → listCustomers) **目前没传 rbacCtx**,
+//   即销售员看到的是**全库非软删客户**。所以「我的」页现在也传 null (同一口径),
+//   否则客户列表写 47 条、「数据概览」写 6 条, 主人一眼以为数字坏了 (2026-09-18 拍)。
+//   等客户列表接了行级过滤 (rbac.ts 里的 TODO 完结), 这里把 ctx 传进去即可 —— SQL 已经写好。
+//
 // 边界: 软删客户 (deleted_at) 一律不计入
 
-export interface MyStats extends DashboardStats {
+export interface StatsOverview extends DashboardStats {
   /** 本月新建档的客户数 */
   newCustomersThisMonth: number;
 }
 
-export async function getMyStats(ctx: RbacContext): Promise<MyStats> {
+export async function getStatsOverview(
+  ctx: RbacContext | null
+): Promise<StatsOverview> {
   const now = new Date();
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const firstStr = firstDayOfMonth.toISOString().split("T")[0];
   const nextStr = nextMonth.toISOString().split("T")[0];
 
-  const filter = customerRbacFilter(ctx);
+  const filter = ctx ? customerRbacFilter(ctx) : undefined;
   const customerScope = and(isNull(customer.deletedAt), filter);
 
   const [

@@ -49,6 +49,8 @@ dependencies:
   # 国际化
   flutter_localizations:
     sdk: flutter
+  shared_preferences: ^2.5.3
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:

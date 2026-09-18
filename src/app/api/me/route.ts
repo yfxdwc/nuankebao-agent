@@ -8,8 +8,10 @@
 //   页面只有一个 loading, 一次能刷新。
 //
 // 边界 (跟 CHARTER §3.6 RBAC 对齐):
-//   - stats 用 **当前登录者 RBAC 口径** (getMyStats), 不是全库数字
-//     (旧「我的」页显示的是全库统计, 销售员看到的是别人的客户数 = 误导)
+//   - stats 用**跟客户列表同一口径**的全库非软删统计 (getStatsOverview(null)),
+//     不是「只看我创建的」—— 客户列表本身还没接行级过滤 (listCustomers 未传 rbacCtx),
+//     两块对不上就是页面自己打自己脸。口径切换点在 queries/dashboard.ts 注释里
+//     (列表接了 RBAC 行级过滤后, 这里传 rbacCtx 就切换)
 //   - phone 同时给 full + masked: masked 给默认展示, full 只在用户点
 //     "显示" 时用 (自己看自己的号, 不算越权)
 //   - 加盟关系是 1:1 但**可空** (user.franchisee_id nullable) → franchisee 可为 null,
@@ -24,7 +26,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
-import { getRbacContext, type UserRole } from "@/lib/auth/rbac";
+import { type UserRole } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { user as userTable, store as storeTable } from "@/lib/db/schema";
 import {
@@ -32,7 +34,7 @@ import {
   getFranchiseeIdByUserId,
   countDirectDownline,
 } from "@/lib/db/queries/franchisee";
-import { getMyStats, type MyStats } from "@/lib/db/queries/dashboard";
+import { getStatsOverview, type StatsOverview } from "@/lib/db/queries/dashboard";
 import { maskPhone } from "@/lib/utils";
 import type { PlacementSide } from "@/lib/db/schema";
 
@@ -152,13 +154,11 @@ export async function GET() {
     }
   }
 
-  // ---- 我的数据 (RBAC 口径) ----
-  // userId = 0 (dev 空 session) 时不查统计: RBAC 会退化成「sales 无店 → created_by = 0」,
-  // 返回全 0 没意义, 不如明确给 null 让客户端隐藏这块
-  let stats: MyStats | null = null;
+  // ---- 数据概览 (口径 = 客户列表) ----
+  // userId = 0 (dev 空 session) → 没有「我」, 不查统计, 明确给 null 让客户端隐藏这块
+  let stats: StatsOverview | null = null;
   if (userId > BigInt(0)) {
-    const rbacCtx = await getRbacContext(userId, role);
-    stats = await getMyStats(rbacCtx);
+    stats = await getStatsOverview(null);
   }
 
   return NextResponse.json({

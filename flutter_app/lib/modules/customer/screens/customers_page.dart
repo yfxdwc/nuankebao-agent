@@ -1462,6 +1462,10 @@ class CustomerDetailPage extends ConsumerWidget {
                   calendar: c.birthCalendar,
                   remindDays: c.birthdayRemindDays,
                 );
+                final nextSolar = info?.nextSolarDate;
+                final nextSolarText = nextSolar == null
+                    ? ''
+                    : ' · 下次 ${nextSolar.year}-${nextSolar.month.toString().padLeft(2, '0')}-${nextSolar.day.toString().padLeft(2, '0')}';
                 return Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1498,8 +1502,7 @@ class CustomerDetailPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '提醒: ${remindLabel(c.birthdayRemindDays)}'
-                        '${info.nextSolarDate != null ? ' · 下次 ${info.nextSolarDate.year}-${info.nextSolarDate.month.toString().padLeft(2, '0')}-${info.nextSolarDate.day.toString().padLeft(2, '0')}' : ''}',
+                        '提醒: ${remindLabel(c.birthdayRemindDays)}$nextSolarText',
                         style: const TextStyle(
                             fontSize: AppTheme.fontXs,
                             color: AppTheme.textSecondary),
