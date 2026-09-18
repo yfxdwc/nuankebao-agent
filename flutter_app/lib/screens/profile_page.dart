@@ -479,7 +479,7 @@ class _StatsCard extends StatelessWidget {
     return ProfileSection(
       title: '数据概览',
       icon: Icons.insights_outlined,
-      hint: '全店口径',
+      hint: '全部数据',
       children: [
         if (s == null)
           const Padding(
