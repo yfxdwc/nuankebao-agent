@@ -23,6 +23,21 @@
 | `follow_up_task` | 跟进任务 | 1 |
 | `user` / `session` | 用户与登录 | 1 |
 | `audit_log` | 审计日志(触发器维护) | 1 |
+| `franchisee` | 加盟商 (二叉树, ADR-0006/0010) | F1 |
+
+### 沙龙实体 (v0.1.5 Phase 7, 主人 2026-09-18 拍)
+
+| 表 | 说明 | Phase |
+|---|---|---|
+| `salon` | 沙龙主表 (时间/地点/交通/餐饮/住宿/会务/日程 jsonb/可见性) | 7 |
+| `salon_invitation` | 邀请 (受邀者+会务): 手机号加密+hash, RSVP 状态, 自报带约数, 留言加密 | 7 |
+| `salon_quota` | 带约任务 (主理人/会务 → 受邀者; 同人同沙龙 active 唯一) | 7 |
+| `salon_guest` | 二级客人 (非 app 用户, 手机号加密+hash, 同沙龙唯一) | 7 |
+| `salon_activity` | 动态 (系统/公告/留言/提问 + 可见性) | 7 |
+| `salon_attachment` | 沙龙资料 (名称 + URL + 可见性) | 7 |
+
+> 审计触发器: `salon` / `salon_invitation` / `salon_guest` / `salon_quota`。
+> 详细字段见 `src/lib/db/schema.ts` “沙龙” 段 + migration `drizzle/0008_rich_ink.sql`。
 
 ### 字典表
 

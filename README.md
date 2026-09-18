@@ -136,6 +136,23 @@ W1 阶段验证码硬编码为 **`123456`**(任意 11 位手机号 + 123456 都�
 
 W2 接入阿里云 SMS 网关后替换为真实短信。
 
+### 跑测试 (本地)
+
+> 集成测试会 TRUNCATE 表, **不要指向 dev 库**。CI 用 `nuankebao_test` 库 (见 `.github/workflows/ci.yml`), 本地同款:
+
+```bash
+# 一次性: 建测试库 + 跑 migration + seed
+docker exec nuankebao-postgres psql -U nuankebao -c "CREATE DATABASE nuankebao_test;"
+DATABASE_URL="postgres://nuankebao:***@localhost:5432/nuankebao_test" pnpm db:migrate
+DATABASE_URL="postgres://nuankebao:***@localhost:5432/nuankebao_test" pnpm db:seed
+
+# 每次跑
+DATABASE_URL="postgres://nuankebao:***@localhost:5432/nuankebao_test" pnpm test:run
+```
+
+> ⚠ 在受限 cgroup 环境 (pi-web sessiond `TasksMax=200`) 下跑测试 / flutter, 需要绕开进程数上限:
+> `systemd-run --user --scope -q -p TasksMax=2000 -- bash -c '<命令>'`
+
 ### 端口说明
 
 主人已有 `sales ai` 项目占用 `localhost:3000`,`localhost:3001` (python3) 和 `localhost:3002` 也被占用。暖客宝 默认使用 **`localhost:3003`**(已实测空闲):
