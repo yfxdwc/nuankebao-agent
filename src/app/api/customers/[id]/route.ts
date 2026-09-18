@@ -15,8 +15,16 @@ const UpdateCustomerSchema = z.object({
   phone: z.string().regex(/^1[3-9]\d{9}$/, "手机号格式错误").optional(),
   gender: z.enum(["M", "F", "U"]).optional(),
   birthYear: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+  // 生日细化 (主人 2026-09-18): 显式传 null = 清空 (不知道)
+  birthMonth: z.number().int().min(1).max(12).nullable().optional(),
+  birthDay: z.number().int().min(1).max(31).nullable().optional(),
+  birthCalendar: z.enum(["solar", "lunar"]).optional(),
+  birthdayRemindDays: z.number().int().refine((v) => [7, 3, 0].includes(v), {
+    message: "提醒强度只能是 7 / 3 / 0 (天)",
+  }).nullable().optional(),
   healthTags: z.array(z.string()).optional(),
   diseaseHistory: z.string().optional(),
+  allergyHistory: z.string().optional(),
   notes: z.string().optional(),
   // 客户推荐人. 显式 null = 清空推荐人
   referrerId: z.string().regex(/^\d+$/, "推荐人 ID 格式错误").nullable().optional(),

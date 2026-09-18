@@ -34,8 +34,17 @@ export interface CustomerView {
   phone: string;
   gender: "M" | "F" | "U" | null;
   birthYear: number | null;
+  /** 生日 (月/日; 不知道 = null) — 主人 2026-09-18 拍: 年月日都可缺 */
+  birthMonth: number | null;
+  birthDay: number | null;
+  /** 历法: 'solar' 阳历 / 'lunar' 农历 */
+  birthCalendar: "solar" | "lunar";
+  /** 生日提醒强度 (7/3/0 天); null = 不提醒 (月+日 都填了才有意义) */
+  birthdayRemindDays: number | null;
   healthTags: string[];
   diseaseHistory: string | null;
+  /** 过敏史 (2026-09-18 新增; 跟既往病史分开) */
+  allergyHistory: string | null;
   notes: string | null;
   /** 客户推荐人 (客户图谱数据源), null = 无推荐人 (根/孤儿节点) */
   referrerId: string | null;
@@ -153,11 +162,18 @@ function toView(
     phone: decryptField(row.phoneEncrypted),
     gender: row.gender,
     birthYear: row.birthYear,
+    birthMonth: row.birthMonth,
+    birthDay: row.birthDay,
+    birthCalendar: (row.birthCalendar as "solar" | "lunar") ?? "solar",
+    birthdayRemindDays: row.birthdayRemindDays,
     healthTags: row.healthTagsEncrypted
       ? JSON.parse(decryptField(row.healthTagsEncrypted))
       : [],
     diseaseHistory: row.diseaseHistoryEncrypted
       ? decryptField(row.diseaseHistoryEncrypted)
+      : null,
+    allergyHistory: row.allergyHistoryEncrypted
+      ? decryptField(row.allergyHistoryEncrypted)
       : null,
     notes: row.notesEncrypted ? decryptField(row.notesEncrypted) : null,
     referrerId: row.referrerId?.toString() ?? null,
@@ -173,8 +189,17 @@ export interface CreateCustomerInput {
   phone: string;
   gender?: "M" | "F" | "U";
   birthYear?: number;
+  /** 生日月/日 (1-12 / 1-31); 不知道就别传 = null */
+  birthMonth?: number | null;
+  birthDay?: number | null;
+  /** 历法, 默认 solar */
+  birthCalendar?: "solar" | "lunar";
+  /** 生日提醒强度 (7/3/0); 只在月+日都有时生效 */
+  birthdayRemindDays?: number | null;
   healthTags?: string[];
   diseaseHistory?: string;
+  /** 过敏史 (2026-09-18 新增) */
+  allergyHistory?: string;
   notes?: string;
   /** 客户推荐人 (老带新, 客户图谱关系边). null = 无推荐人 */
   referrerId?: string | null;
@@ -187,8 +212,15 @@ export interface UpdateCustomerInput {
   phone?: string;
   gender?: "M" | "F" | "U";
   birthYear?: number;
+  /** 显式传 null = 清空 (不知道) */
+  birthMonth?: number | null;
+  birthDay?: number | null;
+  birthCalendar?: "solar" | "lunar";
+  /** 显式传 null = 关掉生日提醒 */
+  birthdayRemindDays?: number | null;
   healthTags?: string[];
   diseaseHistory?: string;
+  allergyHistory?: string;
   notes?: string;
   /** 客户推荐人. 显式传 null 可清空推荐人 */
   referrerId?: string | null;
@@ -222,6 +254,35 @@ export interface CustomerTypeCounts {
 }
 
 // ============================================
+// 生日 / 提醒 小工具 (主人 2026-09-18 拍)
+// ============================================
+
+/** 生日月/日清洗: 空 → null; 越界 → null (不报错, 数据脏也不让表单炸) */
+function normalizeBirthPart(
+  v: number | null | undefined,
+  min: number,
+  max: number
+): number | null {
+  if (v == null) return null;
+  if (!Number.isInteger(v) || v < min || v > max) return null;
+  return v;
+}
+
+/**
+ * 生日提醒强度: 只有「月 + 日」都有才存; 否则 null (= 不提醒)
+ * @param remindDays 7 / 3 / 0(当天); 不合法或未传 → 默认 3 (主人默认三天前)
+ */
+function resolveRemindDays(
+  month: number | null | undefined,
+  day: number | null | undefined,
+  remindDays: number | null | undefined
+): number | null {
+  if (month == null || day == null) return null;
+  if (remindDays == null) return 3; // 填了月日 = 开启提醒, 默认提前 3 天
+  return [7, 3, 0].includes(remindDays) ? remindDays : 3;
+}
+
+// ============================================
 // CRUD
 // ============================================
 
@@ -237,11 +298,23 @@ export async function createCustomer(
     phoneHash: hashForLookup(input.phone),
     gender: input.gender,
     birthYear: input.birthYear,
+    birthMonth: normalizeBirthPart(input.birthMonth, 1, 12),
+    birthDay: normalizeBirthPart(input.birthDay, 1, 31),
+    birthCalendar: input.birthCalendar ?? "solar",
+    // 提醒强度只在「月+日」都有时生效 (业务规则: 填了月日 = 开启生日提醒)
+    birthdayRemindDays: resolveRemindDays(
+      input.birthMonth,
+      input.birthDay,
+      input.birthdayRemindDays
+    ),
     healthTagsEncrypted: input.healthTags
       ? encryptField(JSON.stringify(input.healthTags))
       : null,
     diseaseHistoryEncrypted: input.diseaseHistory
       ? encryptField(input.diseaseHistory)
+      : null,
+    allergyHistoryEncrypted: input.allergyHistory
+      ? encryptField(input.allergyHistory)
       : null,
     notesEncrypted: input.notes ? encryptField(input.notes) : null,
     referrerId: input.referrerId ? BigInt(input.referrerId) : null,
@@ -412,12 +485,48 @@ export async function updateCustomer(
   }
   if (input.gender !== undefined) updateData.gender = input.gender;
   if (input.birthYear !== undefined) updateData.birthYear = input.birthYear;
+  if (input.birthMonth !== undefined) {
+    updateData.birthMonth = normalizeBirthPart(input.birthMonth, 1, 12);
+  }
+  if (input.birthDay !== undefined) {
+    updateData.birthDay = normalizeBirthPart(input.birthDay, 1, 31);
+  }
+  if (input.birthCalendar !== undefined) {
+    updateData.birthCalendar = input.birthCalendar;
+  }
+  if (
+    input.birthdayRemindDays !== undefined ||
+    input.birthMonth !== undefined ||
+    input.birthDay !== undefined
+  ) {
+    // 月/日 变动 → 重算提醒: 未传的字段用库里现值, 显式 null = 真的清空
+    //   (bug fix: 之前 `input.birthMonth ?? current.m` 把显式 null 当成未传 → 清不掉提醒)
+    const [current] = await db
+      .select({ m: customer.birthMonth, d: customer.birthDay })
+      .from(customer)
+      .where(eq(customer.id, id))
+      .limit(1);
+    const month =
+      input.birthMonth !== undefined ? input.birthMonth : (current?.m ?? null);
+    const day =
+      input.birthDay !== undefined ? input.birthDay : (current?.d ?? null);
+    updateData.birthdayRemindDays = resolveRemindDays(
+      month,
+      day,
+      input.birthdayRemindDays ?? null
+    );
+  }
   if (input.healthTags !== undefined) {
     updateData.healthTagsEncrypted = encryptField(JSON.stringify(input.healthTags));
   }
   if (input.diseaseHistory !== undefined) {
     updateData.diseaseHistoryEncrypted = input.diseaseHistory
       ? encryptField(input.diseaseHistory)
+      : null;
+  }
+  if (input.allergyHistory !== undefined) {
+    updateData.allergyHistoryEncrypted = input.allergyHistory
+      ? encryptField(input.allergyHistory)
       : null;
   }
   if (input.notes !== undefined) {

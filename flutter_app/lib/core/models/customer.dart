@@ -11,8 +11,19 @@ class Customer with _$Customer {
     required String phone,
     String? gender, // M / F / U
     int? birthYear,
+    /// 生日月/日 (1-12 / 1-31); null = 不知道 (可只知年份/只知月日)
+    /// 主人 2026-09-18 拍: 年月日 都可缺
+    int? birthMonth,
+    int? birthDay,
+    /// 历法: 'solar' 阳历 / 'lunar' 农历 (默认太阳历)
+    @Default('solar') String birthCalendar,
+    /// 生日提醒强度 (天数): 7 / 3 / 0(当天); null = 不提醒
+    /// 业务规则: 月+日 都有 = 开启提醒
+    int? birthdayRemindDays,
     @Default([]) List<String> healthTags,
     String? diseaseHistory,
+    /// 过敏史 (2026-09-18 新增; 跟既往病史分开)
+    String? allergyHistory,
     String? notes,
     /// 客户推荐人 (客户页图谱数据源), null = 无推荐人 (根/孤儿节点)
     String? referrerId,

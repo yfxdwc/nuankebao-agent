@@ -25,8 +25,23 @@ mixin _$Customer {
   String get phone => throw _privateConstructorUsedError;
   String? get gender => throw _privateConstructorUsedError; // M / F / U
   int? get birthYear => throw _privateConstructorUsedError;
+
+  /// 生日月/日 (1-12 / 1-31); null = 不知道 (可只知年份/只知月日)
+  /// 主人 2026-09-18 拍: 年月日 都可缺
+  int? get birthMonth => throw _privateConstructorUsedError;
+  int? get birthDay => throw _privateConstructorUsedError;
+
+  /// 历法: 'solar' 阳历 / 'lunar' 农历 (默认太阳历)
+  String get birthCalendar => throw _privateConstructorUsedError;
+
+  /// 生日提醒强度 (天数): 7 / 3 / 0(当天); null = 不提醒
+  /// 业务规则: 月+日 都有 = 开启提醒
+  int? get birthdayRemindDays => throw _privateConstructorUsedError;
   List<String> get healthTags => throw _privateConstructorUsedError;
   String? get diseaseHistory => throw _privateConstructorUsedError;
+
+  /// 过敏史 (2026-09-18 新增; 跟既往病史分开)
+  String? get allergyHistory => throw _privateConstructorUsedError;
   String? get notes => throw _privateConstructorUsedError;
 
   /// 客户推荐人 (客户页图谱数据源), null = 无推荐人 (根/孤儿节点)
@@ -63,8 +78,13 @@ abstract class $CustomerCopyWith<$Res> {
       String phone,
       String? gender,
       int? birthYear,
+      int? birthMonth,
+      int? birthDay,
+      String birthCalendar,
+      int? birthdayRemindDays,
       List<String> healthTags,
       String? diseaseHistory,
+      String? allergyHistory,
       String? notes,
       String? referrerId,
       bool isSeed,
@@ -93,8 +113,13 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
     Object? phone = null,
     Object? gender = freezed,
     Object? birthYear = freezed,
+    Object? birthMonth = freezed,
+    Object? birthDay = freezed,
+    Object? birthCalendar = null,
+    Object? birthdayRemindDays = freezed,
     Object? healthTags = null,
     Object? diseaseHistory = freezed,
+    Object? allergyHistory = freezed,
     Object? notes = freezed,
     Object? referrerId = freezed,
     Object? isSeed = null,
@@ -123,6 +148,22 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
           ? _value.birthYear
           : birthYear // ignore: cast_nullable_to_non_nullable
               as int?,
+      birthMonth: freezed == birthMonth
+          ? _value.birthMonth
+          : birthMonth // ignore: cast_nullable_to_non_nullable
+              as int?,
+      birthDay: freezed == birthDay
+          ? _value.birthDay
+          : birthDay // ignore: cast_nullable_to_non_nullable
+              as int?,
+      birthCalendar: null == birthCalendar
+          ? _value.birthCalendar
+          : birthCalendar // ignore: cast_nullable_to_non_nullable
+              as String,
+      birthdayRemindDays: freezed == birthdayRemindDays
+          ? _value.birthdayRemindDays
+          : birthdayRemindDays // ignore: cast_nullable_to_non_nullable
+              as int?,
       healthTags: null == healthTags
           ? _value.healthTags
           : healthTags // ignore: cast_nullable_to_non_nullable
@@ -130,6 +171,10 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
       diseaseHistory: freezed == diseaseHistory
           ? _value.diseaseHistory
           : diseaseHistory // ignore: cast_nullable_to_non_nullable
+              as String?,
+      allergyHistory: freezed == allergyHistory
+          ? _value.allergyHistory
+          : allergyHistory // ignore: cast_nullable_to_non_nullable
               as String?,
       notes: freezed == notes
           ? _value.notes
@@ -173,8 +218,13 @@ abstract class _$$CustomerImplCopyWith<$Res>
       String phone,
       String? gender,
       int? birthYear,
+      int? birthMonth,
+      int? birthDay,
+      String birthCalendar,
+      int? birthdayRemindDays,
       List<String> healthTags,
       String? diseaseHistory,
+      String? allergyHistory,
       String? notes,
       String? referrerId,
       bool isSeed,
@@ -201,8 +251,13 @@ class __$$CustomerImplCopyWithImpl<$Res>
     Object? phone = null,
     Object? gender = freezed,
     Object? birthYear = freezed,
+    Object? birthMonth = freezed,
+    Object? birthDay = freezed,
+    Object? birthCalendar = null,
+    Object? birthdayRemindDays = freezed,
     Object? healthTags = null,
     Object? diseaseHistory = freezed,
+    Object? allergyHistory = freezed,
     Object? notes = freezed,
     Object? referrerId = freezed,
     Object? isSeed = null,
@@ -231,6 +286,22 @@ class __$$CustomerImplCopyWithImpl<$Res>
           ? _value.birthYear
           : birthYear // ignore: cast_nullable_to_non_nullable
               as int?,
+      birthMonth: freezed == birthMonth
+          ? _value.birthMonth
+          : birthMonth // ignore: cast_nullable_to_non_nullable
+              as int?,
+      birthDay: freezed == birthDay
+          ? _value.birthDay
+          : birthDay // ignore: cast_nullable_to_non_nullable
+              as int?,
+      birthCalendar: null == birthCalendar
+          ? _value.birthCalendar
+          : birthCalendar // ignore: cast_nullable_to_non_nullable
+              as String,
+      birthdayRemindDays: freezed == birthdayRemindDays
+          ? _value.birthdayRemindDays
+          : birthdayRemindDays // ignore: cast_nullable_to_non_nullable
+              as int?,
       healthTags: null == healthTags
           ? _value._healthTags
           : healthTags // ignore: cast_nullable_to_non_nullable
@@ -238,6 +309,10 @@ class __$$CustomerImplCopyWithImpl<$Res>
       diseaseHistory: freezed == diseaseHistory
           ? _value.diseaseHistory
           : diseaseHistory // ignore: cast_nullable_to_non_nullable
+              as String?,
+      allergyHistory: freezed == allergyHistory
+          ? _value.allergyHistory
+          : allergyHistory // ignore: cast_nullable_to_non_nullable
               as String?,
       notes: freezed == notes
           ? _value.notes
@@ -276,8 +351,13 @@ class _$CustomerImpl implements _Customer {
       required this.phone,
       this.gender,
       this.birthYear,
+      this.birthMonth,
+      this.birthDay,
+      this.birthCalendar = 'solar',
+      this.birthdayRemindDays,
       final List<String> healthTags = const [],
       this.diseaseHistory,
+      this.allergyHistory,
       this.notes,
       this.referrerId,
       this.isSeed = false,
@@ -300,6 +380,23 @@ class _$CustomerImpl implements _Customer {
 // M / F / U
   @override
   final int? birthYear;
+
+  /// 生日月/日 (1-12 / 1-31); null = 不知道 (可只知年份/只知月日)
+  /// 主人 2026-09-18 拍: 年月日 都可缺
+  @override
+  final int? birthMonth;
+  @override
+  final int? birthDay;
+
+  /// 历法: 'solar' 阳历 / 'lunar' 农历 (默认太阳历)
+  @override
+  @JsonKey()
+  final String birthCalendar;
+
+  /// 生日提醒强度 (天数): 7 / 3 / 0(当天); null = 不提醒
+  /// 业务规则: 月+日 都有 = 开启提醒
+  @override
+  final int? birthdayRemindDays;
   final List<String> _healthTags;
   @override
   @JsonKey()
@@ -311,6 +408,10 @@ class _$CustomerImpl implements _Customer {
 
   @override
   final String? diseaseHistory;
+
+  /// 过敏史 (2026-09-18 新增; 跟既往病史分开)
+  @override
+  final String? allergyHistory;
   @override
   final String? notes;
 
@@ -336,7 +437,7 @@ class _$CustomerImpl implements _Customer {
 
   @override
   String toString() {
-    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, healthTags: $healthTags, diseaseHistory: $diseaseHistory, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -350,10 +451,20 @@ class _$CustomerImpl implements _Customer {
             (identical(other.gender, gender) || other.gender == gender) &&
             (identical(other.birthYear, birthYear) ||
                 other.birthYear == birthYear) &&
+            (identical(other.birthMonth, birthMonth) ||
+                other.birthMonth == birthMonth) &&
+            (identical(other.birthDay, birthDay) ||
+                other.birthDay == birthDay) &&
+            (identical(other.birthCalendar, birthCalendar) ||
+                other.birthCalendar == birthCalendar) &&
+            (identical(other.birthdayRemindDays, birthdayRemindDays) ||
+                other.birthdayRemindDays == birthdayRemindDays) &&
             const DeepCollectionEquality()
                 .equals(other._healthTags, _healthTags) &&
             (identical(other.diseaseHistory, diseaseHistory) ||
                 other.diseaseHistory == diseaseHistory) &&
+            (identical(other.allergyHistory, allergyHistory) ||
+                other.allergyHistory == allergyHistory) &&
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.referrerId, referrerId) ||
                 other.referrerId == referrerId) &&
@@ -375,8 +486,13 @@ class _$CustomerImpl implements _Customer {
       phone,
       gender,
       birthYear,
+      birthMonth,
+      birthDay,
+      birthCalendar,
+      birthdayRemindDays,
       const DeepCollectionEquality().hash(_healthTags),
       diseaseHistory,
+      allergyHistory,
       notes,
       referrerId,
       isSeed,
@@ -407,8 +523,13 @@ abstract class _Customer implements Customer {
       required final String phone,
       final String? gender,
       final int? birthYear,
+      final int? birthMonth,
+      final int? birthDay,
+      final String birthCalendar,
+      final int? birthdayRemindDays,
       final List<String> healthTags,
       final String? diseaseHistory,
+      final String? allergyHistory,
       final String? notes,
       final String? referrerId,
       final bool isSeed,
@@ -429,10 +550,30 @@ abstract class _Customer implements Customer {
   String? get gender; // M / F / U
   @override
   int? get birthYear;
+
+  /// 生日月/日 (1-12 / 1-31); null = 不知道 (可只知年份/只知月日)
+  /// 主人 2026-09-18 拍: 年月日 都可缺
+  @override
+  int? get birthMonth;
+  @override
+  int? get birthDay;
+
+  /// 历法: 'solar' 阳历 / 'lunar' 农历 (默认太阳历)
+  @override
+  String get birthCalendar;
+
+  /// 生日提醒强度 (天数): 7 / 3 / 0(当天); null = 不提醒
+  /// 业务规则: 月+日 都有 = 开启提醒
+  @override
+  int? get birthdayRemindDays;
   @override
   List<String> get healthTags;
   @override
   String? get diseaseHistory;
+
+  /// 过敏史 (2026-09-18 新增; 跟既往病史分开)
+  @override
+  String? get allergyHistory;
   @override
   String? get notes;
 

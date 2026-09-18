@@ -206,12 +206,25 @@ export const customer = pgTable(
     name: text("name").notNull(),
     gender: genderEnum("gender"),
     birthYear: integer("birth_year"),
+    // 生日细化 (主人 2026-09-18 拍): 年/月/日 都可缺 (不知道就留空)
+    //   例: 只知道属相/年份 → 只有 birth_year; 知道农历八月十五 → month=8 day=15 + lunar
+    birthMonth: integer("birth_month"),
+    birthDay: integer("birth_day"),
+    // 历法: 'solar' 阳历 (默认) / 'lunar' 农历
+    birthCalendar: text("birth_calendar", { enum: ["solar", "lunar"] })
+      .notNull()
+      .default("solar"),
+    // 生日提醒强度 (天数: 7 / 3 / 0=当天); null = 不提醒
+    //   业务规则: 月+日 都填了 = 开启提醒 (前端默认给 3 天前); 清空月/日 → 自动置 null
+    birthdayRemindDays: integer("birthday_remind_days"),
 
     phoneEncrypted: text("phone_encrypted").notNull(),
     phoneHash: text("phone_hash").notNull(),
 
     healthTagsEncrypted: text("health_tags_encrypted"),
     diseaseHistoryEncrypted: text("disease_history_encrypted"),
+    // 过敏史 (主人 2026-09-18 新增; 与既往病史分开: 过敏关系到能不能用某些药/精油)
+    allergyHistoryEncrypted: text("allergy_history_encrypted"),
     notesEncrypted: text("notes_encrypted"),
 
     // W5 RBAC: store_id (CHARTER §3.6 行级过滤)
