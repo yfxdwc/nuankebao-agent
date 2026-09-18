@@ -764,10 +764,14 @@ function buildSalonColumnValues(input: SalonWritableFields): Partial<typeof salo
   return v;
 }
 
-/** 解析手机号 → app 用户 id (无则 null); 用于邀请非 app 用户 */
-async function resolveUserIdByPhone(phone: string): Promise<bigint | null> {
+/** 解析手机号 → app 用户 id (无则 null); 用于邀请非 app 用户
+ *  ⚠ 事务内务必传 tx: 连接池 dev 下 max=1, 事务中再用全局 db 会死锁 */
+async function resolveUserIdByPhone(
+  phone: string,
+  tx: typeof db = db
+): Promise<bigint | null> {
   const phoneHash = hashForLookup(phone);
-  const [u] = await db
+  const [u] = await tx
     .select({ id: user.id })
     .from(user)
     .where(and(eq(user.phoneHash, phoneHash), eq(user.isActive, true)))
@@ -795,7 +799,7 @@ export async function createSalon(
     // 会务人员
     for (const s of extras.staff ?? []) {
       const phoneHash = hashForLookup(s.phone);
-      const inviteeUserId = await resolveUserIdByPhone(s.phone);
+      const inviteeUserId = await resolveUserIdByPhone(s.phone, tx);
       await tx
         .insert(salonInvitation)
         .values({
@@ -815,7 +819,7 @@ export async function createSalon(
     // 受邀者
     for (const i of extras.invitees ?? []) {
       const phoneHash = hashForLookup(i.phone);
-      const inviteeUserId = await resolveUserIdByPhone(i.phone);
+      const inviteeUserId = await resolveUserIdByPhone(i.phone, tx);
       await tx
         .insert(salonInvitation)
         .values({

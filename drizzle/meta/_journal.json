@@ -64,6 +64,13 @@
       "when": 1789740178763,
       "tag": "0008_rich_ink",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789741748678,
+      "tag": "0009_free_satana",
+      "breakpoints": true
     }
   ]
 }

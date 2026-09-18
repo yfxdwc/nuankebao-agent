@@ -10,6 +10,7 @@ import '../models/customer.dart';
 import '../models/dashboard.dart';
 import '../models/follow_up.dart';
 import '../models/me.dart';
+import '../models/salon.dart';
 
 /// 全局 ApiClient 单例
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -59,6 +60,9 @@ final meServiceProvider = Provider<MeService>(
 );
 final systemServiceProvider = Provider<SystemService>(
   (ref) => SystemService(ref.watch(dioProvider)),
+);
+final salonServiceProvider = Provider<SalonService>(
+  (ref) => SalonService(ref.watch(dioProvider)),
 );
 
 // ============================================

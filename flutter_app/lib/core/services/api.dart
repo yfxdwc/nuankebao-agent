@@ -14,6 +14,7 @@ import '../models/follow_up.dart';
 import '../models/dashboard.dart';
 import '../models/franchisee.dart';
 import '../models/me.dart';
+import '../models/salon.dart';
 import '../http/api_client.dart';
 
 // ============================================
@@ -514,6 +515,214 @@ class SystemService {
       res.data as Map<String, dynamic>,
       latencyMs: sw.elapsedMilliseconds,
     );
+  }
+}
+
+// ============================================
+// SalonService (沙龙, v0.1.5 Phase 7)
+// 三种角色: 主理人 / 会务 / 受邀者; 手机号仅主理人/会务/本人可见
+// ============================================
+
+class SalonService {
+  final Dio _dio;
+  SalonService(this._dio);
+
+  /// 列表: role = organizing (我主理的) / invited (我受邀的) / all (并集)
+  Future<List<Salon>> list({
+    String role = 'all',
+    bool includeFinished = true,
+    int limit = 50,
+  }) async {
+    final res = await _dio.get('/salons', queryParameters: {
+      'role': role,
+      'includeFinished': includeFinished ? '1' : '0',
+      'limit': limit,
+    });
+    final items = (res.data['items'] as List).cast<Map<String, dynamic>>();
+    return items.map(Salon.fromJson).toList();
+  }
+
+  Future<Salon> getById(String id) async {
+    final res = await _dio.get('/salons/$id');
+    return Salon.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Salon> create(Map<String, dynamic> data) async {
+    final res = await _dio.post('/salons', data: data);
+    return Salon.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Salon> update(String id, Map<String, dynamic> data) async {
+    final res = await _dio.patch('/salons/$id', data: data);
+    return Salon.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 取消沙龙 (status=cancelled, 数据保留)
+  Future<Salon> cancel(String id) async {
+    final res = await _dio.post('/salons/$id/cancel');
+    return Salon.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 删除沙龙 (软删, 仅草稿建议用)
+  Future<void> delete(String id) async {
+    await _dio.delete('/salons/$id');
+  }
+
+  // ---------- 邀请 ----------
+
+  Future<List<SalonInvitation>> invitations(
+    String salonId, {
+    bool includeCancelled = false,
+  }) async {
+    final res = await _dio.get('/salons/$salonId/invitations', queryParameters: {
+      if (includeCancelled) 'includeCancelled': '1',
+    });
+    final items = (res.data['items'] as List).cast<Map<String, dynamic>>();
+    return items.map(SalonInvitation.fromJson).toList();
+  }
+
+  Future<SalonInvitation> addInvitation(
+    String salonId,
+    Map<String, dynamic> data,
+  ) async {
+    final res = await _dio.post('/salons/$salonId/invitations', data: data);
+    return SalonInvitation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<SalonInvitation> updateInvitation(
+    String salonId,
+    String invitationId,
+    Map<String, dynamic> data,
+  ) async {
+    final res = await _dio.patch(
+      '/salons/$salonId/invitations/$invitationId',
+      data: data,
+    );
+    return SalonInvitation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<void> removeInvitation(String salonId, String invitationId) async {
+    await _dio.delete('/salons/$salonId/invitations/$invitationId');
+  }
+
+  // ---------- RSVP ----------
+
+  /// 受邀者回复: accepted / declined / tentative + 预计带约人数 + 留言
+  Future<SalonInvitation> rsvp(
+    String salonId, {
+    required String status,
+    int? expectedGuestCount,
+    String? notes,
+    Map<String, dynamic>? registrationData,
+  }) async {
+    final res = await _dio.post('/salons/$salonId/rsvp', data: {
+      'status': status,
+      if (expectedGuestCount != null) 'expectedGuestCount': expectedGuestCount,
+      if (notes != null) 'notes': notes,
+      if (registrationData != null) 'registrationData': registrationData,
+    });
+    return SalonInvitation.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  // ---------- 带约任务 ----------
+
+  Future<List<SalonQuota>> quotas(String salonId) async {
+    final res = await _dio.get('/salons/$salonId/quotas');
+    final items = (res.data['items'] as List).cast<Map<String, dynamic>>();
+    return items.map(SalonQuota.fromJson).toList();
+  }
+
+  /// 分配/调整 (同人已有 active 任务 → 更新)
+  Future<SalonQuota> upsertQuota(
+    String salonId, {
+    required String assignedToUserId,
+    required int quotaValue,
+    String? deadlineAt,
+    String? note,
+  }) async {
+    final res = await _dio.post('/salons/$salonId/quotas', data: {
+      'assignedToUserId': assignedToUserId,
+      'quotaValue': quotaValue,
+      if (deadlineAt != null) 'deadlineAt': deadlineAt,
+      if (note != null) 'note': note,
+    });
+    return SalonQuota.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<void> cancelQuota(String salonId, String quotaId) async {
+    await _dio.delete('/salons/$salonId/quotas/$quotaId');
+  }
+
+  // ---------- 二级客人 ----------
+
+  /// mine=true → 只看自己带来的 (受邀者默认只看自己)
+  Future<List<SalonGuest>> guests(String salonId, {bool mine = false}) async {
+    final res = await _dio.get('/salons/$salonId/guests', queryParameters: {
+      if (mine) 'mine': '1',
+    });
+    final items = (res.data['items'] as List).cast<Map<String, dynamic>>();
+    return items.map(SalonGuest.fromJson).toList();
+  }
+
+  Future<SalonGuest> addGuest(String salonId, Map<String, dynamic> data) async {
+    final res = await _dio.post('/salons/$salonId/guests', data: data);
+    return SalonGuest.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<SalonGuest> updateGuest(
+    String salonId,
+    String guestId,
+    Map<String, dynamic> data,
+  ) async {
+    final res = await _dio.patch('/salons/$salonId/guests/$guestId', data: data);
+    return SalonGuest.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteGuest(String salonId, String guestId) async {
+    await _dio.delete('/salons/$salonId/guests/$guestId');
+  }
+
+  // ---------- 动态 ----------
+
+  Future<List<SalonActivity>> activities(String salonId) async {
+    final res = await _dio.get('/salons/$salonId/activities');
+    final items = (res.data['items'] as List).cast<Map<String, dynamic>>();
+    return items.map(SalonActivity.fromJson).toList();
+  }
+
+  Future<SalonActivity> addActivity(
+    String salonId,
+    Map<String, dynamic> data,
+  ) async {
+    final res = await _dio.post('/salons/$salonId/activities', data: data);
+    return SalonActivity.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  // ---------- 资料 ----------
+
+  Future<List<SalonAttachment>> attachments(String salonId) async {
+    final res = await _dio.get('/salons/$salonId/attachments');
+    final items = (res.data['items'] as List).cast<Map<String, dynamic>>();
+    return items.map(SalonAttachment.fromJson).toList();
+  }
+
+  Future<SalonAttachment> addAttachment(
+    String salonId,
+    Map<String, dynamic> data,
+  ) async {
+    final res = await _dio.post('/salons/$salonId/attachments', data: data);
+    return SalonAttachment.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteAttachment(String salonId, String attachmentId) async {
+    await _dio.delete('/salons/$salonId/attachments/$attachmentId');
+  }
+
+  // ---------- 聚合 (主理人/会务) ----------
+
+  Future<SalonAggregates> aggregates(String salonId) async {
+    final res = await _dio.get('/salons/$salonId/aggregates');
+    return SalonAggregates.fromJson(res.data as Map<String, dynamic>);
   }
 }
 

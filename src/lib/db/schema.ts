@@ -473,7 +473,11 @@ export const wellnessKnowledge = pgTable(
       .default(sql`NOW()`),
   },
   (table) => ({
-    categoryIdx: uniqueIndex("idx_knowledge_category").on(table.category),
+    // 普通索引 (非 unique): 同一 category 下可有多条知识
+    // 历史: 由 0001_demonic_redwing 误建为 UNIQUE (schema 当时写 uniqueIndex)
+    //   → 0009 migration 修正为普通索引, 与 0002_wellness_knowledge.sql 的原意一致
+    //   (seed 有 10 条 / 5 个 category, unique 会让 seed 直接失败)
+    categoryIdx: index("idx_knowledge_category").on(table.category),
   })
 );
 
