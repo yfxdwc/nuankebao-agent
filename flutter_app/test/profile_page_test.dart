@@ -234,9 +234,9 @@ void main() {
   });
 
   testWidgets('换头像: 入口可见 + 候选头像弹层能出 8 个候选', (tester) async {
-    // bySemanticsLabel 需要语义树 (widget 测试默认不开, 跟线上不同)
+    // bySemanticsLabel 需要语义树 (widget 测试默认不开, 跟线上不同)。
+    // ⚠ 必须在测试体内 dispose: addTearDown 跑在框架的"检查语义句柄是否释放"之后
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
 
     final container = await _container(_fullProfile());
     await _pumpProfile(tester, container);
@@ -257,6 +257,8 @@ void main() {
       expect(find.text(preset.label), findsOneWidget);
     }
     expect(find.text('恢复默认头像'), findsOneWidget);
+
+    semantics.dispose();
   });
 
   testWidgets('候选头像已选中时: 当前头像会被画出来 (首字 → 图标)', (tester) async {
