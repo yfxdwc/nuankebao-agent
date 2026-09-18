@@ -50,7 +50,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   shared_preferences: ^2.5.3
-  package_info_plus: ^9.0.1
+  package_info_plus: ^8.0.0
   flutter_cache_manager: ^3.4.1
 
 dev_dependencies:

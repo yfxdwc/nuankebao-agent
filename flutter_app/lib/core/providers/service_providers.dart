@@ -10,7 +10,6 @@ import '../models/customer.dart';
 import '../models/dashboard.dart';
 import '../models/follow_up.dart';
 import '../models/me.dart';
-import '../models/salon.dart';
 
 /// 全局 ApiClient 单例
 final apiClientProvider = Provider<ApiClient>((ref) {
