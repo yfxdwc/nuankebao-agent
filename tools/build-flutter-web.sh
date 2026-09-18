@@ -216,7 +216,11 @@ fi
 
 # ---------- 4. 验证 IP 写入正确 (防止 build 缓存问题) ----------
 title "验证 main.dart.js 含正确的 API base URL"
-EXPECTED_IP=$(echo "$DART_DEFINE" | grep -oE "http://[0-9.]+:[0-9]+" | head -1 | cut -d/ -f3 | cut -d: -f1)
+# 注 (2026-09-18 修): DART_DEFINE 为空 (--auto 模式) 时 `echo "" | grep -oE ...` 返回 1,
+#   在 `set -e` 下整个 `EXPECTED_IP=$(...)` 赋值就失败 → 脚本在「验证」步直接退出,
+#   **永不同步到 public/app/** (主人报 --auto 后预览没变化就是这个)。兜 `|| true`。
+#   依据: AGENTS §9 (改 preview 冻结文件需主人拍 + --no-verify 提交), 主人 2026-09-18 拍。
+EXPECTED_IP=$(echo "$DART_DEFINE" | grep -oE "http://[0-9.]+:[0-9]+" | head -1 | cut -d/ -f3 | cut -d: -f1 || true)
 if [ -n "$EXPECTED_IP" ]; then
   if grep -q "$EXPECTED_IP" "$BUILD_OUTPUT/main.dart.js"; then
     ok "✓ 含 IP $EXPECTED_IP"

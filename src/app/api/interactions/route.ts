@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { z } from "zod";
 import {
   createInteraction,
@@ -16,7 +17,7 @@ const CreateSchema = z.object({
 
 export async function GET(request: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!isAuthSkipped() && !session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!isAuthSkipped() && !session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -41,7 +42,9 @@ export async function POST(request: NextRequest) {
     const input = CreateSchema.parse(body);
 
     const ctx = getAuditContextFromRequest(request, session);
-    const interaction = await createInteraction(input, ctx, BigInt(session.user.id));
+    // dev 模式 (DEV_SKIP_AUTH=1) session 为 null → 同 customers/route.ts 约定用 0
+    const userId = session?.user?.id ? BigInt(session.user.id) : BigInt(0);
+    const interaction = await createInteraction(input, ctx, userId);
 
     return NextResponse.json(interaction, { status: 201 });
   } catch (error) {

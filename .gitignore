@@ -40,8 +40,17 @@ next-env.d.ts
 tsconfig.tsbuildinfo
 
 # Drizzle
+# Migration 进 git (主人 2026-09-18 拍): 迁移历史 = 部署真相
+#   背景: 之前 `*.sql` + `drizzle/meta/` 把整个 drizzle/ 挡住了 → 7 个 migration
+#        + down.sql 从未进过 git (git clone 无 migration, CI db:compat 也扫不到)
+#   保留忽略: *.sql.gz / *.sql.gpg (备份副本, 不进 git)
+#   注: 负向规则必须**先放开被忽略的目录本身** (drizzle/meta/), 否则 git 不会下沉看子文件
 drizzle/meta/
 drizzle/*.json
+!drizzle/meta/
+!drizzle/meta/*.json
+!drizzle/*.sql
+!drizzle/down/*.sql
 
 # Project-specific (按需放开)
 # .muse-station-state/
@@ -51,6 +60,9 @@ drizzle/*.json
 *.sql
 *.sql.gz
 *.sql.gpg
+!drizzle/*.sql
+!drizzle/down/*.sql
+!drizzle/audit_trigger.sql
 
 # 备份脚手架 (dev-domain-backup SOP §3.0)
 # - data/ 整体: 含密钥 + 健康 state + 备份副本

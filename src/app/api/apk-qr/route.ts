@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import QRCode from "qrcode";
 import { auth } from "@/lib/auth";
+import { isAuthSkipped } from "@/lib/auth/skip-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!isAuthSkipped() && !session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

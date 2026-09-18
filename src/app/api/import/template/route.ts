@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { generateTemplate } from "@/lib/import/parser";
 
 /**
@@ -8,7 +9,7 @@ import { generateTemplate } from "@/lib/import/parser";
  */
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!isAuthSkipped() && !session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

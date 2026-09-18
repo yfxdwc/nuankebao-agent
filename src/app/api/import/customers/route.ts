@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { parseImportFile } from "@/lib/import/parser";
 import { validateImport } from "@/lib/import/validator";
 import { importCustomers } from "@/lib/import/importer";
@@ -17,7 +18,7 @@ export const runtime = "nodejs";
  */
 export async function POST(request: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!isAuthSkipped() && !session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -50,7 +51,8 @@ export async function POST(request: NextRequest) {
 
     // commit 模式: 写入 DB
     const ctx = getAuditContextFromRequest(request, session);
-    const userId = BigInt(session.user.id);
+    // dev 模式 (DEV_SKIP_AUTH=1) session 为 null → 同 customers/route.ts 约定用 0
+    const userId = session?.user?.id ? BigInt(session.user.id) : BigInt(0);
     const validRows = validation.results.filter((r) => r.valid);
     const summary = await importCustomers(validRows, userId, ctx.ipAddress ?? null);
 

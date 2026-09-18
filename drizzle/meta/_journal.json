@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788445897364,
+      "tag": "0000_elite_ultimo",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788500258664,
+      "tag": "0001_demonic_redwing",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789191111090,
+      "tag": "0003_customer_referrer",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789475798565,
+      "tag": "0004_w5_rbac_store_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789696681064,
+      "tag": "0005_customer_is_seed",
+      "breakpoints": true
+    }
+  ]
+}
