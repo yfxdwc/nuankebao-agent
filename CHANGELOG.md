@@ -188,6 +188,30 @@ version.json `0.2.11#12 → 0.2.12#13` + SW hash 已 bump (主人侧需 Ctrl+Shi
 - 上面那条的 UI 部分 (胶囊按键); 当时「真过滤 + 重新 build」还没拍, 主人后拍后已并入上一条
 - 截图: `/tmp/nuankebao-filter-capsule/*.png` (列表默认态 / 点「普通」后 / 放大裁剪)
 
+### Verified (布局不强制对称 — 自由生长, 2026-09-17 主人问)
+
+**主人问**: 「当前的 a、b 两线客户都是 15 个, 且完全对称。对称不是强制的吧, 实际生产模式中节点
+应该是按用户设置自由生长的」
+
+**答: 不强制。15/15 对称来自测试种子数据, 不是布局约束**
+- 数据源: `scripts/seed-test-data.ts` 按「31 节点满二叉树」造数据 (L1: 左右各 1, L2: 各 2 …
+  ADR-0010 的 30+ 需求), 所以图谱看起来完全对称; 图谱只渲染 depth=3 → 15 个节点
+- 生产真实生长: `placeNewFranchisee()` 先填左位 → 左满填右位 → 两侧都满则 BFS 往下找空位
+  (`src/lib/db/queries/franchisee-tree.ts`), 天生歪斜不对称; 布局完全跟着数据走
+
+**验证 (新增 4 个不对称单测, `flutter_app/test/graph_layout_test.dart`, 7/7 pass)**
+1. A线 6 层 / B线 2 层 → 各走各的, **不补齐不镜像** (A 线 y 延伸更长)
+2. 只有 A 线 (根只有左子) → B线集合为空, 不报错, 根仍居中
+3. 只有 B 线 + 单侧链 → 同侧断了用另一侧接主线, 主线仍竖直
+4. 混合型 (左长+侧枝, 右短) → 任意两节点中心距 ≥ 60% 半径和 (不叠死)
+
+**顺手修**: 画布宽度兜底 (最小 400) 生效时内容没居中 → 只有一条腿时会偏心, 现已按
+`canvasWidth/2 - halfWidth` 补偿
+
+**实操演示**: Playwright 拦截 `/franchisees/me/tree` 喂一棵「A线 6 层 + B线 2 层」的自由生长树,
+App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视觉 QA 确认两腿长度明显不同、
+各自的列仍竖直
+
 ### Fixed (加盟商编辑页路由缺失 + 路由兜底, 2026-09-17 主人报)
 
 **主人报**: 「修复加盟商详情的编辑页面, 当前报错: `GoException: no routes for location: /franchisees/81/edit`」
