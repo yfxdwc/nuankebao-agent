@@ -106,6 +106,8 @@ class _ProfileBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListView(
+      // AlwaysScrollable: 内容不满一屏也要能下拉刷新 (RefreshIndicator 需要可滚动)
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
         _HeaderCard(profile: profile),
@@ -275,11 +277,21 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                 width: double.infinity,
                 height: AppTheme.buttonMinHeight,
                 child: OutlinedButton.icon(
-                  onPressed: () => showEditMyProfileSheet(
-                    context,
-                    ref,
-                    franchisee: franchisee,
-                  ),
+                  onPressed: () async {
+                    final saved = await showEditMyProfileSheet(
+                      context,
+                      ref,
+                      franchisee: franchisee,
+                    );
+                    if (saved && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('资料已更新',
+                              style: TextStyle(fontSize: AppTheme.fontMd)),
+                        ),
+                      );
+                    }
+                  },
                   icon: const Icon(Icons.edit_outlined, size: 24),
                   label: const Text('编辑我的资料',
                       style: TextStyle(fontSize: AppTheme.fontMd)),
@@ -468,11 +480,6 @@ class _StatsCard extends StatelessWidget {
           const SizedBox(height: 4),
           const Divider(height: 1),
           InfoRow(label: '累计互动', value: '${s.totalInteractions} 次'),
-          if (profile.franchisee != null)
-            InfoRow(
-              label: '我的下线',
-              value: '${profile.franchisee!.downline.total} 人',
-            ),
           ProfileTile(
             icon: Icons.account_tree,
             title: '我的加盟网络',

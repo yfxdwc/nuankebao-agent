@@ -17,8 +17,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../core/http/api_client.dart';
+import '../core/providers/service_providers.dart';
 import '../core/theme/app_theme.dart';
+import 'profile_sheets.dart';
 import 'profile_widgets.dart';
 
 final _packageInfoProvider = FutureProvider<PackageInfo>(
@@ -187,31 +188,30 @@ class AboutPage extends ConsumerWidget {
             children: [
               ProfileTile(
                 icon: Icons.wifi_find,
-                title: '先做一次网络自检',
-                subtitle: '「我的」页 → 网络自检, 能看到服务器通不通',
-                onTap: () => Navigator.of(context).pop(),
+                title: '做一次网络自检',
+                subtitle: '当场测服务器通不通、快不快',
+                onTap: () => showDiagnosticsSheet(context, ref),
               ),
               ProfileTile(
                 icon: Icons.content_copy,
                 title: '复制诊断信息发给管理员',
-                subtitle: '在网络自检里点「复制诊断信息」, 粘贴发给管理员即可',
-                trailing: IconButton(
-                  icon: const Icon(Icons.copy, size: 24),
-                  tooltip: '复制服务地址',
-                  onPressed: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: ApiClient.baseUrl),
+                subtitle: '版本 / 账号 / 服务地址 / 连接状态',
+                color: AppTheme.accent,
+                onTap: () async {
+                  final text = await buildDiagnosticText(
+                    ref,
+                    ref.read(meProfileProvider),
+                  );
+                  await Clipboard.setData(ClipboardData(text: text));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('诊断信息已复制, 可发给管理员',
+                            style: TextStyle(fontSize: AppTheme.fontMd)),
+                      ),
                     );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('服务地址已复制',
-                              style: TextStyle(fontSize: AppTheme.fontMd)),
-                        ),
-                      );
-                    }
-                  },
-                ),
+                  }
+                },
               ),
             ],
           ),

@@ -560,9 +560,10 @@ Future<String> buildDiagnosticText(
   WidgetRef ref,
   AsyncValue<MeProfile> profileAsync,
 ) async {
-  final info = await PackageInfo.fromPlatform();
+  // 先同步取状态, 再 await (await 后再碰 ref = 可能已被销毁)
   final health = ref.read(healthCheckProvider);
   final p = profileAsync.valueOrNull;
+  final info = await PackageInfo.fromPlatform();
   final platform = kIsWeb ? 'Web' : defaultTargetPlatform.name;
   final now = DateTime.now();
   final ts = '${now.year}-${_two(now.month)}-${_two(now.day)} '
