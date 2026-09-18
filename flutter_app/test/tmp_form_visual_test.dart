@@ -74,20 +74,24 @@ void main() {
     await tester.tap(find.text('月 不清楚'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('8月').last);
+    await tester.scrollUntilVisible(find.text('3月'), 60,
+        scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.text('3月').last);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('月 8'), findsOneWidget);
+    expect(find.text('月 3'), findsOneWidget);
     expect(find.text('生日提醒 (已开启)'), findsNothing, reason: '只有月还没日');
 
     // 选日 = 15 → 自动开启提醒 (默认 3 天前)
     await tester.tap(find.text('日 不清楚'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('15日').last);
+    await tester.scrollUntilVisible(find.text('5日'), 60,
+        scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.text('5日').last);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('日 15'), findsOneWidget);
+    expect(find.text('日 5'), findsOneWidget);
     expect(find.text('生日提醒 (已开启)'), findsOneWidget);
     expect(find.text('提前 7 天'), findsOneWidget);
     expect(find.text('生日当天'), findsOneWidget);
@@ -124,7 +128,7 @@ void main() {
 
     expect(find.text('年 1968'), findsOneWidget);
     expect(find.text('月 8'), findsOneWidget);
-    expect(find.text('日 15'), findsOneWidget);
+    expect(find.text('日 5'), findsOneWidget);
     expect(find.text('农历'), findsWidgets);
     expect(find.text('生日提醒 (已开启)'), findsOneWidget);
     await expectLater(find.byType(MaterialApp),
