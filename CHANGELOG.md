@@ -2,6 +2,56 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (沙龙模块: 一级页「沙龙」完整实施 — 列表/详情/创建/RSVP/带约/二级客人, 2026-09-18 主人拍)
+
+**主人要**: 「我们经常会邀约客户参加一些聚会、沙龙、会议。如果生成一个一级页面(与客户、我的平级)……沙龙页主体是沙龙列表。
+每个沙龙有他人或公司主理, 用户只是受邀者, 同时可能有邀约任务……也有用户自己主理邀约他人的, 邀约客户/潜在用户或同时也分派给
+客户/潜在用户一定的带约人数。沙龙的时间、地址、人数、交通、餐饮、住宿、会务人员安排等都要可以设置, 并且可向受邀者展示详细信息。
+受邀者要可以在沙龙详情页有一定量的互动能力, 如填写预计能邀约到的人数等。另外: 服务器数据库中是否应该要有一个所有用户的关系图谱
+才能实现多用户联动?……是否应该先把用户关系图谱做好再开始沙龙页的开发?」
+
+**主人拍板 5 项决策 (ask_user)**:
+
+| 决策 | 结果 |
+|---|---|
+| 一级页命名 | **沙龙** (覆盖 沙龙/讲座/品鉴/答谢/团建/培训; 避开 meeting 商务例会歧义) |
+| 关系图谱策略 | **不建统一图谱** — 沙龙用 `user` + `salon_invitation`, 后期用 RelationSystem 接口包装; 沙龙**不必等**图谱 |
+| 非 app 受邀者 | **允许** (姓名 + 手机号, 手机号走加密 + hash) |
+| 带约机制 | **简单版**: 受邀者自报「预计带约人数」, 主理人手动核对 (不做全链追踪) |
+| 本次范围 | **完整方案**: 列表+详情+创建+RSVP+带约任务+二级客人 (+动态/资料) |
+
+**后端 (6 张表 + 14 个 API route)**
+
+- `drizzle/0008_rich_ink.sql` (+`down/0008_rich_ink.down.sql`): `salon` / `salon_invitation` / `salon_quota` / `salon_guest` / `salon_activity` / `salon_attachment` + 6 个枚举
+- 审计触发器: `salon` / `salon_invitation` / `salon_guest` / `salon_quota` (见 `drizzle/audit_trigger.sql`)
+- 敏感字段: 受邀者/二级客人/订房联系人手机号 → `*_encrypted` + `*_hash` (与 customer 同口径, `hashForLookup` 去重); 受邀者留言加密
+- `src/lib/db/queries/salon.ts`: 权限矩阵 (主理人/会务/受邀者) + 可见性过滤 (名单/手机号/留言/公告/资料) + 统计聚合
+- `src/lib/salon/validation.ts` + `route-helpers.ts`; 14 个 route: `/api/salons` + `:id` (+cancel/edit) + invitations + rsvp + quotas + guests + activities + attachments + aggregates
+- 会务 = `invitation(role=staff)` 行 (不存 jsonb → 手机号可加密); 同沙龙同手机号唯一 (防重复邀请/重复计数)
+
+**Flutter (APK 域)**: `modules/meeting/` → **`modules/salon/`** (`git mv` 历史可追)
+
+- 模型 `core/models/salon.dart` (手写 fromJson, 不依赖 freezed) + `SalonService` + `salon_providers.dart` (`invalidateSalon` 统一刷新)
+- 5 个 screen (列表 2 tab / 详情 / 创建编辑 4 步向导 / 主理人管理 3 tab / 二级客人) + 4 个 widget (卡片/状态胶囊/区块/RSVP 弹层)
+- Bottom Nav 从 2 tab → **3 tab (客户 / 沙龙 / 我的)**; 路由 `/salons` `:id` `new` `edit` `manage` `guests`
+
+**测试**: `tests/salon.test.ts` 18 例 (权限负例/RSVP/带约进度/二级客人/可见性开关/取消) — 全绿
+
+**顺带修复 (前置漂移)**: `wellness_knowledge.category` 索引在 0001 被误建 UNIQUE (schema 当时写 `uniqueIndex`),
+与 0002 手工 migration 原意 / seed (10 条 / 5 类) / 测试冲突 → `0009_free_satana.sql` 修正为普通索引
+(dev 库早已是非 unique, 属 schema↔DB 漂移; 修正后 `pnpm test:run` 全绿 108/108)。
+
+**新增/改动文件**
+
+- 后端: `drizzle/0008_rich_ink.sql` `0009_free_satana.sql` (+2 down) / `src/lib/db/schema.ts` / `src/lib/db/queries/salon.ts` /
+  `src/lib/salon/{validation,route-helpers}.ts` / `src/app/api/salons/**` (14 route) / `drizzle/audit_trigger.sql`
+- Flutter: `core/models/salon.dart` / `core/services/api.dart` (+SalonService) / `core/providers/service_providers.dart` (+salonServiceProvider) /
+  `core/router/app_router.dart` (3 tab) / `modules/salon/**` (README + 5 screen + 4 widget + providers)
+- 测试/文档: `tests/salon.test.ts` / `AGENTS.md` §4 树 + §4.6 Phase 7 / `docs/adr/0007` Phase 7 注记
+
+**DoD 状态**: `flutter analyze` 0 error / `pnpm test:run` 108/108 pass / API 冒烟 (curl 全 endpoint) 通过 /
+`pnpm db:compat` 通过。**待主人**: 真机验收 (APK 构建 + 多用户联动场景)。
+
 ### Changed (「我的」页追加: 字号「小」档 + 自定义头像 (上传 / 8 个候选), 2026-09-18 主人要)
 
 **主人要**: 「显示与存储区块。在标准下增加1个：小，比标准小。用户头像要能够自定义（上传头像），

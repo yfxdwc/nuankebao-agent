@@ -117,7 +117,7 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 │   │   │   ├── wellness/       ← 养生记录
 │   │   │   ├── follow_up/      ← 跟进任务
 │   │   │   ├── presentation/   ← 图谱(graph) + 列表(list) 合并
-│   │   │   ├── meeting/        ← 会议组织 (占位)
+│   │   │   ├── salon/          ← ★ 沙龙 (v0.1.5 Phase 7 已实施; 旧名 meeting)
 │   │   │   └── relation/       ← ★ 客户/加盟关系 (接口 + 默认实现)
 │   │   ├── app.dart / main.dart
 │   │   └── _deprecated/        ← 旧文件暂存, 待 Phase 1-7 迁移完后清理
@@ -240,16 +240,16 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 
 | Phase | 模块 | 时间 | 状态 |
 |---|---|---|---|
-| 0 | 架构基线 (CHARTER v0.1.3 + AGENTS §4 + ADR-0007 + CHANGELOG [0.5.0]) | 0.5 天 | 🔄 当前 |
-| 1 | `modules/auth/` | 0.5 天 | ⏳ 待开始 |
-| 2 | `modules/customer/` | 1 天 | ⏳ |
-| 3 | `modules/wellness/` | 1 天 | ⏳ |
-| 4 | `modules/follow_up/` | 0.5 天 | ⏳ |
-| 5 | `modules/presentation/` (graph + list 合并) | 1 天 | ⏳ |
-| 6 | `modules/relation/` ★ (抽接口 + 默认实现) | 1.5 天 | ⏳ |
-| 7 | `modules/meeting/` (占位) | 0.1 天 | ⏳ |
-| 8 | `docs/dev-modules/` WEB 域文档化视图 | 1 天 | ⏳ |
-| 9 | CHARTER §4 / AGENTS §4 实地更新收尾 | 0.5 天 | ⏳ |
+| 0 | 架构基线 (CHARTER v0.1.3 + AGENTS §4 + ADR-0007 + CHANGELOG [0.5.0]) | 0.5 天 | ✅ |
+| 1 | `modules/auth/` | 0.5 天 | ✅ |
+| 2 | `modules/customer/` | 1 天 | ✅ |
+| 3 | `modules/wellness/` | 1 天 | ✅ |
+| 4 | `modules/follow_up/` | 0.5 天 | ✅ |
+| 5 | `modules/presentation/` (graph + list 合并) | 1 天 | ✅ |
+| 6 | `modules/relation/` ★ (抽接口 + 默认实现) | 1.5 天 | ✅ (调用方迁移 Phase 6.5 待做) |
+| 7 | `modules/salon/` ★ (沙龙模块, 原占位 meeting → 完整实施) | — | ✅ v0.1.5 (2026-09-18) |
+| 8 | `docs/dev-modules/` WEB 域文档化视图 | 1 天 | ✅ |
+| 9 | CHARTER §4 / AGENTS §4 实地更新收尾 | 0.5 天 | 🔄 随各 Phase 增量更新 |
 
 **每 Phase DoD**:
 - [ ] `git mv` 历史可追 (`git log --follow <file>` 能查到旧路径)
@@ -257,6 +257,13 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 - [ ] 真机验证核心功能 (主人 + 1-2 个测试场景)
 - [ ] 单测通过 (Phase 6 必须有 RelationSystem 单测)
 - [ ] commit message 标注 phase 编号
+
+> **Phase 7 沙龙实施记录 (v0.1.5, 2026-09-18)**: 主人拍板 5 项决策 —— 一级页名 **沙龙** (salon),
+> 不建统一关系图谱 (用 `user` + `salon_invitation`, 后期用 RelationSystem 接口包装),
+> 允许非 app 受邀者 (姓名+加密手机号), 带约机制先做「自报预计人数 + 主理人手动核对」简单版,
+> 本次范围 = 完整方案 (列表+详情+创建+RSVP+带约任务+二级客人+动态/资料)。
+> 落地: 6 张表 (migration `0008_rich_ink`) + 14 个 API route + `modules/salon/` (5 screen) +
+> `tests/salon.test.ts` (18 例)。模块从 `modules/meeting/` 改名 (`git mv` 历史可追)。
 
 
 ## §5. 反模式 (前 3 个月踩过的坑) (CHARTER §7 反模式沉淀)

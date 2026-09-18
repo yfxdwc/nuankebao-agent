@@ -438,6 +438,11 @@ docs/dev-modules/
 | Phase 8 | docs/dev-modules/ WEB 域文档化视图 | 1 天 | 主人 review |
 | Phase 9 | CHARTER §4 / AGENTS §4 实地更新 | 0.5 天 | 主人 review + git history |
 
+> **后续更新 (2026-09-18, v0.1.5)**: Phase 7 已从「meeting 占位」落地为**完整沙龙模块**:
+> 主人拍板一级页名 = **沙龙**, 模块改名 `modules/meeting/` → `modules/salon/` (`git mv`, 历史可追)。
+> 实施内容见 `flutter_app/lib/modules/salon/README.md` + AGENTS §4.6 Phase 7 记录。
+> 本表其余 Phase 状态同步到 AGENTS.md §4.6 (以那里为准)。
+
 **原则**:
 - 一次只挪一个模块 (Phase 1-7)
 - 每步 git commit (单模块粒度, 标题: `refactor(apk): migrate <module> to modules/<name>/`)

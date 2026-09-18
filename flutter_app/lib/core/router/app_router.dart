@@ -1,8 +1,9 @@
 // ============================================
-// 暖客宝 路由 (Plan F2 极简版)
-// - 2 tab: 客户 / 我的
+// 暖客宝 路由 (Plan F2 极简版 + v0.1.5 沙龙)
+// - 3 tab: 客户 / 沙龙 / 我的
 // - 删 5 旧 tab (dashboard / wellness / follow-ups / interactions / ai / reports)
 // - 加 /franchise-tree (Plan F3 接续)
+// - 沙龙 (v0.1.5 Phase 7): /salons + /salons/:id + new/edit/manage/guests
 // - 所有录入 (养生/联系/跟进) 必须从客户详情"+"进入
 // ============================================
 
@@ -20,6 +21,11 @@ import '../../screens/about_page.dart';
 import '../../screens/profile_page.dart';
 import '../../modules/wellness/screens/wellness_record_form_page.dart';
 import '../../modules/wellness/screens/wellness_record_detail_page.dart';
+import '../../modules/salon/screens/salon_list_page.dart';
+import '../../modules/salon/screens/salon_detail_page.dart';
+import '../../modules/salon/screens/salon_form_page.dart';
+import '../../modules/salon/screens/salon_manage_page.dart';
+import '../../modules/salon/screens/salon_guests_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -96,7 +102,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Tab 1: 我的
+          // Tab 1: 沙龙 (v0.1.5 Phase 7)
+          GoRoute(
+            path: '/salons',
+            name: 'salons',
+            builder: (context, state) => const SalonListPage(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                name: 'salon-detail',
+                builder: (context, state) => SalonDetailPage(
+                  salonId: state.pathParameters['id']!,
+                ),
+              ),
+            ],
+          ),
+          // Tab 2: 我的
           GoRoute(
             path: '/profile',
             name: 'profile',
@@ -111,6 +132,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+
+      // 沙龙独立路由 (全屏, 不在 bottom nav 内)
+      // 注: 静态 /salons/new 必须与 /salons/:id 同级声明 (跟 /customers/new 同模式)
+      GoRoute(
+        path: '/salons/new',
+        name: 'salon-new',
+        builder: (context, state) => const SalonFormPage(),
+      ),
+      GoRoute(
+        path: '/salons/:id/edit',
+        name: 'salon-edit',
+        builder: (context, state) => SalonFormPage(
+          salonId: state.pathParameters['id'],
+        ),
+      ),
+      GoRoute(
+        path: '/salons/:id/manage',
+        name: 'salon-manage',
+        builder: (context, state) => SalonManagePage(
+          salonId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
+        path: '/salons/:id/guests',
+        name: 'salon-guests',
+        builder: (context, state) => SalonGuestsPage(
+          salonId: state.pathParameters['id']!,
+        ),
       ),
 
       // 独立路由 (不在 shell 内, 全屏)
@@ -207,7 +257,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 });
 
 // ============================================
-// 主导航外壳 (Bottom Navigation 2 tab)
+// 主导航外壳 (Bottom Navigation 3 tab: 客户 / 沙龙 / 我的)
 // ============================================
 
 class _MainShell extends StatelessWidget {
@@ -229,6 +279,9 @@ class _MainShell extends StatelessWidget {
               context.go('/customers');
               break;
             case 1:
+              context.go('/salons');
+              break;
+            case 2:
               context.go('/profile');
               break;
           }
@@ -238,6 +291,11 @@ class _MainShell extends StatelessWidget {
             icon: Icon(Icons.people_outline, size: 28),
             selectedIcon: Icon(Icons.people, size: 28),
             label: '客户',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.event_outlined, size: 28),
+            selectedIcon: Icon(Icons.event, size: 28),
+            label: '沙龙',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline, size: 28),
@@ -251,7 +309,8 @@ class _MainShell extends StatelessWidget {
 
   int _getIndex(String location) {
     if (location.startsWith('/customers')) return 0;
-    if (location.startsWith('/profile')) return 1;
+    if (location.startsWith('/salons')) return 1;
+    if (location.startsWith('/profile')) return 2;
     return 0;
   }
 }

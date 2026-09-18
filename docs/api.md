@@ -1,6 +1,6 @@
 # 暖客宝 API 文档 (v0.1.0)
 
-> 16 个 REST API 端点
+> REST API 端点 (沙龙模块追加 14 个, 见 §14)
 > Base URL: `http://127.0.0.1:3003/api` (开发) / `https://nuankebao.tooyang.top/api` (生产)
 > 认证: Auth.js v5 session cookie (`authjs.session-token`)
 
@@ -543,6 +543,78 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 - `version` / `buildNumber` 来自 `flutter_app/pubspec.yaml` 的 `version:` (APK versionName 的真源)
 - `apk: null` = 服务器上没有可下载的包 (纯 web 部署), 客户端只显示当前版本
 - 客户端比对 `package_info_plus` 的本机版本 → 服务器更新才提示 (不做强制升级)
+
+---
+
+## 14. 沙龙 (v0.1.5 Phase 7)
+
+> 场景: 邀约客户参加 聚会/沙龙/健康讲座/答谢会/团建。
+> 三种角色: **主理人** (organizer, `salon.organizer_user_id`) / **会务** (staff, `invitation.role_in_salon='staff'`) / **受邀者** (attendee)。
+> 手机号仅主理人/会务/本人可见; 受邀者留言仅主理人/会务/本人可见; 草稿沙龙仅主理人可见。
+
+### `GET /api/salons`
+我相关的沙龙列表。
+
+**Query**: `role` = `organizing` (我主理的) / `invited` (我受邀的) / `all` (默认); `status` (可选); `includeFinished=0` 只看未结束; `limit`/`offset`
+**响应**: `{ items: [SalonView], total }` — 每条含 `viewer` (我的身份/RSVP/带约) + `counts` (统计)。
+
+### `POST /api/salons`
+创建沙龙 (创建者 = 主理人)。
+
+**Body** (节选; 全字段见 `src/lib/salon/validation.ts` SalonCreateSchema):
+```json
+{
+  "title": "肩颈调理体验沙龙", "subtitle": "…", "themeTags": ["沙龙","体验"],
+  "startAt": "2026-10-01T06:00:00.000Z", "endAt": "…", "registrationDeadlineAt": "…",
+  "locationName": "…", "address": "…", "floorRoom": "…", "parkingInfo": "…",
+  "transportPublic": "…", "transportDriving": "…", "transportPickup": "…",
+  "capacityTotal": 20, "capacityReserved": 0,
+  "cateringMealType": "dinner", "cateringCuisine": "…", "cateringDietary": "…",
+  "lodgingHotelName": "…", "lodgingContactPhone": "13800138000",
+  "feeType": "free", "feeAmountCents": null,
+  "agenda": [{ "start": "14:00", "title": "开场" }],
+  "registrationFormSchema": [{ "key": "health", "label": "健康状况", "type": "text" }],
+  "visibilitySettings": { "attendeeList": "all", "staffContact": "all" },
+  "staff":   [{ "name": "会务小张", "phone": "139…", "staffRole": "主持" }],
+  "invitees":[{ "name": "客户李", "phone": "138…", "expectedGuestCount": 2 }]
+}
+```
+> 首批 `staff` / `invitees` 可为空; 手机号命中已有 app 用户时自动关联 `inviteeUserId`。
+
+### `GET /api/salons/[id]`
+详情 (非参与者 404; 草稿仅主理人可见)。
+
+### `PATCH /api/salons/[id]` / `DELETE /api/salons/[id]` / `POST /api/salons/[id]/cancel`
+编辑 (仅主理人) / 软删 / 取消 (status=cancelled, 数据保留)。
+
+### `GET|POST /api/salons/[id]/invitations`
+邀请名单 / 添加邀请 (姓名+手机号+身份, 手机号重复 → 409)。
+
+### `PATCH|DELETE /api/salons/[id]/invitations/[invId]`
+改状态 (`pending|accepted|tentative|declined|waitlist|attended|absent`) / 实际带约数 / 角色; 移除 = 标记 `cancelled`。
+
+### `POST /api/salons/[id]/rsvp`
+受邀者回复。
+
+**Body**: `{ "status": "accepted|declined|tentative", "expectedGuestCount": 3, "notes": "…", "registrationData": {} }`
+> `expectedGuestCount` = ★ 受邀者自报「预计能邀约到的人数」; 主理人在管理页手动核对。
+
+### `GET|POST /api/salons/[id]/quotas` + `DELETE /api/salons/[id]/quotas/[quotaId]`
+带约任务: 主理人/会务分配 (`assignedToUserId` + `quotaValue` + 可选 `deadlineAt`/`note`; 同人同沙龙 active 唯一, 重复分配 = 更新) / 取消。
+**响应含** `expectedGuestCount` (自报) + `guestCount` (已登记二级客人) + `progress = max(两者)`。
+
+### `GET|POST /api/salons/[id]/guests` + `PATCH|DELETE /api/salons/[id]/guests/[guestId]`
+二级客人 (非 app 用户): 登记 (关系: client/friend/family/colleague/other; 同沙龙手机号唯一 → 409) / 改状态+实到 / 删除。
+> 受邀者只看自己带来的 (`mine=1` 可显式指定); 主理人/会务看全部。
+
+### `GET|POST /api/salons/[id]/activities`
+动态流 / 发动态: 主理人+会务可发 `announcement` (公告) 并可指定可见性 (`all|staff|organizer`); 受邀者只能发 `comment`/`question` (visibility 强制 all)。
+
+### `GET|POST /api/salons/[id]/attachments` + `DELETE /api/salons/[id]/attachments/[attId]`
+沙龙资料 (先 `POST /api/photos` 拿 URL 再登记) / 删除; 可见性同上。
+
+### `GET /api/salons/[id]/aggregates`
+聚合统计 (主理人/会务; 受邀者 404): 报名状态分布 + 预计带约总人数 + 已登记客人 + 名额剩余 + 带约任务总额 (`quotaAssignees`/`quotaTotal`/`quotaExpectedTotal`/`quotaGuestTotal`)。
 
 ---
 
