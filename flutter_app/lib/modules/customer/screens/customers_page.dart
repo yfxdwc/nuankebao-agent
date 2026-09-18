@@ -1709,9 +1709,30 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _notesController = TextEditingController();
+  final _diseaseController = TextEditingController(); // 既往病史
+  final _allergyController = TextEditingController(); // 过敏史 (2026-09-18 新增)
+  final _customTagController = TextEditingController(); // 自定义健康标签
   String? _gender = 'F';
   DateTime? _birthYear;
+  /// 生日 月/日 (主人 2026-09-18 拍): 都可缺 — 不知道就 null
+  int? _birthMonth;
+  int? _birthDay;
+  /// 历法: solar 阳历 / lunar 农历
+  String _birthCalendar = 'solar';
+  /// 生日提醒强度 (7/3/0 天); null = 不提醒
+  /// 规则: 月 + 日 都填 = 自动开启 (默认 3 天前); 任一个清空 = 关掉
+  int? _birthdayRemindDays = 3;
   final List<String> _healthTags = [];
+
+  /// 健康标签默认候选项 (中老年养生高频; 主人 2026-09-18 拍「显示一些默认候选项」)
+  static const List<String> _defaultHealthTags = [
+    '肩颈僵硬', '腰椎不适', '膝关节痛', '睡眠差',
+    '体寒怕冷', '湿气重', '气血不足', '脾胃虚弱',
+    '手脚冰凉', '头晕乏力', '更年期', '便秘',
+  ];
+
+  /// 自定义标签上限: 6 个汉字 (主人 2026-09-18 拍)
+  static const int _maxTagLength = 6;
   /// 客户推荐人 (客户页图谱关系边). null = 无推荐人
   String? _referrerId;
   String? _referrerName;
@@ -1737,8 +1758,14 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       _nameController.text = c.name;
       _phoneController.text = c.phone;
       _notesController.text = c.notes ?? '';
+      _diseaseController.text = c.diseaseHistory ?? '';
+      _allergyController.text = c.allergyHistory ?? '';
       _gender = c.gender;
       _birthYear = c.birthYear != null ? DateTime(c.birthYear!, 1, 1) : null;
+      _birthMonth = c.birthMonth;
+      _birthDay = c.birthDay;
+      _birthCalendar = c.birthCalendar;
+      _birthdayRemindDays = c.birthdayRemindDays;
       _healthTags.clear();
       _healthTags.addAll(c.healthTags);
       _referrerId = c.referrerId;
@@ -1752,6 +1779,9 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     _nameController.dispose();
     _phoneController.dispose();
     _notesController.dispose();
+    _diseaseController.dispose();
+    _allergyController.dispose();
+    _customTagController.dispose();
     super.dispose();
   }
 
@@ -1764,7 +1794,14 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
         'phone': _phoneController.text,
         if (_gender != null) 'gender': _gender,
         if (_birthYear != null) 'birthYear': _birthYear!.year,
+        // 生日细化 + 提醒 (显式发 null = 清空; 后端按月/日 自动开关提醒)
+        'birthMonth': _birthMonth,
+        'birthDay': _birthDay,
+        'birthCalendar': _birthCalendar,
+        'birthdayRemindDays': _birthdayRemindDays,
         'healthTags': _healthTags,
+        'diseaseHistory': _diseaseController.text,
+        'allergyHistory': _allergyController.text,
         if (_notesController.text.isNotEmpty) 'notes': _notesController.text,
         // referrerId: 显式发 null 清空, undefined 不变
         'referrerId': _referrerId,
