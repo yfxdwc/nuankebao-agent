@@ -262,7 +262,15 @@ if [ -f "$VERSION_FILE" ]; then
   # bump build_number
   CURRENT_BUILD=$(grep -oE '"build_number":"[0-9]+"' "$VERSION_FILE" | grep -oE '[0-9]+' || echo "1")
   NEW_BUILD=$((CURRENT_BUILD + 1))
-  CURRENT_VERSION=$(grep -oE '"version":"[^"]*"' "$VERSION_FILE" | cut -d'"' -f4)
+  # 注 (2026-09-18 二次加固): 同一个坑的另一处 — version 字段缺失时 grep 无匹配返回 1,
+  #   在 `set -euo pipefail` 下直接退出 (此时已同步但 version/SW hash 都没更新 → 浏览器拿不到新版)。
+  #   顺带: version 不是 x.y.z 时 `$((PATCH+1))` 会算术报错, 一并兜底成 0.2.0。
+  CURRENT_VERSION=$(grep -oE '"version":"[^"]*"' "$VERSION_FILE" | cut -d'"' -f4 || true)
+  CURRENT_VERSION=${CURRENT_VERSION:-0.2.0}
+  if ! [[ "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    warn "version.json 里 version 不合法 (${CURRENT_VERSION}) → 退回 0.2.0 再 bump"
+    CURRENT_VERSION="0.2.0"
+  fi
   # 生成 timestamp-based version (SemVer patch 增量, e.g. 0.1.0 → 0.1.1)
   BASE_VERSION="${CURRENT_VERSION%.*}"
   PATCH=$(echo "$CURRENT_VERSION" | awk -F. '{print $3}')
