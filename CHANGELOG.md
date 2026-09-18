@@ -62,8 +62,15 @@
 **public/app 重新 build** (同一任务第二次; `--auto`, `pnpm test tests/preview-framework-snapshot.test.ts` 19 passed)
 主人浏览器需 Ctrl+Shift+R 硬刷新。
 
-**遗留 (已记录, 未改)**: viewer 自己的客户档案 (本人) 落在「普通」桶里 (加盟 = 下级, 不含自己)；
-若不想看到自己，可后续加「排除自己」规则 (需主人拍，会影响 all 计数口径)。
+**遗留/澄清**
+- viewer 自己的客户档案 (本人) 落在「普通」桶里 (加盟 = 下级, 不含自己)；
+  若不想看到自己，可后续加「排除自己」规则 (需主人拍，会影响 all 计数口径)
+- **更正 (2026-09-18 晚, 主人追问层级上限后核实)**: 上一版本条目写过「层级超过 4 层时胶囊数字会大于图谱
+  节点数」—— **这句是错的**: 第 5 层根本建不出来。实测 `POST /api/franchisees` referrerId=depth4 节点 →
+  HTTP 400「加盟树深度上限 4 层 (ADR-0010)」；所以胶囊数不可能超过 depth=4 能画出的节点数。
+  该限制位于 `franchisee-tree.ts: MAX_DEPTH = 4` (服务层) + `me/tree route: Math.min(depth, 4)` (接口层)
+  + `schema.ts` 里一个**未实际 migrate 到 DB 的 CHECK 注释**。它源自 ADR-0006 的合规红线 (《禁止传销条例》)
+  —— 即 **合规约束，不是技术约束**；要不要放开已单独 ask 主人 (待拍)
 
 ### Fixed (DEV_SKIP_AUTH 白名单全仓补齐 + migration 进 git + build 脚本 --auto 修复, 2026-09-18 主人拍)
 
