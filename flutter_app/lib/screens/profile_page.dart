@@ -308,6 +308,36 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
   }
 }
 
+/// 手机号旁边的小按钮 (44pt 触摸区, 不是 IconButton 默认 48+
+/// —— 默认尺寸在 320 窄屏 + 特大字号下会把这一行顶溢)
+class _PhoneAction extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _PhoneAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(22),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(icon, size: 24, color: AppTheme.primaryDark),
+        ),
+      ),
+    );
+  }
+}
+
 /// 小标签 (角色 / 门店) —— 加盟身份用项目统一的 FranchiseChip
 class _Tag extends StatelessWidget {
   final String text;
