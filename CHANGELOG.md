@@ -2,6 +2,27 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (客户列表筛选 = 胶囊按键 4 段, 2026-09-18 主人拍)
+
+**主人要**: 「客户.列表页。把搜索栏正面的筛选标签(全部、加盟、普通、种子)组合成胶囊按键」
+
+- **改**: `flutter_app/lib/modules/customer/screens/customers_page.dart`
+  - 旧 = `SizedBox(h:56)` + 横向 `ListView` + 4 个 `FilterChip` (可左右滚, 右侧留半截, 不整齐)
+  - 新 = `SegmentedButton<_CustomerFilter>` 4 段 (全部 / 🟣 加盟 / 🟢 普通 / 🌱 种子),
+    `expandedInsets: EdgeInsets.zero` → 4 段平分整行宽 (393pt − 32pt 内边距 = 361pt, 每段 ≈90pt)
+  - 跟图谱筛选 (全部/A线/B线/直推, commit 1b1de54) **同一组件同一样式**, 视觉统一
+  - 删掉不再使用的 `_buildChip()` (FilterChip 版本)
+- **验证** (widget golden, 393x852 真机尺寸, 临时测试文件已删):
+  - 4 段等宽: 段边界 x≈16 / 107 / 197 / 288 / 377; 胶囊行高 40pt (y 147–186)
+  - 4 个标签均**单行** (ink y 160–169), 无换行 / 无省略: 最宽标签「🟣 加盟」ink 53pt, 段内左右各余 17pt
+  - 点选切换正常 (选中底色随点击从第 1 段移到第 3 段), `takeException() == null` (无 RenderFlex 溢出)
+  - 截图: `/tmp/nuankebao-filter-capsule/*.png` (列表默认态 / 点「普通」后 / 放大裁剪)
+- **⚠ 未做 / 待主人拍**:
+  - `_applyFilter()` 仍是 TODO (返回全量) — 胶囊目前只是**高亮**, 真过滤要后端提供客户
+    `type` (本人/加盟/普通/种子) + API 侧过滤; 改动前的 FilterChip 版本同样如此 (非本次回归)
+  - `public/app/**` (Flutter web 构建产物) **没重新 build** — 预览页 `/app-preview` 里还是旧 chips;
+    要刷新预览需跑 `tools/build-flutter-web.sh` (涉及 preview 冻结路径 AGENTS §9, 等主人拍)
+
 ### Fixed (加盟商编辑页路由缺失 + 路由兜底, 2026-09-17 主人报)
 
 **主人报**: 「修复加盟商详情的编辑页面, 当前报错: `GoException: no routes for location: /franchisees/81/edit`」
