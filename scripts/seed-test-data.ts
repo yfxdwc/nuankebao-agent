@@ -411,6 +411,9 @@ async function main() {
       phone,
       gender: spec.gender,
       birthYear: spec.birthYear,
+      // 种子客户 = 显式开关 (customer.is_seed, 主人 2026-09-18 拍)
+      //   改了这里 /api/customers?type=seed 才筛得出来 (旧数据都是 normal)
+      isSeed: spec.isSeed,
     };
     if (spec.referrerIndex !== undefined && createdCustomers[spec.referrerIndex]) {
       payload.referrerId = createdCustomers[spec.referrerIndex].id;

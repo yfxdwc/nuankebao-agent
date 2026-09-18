@@ -28,7 +28,17 @@ mixin _$Customer {
   List<String> get healthTags => throw _privateConstructorUsedError;
   String? get diseaseHistory => throw _privateConstructorUsedError;
   String? get notes => throw _privateConstructorUsedError;
+
+  /// 客户推荐人 (客户页图谱数据源), null = 无推荐人 (根/孤儿节点)
   String? get referrerId => throw _privateConstructorUsedError;
+
+  /// 种子客户标记 (显式勾选, 主人 2026-09-18). 老后端不返回该字段 → 默认 false
+  bool get isSeed => throw _privateConstructorUsedError;
+
+  /// 客户类型 (混合判定, 后端算好): franchisee 加盟 / seed 种子 / normal 普通
+  /// 优先级: 加盟 > 种子 > 普通 (加盟表派生 > is_seed > 默认)
+  /// 老后端不返回该字段 → 默认 'normal'
+  String get customerType => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get updatedAt => throw _privateConstructorUsedError;
 
@@ -57,6 +67,8 @@ abstract class $CustomerCopyWith<$Res> {
       String? diseaseHistory,
       String? notes,
       String? referrerId,
+      bool isSeed,
+      String customerType,
       DateTime createdAt,
       DateTime updatedAt});
 }
@@ -85,6 +97,8 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
     Object? diseaseHistory = freezed,
     Object? notes = freezed,
     Object? referrerId = freezed,
+    Object? isSeed = null,
+    Object? customerType = null,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -125,6 +139,14 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
           ? _value.referrerId
           : referrerId // ignore: cast_nullable_to_non_nullable
               as String?,
+      isSeed: null == isSeed
+          ? _value.isSeed
+          : isSeed // ignore: cast_nullable_to_non_nullable
+              as bool,
+      customerType: null == customerType
+          ? _value.customerType
+          : customerType // ignore: cast_nullable_to_non_nullable
+              as String,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -155,6 +177,8 @@ abstract class _$$CustomerImplCopyWith<$Res>
       String? diseaseHistory,
       String? notes,
       String? referrerId,
+      bool isSeed,
+      String customerType,
       DateTime createdAt,
       DateTime updatedAt});
 }
@@ -181,6 +205,8 @@ class __$$CustomerImplCopyWithImpl<$Res>
     Object? diseaseHistory = freezed,
     Object? notes = freezed,
     Object? referrerId = freezed,
+    Object? isSeed = null,
+    Object? customerType = null,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -221,6 +247,14 @@ class __$$CustomerImplCopyWithImpl<$Res>
           ? _value.referrerId
           : referrerId // ignore: cast_nullable_to_non_nullable
               as String?,
+      isSeed: null == isSeed
+          ? _value.isSeed
+          : isSeed // ignore: cast_nullable_to_non_nullable
+              as bool,
+      customerType: null == customerType
+          ? _value.customerType
+          : customerType // ignore: cast_nullable_to_non_nullable
+              as String,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -246,6 +280,8 @@ class _$CustomerImpl implements _Customer {
       this.diseaseHistory,
       this.notes,
       this.referrerId,
+      this.isSeed = false,
+      this.customerType = 'normal',
       required this.createdAt,
       required this.updatedAt})
       : _healthTags = healthTags;
@@ -277,8 +313,22 @@ class _$CustomerImpl implements _Customer {
   final String? diseaseHistory;
   @override
   final String? notes;
+
+  /// 客户推荐人 (客户页图谱数据源), null = 无推荐人 (根/孤儿节点)
   @override
   final String? referrerId;
+
+  /// 种子客户标记 (显式勾选, 主人 2026-09-18). 老后端不返回该字段 → 默认 false
+  @override
+  @JsonKey()
+  final bool isSeed;
+
+  /// 客户类型 (混合判定, 后端算好): franchisee 加盟 / seed 种子 / normal 普通
+  /// 优先级: 加盟 > 种子 > 普通 (加盟表派生 > is_seed > 默认)
+  /// 老后端不返回该字段 → 默认 'normal'
+  @override
+  @JsonKey()
+  final String customerType;
   @override
   final DateTime createdAt;
   @override
@@ -286,7 +336,7 @@ class _$CustomerImpl implements _Customer {
 
   @override
   String toString() {
-    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, healthTags: $healthTags, diseaseHistory: $diseaseHistory, notes: $notes, referrerId: $referrerId, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, healthTags: $healthTags, diseaseHistory: $diseaseHistory, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -307,6 +357,9 @@ class _$CustomerImpl implements _Customer {
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.referrerId, referrerId) ||
                 other.referrerId == referrerId) &&
+            (identical(other.isSeed, isSeed) || other.isSeed == isSeed) &&
+            (identical(other.customerType, customerType) ||
+                other.customerType == customerType) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -326,6 +379,8 @@ class _$CustomerImpl implements _Customer {
       diseaseHistory,
       notes,
       referrerId,
+      isSeed,
+      customerType,
       createdAt,
       updatedAt);
 
@@ -356,6 +411,8 @@ abstract class _Customer implements Customer {
       final String? diseaseHistory,
       final String? notes,
       final String? referrerId,
+      final bool isSeed,
+      final String customerType,
       required final DateTime createdAt,
       required final DateTime updatedAt}) = _$CustomerImpl;
 
@@ -378,8 +435,20 @@ abstract class _Customer implements Customer {
   String? get diseaseHistory;
   @override
   String? get notes;
+
+  /// 客户推荐人 (客户页图谱数据源), null = 无推荐人 (根/孤儿节点)
   @override
   String? get referrerId;
+
+  /// 种子客户标记 (显式勾选, 主人 2026-09-18). 老后端不返回该字段 → 默认 false
+  @override
+  bool get isSeed;
+
+  /// 客户类型 (混合判定, 后端算好): franchisee 加盟 / seed 种子 / normal 普通
+  /// 优先级: 加盟 > 种子 > 普通 (加盟表派生 > is_seed > 默认)
+  /// 老后端不返回该字段 → 默认 'normal'
+  @override
+  String get customerType;
   @override
   DateTime get createdAt;
   @override

@@ -190,13 +190,15 @@ export async function createCustomer(
       : null,
     notesEncrypted: input.notes ? encryptField(input.notes) : null,
     referrerId: input.referrerId ? BigInt(input.referrerId) : null,
+    isSeed: input.isSeed ?? false,
     createdBy,
   };
 
   const [row] = await withAuditContext(ctx, async (tx) => {
     return await tx.insert(customer).values(encryptedData).returning();
   });
-  return toView(row);
+  // 新建客户可能已经是加盟商 (同手机号有 franchisee 记录) → 类型一次算准
+  return toView(row, await loadFranchiseePhoneHashes([row.phoneHash]));
 }
 
 export async function getCustomerById(

@@ -20,6 +20,8 @@ _$CustomerImpl _$$CustomerImplFromJson(Map<String, dynamic> json) =>
       diseaseHistory: json['diseaseHistory'] as String?,
       notes: json['notes'] as String?,
       referrerId: json['referrerId'] as String?,
+      isSeed: json['isSeed'] as bool? ?? false,
+      customerType: json['customerType'] as String? ?? 'normal',
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -35,6 +37,8 @@ Map<String, dynamic> _$$CustomerImplToJson(_$CustomerImpl instance) =>
       'diseaseHistory': instance.diseaseHistory,
       'notes': instance.notes,
       'referrerId': instance.referrerId,
+      'isSeed': instance.isSeed,
+      'customerType': instance.customerType,
       'createdAt': instance.createdAt.toIso8601String(),
       'updatedAt': instance.updatedAt.toIso8601String(),
     };

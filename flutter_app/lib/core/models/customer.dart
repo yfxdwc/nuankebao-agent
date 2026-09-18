@@ -16,6 +16,12 @@ class Customer with _$Customer {
     String? notes,
     /// 客户推荐人 (客户页图谱数据源), null = 无推荐人 (根/孤儿节点)
     String? referrerId,
+    /// 种子客户标记 (显式勾选, 主人 2026-09-18). 老后端不返回该字段 → 默认 false
+    @Default(false) bool isSeed,
+    /// 客户类型 (混合判定, 后端算好): franchisee 加盟 / seed 种子 / normal 普通
+    /// 优先级: 加盟 > 种子 > 普通 (加盟表派生 > is_seed > 默认)
+    /// 老后端不返回该字段 → 默认 'normal'
+    @Default('normal') String customerType,
     required DateTime createdAt,
     required DateTime updatedAt,
   }) = _Customer;
