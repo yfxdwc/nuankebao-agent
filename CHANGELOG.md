@@ -2,6 +2,61 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (客户详情页内容丰富: 养生记录 + AI 4 卡 + 跟进 + 互动, 2026-09-18 主人要)
+
+**主人要**: 「丰富客户详情页内容（最少要有已打包的最新版本apk中的客户详情项：养生记录、
+ai客户画像、ai跟进建议、复购预测、效果分析等，或更多）」
+
+**实现了什么** (客户详情页现在从上到下):
+
+| 区 | 内容 | 数据源 |
+|---|---|---|
+| 头部 | 头像(类型配色) + 姓名 + **类型徽章**(加盟/种子/普通) + 手机号 + 性别/年龄/建档日 + **健康标签** + 既往病史 + 「**打电话**」/「**记一次互动**」 | customer detail |
+| 养生记录 | 汇总(`共 N 次 · 最近 yyyy-MM-dd`) + 最近 5 条 + 「查看全部 N 条」底部弹层 + 「+ 添加记录」 | wellness-records?customerId |
+| **AI 助手** | **复购预测**(自动算, 不烧额度) / **AI 跟进建议** / **AI 客户画像** / **效果分析** | /api/ai/* |
+| 跟进任务 | 该客户待办 + 一键「完成」+ 新建 | follow-ups?customerId (本次新增) |
+| 互动记录 | 电话/微信/到店/节日问候流水 + 计数 | interactions?customerId |
+
+**Flutter**
+- 新 `core/models/ai_insight.dart`: `RepurchasePrediction` / `EffectAnalysis` / `CustomerProfileInsight` /
+  `FollowUpSuggestion` (手写 fromJson, 字段缺失有兜底, 不引 codegen)
+- `AiService` 新增 `profileInsight` / `followUpInsight(reason)` / `repurchasePrediction` / `effectAnalysis` 4 个类型化方法
+- 新 `modules/customer/widgets/ai_insight_cards.dart`: 4 张卡 ——
+  · **省钱策略**: 复购预测是纯 DB 计算 → 进页自动加载; 其余 3 个烧 MiniMax 额度 → **点了才生成**,
+    生成后缓存 + 可重新生成; 失败给明文案 + 重试; mock 数据打「示例数据」标
+  · 跟进卡: 原因 ChoiceChip(好久没来/想约到店/节日问候/该复购) → 话术 + 「复制话术」/「建跟进任务」
+  · 复购卡: 距上次/平均周期/预计下次三指标 + 置信度 + 预测到期时给「建一条跟进任务」
+- 新 `modules/customer/widgets/customer_activity_cards.dart`: 跟进任务区(一键完成) + 互动记录区 +
+  **`showAddFollowUpSheet`**(跟进任务弹层) / 记互动弹层(类型 Chip + 备注)
+- `providers`: 新增 `customerFollowUpTasksProvider` / `interactionsForCustomerProvider` (按客户, provider 驱动
+  以便完成/新增后自动刷新)
+- 中老年友好: 卡片标题 18pt / 正文 16pt 行高 1.6 / 按钮 48-56pt / 关键数字用色块凸显
+
+**Backend**
+- `GET /api/follow-ups?customerId=` 新增客户过滤 (`listFollowUpTasks({ customerId })`) —— 客户详情页用
+- ❗**修一个真 bug: AI 调用静默返回空文本** —— `src/lib/ai/client.ts` 原来用 `@ai-sdk/minimax` +
+  `ai@3.4.0` 的 `generateText()`, 实测 `text=""` + `finishReason: stop` + usage 全 null (**不报错**) →
+  客户画像/效果分析/跟进话术三个卡片全是空白。根因: provider 包 (`latest`) 与 ai 核心 v3.4 协议不匹配。
+  改为**直连 MiniMax Anthropic 兼容端点** (`POST {base}/v1/messages`, `x-api-key` + `anthropic-version`),
+  同一把 key; 报错/空文本/超时(60s) 一律回退 mock (页面不会白)。`isAIEnabled()` 同步改用 key 判定。
+
+**验证**
+- **真 AI 三连** (dev server + 真 MiniMax key): 跟进话术 118 tokens 真话术 ✓; 客户画像真摘要(含健康/偏好/建议) ✓;
+  效果分析真报告(趋势+改善幅度+注意事项) ✓; 三个接口 `aiMock: false` + usage 有值 ✓
+- **真浏览器 E2E** (playwright + 隧道 + build 后 /app, 客户 1 王女士, 截图 `/tmp/nuankebao-detail/e2e-*.png`):
+  头部 = `王女士 /🟢 普通/139****5678/女/41 岁/建档 2026-09-03/打电话/记一次互动/健康标签(肩颈,睡眠差)` ✓;
+  养生记录 = `共 4 次 · 最近 2026-09-16` + 4 条 ✓; AI 助手区 = 复购预测(自动, `GET /api/ai/repurchase-prediction/1` 200)
+  + 结果(`重新计算/建一条跟进任务`) + AI 跟进建议(原因 Chips + 生成按钮) + AI 客户画像 + 效果分析 ✓;
+  底部 = 跟进任务 + 互动记录 + `新建跟进任务` ✓
+- **widget golden** 4 张 (393x852): 顶部 / AI 区 / 生成话术结果 / 底部 (跟进+互动), 断言文案与结构;
+  测试帮抓出 1 处 `RenderFlex overflowed 4.3px` (窄屏/大字体下头部计数挤爆) → 已用 `Flexible + ellipsis` 修
+- `npx tsc --noEmit` 0 error; vitest `tests/ai-client.test.ts` 5 例 pass
+
+**public/app 重新 build** (`--auto`, preview 冻结路径 §9.3 主人拍); 主人浏览器需 Ctrl+Shift+R。
+
+**遗留**: 真机 APK 上的「拨号」需在手机上验一次 (web 不支持 tel:, 已做失败提示);
+AI 卡片的生成结果未做服务端缓存 (每次点都重新生成, 没额度压力再说).
+
 ### Changed (加盟树层级**不限** + 图谱懒加载 + 补写 ADR-0006, 2026-09-18 主人拍)
 
 **主人问**: 「层级超过 4 层时（ADR-0010 上限）？我没理解这个限制，层级不应该做限制，理论上是可以无限层级的」

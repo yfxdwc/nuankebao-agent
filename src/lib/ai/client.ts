@@ -1,14 +1,16 @@
-import { createMiniMax } from "@ai-sdk/minimax";
-import { generateText } from "ai";
-
 // ============================================
 // MiniMax AI 客户端封装
 //
-// 有 MINIMAX_API_KEY 时用真实 API
-// 没 key 时走 mock (返回模板话术, 方便主人开发测试)
+// 有 MINIMAX_API_KEY 时用真实 API; 没 key / 调用失败 → mock 模板
 //
-// 详见 docs/references.md §4 (AI Builder 工作流嵌入)
-// 借鉴 LangChain LCEL + Vercel AI SDK
+// ⚙️ 实现变更 (2026-09-18, 主人拍客户详情页要真 AI):
+//   旧实现用 `@ai-sdk/minimax` + `ai@3.4.0` 的 `generateText()` —— 实测**静默返回空文本**
+//   (`text=""` + `finishReason: stop` + usage 全 null), 不报错 → 客户画像/效果分析/跟进话术
+//   三个卡片全是空白。根因: provider 包 (`latest`) 与 ai 核心 v3.4 的协议不匹配。
+//   现改为**直连 MiniMax 的 Anthropic 兼容端点** (POST {base}/messages) —— 同一把 key,
+//   跟官方文档一致, 不依赖 SDK 版本; 响应缺字段/报错仍回退 mock (不会把页面搞白)。
+//
+// 详见 docs/references.md §4 + docs/adr/0001-tech-stack.md
 // ============================================
 
 export interface AIMessage {
@@ -34,30 +36,27 @@ export interface AICompletionResult {
   };
 }
 
-let cachedClient: ReturnType<typeof createMiniMax> | null = null;
-let useMock = true;
+/** 拼接 Anthropic 兼容端点: base 可能带/不带 /v1 → 都归一化到 /v1/messages */
+function messagesEndpoint(base: string): string {
+  const trimmed = base.replace(/\/+$/, "");
+  const withV1 = /\/v1$/.test(trimmed) ? trimmed : `${trimmed}/v1`;
+  return `${withV1}/messages`;
+}
 
-function getClient() {
-  if (cachedClient) return cachedClient;
-
+/** 是否配了可用的 key (长度太短视为占位) */
+export function isAIConfigured(): boolean {
   const apiKey = process.env.MINIMAX_API_KEY;
-  if (!apiKey || apiKey.length < 10) {
-    useMock = true;
-    return null;
-  }
+  return !!apiKey && apiKey.length >= 10;
+}
 
-  try {
-    cachedClient = createMiniMax({
-      apiKey,
-      baseURL: process.env.MINIMAX_API_BASE || "https://api.minimaxi.com/anthropic",
-    });
-    useMock = false;
-    return cachedClient;
-  } catch (error) {
-    console.warn("[ai] 初始化 MiniMax 客户端失败, 走 mock:", error);
-    useMock = true;
-    return null;
-  }
+interface AnthropicMessagesResponse {
+  content?: Array<{ type?: string; text?: string }>;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+  base_resp?: { status_code?: number; status_msg?: string };
+  error?: { message?: string; type?: string };
 }
 
 /**
@@ -66,36 +65,77 @@ function getClient() {
 export async function aiComplete(
   options: AICompletionOptions
 ): Promise<AICompletionResult> {
-  const client = getClient();
-  const modelName = process.env.MINIMAX_MODEL || "minimax-text-01";
+  const modelName = process.env.MINIMAX_MODEL || "MiniMax-M3";
 
-  if (!client || useMock) {
-    return {
-      text: mockCompletion(options),
-      mock: true,
-      model: `${modelName} (mock)`,
-    };
+  if (!isAIConfigured()) {
+    return { text: mockCompletion(options), mock: true, model: `${modelName} (mock)` };
   }
 
+  const base = process.env.MINIMAX_API_BASE || "https://api.minimaxi.com/anthropic";
   try {
-    const result = await generateText({
-      model: client(modelName) as any,
-      system: options.system,
-      prompt: options.prompt,
-      maxTokens: options.maxTokens ?? 500,
-      temperature: options.temperature ?? 0.7,
+    const res = await fetch(messagesEndpoint(base), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.MINIMAX_API_KEY!, // Anthropic 风格鉴权头
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: modelName,
+        max_tokens: options.maxTokens ?? 500,
+        temperature: options.temperature ?? 0.7,
+        ...(options.system ? { system: options.system } : {}),
+        messages: [{ role: "user", content: options.prompt }],
+      }),
+      // AI 生成慢: 给 60s (图片/大段文本也可能久)
+      signal: AbortSignal.timeout(60_000),
     });
+
+    const data = (await res.json()) as AnthropicMessagesResponse;
+
+    if (!res.ok || data.error) {
+      console.error(
+        "[ai] MiniMax API 报错:",
+        res.status,
+        data.error?.message ?? data.base_resp?.status_msg
+      );
+      return {
+        text: mockCompletion(options),
+        mock: true,
+        model: `${modelName} (error-fallback)`,
+      };
+    }
+
+    const text = (data.content ?? [])
+      .filter((b) => b.type === "text" && b.text)
+      .map((b) => b.text)
+      .join("")
+      .trim();
+
+    // 空文本也算失败 (2026-09-18 的 bu�� 就是这个: 不报错但没内容)
+    if (!text) {
+      console.error("[ai] MiniMax 返回空文本, 走 mock", JSON.stringify(data).slice(0, 300));
+      return {
+        text: mockCompletion(options),
+        mock: true,
+        model: `${modelName} (empty-fallback)`,
+      };
+    }
+
+    const inTok = data.usage?.input_tokens;
+    const outTok = data.usage?.output_tokens;
     return {
-      text: result.text,
+      text,
       mock: false,
       model: modelName,
-      usage: result.usage
-        ? {
-            promptTokens: result.usage.promptTokens,
-            completionTokens: result.usage.completionTokens,
-            totalTokens: result.usage.totalTokens,
-          }
-        : undefined,
+      usage:
+        inTok != null && outTok != null
+          ? {
+              promptTokens: inTok,
+              completionTokens: outTok,
+              totalTokens: inTok + outTok,
+            }
+          : undefined,
     };
   } catch (error) {
     console.error("[ai] MiniMax API 调用失败, fallback mock:", error);
@@ -204,9 +244,8 @@ export async function aiChat(messages: AIMessage[]): Promise<string> {
 }
 
 /**
- * 检查 AI 是否可用 (API key 配置 + 客户端可初始化)
+ * 检查 AI 是否可用 (API key 配置)
  */
 export function isAIEnabled(): boolean {
-  getClient(); // 触发初始化
-  return !useMock;
+  return isAIConfigured();
 }

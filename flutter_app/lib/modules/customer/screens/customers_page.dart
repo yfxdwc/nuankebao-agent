@@ -1180,11 +1180,17 @@ class CustomerDetailPage extends ConsumerWidget {
                   data: (records) {
                     if (records.isEmpty) return const SizedBox.shrink();
                     final last = records.first.serviceDate.toString();
-                    return Text(
-                      '共 ${records.length} 次 · 最近 ${fmt.format(DateTime.parse(last))}',
-                      style: const TextStyle(
-                          fontSize: AppTheme.fontXs,
-                          color: AppTheme.textSecondary),
+                    // Flexible: 窄屏/大字体下让文案省略, 不撑破 Row (中老年常放大系统字号)
+                    return Flexible(
+                      child: Text(
+                        '共 ${records.length} 次 · 最近 ${fmt.format(DateTime.parse(last))}',
+                        style: const TextStyle(
+                            fontSize: AppTheme.fontXs,
+                            color: AppTheme.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                      ),
                     );
                   },
                   orElse: () => const SizedBox.shrink(),
@@ -1321,6 +1327,8 @@ class CustomerDetailPage extends ConsumerWidget {
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimary,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),

@@ -190,10 +190,14 @@ class _CustomerFollowUpSectionState
                           fontWeight: FontWeight.w700)),
                 ),
                 async.maybeWhen(
-                  data: (tasks) => Text('${tasks.length} 条待办',
-                      style: const TextStyle(
-                          fontSize: AppTheme.fontXs,
-                          color: AppTheme.textSecondary)),
+                  data: (tasks) => Flexible(
+                    child: Text('${tasks.length} 条待办',
+                        style: const TextStyle(
+                            fontSize: AppTheme.fontXs,
+                            color: AppTheme.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
                   orElse: () => const SizedBox.shrink(),
                 ),
               ],
@@ -339,10 +343,14 @@ class _CustomerInteractionSectionState
                           fontWeight: FontWeight.w700)),
                 ),
                 if (items.isNotEmpty)
-                  Text('共 ${items.length} 次',
-                      style: const TextStyle(
-                          fontSize: AppTheme.fontXs,
-                          color: AppTheme.textSecondary)),
+                  Flexible(
+                    child: Text('共 ${items.length} 次',
+                        style: const TextStyle(
+                            fontSize: AppTheme.fontXs,
+                            color: AppTheme.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
