@@ -50,7 +50,10 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // 不用 pumpAndSettle: loading spinner / RefreshIndicator 一直在动, 会挂死
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 300));
 
     // 溢出 = 测试直接红, 这里显式断言一次 (胶囊 4 段平分 393pt)
     expect(tester.takeException(), isNull);
@@ -62,7 +65,8 @@ void main() {
 
     // 选中态也截一张 (点「普通」)
     await tester.tap(find.text('🟢 普通'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 300));
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/tmp_filter_capsule_list_selected.png'),
