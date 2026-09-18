@@ -67,12 +67,9 @@
 → 预览页同源调 API, 不再出现「隧道 https 页面调 http://192.168.1.200:3003 被浏览器拦 (mixed content)」;
 version.json `0.2.11#12 → 0.2.12#13` + SW hash 已 bump (主人侧需 Ctrl+Shift+R 硬刷新)
 
-**⚠ 发现 (不在本次范围, 待主人拍)**
-1. `tools/build-flutter-web.sh --auto` **本身有 bug**: `set -e` + 空 `DART_DEFINE` 让
-   `EXPECTED_IP=$(echo "" | grep -oE ...)` 返回 1 → 脚本在「验证」步直接退出, **永不同步到 public/app**。
-   本次是手动跑同款 rsync/version bump 完成的。脚本在冻结清单 (AGENTS §9), 没主人拍不改
-2. `/api/auth/flutter-login` 在 dev (NODE_ENV != production) 直接发 JWT, 而 dev 机器**已通过隧道暴露公网**
-   → 任何人知道 `13800138000 / 123456` 就能拿 session。之前就有, 但这次 E2E 复现了, 建议尽快关 (加 secret / 隧道限流 / 生产环境不暴露)
+**⚠ 发现 (已处理/已拍, 详见上一条 2026-09-18 修复条目)**
+1. ~~`tools/build-flutter-web.sh --auto` 有 `set -e` bug~~ → ✅ 已修 (主人拍, `--no-verify` + 全流程实测)
+2. ~~`/api/auth/flutter-login` dev 免密 + 公网可达~~ → ⚠ 主人拍「接受风险, 先保持」, 留档不改
 
 ### Changed (客户列表筛选 = 胶囊按键 4 段 — UI 部分, 2026-09-18 主人拍)
 
