@@ -57,28 +57,35 @@ final photoServiceProvider = Provider<PhotoService>(
 // 数据 Providers (UI 层用)
 // ============================================
 
-/// 客户列表 (含搜索) - W5 RBAC 后置
-final customersProvider = FutureProvider.family<List<dynamic>, String?>(
-  (ref, search) async {
+/// 客户列表查询参数 (搜索 + 类型筛选)
+///
+/// 类型筛选走后端 (`/api/customers?type=`), 判定规则: 加盟 (franchisee 派生) > 种子 (is_seed) > 普通
+/// 主人 2026-09-18 拍: 客户列表胶囊按键接真过滤
+class CustomerListQuery {
+  final String? search;
+  /// null / 'all' = 不筛; 其余 = 'franchisee' | 'seed' | 'normal'
+  final String? type;
+  const CustomerListQuery({this.search, this.type});
+
+  @override
+  bool operator ==(Object other) =>
+      other is CustomerListQuery && other.search == search && other.type == type;
+
+  @override
+  int get hashCode => Object.hash(search, type);
+}
+
+/// 客户列表 (含搜索 + 类型筛选) - W5 RBAC 后置
+final customersProvider = FutureProvider.family<List<dynamic>, CustomerListQuery>(
+  (ref, query) async {
     return ref.watch(customerServiceProvider).list(
-      search: search,
+      search: query.search,
+      type: query.type,
       limit: 50,
       offset: 0,
     );
   },
 );
-
-class _CustomerQuery {
-  final String? search;
-  const _CustomerQuery({this.search});
-
-  @override
-  bool operator ==(Object other) =>
-      other is _CustomerQuery && other.search == search;
-
-  @override
-  int get hashCode => search?.hashCode ?? 0;
-}
 
 /// 客户详情
 final customerDetailProvider = FutureProvider.family<dynamic, String>(

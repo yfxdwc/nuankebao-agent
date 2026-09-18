@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 class FranchiseChip extends StatelessWidget {
   /// 'franchisee' = 紫色"加盟"
   /// 'normal' = 绿色"普通"
+  /// 'seed' = 暖橙"种子" (潜在客户, 显式勾选; 主人 2026-09-18)
   final String type;
   final double fontSize;
 
@@ -16,15 +17,19 @@ class FranchiseChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFranchisee = type == 'franchisee';
+    final (label, color) = switch (type) {
+      'franchisee' => ('🟣 加盟', AppTheme.franchisee),
+      'seed' => ('🌱 种子', AppTheme.accent),
+      _ => ('🟢 普通', AppTheme.primary),
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: isFranchisee ? AppTheme.franchisee : AppTheme.primary,
+        color: color,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        isFranchisee ? '🟣 加盟' : '🟢 普通',
+        label,
         style: TextStyle(
           color: Colors.white,
           fontSize: fontSize,

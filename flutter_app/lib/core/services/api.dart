@@ -134,9 +134,17 @@ class CustomerService {
   final Dio _dio;
   CustomerService(this._dio);
 
-  Future<List<Customer>> list({String? search, int limit = 50, int offset = 0}) async {
+  /// 客户列表
+  /// [type] 类型筛选 (胶囊按键): null / 'all' = 不筛, 其余 = franchisee / seed / normal
+  Future<List<Customer>> list({
+    String? search,
+    String? type,
+    int limit = 50,
+    int offset = 0,
+  }) async {
     final res = await _dio.get('/customers', queryParameters: {
       if (search != null && search.isNotEmpty) 'search': search,
+      if (type != null && type.isNotEmpty && type != 'all') 'type': type,
       'limit': limit,
       'offset': offset,
     });

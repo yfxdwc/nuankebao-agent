@@ -101,7 +101,12 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final asyncCustomers = ref.watch(customersProvider(_search.isEmpty ? null : _search));
+    final query = CustomerListQuery(
+      search: _search.isEmpty ? null : _search,
+      // 'all' 不发给后端 (省一次白筛); 其余是真过滤 (加盟派生 / 种子 is_seed)
+      type: _filter == _CustomerFilter.all ? null : _filterToApi,
+    );
+    final asyncCustomers = ref.watch(customersProvider(query));
     // 图谱 tab 数据源: 加盟客户的 2 线图谱 (复用 franchisee/me/tree)
     // 普通 / 种子客户不参与图谱, 由 type 字段 + 后端过滤保证 (待补)
     final asyncTree = ref.watch(myFranchiseeTreeProvider(3));
@@ -222,15 +227,23 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   Widget _buildListView(AsyncValue<List<dynamic>> asyncCustomers) {
     return asyncCustomers.when(
       loading: () => const LoadingState(),
-      error: (e, _) => ErrorState(error: e, onRetry: () => ref.invalidate(customersProvider)),
+      error: (e, _) => ErrorState(
+        error: e,
+        onRetry: () => ref.invalidate(customersProvider),
+      ),
       data: (rawCustomers) {
+        // 类型筛选走后端 (主人 2026-09-18): ?type=franchisee|seed|normal
         final customers = rawCustomers.cast<Customer>();
-        final filtered = _applyFilter(customers);
-        if (filtered.isEmpty) {
+        if (customers.isEmpty) {
+          final filtered = _filter != _CustomerFilter.all;
           return EmptyState(
             icon: Icons.people_outline,
-            title: _search.isNotEmpty ? '没找到客户' : '还没有客户',
-            hint: _search.isNotEmpty ? '换个名字试试' : '点击右下角 + 添加第一位客户',
+            title: _search.isNotEmpty
+                ? '没找到客户'
+                : (filtered ? '没有${_filterLabelText}客户' : '还没有客户'),
+            hint: _search.isNotEmpty
+                ? '换个名字试试'
+                : (filtered ? '换个筛选看看，或点「全部」' : '点击右下角 + 添加第一位客户'),
             onAction: () => context.push('/customers/new'),
             actionLabel: '+ 添加客户',
           );
@@ -238,12 +251,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(customersProvider),
           child: ListView.builder(
-            itemCount: filtered.length,
+            itemCount: customers.length,
             itemBuilder: (context, i) {
-              final c = filtered[i];
+              final c = customers[i];
               return CustomerRow(
                 customer: c,
-                isFranchisee: false,
+                // 类型徽章 = 后端算好的 customerType (加盟 > 种子 > 普通)
+                isFranchisee: c.customerType == 'franchisee',
+                customerType: c.customerType,
                 pendingCount: 0,
                 onTap: () => context.push('/customers/${c.id}'),
               );
@@ -903,9 +918,32 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     return dfs(root) ? path.toSet() : null;
   }
 
-  List<Customer> _applyFilter(List<Customer> all) {
-    // TODO: 真实过滤需后端配合 isFranchisee / pendingCount
-    return all;
+  /// 胶囊筛选 → 后端 type 参数 (all 不发)
+  String get _filterToApi {
+    switch (_filter) {
+      case _CustomerFilter.all:
+        return 'all';
+      case _CustomerFilter.franchisee:
+        return 'franchisee';
+      case _CustomerFilter.normal:
+        return 'normal';
+      case _CustomerFilter.seed:
+        return 'seed';
+    }
+  }
+
+  /// 空状态文案用 (不含 emoji)
+  String get _filterLabelText {
+    switch (_filter) {
+      case _CustomerFilter.all:
+        return '';
+      case _CustomerFilter.franchisee:
+        return '加盟';
+      case _CustomerFilter.normal:
+        return '普通';
+      case _CustomerFilter.seed:
+        return '种子';
+    }
   }
 }
 
@@ -1185,6 +1223,10 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   String? _referrerId;
   String? _referrerName;
 
+  /// 种子客户 (潜在客户开关, 主人 2026-09-18 拍 — 显式勾选)
+  /// 注意: 已加盟客户 (同手机号有加盟商记录) 后端会优先显示「加盟」, 这个开关就不生效
+  bool _isSeed = false;
+
   bool _loading = false;
 
   @override
@@ -1207,6 +1249,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       _healthTags.clear();
       _healthTags.addAll(c.healthTags);
       _referrerId = c.referrerId;
+      _isSeed = c.isSeed;
       _referrerName = null; // 按需点击选择器时懒加载名字
     });
   }
@@ -1232,6 +1275,8 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
         if (_notesController.text.isNotEmpty) 'notes': _notesController.text,
         // referrerId: 显式发 null 清空, undefined 不变
         'referrerId': _referrerId,
+        // 种子客户开关 (后端算进 customerType: 加盟 > 种子 > 普通)
+        'isSeed': _isSeed,
       };
       if (widget.customerId != null) {
         await ref.read(customerServiceProvider).update(widget.customerId!, data);
@@ -1341,6 +1386,29 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 },
                 icon: const Icon(Icons.add),
                 label: const Text('添加标签', style: TextStyle(fontSize: AppTheme.fontMd)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 种子客户开关 (潜在客户, 胶囊筛选「种子」命中这里)
+            Container(
+              decoration: BoxDecoration(
+                color: _isSeed ? AppTheme.accent.withOpacity(0.12) : Colors.white,
+                border: Border.all(
+                  color: _isSeed ? AppTheme.accent : const Color(0xFFD0D0D0),
+                  width: _isSeed ? 2 : 1,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: SwitchListTile(
+                value: _isSeed,
+                onChanged: (v) => setState(() => _isSeed = v),
+                activeColor: AppTheme.accent,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                title: const Text('🌱 种子客户', style: TextStyle(fontSize: AppTheme.fontMd)),
+                subtitle: const Text(
+                  '还没体验过/刚加好友的潜在客户。勾上后客户列表可用「种子」筛出',
+                  style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -1549,7 +1617,9 @@ class _ReferrerPickerDialogState extends ConsumerState<_ReferrerPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final asyncCustomers = ref.watch(customersProvider(_search.isEmpty ? null : _search));
+    // 推荐人选择器不按类型筛 (所有客户都可能当推荐人)
+    final asyncCustomers =
+        ref.watch(customersProvider(CustomerListQuery(search: _search.isEmpty ? null : _search)));
 
     return AlertDialog(
       title: const Text('选择推荐人', style: TextStyle(fontSize: AppTheme.fontLg)),

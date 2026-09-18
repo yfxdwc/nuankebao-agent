@@ -6,7 +6,11 @@ import '../../../core/widgets/franchise_chip.dart';
 
 class CustomerRow extends StatelessWidget {
   final Customer customer;
+  /// @deprecated 改用 [customerType] (保留兼容旧调用点; 两者不一致时以 customerType 为准)
   final bool isFranchisee;
+  /// 客户类型徽章: franchisee 加盟 / seed 种子 / normal 普通
+  /// null = 回退到 [isFranchisee] 推导 (老调用点)
+  final String? customerType;
   final String? referrerName;
   final String? lastVisitDate;
   final int pendingCount;
@@ -17,13 +21,23 @@ class CustomerRow extends StatelessWidget {
     required this.customer,
     required this.onTap,
     this.isFranchisee = false,
+    this.customerType,
     this.referrerName,
     this.lastVisitDate,
     this.pendingCount = 0,
   });
 
+  /// 实际展示的类型: 显式 customerType > customer 模型里的 customerType 字段 > isFranchisee 推导
+  String get _type {
+    final t = customerType ?? customer.customerType;
+    if (t.isNotEmpty) return t;
+    return isFranchisee ? 'franchisee' : 'normal';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isFranchisee = _type == 'franchisee';
+    final isSeed = _type == 'seed';
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -42,13 +56,17 @@ class CustomerRow extends StatelessWidget {
               radius: AppTheme.avatarMd / 2,
               backgroundColor: isFranchisee
                   ? AppTheme.franchisee.withOpacity(0.2)
-                  : AppTheme.primaryLight,
+                  : (isSeed
+                      ? AppTheme.accent.withOpacity(0.2)
+                      : AppTheme.primaryLight),
               child: Text(
                 customer.name.isNotEmpty ? customer.name[0] : '?',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w600,
-                  color: isFranchisee ? AppTheme.franchisee : AppTheme.primaryDark,
+                  color: isFranchisee
+                      ? AppTheme.franchisee
+                      : (isSeed ? AppTheme.accent : AppTheme.primaryDark),
                 ),
               ),
             ),
@@ -75,13 +93,11 @@ class CustomerRow extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      FranchiseChip(
-                        type: isFranchisee ? 'franchisee' : 'normal',
-                      ),
+                      FranchiseChip(type: _type),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  // 第二行: 上级 (加盟) 或 上次到店 (普通)
+                  // 第二行: 上级 (加盟) 或 上次到店 (普通/种子)
                   if (isFranchisee && referrerName != null)
                     Text(
                       '上级: $referrerName',
