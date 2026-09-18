@@ -3,9 +3,12 @@
 // 关注点 (跟目标用户强相关):
 //   1. 资料/加盟/数据/设置四块都渲染出来 (文字对不对)
 //   2. 未加盟 / 统计缺失 / 账号资料不全 这三种空态**不崩、不空白**
-//   3. 窄屏 (320) + 特大字号 (1.3) 下不溢出 (中老年用户就是这样用的)
+//   3. 窄屏 (320) + 特大字号 (1.3) 下滚完整页**不溢出** (中老年用户就是这样用的)
 //
 // 不测: 网络请求 (provider 直接 override 成假数据), 弹层里的平台能力 (package_info 等)
+//
+// 注意: 页面是 ListView (按需构建), 内容测试用一个「高屏」viewport 让整页一次渲染完;
+//       溢出测试用真实手机尺寸 + 手动滚到底 —— 两条路径都要覆盖
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -74,9 +77,10 @@ Future<void> _pumpProfile(
   WidgetTester tester,
   ProviderContainer container, {
   double width = 393,
+  double height = 2400, // 高屏: 整页一次渲染 (内容测试用)
   double fontScale = 1.0,
 }) async {
-  tester.view.physicalSize = Size(width * 3, 852 * 3);
+  tester.view.physicalSize = Size(width * 3, height * 3);
   tester.view.devicePixelRatio = 3.0;
   addTearDown(tester.view.reset);
 
@@ -96,6 +100,14 @@ Future<void> _pumpProfile(
   await tester.pumpAndSettle();
 }
 
+/// 从顶滚到底 (溢出只会在构建到那一段时暴露)
+Future<void> _scrollToBottom(WidgetTester tester) async {
+  for (var i = 0; i < 16; i++) {
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pump();
+  }
+}
+
 void main() {
   testWidgets('个人资料: 姓名/账号/角色/门店/手机号打码 都显示', (tester) async {
     final container = await _container(_fullProfile());
@@ -106,7 +118,7 @@ void main() {
     expect(find.text('销售员'), findsOneWidget);
     expect(find.text('城南店'), findsOneWidget);
     expect(find.text('138****8000'), findsWidgets); // 头部 + 账号与安全 两处都打码
-    expect(find.text('13800138000'), findsNothing);
+    expect(find.text('13800138000'), findsNothing); // 默认不露全号
     expect(find.text('编辑我的资料'), findsOneWidget);
   });
 
@@ -170,6 +182,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(settingsProvider).fontSize, AppFontSize.xlarge);
+    // 持久化也要落到 prefs
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('settings.font_size'), 'xlarge');
   });
 
   testWidgets('未加盟: 给说明而不是空白/报错', (tester) async {
@@ -217,13 +232,15 @@ void main() {
     expect(find.textContaining('账号资料还没建全'), findsOneWidget);
   });
 
-  testWidgets('窄屏 320 + 特大字号 1.3: 不溢出', (tester) async {
+  testWidgets('窄屏 320 + 特大字号 1.3: 滚完整页不溢出', (tester) async {
     final container = await _container(_fullProfile());
-    await _pumpProfile(tester, container, width: 320, fontScale: 1.3);
+    // 真实手机尺寸 (红米/老安卓常见 320 宽) + 特大字号 —— 最容易挤破的组合
+    await _pumpProfile(tester, container, width: 320, height: 852, fontScale: 1.3);
+
+    await _scrollToBottom(tester);
 
     // 溢出会让 test framework 直接 fail (RenderFlex overflowed 是异常)
-    expect(find.text('我的加盟身份'), findsOneWidget);
-    expect(find.text('关于与帮助'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    expect(find.text('退出登录'), findsOneWidget); // 滚到底了, 整页都构建过
   });
 }
