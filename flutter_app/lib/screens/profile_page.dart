@@ -1,99 +1,158 @@
 // ============================================
-// 我的 (Profile) 页面 (Plan F2 极简版)
-// 销售员视角: 头像/上级/数据/加盟网络入口
+// 我的 (Profile) 页 —— 个人资料 + 加盟身份 + 数据概览 + 系统设置
 // ============================================
+// 目标用户: 大健康销售/客服 (中年女性为主, 移动端)
+//   → 一屏内看全「我是谁 / 我下面有谁 / 我干了多少 / 我手机上的设置」
+//   → 每条设置都**真的有效果** (不摆假开关): 字号立即变、版本真能查、
+//     网络自检真连服务器、缓存真清、退出真退
+//
+// 数据源 (一次拉完): GET /api/me → 账号 + 加盟身份 + 门店 + 数据概览
+//   见 src/app/api/me/route.ts; 模型见 core/models/me.dart
+// 本地设置: core/providers/settings_provider.dart (shared_preferences)
+//
+// 历史 (2026-09-18 主人: "丰富个人和系统设置信息"):
+//   旧版 = 头像('我' 占位) + 3 个数字 + 加盟网络入口 + 退出登录。
+//   现在: 真实姓名/角色/手机号 (可显示可复制可改) + 加盟身份明细 (编号/位置/上级/加入时间/下线数)
+//   + 数据概览 5 项 + 字号设置 + 账号与安全 (缓存/退出) + 关于与帮助 (版本/更新/自检/说明)
 
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
+import '../core/http/api_client.dart';
+import '../core/models/me.dart';
 import '../core/providers/auth_provider.dart';
 import '../core/providers/service_providers.dart';
+import '../core/providers/settings_provider.dart';
 import '../core/theme/app_theme.dart';
-import '../core/widgets/big_button.dart';
 import '../core/widgets/empty_state.dart';
 import '../core/widgets/franchise_chip.dart';
-import '../core/models/dashboard.dart';
-
-final _dashboardStatsProvider = dashboardStatsProvider;
-
-// W5 RBAC: 角色 → 中文显示
-const Map<String, String> _roleLabels = {
-  'admin': '管理员',
-  'manager': '店长',
-  'sales': '销售员',
-};
+import 'profile_sheets.dart';
+import 'profile_widgets.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authProvider);
-    final asyncStats = ref.watch(_dashboardStatsProvider);
+    final profileAsync = ref.watch(meProfileProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('我的'),
         toolbarHeight: 64,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        children: [
-          // 头像 + 基本信息卡
-          _buildProfileHeader(auth),
-          const SizedBox(height: 16),
-
-          // 我的数据
-          _buildStatsCard(asyncStats, ref),
-          const SizedBox(height: 16),
-
-          // 我的加盟网络入口 (接 Plan F3)
-          Card(
-            margin: EdgeInsets.zero,
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              leading: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppTheme.franchisee.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Icon(Icons.account_tree, color: AppTheme.franchisee, size: 28),
-              ),
-              title: const Text(
-                '我的加盟网络',
-                style: TextStyle(fontSize: AppTheme.fontMd, fontWeight: FontWeight.w600),
-              ),
-              subtitle: const Text(
-                '查看上下级加盟商',
-                style: TextStyle(fontSize: AppTheme.fontSm),
-              ),
-              trailing: const Icon(Icons.chevron_right, size: 28),
-              onTap: () => context.push('/franchise-tree'),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // 退出登录
-          OutlinedButton.icon(
-            onPressed: () => _confirmLogout(context, ref),
-            icon: const Icon(Icons.logout, size: 24),
-            label: const Text('退出登录', style: TextStyle(fontSize: AppTheme.fontMd)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.danger,
-              side: const BorderSide(color: AppTheme.danger, width: 2),
-              minimumSize: const Size(double.infinity, 56),
-            ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, size: 28),
+            tooltip: '刷新',
+            onPressed: () => ref.invalidate(meProfileProvider),
           ),
         ],
       ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(meProfileProvider);
+          await ref.read(meProfileProvider.future);
+        },
+        child: profileAsync.when(
+          loading: () => const _ProfileSkeleton(),
+          error: (e, _) => ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              ErrorState(
+                error: e,
+                onRetry: () => ref.invalidate(meProfileProvider),
+              ),
+            ],
+          ),
+          data: (profile) => _ProfileBody(profile: profile),
+        ),
+      ),
     );
   }
+}
 
-  Widget _buildProfileHeader(AuthState auth) {
+/// 加载中: 保留卡片骨架 (比转圈更不"跳", 老花眼看也不闪)
+class _ProfileSkeleton extends StatelessWidget {
+  const _ProfileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: const [
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: SizedBox(
+              height: 220,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileBody extends ConsumerWidget {
+  final MeProfile profile;
+  const _ProfileBody({required this.profile});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: [
+        _HeaderCard(profile: profile),
+        profileSectionGap,
+        if (profile.franchisee != null)
+          _FranchiseCard(franchisee: profile.franchisee!)
+        else
+          const _NotFranchiseeCard(),
+        profileSectionGap,
+        _StatsCard(profile: profile),
+        profileSectionGap,
+        const _DisplaySettingsCard(),
+        profileSectionGap,
+        _AccountCard(profile: profile),
+        profileSectionGap,
+        _AboutCard(profile: profile),
+        const SizedBox(height: 20),
+        const _LogoutButton(),
+      ],
+    );
+  }
+}
+
+// ============================================
+// 1. 头部: 头像 + 姓名 + 角色/加盟身份 + 手机号 + 编辑
+// ============================================
+
+class _HeaderCard extends ConsumerStatefulWidget {
+  final MeProfile profile;
+  const _HeaderCard({required this.profile});
+
+  @override
+  ConsumerState<_HeaderCard> createState() => _HeaderCardState();
+}
+
+class _HeaderCardState extends ConsumerState<_HeaderCard> {
+  /// 手机号明/暗: 默认打码 (页面经常被同事/客户瞄一眼), 点了才显示全号
+  bool _showFullPhone = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.profile;
+    final name = p.displayName;
+    final phone = p.phone;
+    final franchisee = p.franchisee;
+
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -103,45 +162,254 @@ class ProfilePage extends ConsumerWidget {
             CircleAvatar(
               radius: AppTheme.avatarLg / 2,
               backgroundColor: AppTheme.primaryLight,
-              child: const Icon(Icons.person, size: 48, color: AppTheme.primaryDark),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              '我',
-              style: TextStyle(
-                fontSize: AppTheme.fontXl,
-                fontWeight: FontWeight.w600,
+              child: Text(
+                name.isNotEmpty ? name.characters.first : '我',
+                style: const TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryDark,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            const FranchiseChip(type: 'franchisee'),
             const SizedBox(height: 12),
-            // W5 RBAC: 角色显示
-            Builder(
-              builder: (ctx) {
-                final role = (auth as dynamic).role as String?;
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryLight.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '角色: ${_roleLabels[role ?? 'sales'] ?? '销售员'}',
-                    style: const TextStyle(
-                      fontSize: AppTheme.fontSm,
-                      color: AppTheme.primaryDark,
-                      fontWeight: FontWeight.w500,
+            Text(
+              name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: AppTheme.fontXl,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            if (p.accountAlias != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '账号: ${p.accountAlias}',
+                style: const TextStyle(
+                  fontSize: AppTheme.fontXs,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (franchisee != null)
+                  const FranchiseChip(type: 'franchisee')
+                else
+                  const _Tag(text: '未加盟', color: AppTheme.badgeNeutral),
+                _Tag(
+                  text: p.user?.roleLabel ?? '销售员',
+                  color: AppTheme.primary,
+                ),
+                if (p.store != null)
+                  _Tag(text: p.store!.name, color: AppTheme.accent),
+              ],
+            ),
+            if (phone != null && !phone.isEmpty) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppTheme.bgWarm,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.phone_iphone, size: 22, color: AppTheme.primaryDark),
+                    const SizedBox(width: 8),
+                    Text(
+                      _showFullPhone ? phone.full : phone.display,
+                      style: const TextStyle(
+                        fontSize: AppTheme.fontMd,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
+                    IconButton(
+                      icon: Icon(
+                        _showFullPhone ? Icons.visibility_off : Icons.visibility,
+                        size: 24,
+                      ),
+                      tooltip: _showFullPhone ? '隐藏' : '显示完整手机号',
+                      onPressed: () =>
+                          setState(() => _showFullPhone = !_showFullPhone),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 22),
+                      tooltip: '复制手机号',
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: phone.full));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('手机号已复制',
+                                  style: TextStyle(fontSize: AppTheme.fontMd)),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            // 账号资料不全 (dev mock 登录没落 user 行) → 明确告诉用户, 别装作正常
+            if (p.user != null && !p.user!.hasUserRecord) ...[
+              const SizedBox(height: 12),
+              const Text(
+                '账号资料还没建全 (开发模式登录), 加盟信息可能显示不全',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: AppTheme.fontXs,
+                  color: AppTheme.danger,
+                ),
+              ),
+            ],
+            if (franchisee != null) ...[
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: AppTheme.buttonMinHeight,
+                child: OutlinedButton.icon(
+                  onPressed: () => showEditMyProfileSheet(
+                    context,
+                    ref,
+                    franchisee: franchisee,
                   ),
-                );
-              },
+                  icon: const Icon(Icons.edit_outlined, size: 24),
+                  label: const Text('编辑我的资料',
+                      style: TextStyle(fontSize: AppTheme.fontMd)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 小标签 (角色 / 门店) —— 加盟身份用项目统一的 FranchiseChip
+class _Tag extends StatelessWidget {
+  final String text;
+  final Color color;
+  const _Tag({required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: AppTheme.fontSm,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================
+// 2. 我的加盟身份 (编号 / 位置 / 上级 / 加入时间 / 下线)
+// ============================================
+
+class _FranchiseCard extends StatelessWidget {
+  final MeFranchisee franchisee;
+  const _FranchiseCard({required this.franchisee});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = franchisee;
+    final placement = f.placement;
+    final referrer = f.referrer;
+
+    return ProfileSection(
+      title: '我的加盟身份',
+      icon: Icons.account_tree_outlined,
+      hint: '编号 #${f.id}',
+      children: [
+        InfoRow(label: '位置', value: placement?.sideLabel ?? '顶级'),
+        if (placement != null)
+          InfoRow(label: '层级', value: placement.depthLabel),
+        if (placement != null && placement.path.isNotEmpty)
+          InfoRow(label: '路径', value: placement.pathLabel),
+        InfoRow(
+          label: '我的上级',
+          value: referrer == null
+              ? '无 (您是顶级加盟商)'
+              : '${referrer.name}${referrer.phone == null ? '' : ' · ${referrer.phone!.display}'}',
+          trailing: referrer == null
+              ? null
+              : const Icon(Icons.chevron_right, size: 28, color: AppTheme.textSecondary),
+          onTap: referrer == null
+              ? null
+              : () => context.push('/franchisees/${referrer.id}'),
+        ),
+        InfoRow(
+          label: '加入时间',
+          value: f.joinedAt == null ? '-' : _formatDate(f.joinedAt!),
+        ),
+        InfoRow(
+          label: '状态',
+          value: f.isActive ? '正常' : '已停用',
+        ),
+        InfoRow(
+          label: '我的下线',
+          value: f.downline.total == 0
+              ? '还没有下线'
+              : '${f.downline.total} 人 (A线 ${f.downline.left} · B线 ${f.downline.right})',
+        ),
+        if (f.notes != null && f.notes!.isNotEmpty)
+          InfoRow(label: '备注', value: f.notes!),
+      ],
+    );
+  }
+}
+
+/// 没绑加盟关系 (合法状态): 说明清楚 + 给管理员的提示, 不是错误页
+class _NotFranchiseeCard extends StatelessWidget {
+  const _NotFranchiseeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.info_outline, size: 24, color: AppTheme.accent),
+                SizedBox(width: 8),
+                Text(
+                  '还没绑定加盟关系',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontMd,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             const Text(
-              '暖客宝销售员',
+              '账号还没挂到加盟网络上 (不影响录客户/记养生)。'
+              '需要挂靠的话找管理员, 在加盟网络里把您加进去。',
               style: TextStyle(
                 fontSize: AppTheme.fontSm,
+                height: 1.5,
                 color: AppTheme.textSecondary,
               ),
             ),
@@ -150,64 +418,331 @@ class ProfilePage extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Widget _buildStatsCard(AsyncValue stats, WidgetRef ref) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '我的数据',
-              style: TextStyle(
-                fontSize: AppTheme.fontMd,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            stats.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(16),
-                child: LoadingState(),
-              ),
-              error: (e, _) => Text('加载失败: $e', style: const TextStyle(fontSize: AppTheme.fontSm)),
-              data: (s) => Row(
-                children: [
-                  _statBox('客户', s.customerCount ?? 0),
-                  _statBox('待办', s.pendingFollowUps ?? 0, color: AppTheme.danger),
-                  _statBox('本月', s.thisMonthVisits ?? 0),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+// ============================================
+// 3. 数据概览 (5 个数字 + 加盟网络入口)
+// ============================================
 
-  Widget _statBox(String label, int value, {Color? color}) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value.toString(),
-            style: TextStyle(
-              fontSize: AppTheme.fontXxl,
-              fontWeight: FontWeight.bold,
-              color: color ?? AppTheme.primary,
+class _StatsCard extends StatelessWidget {
+  final MeProfile profile;
+  const _StatsCard({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = profile.stats;
+
+    return ProfileSection(
+      title: '数据概览',
+      icon: Icons.insights_outlined,
+      hint: '全店口径',
+      children: [
+        if (s == null)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              '这次没拿到统计数据, 下拉页面刷新试试',
+              style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
             ),
+          )
+        else ...[
+          Row(
+            children: [
+              StatBox(label: '客户', value: '${s.customerCount}'),
+              StatBox(
+                label: '待办跟进',
+                value: '${s.pendingFollowUps}',
+                color: s.pendingFollowUps > 0 ? AppTheme.danger : AppTheme.primary,
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              StatBox(label: '本月拜访', value: '${s.thisMonthVisits}'),
+              StatBox(
+                label: '本月新增客户',
+                value: '${s.newCustomersThisMonth}',
+                color: AppTheme.accent,
+              ),
+            ],
           ),
           const SizedBox(height: 4),
-          Text(
+          const Divider(height: 1),
+          InfoRow(label: '累计互动', value: '${s.totalInteractions} 次'),
+          if (profile.franchisee != null)
+            InfoRow(
+              label: '我的下线',
+              value: '${profile.franchisee!.downline.total} 人',
+            ),
+          ProfileTile(
+            icon: Icons.account_tree,
+            title: '我的加盟网络',
+            subtitle: '查看上下级 (A线 / B线 图谱)',
+            color: AppTheme.franchisee,
+            onTap: () => context.go('/customers?view=graph'),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ============================================
+// 4. 显示与存储 (字号 / 清缓存)
+// ============================================
+
+class _DisplaySettingsCard extends ConsumerStatefulWidget {
+  const _DisplaySettingsCard();
+
+  @override
+  ConsumerState<_DisplaySettingsCard> createState() =>
+      _DisplaySettingsCardState();
+}
+
+class _DisplaySettingsCardState extends ConsumerState<_DisplaySettingsCard> {
+  bool _clearing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final fontSize = ref.watch(settingsProvider).fontSize;
+
+    return ProfileSection(
+      title: '显示与存储',
+      icon: Icons.text_fields,
+      hint: '本机设置',
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 4, bottom: 8),
+          child: Text(
+            '字太小看不清楚? 选一档 (选完立即生效, 全 App 都变大)',
+            style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+          ),
+        ),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: AppFontSize.values.map((v) {
+            return ChoiceChip(
+              label: Text(
+                v.label,
+                style: TextStyle(
+                  fontSize: v == AppFontSize.xlarge
+                      ? AppTheme.fontMd + 4
+                      : v == AppFontSize.large
+                          ? AppTheme.fontMd + 2
+                          : AppTheme.fontMd,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              selected: fontSize == v,
+              onSelected: (_) =>
+                  ref.read(settingsProvider.notifier).setFontSize(v),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 8),
+        ProfileTile(
+          icon: Icons.photo_library_outlined,
+          title: _clearing ? '正在清理...' : '清理图片缓存',
+          subtitle: '养生记录里的照片会临时存在手机上, 清理不影响数据',
+          color: AppTheme.accent,
+          onTap: _clearing
+              ? null
+              : () async {
+                  setState(() => _clearing = true);
+                  try {
+                    await DefaultCacheManager().emptyCache();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('图片缓存已清理',
+                            style: TextStyle(fontSize: AppTheme.fontMd)),
+                      ),
+                    );
+                  } catch (_) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('清理失败, 稍后再试',
+                            style: TextStyle(fontSize: AppTheme.fontMd)),
+                      ),
+                    );
+                  } finally {
+                    if (mounted) setState(() => _clearing = false);
+                  }
+                },
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================
+// 5. 账号与安全
+// ============================================
+
+class _AccountCard extends StatelessWidget {
+  final MeProfile profile;
+  const _AccountCard({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = profile;
+    return ProfileSection(
+      title: '账号与安全',
+      icon: Icons.lock_outline,
+      children: [
+        InfoRow(
+          label: '登录手机号',
+          value: p.phone?.display ?? '未知',
+          trailing: p.phone == null
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.copy, size: 22),
+                  tooltip: '复制',
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: p.phone!.full));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('手机号已复制',
+                              style: TextStyle(fontSize: AppTheme.fontMd)),
+                        ),
+                      );
+                    }
+                  },
+                ),
+        ),
+        const InfoRow(label: '登录有效', value: '30 天 (期间不用重复登录)'),
+        if (p.user != null)
+          InfoRow(
+            label: '账号编号',
+            value: '#${p.user!.id} · ${p.user!.roleLabel}',
+          ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4, bottom: 8),
+          child: Text(
+            '手机号就是登录账号, 要换号 / 停用账号请联系管理员',
+            style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================
+// 6. 关于与帮助 (版本 / 更新 / 自检)
+// ============================================
+
+class _AboutCard extends ConsumerWidget {
+  final MeProfile profile;
+  const _AboutCard({required this.profile});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ProfileSection(
+      title: '关于与帮助',
+      icon: Icons.info_outline,
+      children: [
+        const _VersionTile(),
+        ProfileTile(
+          icon: Icons.system_update_alt,
+          title: '检查更新',
+          subtitle: '看服务器上有没有新版本',
+          onTap: () => showUpdateSheet(context, ref),
+        ),
+        ProfileTile(
+          icon: Icons.menu_book_outlined,
+          title: '使用帮助 / 数据安全',
+          subtitle: '怎么录客户、数据存在哪',
+          onTap: () => context.push('/profile/about'),
+        ),
+        ProfileTile(
+          icon: Icons.wifi_find,
+          title: '网络自检',
+          subtitle: '连不上时先点这里',
+          color: AppTheme.accent,
+          onTap: () => showDiagnosticsSheet(context, ref),
+        ),
+        // 服务地址: 开发/排障可见 (生产用户看到 IP 只会困惑)
+        if (kDebugMode)
+          ProfileTile(
+            icon: Icons.dns_outlined,
+            title: '服务地址 (调试)',
+            subtitle: ApiClient.baseUrl,
+            trailing: IconButton(
+              icon: const Icon(Icons.copy, size: 22),
+              onPressed: () async {
+                await Clipboard.setData(
+                  ClipboardData(text: ApiClient.baseUrl),
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已复制',
+                          style: TextStyle(fontSize: AppTheme.fontMd)),
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// 版本行 (本机版本, 点一下 = 检查更新)
+class _VersionTile extends ConsumerWidget {
+  const _VersionTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snap) {
+        final label = snap.hasData
+            ? 'v${snap.data!.version} (${snap.data!.buildNumber})'
+            : (snap.hasError ? '读取失败' : '读取中...');
+        return ProfileTile(
+          icon: Icons.verified_outlined,
+          title: '当前版本',
+          subtitle: '暖客宝 · 数据自托管',
+          trailing: Text(
             label,
             style: const TextStyle(
               fontSize: AppTheme.fontSm,
               color: AppTheme.textSecondary,
             ),
           ),
-        ],
+          onTap: () => showUpdateSheet(context, ref),
+        );
+      },
+    );
+  }
+}
+
+// ============================================
+// 7. 退出登录 (页面最底部, 危险操作)
+// ============================================
+
+class _LogoutButton extends ConsumerWidget {
+  const _LogoutButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      width: double.infinity,
+      height: AppTheme.buttonLgHeight,
+      child: OutlinedButton.icon(
+        onPressed: () => _confirmLogout(context, ref),
+        icon: const Icon(Icons.logout, size: 26),
+        label: const Text('退出登录', style: TextStyle(fontSize: AppTheme.fontMd)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.danger,
+          side: const BorderSide(color: AppTheme.danger, width: 2),
+        ),
       ),
     );
   }
@@ -217,7 +752,7 @@ class ProfilePage extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('确定退出?'),
-        content: const Text('退出后需要重新登录'),
+        content: const Text('退出后需要重新用手机号登录 (数据不受影响)'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -231,11 +766,19 @@ class ProfilePage extends ConsumerWidget {
         ],
       ),
     ).then((ok) async {
-      if (ok == true) {
-        await ref.read(authProvider.notifier).logout();
-        if (!context.mounted) return;
-        context.go('/login');
-      }
+      if (ok != true) return;
+      await ref.read(authProvider.notifier).logout();
+      if (!context.mounted) return;
+      context.go('/login');
     });
   }
+}
+
+// ============================================
+// 小工具
+// ============================================
+
+String _formatDate(DateTime d) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${d.year}-${two(d.month)}-${two(d.day)}';
 }

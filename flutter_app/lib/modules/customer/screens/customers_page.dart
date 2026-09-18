@@ -2220,10 +2220,16 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // 定宽: 主题里 OutlinedButton minimumSize = infinity, 在 Row 里会被量成无限宽
                 SizedBox(
+                  width: 88,
                   height: 48,
                   child: OutlinedButton.icon(
                     onPressed: _addCustomTag,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      padding: EdgeInsets.zero,
+                    ),
                     icon: const Icon(Icons.add, size: 20),
                     label: const Text('添加', style: TextStyle(fontSize: AppTheme.fontSm)),
                   ),

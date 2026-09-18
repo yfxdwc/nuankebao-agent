@@ -16,6 +16,7 @@ import '../../modules/customer/screens/customers_page.dart';
 import '../../modules/relation/screens/franchisee_detail_page.dart';
 import '../../modules/relation/screens/add_franchisee_page.dart';
 import '../../modules/relation/screens/edit_franchisee_page.dart';
+import '../../screens/about_page.dart';
 import '../../screens/profile_page.dart';
 import '../../modules/wellness/screens/wellness_record_form_page.dart';
 import '../../modules/wellness/screens/wellness_record_detail_page.dart';
@@ -100,6 +101,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/profile',
             name: 'profile',
             builder: (context, state) => const ProfilePage(),
+            routes: [
+              // 关于与帮助 (使用帮助 / 数据安全说明) — 子路由, 保持 /profile 返回栈
+              GoRoute(
+                path: 'about',
+                name: 'profile-about',
+                builder: (context, state) => const AboutPage(),
+              ),
+            ],
           ),
         ],
       ),
