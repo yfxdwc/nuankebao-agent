@@ -28,6 +28,7 @@ class Customer with _$Customer {
     String? allergyHistory,
     /// 客户头像 (主人 2026-09-18 拍): null = 默认首字 / 'preset:x' / '/uploads/x.jpg'
     /// 未知值一律当 null (UI 退回首字, 不渲染白框)
+    // ignore: invalid_annotation_target
     @JsonKey(fromJson: _parseAvatarValue) String? avatar,
     String? notes,
     /// 客户推荐人 (客户页图谱数据源), null = 无推荐人 (根/孤儿节点)

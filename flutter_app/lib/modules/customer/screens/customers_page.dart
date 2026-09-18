@@ -24,6 +24,8 @@ import '../widgets/customer_row.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/franchise_chip.dart';
 import '../../../core/utils/birthday.dart';
+import '../../../core/widgets/user_avatar.dart';
+import '../../../screens/profile_sheets.dart' show showAvatarPickerSheet;
 import '../../presentation/graph/widgets/franchise_tree_painter.dart';
 import 'add_record_sheet.dart';
 
@@ -1359,27 +1361,42 @@ class CustomerDetailPage extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            CircleAvatar(
-              radius: AppTheme.avatarLg / 2,
-              backgroundColor: type == 'franchisee'
-                  ? AppTheme.franchisee.withOpacity(0.2)
-                  : (type == 'seed'
-                      ? AppTheme.accent.withOpacity(0.2)
-                      : AppTheme.primaryLight),
-              child: Text(
-                c.name.isNotEmpty ? c.name[0] : '?',
-                style: TextStyle(
-                  fontSize: 36,
-                  color: type == 'franchisee'
-                      ? AppTheme.franchisee
-                      : (type == 'seed'
-                          ? AppTheme.accent
-                          : AppTheme.primaryDark),
-                  fontWeight: FontWeight.w600,
-                ),
+            // 头像 + 右下角相机角标 (主人 2026-09-18 拍: 点它设置客户头像)
+            GestureDetector(
+              onTap: () => _pickCustomerAvatar(context, ref, c),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  UserAvatar(
+                    avatarUrl: c.avatar,
+                    name: c.name,
+                    size: AppTheme.avatarLg,
+                  ),
+                  // 相机角标 (64pt 头像右下角, 触摸区 32pt 对中老年友好)
+                  Positioned(
+                    right: -4,
+                    bottom: -4,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(Icons.photo_camera,
+                          size: 18, color: Colors.white),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
+            const Text(
+              '点头像可以换 (拍照 / 相册 / 现成头像)',
+              style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1572,6 +1589,37 @@ class CustomerDetailPage extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// 换客户头像 (主人 2026-09-18 拍)
+  ///   复用「我的」页那套 sheet: 候选头像 (8 个养生图标) + 拍照 + 相册 + 恢复默认;
+  ///   区别只是保存动作 = PATCH /api/customers/:id 的 avatar 字段
+  Future<void> _pickCustomerAvatar(
+    BuildContext context,
+    WidgetRef ref,
+    Customer c,
+  ) async {
+    final changed = await showAvatarPickerSheet(
+      context,
+      ref,
+      currentAvatarUrl: c.avatar,
+      name: c.name,
+      title: '给「${c.name}」设头像',
+      subtitle: '拍照 / 相册上传, 或挑一个现成的 (不想用真人照片就选花草茶禅)',
+      onApply: (value) async {
+        await ref
+            .read(customerServiceProvider)
+            .update(c.id, {'avatar': value});
+        ref.invalidate(customerDetailProvider(c.id));
+        // 列表里的小头像也跟着刷新
+        ref.invalidate(customersProvider);
+      },
+    );
+    if (changed && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('头像已更新')),
+      );
+    }
   }
 
   /// 拨号 (tel:) — web 不支持时给提示, 不崩

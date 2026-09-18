@@ -670,11 +670,17 @@ void _toast(BuildContext context, String msg) {
 //   - 只允许本站上传路径 /uploads/xxx.(jpg|png|webp) 与 preset:x, 拒外链
 //   - 上传前本地压到 ≤512px / ≤3MB, 网络差也能传上去
 
+/// [onApply] 可选: 自定义"保存头像"的动作 (默认 = 改「我的」头像)。
+///   客户详情页传自己的实现 (PATCH /api/customers/:id), 复用同一套 UI/上传/白名单。
+///   [title]/[subtitle] 可选: 换个说法 (客户页说"客户的头像", 我的页说"你的头像")
 Future<bool> showAvatarPickerSheet(
   BuildContext context,
   WidgetRef ref, {
   required String? currentAvatarUrl,
   required String name,
+  Future<void> Function(String? value)? onApply,
+  String title = '换个头像',
+  String subtitle = '用自己的照片, 或者挑一个现成的 (花草茶禅, 不想露脸就用这些)',
 }) async {
   var changed = false;
   var busy = false;
@@ -689,8 +695,12 @@ Future<bool> showAvatarPickerSheet(
           if (busy) return;
           setSheetState(() => busy = true);
           try {
-            await ref.read(meServiceProvider).updateAvatar(value);
-            ref.invalidate(meProfileProvider);
+            if (onApply != null) {
+              await onApply(value);
+            } else {
+              await ref.read(meServiceProvider).updateAvatar(value);
+              ref.invalidate(meProfileProvider);
+            }
             changed = true;
             if (ctx.mounted) {
               Navigator.of(ctx).pop();
@@ -725,8 +735,12 @@ Future<bool> showAvatarPickerSheet(
             final url = await ref
                 .read(photoServiceProvider)
                 .upload(base64Encode(bytes), mimeType: _sniffImageMime(bytes));
-            await ref.read(meServiceProvider).updateAvatar(url);
-            ref.invalidate(meProfileProvider);
+            if (onApply != null) {
+              await onApply(url);
+            } else {
+              await ref.read(meServiceProvider).updateAvatar(url);
+              ref.invalidate(meProfileProvider);
+            }
             changed = true;
             if (ctx.mounted) {
               Navigator.of(ctx).pop();
@@ -748,17 +762,17 @@ Future<bool> showAvatarPickerSheet(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '换个头像',
-                style: TextStyle(
+              Text(
+                title,
+                style: const TextStyle(
                   fontSize: AppTheme.fontLg,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                '用自己的照片, 或者挑一个现成的 (花草茶禅, 不想露脸就用这些)',
-                style: TextStyle(
+              Text(
+                subtitle,
+                style: const TextStyle(
                   fontSize: AppTheme.fontSm,
                   color: AppTheme.textSecondary,
                 ),

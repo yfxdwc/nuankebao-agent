@@ -42,6 +42,11 @@ mixin _$Customer {
 
   /// 过敏史 (2026-09-18 新增; 跟既往病史分开)
   String? get allergyHistory => throw _privateConstructorUsedError;
+
+  /// 客户头像 (主人 2026-09-18 拍): null = 默认首字 / 'preset:x' / '/uploads/x.jpg'
+  /// 未知值一律当 null (UI 退回首字, 不渲染白框)
+  @JsonKey(fromJson: _parseAvatarValue)
+  String? get avatar => throw _privateConstructorUsedError;
   String? get notes => throw _privateConstructorUsedError;
 
   /// 客户推荐人 (客户页图谱数据源), null = 无推荐人 (根/孤儿节点)
@@ -85,6 +90,7 @@ abstract class $CustomerCopyWith<$Res> {
       List<String> healthTags,
       String? diseaseHistory,
       String? allergyHistory,
+      @JsonKey(fromJson: _parseAvatarValue) String? avatar,
       String? notes,
       String? referrerId,
       bool isSeed,
@@ -120,6 +126,7 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
     Object? healthTags = null,
     Object? diseaseHistory = freezed,
     Object? allergyHistory = freezed,
+    Object? avatar = freezed,
     Object? notes = freezed,
     Object? referrerId = freezed,
     Object? isSeed = null,
@@ -176,6 +183,10 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
           ? _value.allergyHistory
           : allergyHistory // ignore: cast_nullable_to_non_nullable
               as String?,
+      avatar: freezed == avatar
+          ? _value.avatar
+          : avatar // ignore: cast_nullable_to_non_nullable
+              as String?,
       notes: freezed == notes
           ? _value.notes
           : notes // ignore: cast_nullable_to_non_nullable
@@ -225,6 +236,7 @@ abstract class _$$CustomerImplCopyWith<$Res>
       List<String> healthTags,
       String? diseaseHistory,
       String? allergyHistory,
+      @JsonKey(fromJson: _parseAvatarValue) String? avatar,
       String? notes,
       String? referrerId,
       bool isSeed,
@@ -258,6 +270,7 @@ class __$$CustomerImplCopyWithImpl<$Res>
     Object? healthTags = null,
     Object? diseaseHistory = freezed,
     Object? allergyHistory = freezed,
+    Object? avatar = freezed,
     Object? notes = freezed,
     Object? referrerId = freezed,
     Object? isSeed = null,
@@ -314,6 +327,10 @@ class __$$CustomerImplCopyWithImpl<$Res>
           ? _value.allergyHistory
           : allergyHistory // ignore: cast_nullable_to_non_nullable
               as String?,
+      avatar: freezed == avatar
+          ? _value.avatar
+          : avatar // ignore: cast_nullable_to_non_nullable
+              as String?,
       notes: freezed == notes
           ? _value.notes
           : notes // ignore: cast_nullable_to_non_nullable
@@ -358,6 +375,7 @@ class _$CustomerImpl implements _Customer {
       final List<String> healthTags = const [],
       this.diseaseHistory,
       this.allergyHistory,
+      @JsonKey(fromJson: _parseAvatarValue) this.avatar,
       this.notes,
       this.referrerId,
       this.isSeed = false,
@@ -412,6 +430,12 @@ class _$CustomerImpl implements _Customer {
   /// 过敏史 (2026-09-18 新增; 跟既往病史分开)
   @override
   final String? allergyHistory;
+
+  /// 客户头像 (主人 2026-09-18 拍): null = 默认首字 / 'preset:x' / '/uploads/x.jpg'
+  /// 未知值一律当 null (UI 退回首字, 不渲染白框)
+  @override
+  @JsonKey(fromJson: _parseAvatarValue)
+  final String? avatar;
   @override
   final String? notes;
 
@@ -437,7 +461,7 @@ class _$CustomerImpl implements _Customer {
 
   @override
   String toString() {
-    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, avatar: $avatar, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -465,6 +489,7 @@ class _$CustomerImpl implements _Customer {
                 other.diseaseHistory == diseaseHistory) &&
             (identical(other.allergyHistory, allergyHistory) ||
                 other.allergyHistory == allergyHistory) &&
+            (identical(other.avatar, avatar) || other.avatar == avatar) &&
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.referrerId, referrerId) ||
                 other.referrerId == referrerId) &&
@@ -479,26 +504,28 @@ class _$CustomerImpl implements _Customer {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(
-      runtimeType,
-      id,
-      name,
-      phone,
-      gender,
-      birthYear,
-      birthMonth,
-      birthDay,
-      birthCalendar,
-      birthdayRemindDays,
-      const DeepCollectionEquality().hash(_healthTags),
-      diseaseHistory,
-      allergyHistory,
-      notes,
-      referrerId,
-      isSeed,
-      customerType,
-      createdAt,
-      updatedAt);
+  int get hashCode => Object.hashAll([
+        runtimeType,
+        id,
+        name,
+        phone,
+        gender,
+        birthYear,
+        birthMonth,
+        birthDay,
+        birthCalendar,
+        birthdayRemindDays,
+        const DeepCollectionEquality().hash(_healthTags),
+        diseaseHistory,
+        allergyHistory,
+        avatar,
+        notes,
+        referrerId,
+        isSeed,
+        customerType,
+        createdAt,
+        updatedAt
+      ]);
 
   /// Create a copy of Customer
   /// with the given fields replaced by the non-null parameter values.
@@ -530,6 +557,7 @@ abstract class _Customer implements Customer {
       final List<String> healthTags,
       final String? diseaseHistory,
       final String? allergyHistory,
+      @JsonKey(fromJson: _parseAvatarValue) final String? avatar,
       final String? notes,
       final String? referrerId,
       final bool isSeed,
@@ -574,6 +602,12 @@ abstract class _Customer implements Customer {
   /// 过敏史 (2026-09-18 新增; 跟既往病史分开)
   @override
   String? get allergyHistory;
+
+  /// 客户头像 (主人 2026-09-18 拍): null = 默认首字 / 'preset:x' / '/uploads/x.jpg'
+  /// 未知值一律当 null (UI 退回首字, 不渲染白框)
+  @override
+  @JsonKey(fromJson: _parseAvatarValue)
+  String? get avatar;
   @override
   String? get notes;
 

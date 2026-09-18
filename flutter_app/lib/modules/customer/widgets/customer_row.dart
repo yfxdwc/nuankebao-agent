@@ -4,6 +4,7 @@ import '../../../core/models/customer.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/franchise_chip.dart';
 import '../../../core/utils/birthday.dart';
+import '../../../core/widgets/user_avatar.dart';
 
 class CustomerRow extends StatelessWidget {
   final Customer customer;
@@ -52,7 +53,6 @@ class CustomerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isFranchisee = _type == 'franchisee';
-    final isSeed = _type == 'seed';
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -67,23 +67,12 @@ class CustomerRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // 大头像 (56pt)
-            CircleAvatar(
-              radius: AppTheme.avatarMd / 2,
-              backgroundColor: isFranchisee
-                  ? AppTheme.franchisee.withOpacity(0.2)
-                  : (isSeed
-                      ? AppTheme.accent.withOpacity(0.2)
-                      : AppTheme.primaryLight),
-              child: Text(
-                customer.name.isNotEmpty ? customer.name[0] : '?',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: isFranchisee
-                      ? AppTheme.franchisee
-                      : (isSeed ? AppTheme.accent : AppTheme.primaryDark),
-                ),
-              ),
+            // 头像: 有自定义头像就显示 (照片/候选), 否则退回姓名首字
+            UserAvatar(
+              avatarUrl: customer.avatar,
+              name: customer.name,
+              size: AppTheme.avatarMd,
+              showLoadingIndicator: false,
             ),
             const SizedBox(width: 12),
 
