@@ -16,6 +16,10 @@ import '../../../core/widgets/big_button.dart';
 import '../widgets/rating_slider.dart';
 import '../widgets/wellness_photo_uploader.dart';
 
+/// 新增记录时默认选中的服务项目 (主人 2026-09-18 拍: 「碧波庭-脉动负压提拉按摩」置顶 + 下拉 + 默认选中)
+/// 字典里找不到 → 不预选 (不硬编码假项目), 用户自己选
+const String _defaultServiceItemName = '碧波庭-脉动负压提拉按摩';
+
 class WellnessRecordFormPage extends ConsumerStatefulWidget {
   final String? recordId;
   final String? customerId; // 来自 query param (?customerId=X)
@@ -66,7 +70,23 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
   Future<void> _loadDict() async {
     final d = await ref.read(dictionaryServiceProvider).all();
     if (!mounted) return;
-    setState(() => _dict = d);
+    setState(() {
+      _dict = d;
+      // 新增: 默认选中「碧波庭-脉动负压提拉按摩」
+      // 编辑: _loadExisting() 已填好原值 (谁后到谁生效, 两边都不覆盖非空值)
+      _serviceItemId ??= _defaultServiceItemIdOf(d);
+    });
+  }
+
+  /// 找默认服务项目 id: 先精确匹配全名, 再宽松匹配「碧波庭」, 都没有 → null
+  String? _defaultServiceItemIdOf(Dictionaries d) {
+    for (final s in d.serviceItems) {
+      if (s.name.trim() == _defaultServiceItemName) return s.id;
+    }
+    for (final s in d.serviceItems) {
+      if (s.name.contains('碧波庭')) return s.id;
+    }
+    return null;
   }
 
   Future<void> _loadExisting() async {
@@ -167,9 +187,9 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _buildBodyPartSelector(),
-                  const SizedBox(height: 20),
                   _buildServiceSelector(),
+                  const SizedBox(height: 20),
+                  _buildBodyPartSelector(),
                   const SizedBox(height: 20),
                   _buildConditionSection('理疗前状态'),
                   const SizedBox(height: 20),
@@ -251,6 +271,11 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
   }
 
   Widget _buildServiceSelector() {
+    final items = _dict!.serviceItems;
+    // 防御: 编辑历史记录时, 若其服务项目已被字典删除, Dropdown 会断言崩 → 降级为未选
+    final value =
+        items.any((s) => s.id == _serviceItemId) ? _serviceItemId : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -261,26 +286,33 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _dict!.serviceItems.map((s) {
-            final selected = _serviceItemId == s.id;
-            return ChoiceChip(
-              label: Text(
-                s.name,
-                style: TextStyle(
-                  fontSize: AppTheme.fontSm,
-                  color: selected ? Colors.white : AppTheme.textPrimary,
-                ),
-              ),
-              selected: selected,
-              onSelected: (_) => setState(() => _serviceItemId = s.id),
-              selectedColor: AppTheme.accent,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            );
-          }).toList(),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: value,
+          isExpanded: true,
+          itemHeight: 56,
+          decoration: const InputDecoration(hintText: '请选择服务项目'),
+          icon: const Icon(Icons.arrow_drop_down,
+              size: 32, color: AppTheme.primary),
+          dropdownColor: AppTheme.bgCard,
+          style: const TextStyle(
+            fontSize: AppTheme.fontMd,
+            color: AppTheme.textPrimary,
+          ),
+          items: items
+              .map((s) => DropdownMenuItem<String>(
+                    value: s.id,
+                    child: Text(
+                      s.name,
+                      style: const TextStyle(
+                        fontSize: AppTheme.fontMd,
+                        color: AppTheme.textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _serviceItemId = v),
         ),
       ],
     );

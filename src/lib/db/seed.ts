@@ -29,6 +29,13 @@ async function seedBodyParts() {
 async function seedServiceItems() {
   const items = [
     {
+      // 主人 2026-09-18 拍: 养生记录表单默认项目 (置顶 + 下拉默认选中)
+      name: "碧波庭-脉动负压提拉按摩",
+      durationMinutes: null,
+      defaultPriceCents: null,
+      description: "碧波庭 脉动负压提拉按摩",
+    },
+    {
       name: "肩颈经络理疗",
       durationMinutes: 60,
       defaultPriceCents: 19800,

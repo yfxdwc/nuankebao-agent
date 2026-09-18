@@ -38,6 +38,7 @@ class BirthdayInfo {
 String _lunarChinese(int month, int day) {
   const digits = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
   String m() {
+    if (month == 1) return '正月';
     if (month <= 10) return '${digits[month]}月';
     return month == 11 ? '冬月' : '腊月';
   }
