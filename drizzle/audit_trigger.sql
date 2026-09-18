@@ -67,3 +67,29 @@ DROP TRIGGER IF EXISTS wellness_knowledge_audit ON wellness_knowledge;
 CREATE TRIGGER wellness_knowledge_audit
   AFTER INSERT OR UPDATE OR DELETE ON wellness_knowledge
   FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+-- ============================================
+-- 沙龙模块触发器 (v0.1.5 Phase 7)
+-- salon / salon_invitation / salon_guest / salon_quota
+-- (动态/资料表不挂: 系统消息会产生大量噪声, 价值低)
+-- ============================================
+
+DROP TRIGGER IF EXISTS salon_audit ON salon;
+CREATE TRIGGER salon_audit
+  AFTER INSERT OR UPDATE OR DELETE ON salon
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+DROP TRIGGER IF EXISTS salon_invitation_audit ON salon_invitation;
+CREATE TRIGGER salon_invitation_audit
+  AFTER INSERT OR UPDATE OR DELETE ON salon_invitation
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+DROP TRIGGER IF EXISTS salon_guest_audit ON salon_guest;
+CREATE TRIGGER salon_guest_audit
+  AFTER INSERT OR UPDATE OR DELETE ON salon_guest
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+DROP TRIGGER IF EXISTS salon_quota_audit ON salon_quota;
+CREATE TRIGGER salon_quota_audit
+  AFTER INSERT OR UPDATE OR DELETE ON salon_quota
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();

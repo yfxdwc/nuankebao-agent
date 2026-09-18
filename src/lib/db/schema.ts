@@ -507,3 +507,380 @@ export const auditLog = pgTable(
 );
 
 export type AuditLog = typeof auditLog.$inferSelect;
+// ============================================
+// 沙龙 (v0.1.5 Phase 7, 主人 2026-09-18 拍板: 完整方案)
+// ============================================
+// 场景: 销售员 / 公司主理的 聚会 / 沙龙 / 健康讲座 / 客户答谢会 / 团建
+// 三种角色: 主理人 (salons.organizer_user_id) / 会务 (invitation.role=staff) / 受邀者 (attendee)
+// 边界 (主人 2026-09-18 拍):
+//   1. 受邀者可填「预计带约人数」(expected_guest_count), 主理人手动核对 (简单版, 不做全链追踪)
+//   2. 受邀者允许非 app 用户 (姓名 + 手机号, 手机号走应用层加密, 与 customer/user 同口径)
+//   3. 不建统一关系图谱: 沙龙内用 salon_invitation 树 + user 表; 后期用 RelationSystem 接口包装
+//   4. 会务人员 = invitation(role=staff) 行 —— 不存 jsonb, 否则手机号无法加密 (AGENTS §3 红线)
+//   5. 敏感字段 (手机号/留言) 一律 *_encrypted + *_hash, 与既有 customer/franchisee 一致
+// ============================================
+
+export const salonStatusEnum = pgEnum("salon_status", [
+  "draft",                // 草稿 (仅主理人可见)
+  "published",            // 已发布 (报名中)
+  "registration_closed",  // 报名已截止
+  "ongoing",              // 进行中
+  "finished",             // 已结束
+  "cancelled",            // 已取消
+]);
+
+export const salonRoleEnum = pgEnum("salon_role", [
+  "organizer", // 主理人 (salons.organizer_user_id, 不占 invitation 行)
+  "staff",     // 会务 (主持人 / 讲师 / 摄影 / 后勤 / 接待)
+  "attendee",  // 受邀者
+]);
+
+export const salonInvitationStatusEnum = pgEnum("salon_invitation_status", [
+  "pending",   // 待回复
+  "accepted",  // 已接受
+  "tentative", // 待定
+  "declined",  // 已婉拒
+  "waitlist",  // 候补
+  "attended",  // 已到场 (主理人事后核销)
+  "absent",    // 未到场
+  "cancelled", // 邀请已撤销 (主理人移除)
+]);
+
+export const salonGuestStatusEnum = pgEnum("salon_guest_status", [
+  "pending",
+  "accepted",
+  "declined",
+  "attended",
+  "absent",
+  "cancelled",
+]);
+
+export const salonActivityTypeEnum = pgEnum("salon_activity_type", [
+  "system",       // 系统消息 (自动生成: 谁接受了邀请等)
+  "announcement", // 公告 (主理人 / 会务)
+  "question",     // 提问
+  "comment",      // 留言
+]);
+
+export const salonVisibilityEnum = pgEnum("salon_visibility", [
+  "all",       // 全部参与者可见
+  "staff",     // 仅主理人 + 会务
+  "organizer", // 仅主理人
+]);
+
+// ---------- 沙龙主表 ----------
+
+export const salon = pgTable(
+  "salon",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+
+    // 基础信息
+    title: text("title").notNull(),
+    subtitle: text("subtitle"),
+    description: text("description"),
+    coverUrl: text("cover_url"),
+    themeTags: jsonb("theme_tags").$type<string[]>().default([]),
+
+    // 主理人 = 创建者 (app 用户). 会务/受邀者走 salon_invitation
+    organizerUserId: bigint("organizer_user_id", { mode: "bigint" }).notNull(),
+
+    status: salonStatusEnum("status").notNull().default("draft"),
+
+    // 时间 (起止 + 报名截止; timezone 存 IANA 名, 默认中国区)
+    startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+    endAt: timestamp("end_at", { withTimezone: true }),
+    registrationDeadlineAt: timestamp("registration_deadline_at", { withTimezone: true }),
+    timezone: text("timezone").notNull().default("Asia/Shanghai"),
+
+    // 地点
+    locationName: text("location_name"),
+    address: text("address"),
+    floorRoom: text("floor_room"),      // 楼层/包间/会场名
+    lat: numeric("lat", { precision: 10, scale: 7 }),
+    lng: numeric("lng", { precision: 10, scale: 7 }),
+    parkingInfo: text("parking_info"),  // 停车位 / 费用
+
+    // 交通 (受邀者怎么来)
+    transportPublic: text("transport_public"),  // 公交/地铁指引
+    transportDriving: text("transport_driving"),// 自驾路线
+    transportPickup: text("transport_pickup"),  // 接站安排 (高铁/机场)
+
+    // 餐饮
+    cateringMealType: text("catering_meal_type"), // lunch / dinner / tea / none (zod 校验)
+    cateringCuisine: text("catering_cuisine"),
+    cateringDietary: text("catering_dietary"),    // 过敏 / 清真 / 素食 备注
+    cateringTime: text("catering_time"),          // 用餐时间 (自由文本, 例 "12:00")
+    cateringPayer: text("catering_payer"),        // 谁承担 (主理人 / AA / 自费)
+
+    // 住宿
+    lodgingHotelName: text("lodging_hotel_name"),
+    lodgingRoomType: text("lodging_room_type"),
+    lodgingPriceCents: integer("lodging_price_cents"),
+    lodgingContactName: text("lodging_contact_name"),
+    // 订房联系人手机号 (敏感: 加密 + hash; 与 customer 同口径)
+    lodgingContactPhoneEncrypted: text("lodging_contact_phone_encrypted"),
+    lodgingDeadlineAt: timestamp("lodging_deadline_at", { withTimezone: true }),
+    lodgingNote: text("lodging_note"),
+
+    // 着装 / 费用
+    dressCode: text("dress_code"),
+    feeType: text("fee_type").notNull().default("free"), // free / aa / organizer_pays / paid
+    feeAmountCents: integer("fee_amount_cents"),
+    feeNote: text("fee_note"),
+
+    // 人数
+    capacityTotal: integer("capacity_total"),        // 总名额 (null = 不限)
+    capacityReserved: integer("capacity_reserved").notNull().default(0), // 主理人/嘉宾保留
+
+    // 日程 (时间轴) — [{ start, end, title, desc }]
+    agenda: jsonb("agenda").$type<SalonAgendaItem[]>().default([]),
+
+    // 报名表单动态字段 — [{ key, label, type, required, options }]
+    // 通用 (不存敏感值本身; 受邀者的填写值存 invitation.registration_data)
+    registrationFormSchema: jsonb("registration_form_schema")
+      .$type<SalonFormField[]>()
+      .default([]),
+
+    // 可见性设置 — { attendeeList, staffContact }
+    visibilitySettings: jsonb("visibility_settings")
+      .$type<SalonVisibilitySettings>()
+      .default({ attendeeList: "all", staffContact: "all" }),
+
+    // 审计
+    createdBy: bigint("created_by", { mode: "bigint" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => ({
+    organizerIdx: index("idx_salon_organizer").on(table.organizerUserId),
+    startAtIdx: index("idx_salon_start_at").on(table.startAt),
+    statusIdx: index("idx_salon_status").on(table.status),
+    deletedAtIdx: index("idx_salon_deleted_at").on(table.deletedAt),
+  })
+);
+
+/** 日程条目 (jsonb, 不加密: 不含 PII) */
+export interface SalonAgendaItem {
+  start?: string;   // "14:00"
+  end?: string;
+  title: string;
+  desc?: string;
+}
+
+/** 报名表单字段定义 (jsonb) */
+export interface SalonFormField {
+  key: string;
+  label: string;
+  type: "text" | "number" | "select" | "multiselect" | "textarea" | "date" | "boolean";
+  required?: boolean;
+  options?: string[];
+  placeholder?: string;
+}
+
+/** 可见性设置 (jsonb) */
+export interface SalonVisibilitySettings {
+  /** 受邀者名单 (姓名/状态) 谁能看 */
+  attendeeList: "all" | "staff" | "organizer";
+  /** 会务人员联系方式 谁能看 */
+  staffContact: "all" | "staff";
+}
+
+export type Salon = typeof salon.$inferSelect;
+export type NewSalon = typeof salon.$inferInsert;
+
+// ---------- 邀请 (受邀者 + 会务) ----------
+
+export const salonInvitation = pgTable(
+  "salon_invitation",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    salonId: bigint("salon_id", { mode: "bigint" }).notNull(),
+
+    // 受邀者身份:
+    //   invitee_user_id 非空 = 该手机号对应 app 用户 (受邀者本人也能在 app 里看到)
+    //   invitee_user_id 为空 = 非 app 用户 (仅存姓名 + 加密手机号)
+    inviteeUserId: bigint("invitee_user_id", { mode: "bigint" }),
+    inviteeName: text("invitee_name").notNull(),
+    inviteePhoneEncrypted: text("invitee_phone_encrypted").notNull(),
+    inviteePhoneHash: text("invitee_phone_hash").notNull(),
+
+    roleInSalon: salonRoleEnum("role_in_salon").notNull().default("attendee"),
+    // 会务角色 (role_in_salon='staff' 时有意义, 例: 主持人 / 讲师 / 摄影)
+    staffRole: text("staff_role"),
+
+    // 谁添加的 (主理人 / 会务; 受邀者互相邀请走 salon_guest 表)
+    invitedByUserId: bigint("invited_by_user_id", { mode: "bigint" }),
+
+    status: salonInvitationStatusEnum("status").notNull().default("pending"),
+
+    // ★ 带约: 受邀者自己填「预计能邀约到的人数」(主人 2026-09-18 拍: 简单版)
+    expectedGuestCount: integer("expected_guest_count").notNull().default(0),
+    // 实际带约人数 (主理人事后核对补录, null = 未核对)
+    actualGuestCount: integer("actual_guest_count"),
+
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    // 受邀者留言 / 备注 (敏感: 加密)
+    notesEncrypted: text("notes_encrypted"),
+    // 报名表单填写值 (按 salon.registration_form_schema 的 key)
+    registrationData: jsonb("registration_data").$type<Record<string, unknown>>(),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    salonIdx: index("idx_salon_invitation_salon").on(table.salonId),
+    inviteeUserIdx: index("idx_salon_invitation_invitee").on(table.inviteeUserId),
+    phoneHashIdx: index("idx_salon_invitation_phone_hash").on(table.inviteePhoneHash),
+    // 同一沙龙内同一手机号只能有一条邀请 (防重复邀请 / 重复计数)
+    salonPhoneUnique: uniqueIndex("idx_salon_invitation_salon_phone").on(
+      table.salonId,
+      table.inviteePhoneHash
+    ),
+  })
+);
+
+export type SalonInvitation = typeof salonInvitation.$inferSelect;
+export type NewSalonInvitation = typeof salonInvitation.$inferInsert;
+
+// ---------- 带约任务 (主理人 → 受邀者) ----------
+
+export const salonQuota = pgTable(
+  "salon_quota",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    salonId: bigint("salon_id", { mode: "bigint" }).notNull(),
+    assignedToUserId: bigint("assigned_to_user_id", { mode: "bigint" }).notNull(),
+
+    quotaValue: integer("quota_value").notNull(), // 需带约人数
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }),
+    note: text("note"),
+
+    isActive: boolean("is_active").notNull().default(true),
+    createdByUserId: bigint("created_by_user_id", { mode: "bigint" }).notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    salonIdx: index("idx_salon_quota_salon").on(table.salonId),
+    assignedIdx: index("idx_salon_quota_assigned").on(table.assignedToUserId),
+    // 每人每沙龙同时只有 1 条 active 任务 (取消后可再分配)
+    activeUnique: uniqueIndex("idx_salon_quota_active_unique")
+      .on(table.salonId, table.assignedToUserId)
+      .where(sql`is_active = true`),
+  })
+);
+
+export type SalonQuota = typeof salonQuota.$inferSelect;
+export type NewSalonQuota = typeof salonQuota.$inferInsert;
+
+// ---------- 二级客人 (受邀者/主理人带来的非 app 用户) ----------
+
+export const salonGuest = pgTable(
+  "salon_guest",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    salonId: bigint("salon_id", { mode: "bigint" }).notNull(),
+
+    // 谁带来的 (app 用户: 主理人 / 会务 / 受邀者)
+    broughtByUserId: bigint("brought_by_user_id", { mode: "bigint" }).notNull(),
+
+    name: text("name").notNull(),
+    phoneEncrypted: text("phone_encrypted").notNull(),
+    phoneHash: text("phone_hash").notNull(),
+
+    // 与带约人的关系 (client / friend / family / colleague / other; zod 校验)
+    relation: text("relation"),
+
+    status: salonGuestStatusEnum("status").notNull().default("pending"),
+    actualAttended: boolean("actual_attended").notNull().default(false),
+    notesEncrypted: text("notes_encrypted"),
+
+    createdBy: bigint("created_by", { mode: "bigint" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    salonIdx: index("idx_salon_guest_salon").on(table.salonId),
+    broughtByIdx: index("idx_salon_guest_brought_by").on(table.broughtByUserId),
+    // 同一沙龙内同一手机号只登记一次 (防重复带约 / 重复计数)
+    salonPhoneUnique: uniqueIndex("idx_salon_guest_salon_phone").on(
+      table.salonId,
+      table.phoneHash
+    ),
+  })
+);
+
+export type SalonGuest = typeof salonGuest.$inferSelect;
+export type NewSalonGuest = typeof salonGuest.$inferInsert;
+
+// ---------- 沙龙动态 (公告 / 留言 / 提问 / 系统消息) ----------
+
+export const salonActivity = pgTable(
+  "salon_activity",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    salonId: bigint("salon_id", { mode: "bigint" }).notNull(),
+    authorUserId: bigint("author_user_id", { mode: "bigint" }).notNull(),
+
+    type: salonActivityTypeEnum("type").notNull().default("comment"),
+    content: text("content").notNull(),
+    // 系统消息放结构化数据 (例: { event: 'rsvp', status: 'accepted', name: '张三' })
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+
+    visibility: salonVisibilityEnum("visibility").notNull().default("all"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    salonIdx: index("idx_salon_activity_salon").on(table.salonId, table.createdAt.desc()),
+  })
+);
+
+export type SalonActivity = typeof salonActivity.$inferSelect;
+export type NewSalonActivity = typeof salonActivity.$inferInsert;
+
+// ---------- 沙龙资料 (物料 / 图文, 走 /api/photos 产出的 URL) ----------
+
+export const salonAttachment = pgTable(
+  "salon_attachment",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    salonId: bigint("salon_id", { mode: "bigint" }).notNull(),
+
+    name: text("name").notNull(),
+    fileUrl: text("file_url").notNull(),
+    fileType: text("file_type").notNull().default("image"), // image / file (zod 校验)
+    visibility: salonVisibilityEnum("visibility").notNull().default("all"),
+
+    uploadedByUserId: bigint("uploaded_by_user_id", { mode: "bigint" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    salonIdx: index("idx_salon_attachment_salon").on(table.salonId),
+  })
+);
+
+export type SalonAttachment = typeof salonAttachment.$inferSelect;
+export type NewSalonAttachment = typeof salonAttachment.$inferInsert;

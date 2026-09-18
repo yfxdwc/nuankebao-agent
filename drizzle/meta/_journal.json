@@ -57,6 +57,13 @@
       "when": 1789736238455,
       "tag": "0007_customer_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789740178763,
+      "tag": "0008_rich_ink",
+      "breakpoints": true
     }
   ]
 }
