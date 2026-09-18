@@ -14,6 +14,7 @@ import '../models/dictionaries.dart';
 import '../models/follow_up.dart';
 import '../models/dashboard.dart';
 import '../models/franchisee.dart';
+import '../models/me.dart';
 import '../http/api_client.dart';
 
 // ============================================
@@ -451,6 +452,62 @@ class DashboardService {
   Future<DashboardStats> stats() async {
     final res = await _dio.get('/dashboard/stats');
     return DashboardStats.fromJson(res.data as Map<String, dynamic>);
+  }
+}
+
+// ============================================
+// MeService (「我的」页: 个人资料 + 自改资料)
+// ============================================
+
+class MeService {
+  final Dio _dio;
+  MeService(this._dio);
+
+  /// GET /api/me — 账号 + 加盟身份 + 门店 + 数据概览 (一次拉完)
+  Future<MeProfile> profile() async {
+    final res = await _dio.get('/me');
+    return MeProfile.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// PATCH /api/franchisees/{id} — 只能改自己的姓名/备注
+  /// (后端 Schema 还允许 phone / isActive, 但页面不给入口: 手机号是登录账号,
+  ///  停用自己会把账号锁死 —— 这两项找管理员)
+  Future<void> updateMyFranchisee(
+    String franchiseeId, {
+    String? name,
+    String? notes,
+  }) async {
+    await _dio.patch('/franchisees/$franchiseeId', data: {
+      if (name != null) 'name': name,
+      if (notes != null) 'notes': notes,
+    });
+  }
+}
+
+// ============================================
+// SystemService (版本 / 更新 / 网络自检)
+// ============================================
+
+class SystemService {
+  final Dio _dio;
+  SystemService(this._dio);
+
+  /// GET /api/app-version — 服务器版本 + 安装包元数据
+  Future<AppRelease> appRelease() async {
+    final res = await _dio.get('/app-version');
+    return AppRelease.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// GET /api/health — 不需要登录, 网络不通时也能告诉用户“服务器没连上”
+  /// 自己计时 (dio 的 connectTimeout 是超时上限, 不是实测值)
+  Future<HealthInfo> health() async {
+    final sw = Stopwatch()..start();
+    final res = await _dio.get('/health');
+    sw.stop();
+    return HealthInfo.fromJson(
+      res.data as Map<String, dynamic>,
+      latencyMs: sw.elapsedMilliseconds,
+    );
   }
 }
 

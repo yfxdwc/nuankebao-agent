@@ -9,6 +9,7 @@ import '../services/api.dart';
 import '../models/customer.dart';
 import '../models/dashboard.dart';
 import '../models/follow_up.dart';
+import '../models/me.dart';
 
 /// 全局 ApiClient 单例
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -52,6 +53,32 @@ final dashboardStatsProvider = FutureProvider<DashboardStats>((ref) async {
 });
 final photoServiceProvider = Provider<PhotoService>(
   (ref) => PhotoService(ref.watch(dioProvider)),
+);
+final meServiceProvider = Provider<MeService>(
+  (ref) => MeService(ref.watch(dioProvider)),
+);
+final systemServiceProvider = Provider<SystemService>(
+  (ref) => SystemService(ref.watch(dioProvider)),
+);
+
+// ============================================
+// 「我的」页数据
+// ============================================
+
+/// 个人资料 (账号 + 加盟身份 + 门店 + 数据概览)
+/// 改完资料后 `ref.invalidate(meProfileProvider)` 就能刷新
+final meProfileProvider = FutureProvider<MeProfile>(
+  (ref) async => ref.watch(meServiceProvider).profile(),
+);
+
+/// 服务器版本 + 安装包 (只在「检查更新」时拉, 不做自动轮询)
+final appReleaseProvider = FutureProvider<AppRelease>(
+  (ref) async => ref.watch(systemServiceProvider).appRelease(),
+);
+
+/// 网络自检 (GET /api/health, 不需要登录): autoDispose —— 每次打开"网络自检"都要拿当前状态
+final healthCheckProvider = FutureProvider.autoDispose<HealthInfo>(
+  (ref) async => ref.watch(systemServiceProvider).health(),
 );
 
 // ============================================
