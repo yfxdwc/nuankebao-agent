@@ -23,6 +23,7 @@ import '../widgets/customer_activity_cards.dart';
 import '../widgets/customer_row.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/franchise_chip.dart';
+import '../../../core/utils/birthday.dart';
 import '../../presentation/graph/widgets/franchise_tree_painter.dart';
 import 'add_record_sheet.dart';
 
@@ -1446,6 +1447,75 @@ class CustomerDetailPage extends ConsumerWidget {
                 ),
               ],
             ),
+            // 生日 + 提醒 (主人 2026-09-18)
+            if (c.birthMonth != null && c.birthDay != null) ...[
+              const SizedBox(height: 10),
+              Builder(builder: (_) {
+                final info = birthdayInfo(
+                  month: c.birthMonth,
+                  day: c.birthDay,
+                  calendar: c.birthCalendar,
+                );
+                final due = isInBirthdayRemindWindow(
+                  month: c.birthMonth,
+                  day: c.birthDay,
+                  calendar: c.birthCalendar,
+                  remindDays: c.birthdayRemindDays,
+                );
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: due
+                        ? AppTheme.accent.withOpacity(0.18)
+                        : AppTheme.bgWarm,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: due ? AppTheme.accent : const Color(0xFFEDE6DA),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.cake_outlined,
+                              size: 20,
+                              color: due ? AppTheme.accent : AppTheme.primaryDark),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '生日 ${birthdayLabel(month: c.birthMonth, day: c.birthDay, calendar: c.birthCalendar, year: c.birthYear)}'
+                              '${info != null ? ' · ${info.countdownLabel}' : ''}',
+                              style: TextStyle(
+                                fontSize: AppTheme.fontSm,
+                                fontWeight: FontWeight.w600,
+                                color: due ? AppTheme.accent : AppTheme.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '提醒: ${remindLabel(c.birthdayRemindDays)}'
+                        '${info.nextSolarDate != null ? ' · 下次 ${info.nextSolarDate.year}-${info.nextSolarDate.month.toString().padLeft(2, '0')}-${info.nextSolarDate.day.toString().padLeft(2, '0')}' : ''}',
+                        style: const TextStyle(
+                            fontSize: AppTheme.fontXs,
+                            color: AppTheme.textSecondary),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ] else if (c.birthYear != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                '生日未填 (只知道年份 ${c.birthYear}) · 填上月日可开启生日提醒',
+                style: const TextStyle(
+                    fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+              ),
+            ],
             if (c.diseaseHistory != null && c.diseaseHistory!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
@@ -1460,6 +1530,34 @@ class CustomerDetailPage extends ConsumerWidget {
                     fontSize: AppTheme.fontSm,
                     color: AppTheme.textPrimary,
                   ),
+                ),
+              ),
+            ],
+            if (c.allergyHistory != null && c.allergyHistory!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E8),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.accent.withOpacity(0.4)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded,
+                        size: 20, color: AppTheme.accent),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '过敏史: ${c.allergyHistory}',
+                        style: const TextStyle(
+                          fontSize: AppTheme.fontSm,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

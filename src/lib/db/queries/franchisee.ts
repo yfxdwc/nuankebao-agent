@@ -747,3 +747,38 @@ export async function getFranchiseeIdByUserId(userId: bigint): Promise<bigint | 
 
   return u?.franchiseeId ?? null;
 }
+
+/**
+ * 直接下级加盟商计数 (「我的」页: 我的下线 N 人 · A线 X / B线 Y)
+ *
+ * 只算**直接下线** (referrer_id = 我), 不递归 —— 递归计数是图谱/树页的活,
+ * 这里只要一个「我有几个人」的数字, 一次 GROUP BY 拿完, 不做 N+1。
+ * 边界: 软删 (deleted_at) 不计入
+ */
+export async function countDirectDownline(franchiseeId: bigint): Promise<{
+  total: number;
+  left: number;
+  right: number;
+  unknown: number;
+}> {
+  const rows = await db
+    .select({
+      side: franchisee.placementSide,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(franchisee)
+    .where(
+      and(eq(franchisee.referrerId, franchiseeId), isNull(franchisee.deletedAt))
+    )
+    .groupBy(franchisee.placementSide);
+
+  const pick = (side: string) =>
+    Number(rows.find((r) => r.side === side)?.count ?? 0);
+  const left = pick("left");
+  const right = pick("right");
+  const unknown = rows
+    .filter((r) => r.side !== "left" && r.side !== "right")
+    .reduce((sum, r) => sum + Number(r.count ?? 0), 0);
+
+  return { total: left + right + unknown, left, right, unknown };
+}

@@ -114,3 +114,24 @@ export async function getAppVersion(): Promise<string> {
   }
   return "0.1.0";
 }
+
+/**
+ * 拆 pubspec version spec ("0.2.2+3") → { version: "0.2.2", buildNumber: 3 }
+ *
+ * 边界 (老 APK / 手改坏): 缺 +build 时 buildNumber = 0; 非 semver 片段原样透传
+ * (前端只做「字符串不等 = 可能更新」提示, 不做严格 semver 排序)。
+ *
+ * 用在: GET /api/app-version (Flutter 「检查更新」比对 package_info 里的版本)
+ */
+export function parseAppVersionSpec(spec: string): {
+  version: string;
+  buildNumber: number;
+} {
+  const [versionPart, buildPart] = (spec ?? "").split("+");
+  const version = (versionPart ?? "").trim() || "0.0.0";
+  const buildNumber = Number.parseInt((buildPart ?? "").trim(), 10);
+  return {
+    version,
+    buildNumber: Number.isFinite(buildNumber) && buildNumber > 0 ? buildNumber : 0,
+  };
+}

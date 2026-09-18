@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/franchise_chip.dart';
+import '../../../core/utils/birthday.dart';
 
 class CustomerRow extends StatelessWidget {
   final Customer customer;
@@ -26,6 +27,20 @@ class CustomerRow extends StatelessWidget {
     this.lastVisitDate,
     this.pendingCount = 0,
   });
+
+  /// 距离生日还有几天 (只在「她设的提醒窗口内」返回, 否则 null → 不显示徽章)
+  int? get _birthdayDays {
+    final c = customer;
+    if (c.birthMonth == null || c.birthDay == null) return null;
+    if (c.birthdayRemindDays == null) return null;
+    final d = daysUntilBirthday(
+      month: c.birthMonth,
+      day: c.birthDay,
+      calendar: c.birthCalendar,
+    );
+    if (d == null || d > c.birthdayRemindDays!) return null;
+    return d;
+  }
 
   /// 实际展示的类型: 显式 customerType > customer 模型里的 customerType 字段 > isFranchisee 推导
   String get _type {
@@ -94,6 +109,26 @@ class CustomerRow extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       FranchiseChip(type: _type),
+                      // 🎂 生日提醒 (落在她设的提醒窗口内才显示; 主人 2026-09-18 拍)
+                      if (_birthdayDays != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accent,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            _birthdayDays == 0 ? '🎂 今天' : '🎂 ${_birthdayDays}天',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: AppTheme.fontXs,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 4),
