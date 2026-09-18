@@ -70,8 +70,7 @@ class ProfilePage extends ConsumerWidget {
             ],
           ),
           data: (profile) => _ProfileBody(profile: profile),
-        ),
-      ),
+        ),      ),
     );
   }
 }

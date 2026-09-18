@@ -219,6 +219,11 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 - **不归入 modules/customer/** (profile 是 web admin 扩展, 不是 APK 模块)
 - **不归入 modules/profile/** (新建模块需主人 ask_user 拍板)
 - 后续若要做独立模块 (profile), 主人拍板后再迁移
+- 2026-09-18 同伴文件 (同在 `lib/screens/`, 同样**不是模块**):
+  `profile_widgets.dart` (分区卡/条目/数字框) + `profile_sheets.dart`
+  (编辑资料 / 检查更新 / 网络自检 弹层) + `about_page.dart` (路由 `/profile/about`)
+  数据源 `GET /api/me` + `GET /api/app-version` (见 `docs/api.md §13`);
+  本机设置 `core/providers/settings_provider.dart` (shared_preferences)
 
 **`lib/_deprecated/`** (v0.1.4 Phase 9 真删评估):
 - 1 周观察期已过 (v0.1.2 → v0.1.3 拍板 2026-09-07 → 现在 > 1 周)

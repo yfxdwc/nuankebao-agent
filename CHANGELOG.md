@@ -2,6 +2,55 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (「我的」页工业级完善: 个人资料 + 加盟身份 + 数据概览 + 系统设置, 2026-09-18 主人要)
+
+**主人要**: 「'我的'页中。丰富个人和系统设置信息。我没有具体要求，你根据当前项目情况做工业级完善」
+
+**落地原刚**: 不摆假开关 —— 每个设置都**真有效果** (字号真变、版本真查、网络真测、缓存真清、
+资料真改); 空态 (未加盟 / 统计缺失 / 账号资料不全) 都当**合法状态**渲染, 不是错误页。
+
+**「我的」页现在从上到下** (旧版 = 「我」占位头像 + 3 个数字 + 加盟入口 + 退出):
+
+| 区 | 内容 | 数据源 |
+|---|---|---|
+| 个人资料 | 真实姓名 (加盟名优先) + 账号名 alias + 角色 + 门店 + 手机号 (**打码**/点👁看全号/📋复制) + 「编辑我的资料」 | `/api/me` |
+| 我的加盟身份 | 编号 #75 / 位置 (A线-B线) / 层级 / 路径 / **我的上级** (可点进详情) / 加入时间 / 状态 / **我的下线 N 人 (A线 x · B线 y)** / 备注 | `/api/me` |
+| 数据概览 | 客户 / 待办跟进 / 本月拜访 / 本月新增客户 + 累计互动 + 加盟网络入口 | `/api/me` |
+| 显示与存储 | **字号 标准/大/特大 (立即生效, 全 App)** + 清理图片缓存 | 本机 prefs |
+| 账号与安全 | 登录手机号 (只读+复制) / 30 天登录有效期 / 账号编号 | `/api/me` |
+| 关于与帮助 | 当前版本 / **检查更新** (服务器版本+安装包时间/大小+下载+扫码) / 使用帮助+数据安全页 / **网络自检** / 服务地址(debug) | `/api/app-version` + `/api/health` |
+
+**Backend (新增 2 个端点)**
+- `GET /api/me` —— 账号 + 加盟身份 (含上级/下线计数) + 门店 + 数据概览, **一次拉完**
+  (客户端拼 4 个请求 = 4 个 loading; 服务端一次给一份快照)
+- `GET /api/app-version` —— 服务器版本 (pubspec 真源) + 安装包元数据 (时间/大小/md5/下载 URL)
+- `queries/dashboard.ts` 新增 `getStatsOverview(ctx | null)`: 支持 RBAC 收紧, **当前传 null**
+  以跟客户列表同口径 (列表还没接行级过滤, 否则页面里两条数字互相打脸 —— 切点在函数注释里)
+- `queries/franchisee.ts` 新增 `countDirectDownline()` (一次 GROUP BY, 不递归不进 N+1)
+- `lib/utils.ts` 新增 `maskPhone()`; `lib/apk.ts` 新增 `parseAppVersionSpec()`
+
+**Flutter**
+- 新 `core/models/me.dart` (手写 fromJson, 字段全兜底) + `core/services/api.dart` 新增
+  `MeService` / `SystemService` + `providers` 新增 `meProfileProvider` / `appReleaseProvider` / `healthCheckProvider`
+- 新 `core/providers/settings_provider.dart`: 字号档位 (标准 1.0 / 大 1.15 / 特大 1.3) 落 `shared_preferences`;
+  `main()` 先 `await` 好 prefs 再 runApp (否则首帧标准字号→跳特大, 老人看到闪一下)
+- `app.dart`: `builder` 里包 `MediaQuery(textScaler: 用户档位 × 系统字号, 夹在 [0.9, 1.6])`
+  —— 尊重手机系统大字设置, 但不允许叠出不可用的界面
+- 新 `screens/profile_widgets.dart` (分区卡/条目/信息行/数字框, 统一行高与字号) +
+  `screens/profile_sheets.dart` (编辑资料 / 检查更新 / 网络自检 3 个弹层) +
+  `screens/about_page.dart` (使用帮助 6 条 + 数据安全 5 条 + 遇到问题)
+- `screens/profile_page.dart` 重写; 路由新增 `/profile/about`
+- 依赖新增 `shared_preferences` / `package_info_plus` / `flutter_cache_manager` (最后一个本就在依赖树里)
+- ❗修一个真 bug: `widget_test.dart` 不 override `sharedPreferencesProvider` → app 启动就抛异常
+  (字号设置引入的新前置条件), 已补 override
+
+**验证**
+- `flutter analyze` (lib/ + 改动文件): 0 issue
+- `flutter test test/me_model_test.dart test/settings_provider_test.dart`: 21 pass (模型空态/脏数据/版本比较/落盘)
+- `flutter test test/profile_page_test.dart`: 9 pass (四块内容 + 3 种空态 + 「特大」点下去真落盘 + **窄屏 320×特大字号不溢出**)
+- `npx tsc --noEmit`: 0 error; `curl /api/me` + `/api/app-version`: 返回见 `docs/api.md §13`
+- 文档同步: `docs/api.md §13` / `docs/user-manual.md` 「我的」章节 / `AGENTS.md §4.5`
+
 ### Changed (客户详情页内容丰富: 养生记录 + AI 4 卡 + 跟进 + 互动, 2026-09-18 主人要)
 
 **主人要**: 「丰富客户详情页内容（最少要有已打包的最新版本apk中的客户详情项：养生记录、
