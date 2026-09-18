@@ -118,6 +118,46 @@
 - `npx tsc --noEmit`: 0 error; `curl /api/me` + `/api/app-version`: 返回见 `docs/api.md §13`
 - 文档同步: `docs/api.md §13` / `docs/profile-and-settings.md` (新增) / `docs/user-manual.md` 「我的」章节 / `AGENTS.md §4.5`
 
+### Added (客户头像: 详情页头像右下角相机图标 → 候选头像 / 拍照 / 相册, 2026-09-18 主人要)
+
+**主人要**: 「客户详情页，客户头像右下角增加一个相机图标，点击可设置客户头像
+(增加几个候选头像供不希望用真人头像的用户选择) 或自拍照或相册上传」
+
+**DB (migration 0007, 已 migrate, compat 0 error/0 warning)**
+- `customer.avatar text` (nullable) —— 取值约定跟 `user.avatar_url` **完全一致** (复用 `src/lib/avatar.ts` 白名单):
+  `null` = 默认姓名首字 / `preset:<id>` = 内置候选 (前端本地画, **不占存储不跑流量**) /
+  `/uploads/x.jpg` = 上传的照片 (复用现成 `POST /api/photos`, 不新增存储设施)
+- 拒绝外链 (`https://...`) / 未知候选 id / 目录穿越 → **400** (服务端兼底; 客户端也提前拦)
+
+**Backend**
+- `queries/customer.ts`: view/input 加 `avatar`; 写前过 `parseAvatarValue()` (非法值抛错 → 路由转 400);
+  读后过 `readAvatarValue()` (库里脏值 → null, 不渲染白框)
+- `POST /api/customers` + `PATCH /api/customers/[id]` 接 `avatar` (zod: string ≤300 / nullable)
+- 实测: `preset:leaf` 写入 ✓ / 外链 400 ✓ / 未知候选 400 ✓ / `null` 清空 ✓
+
+**Flutter**
+- 详情页头部: 头像换成 `UserAvatar` (自动认 照片 / 候选 / 首字) + **右下角绿色相机角标** (32pt,
+  带白边, 中老年看得清) + 头像下加一行提示「点头像可以换 (拍照 / 相册 / 现成头像)」
+  → 整个头像区可点 (GestureDetector, 触摸区 ≥64pt)
+- 弹出的选头像 sheet: **复用「我的」页那套** (`showAvatarPickerSheet`) —— 本次只做**加法**:
+  加了可选 `onApply` / `title` / `subtitle` 参数 (默认行为不变), 客户页传自己的保存动作
+  (PATCH /api/customers/:id) → 同一套候选头像网格 (8 个养生图标: 绿叶/花朵/喝茶/静心/爱心/暖阳/养生/清泉)
+  + 「拍一张」/「从相册选」/ 恢复默认, 不重复造 UI
+- 上传前本地压到 ≤512px (头像够用, 网络差也能传上去)、≤3MB; 上传后存 URL
+- 客户列表行头像也用 `UserAvatar` (有头像就显示, 列表里关掉 loading 菊花更安静)
+- `core/models/customer.dart` 加 `avatar` + 解析白名单 (单测覆盖)
+
+**验证**
+- 单测 `flutter_app/test/avatar_parse_test.dart` **4 例全过**: 合法候选保留 / 未知候选→null /
+  `/uploads/` 保留 / 目录穿越与外链→null / null与空串→null
+- 后端 curl: 4 种情形全对 (上面已列)
+- `npx tsc --noEmit` 0 error; `flutter analyze` 改动文件 0 error
+- 真浏览器 E2E: 详情页头像 + 相机角标渲染 ✓; 点开 sheet → 「候选头像 花朵」→ PATCH 200 → 头像变成候选
+  (截图 `/tmp/nuankebao-detail/avatar-*.png`)
+
+**边界/遗留**: 头像文件本身跟养生照片一样存 `public/uploads/` (无删旧文件机制 → 换头像多了会残留;
+后续可加「孤儿文件清理」定时任务); 手机端拍照需真机验证 (web 环境拿不到相机, 会走相册)。
+
 ### Changed (编辑客户页: 健康标签候选项 + 生日(年月日/农历) + 生日提醒 + 过敏史, 2026-09-18 主人要)
 
 **主人要** (原文):
