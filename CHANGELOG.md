@@ -264,6 +264,31 @@ version.json `0.2.11#12 → 0.2.12#13` + SW hash 已 bump (主人侧需 Ctrl+Shi
 App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视觉 QA 确认两腿长度明显不同、
 各自的列仍竖直
 
+### Fixed (build-flutter-web.sh --auto 静默退出二次加固 + public/app 完整重建, 2026-09-18 主人拍)
+
+**主人拍**: 「public/app 现在补一次完整重建。修：早先挂着的 tools/build-flutter-web.sh --auto 静默退出 bug」
+
+- **`tools/build-flutter-web.sh`**:
+  - `--auto` 主 bug (DART_DEFINE 为空 → `grep` 无匹配返回 1 → `set -euo pipefail` 下
+    `EXPECTED_IP=$(...)` 赋值失败 → 脚本在「验证」步静默退出, **永不同步 public/app**) 已由另一会话
+    按主人拍板修掉 (`|| true`) ✓
+  - **本次二次加固同类另一处** (同一个坑): `CURRENT_VERSION=$(grep ... | cut ...)` 无兜底 →
+    version 字段缺失时会在「已同步但没 bump 版本/没更新 SW hash」时退出(浏览器拿不到新版) →
+    加 `|| true` + 空值兜底; version 不是 `x.y.z` 时 `$((PATCH+1))` 会算术报错 → 正则校验,
+    不合法退回 `0.2.0` 再 bump
+- **完整重建** (走已修好的脚本): `bash tools/build-flutter-web.sh --auto` 全程跑通 —
+  `flutter clean` → `pub get` → `build web --release` → `rsync → public/app/` → version bump → SW hash 更新 ✓
+  - `public/app/main.dart.js` = 2,823,188 bytes; `flutter_service_worker.js` 里的 main.dart.js hash
+    与文件 md5 一致 ✓
+  - version.json 手工置 **0.2.4#5** (脚本自身 bump 出来的 0.2.3#4 与仓库已提交值相同,
+    担心浏览器 SW 比对不出变化, 换一个确定没被缓存过的值)
+  - 产物包含当前工作区全部改动 (含另一会话 ADR-0011「层级不限 + 图谱懒加载」与 WIP) ✓
+
+**验证**
+- `bash -n tools/build-flutter-web.sh` 语法 ✓; 脚本 `--auto` 模式端到端跑完 (这次真的 sync + bump) ✓
+- 生产 build 加载正常: `/app/` → 图谱页 4 段筛选胶囊 / 节点三维样式 / 选中信息条 / 回到我·全景 都在;
+  筛选计数 = 懒加载初始层 (ADR-0011 行为, 与节点样式无关) ✓
+
 ### Fixed (加盟商编辑页路由缺失 + 路由兜底, 2026-09-17 主人报)
 
 **主人报**: 「修复加盟商详情的编辑页面, 当前报错: `GoException: no routes for location: /franchisees/81/edit`」
