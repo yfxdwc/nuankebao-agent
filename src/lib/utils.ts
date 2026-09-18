@@ -12,20 +12,24 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * 手机号打码 (展示用): 13800138000 → 138****8000
  *
- * 边界:
- *   - 非 11 位 (老数据 / 座机 / 空) → 只留头 3 + 尾 2, 至少不整串暴露;
- *     长度 <= 5 时全打码
- *   - null / undefined / 空串 → "" (调用方自己决定占位符)
+ * 规则 (先判手机号, 再兜底通用):
+ *   - 11 位手机号 (1[3-9]xxxxxxxx) → 头 3 + **** + 尾 4
+ *   - 其他 (座机 / 境外 / 带分机 / 老数据) → 头 3 + 同样长度的星号 + 尾 2
+ *     (长度 <= 5 时全打码)
+ *   - null / undefined / 空串 / 没数字 → "" (调用方自己决定占位符)
  *
+ * ⚠ 不变量: 输出永远不等于输入 (回归测试锁住) —— 打码函数把明文漏出去 = 事故
  * 用在: GET /api/me (「我的」页默认只显示打码号, 点"显示"才用 full)
  */
 export function maskPhone(phone: string | null | undefined): string {
   if (!phone) return "";
   const digits = phone.replace(/\D/g, "");
   if (digits.length === 0) return "";
-  if (digits.length === 11) return `${digits.slice(0, 3)}****${digits.slice(7)}`;
+  if (/^1[3-9]\d{9}$/.test(digits)) {
+    return `${digits.slice(0, 3)}****${digits.slice(7)}`;
+  }
   if (digits.length <= 5) return "*".repeat(digits.length);
-  return `${digits.slice(0, 3)}${"*".repeat(Math.max(digits.length - 5, 1))}${digits.slice(-2)}`;
+  return `${digits.slice(0, 3)}${"*".repeat(digits.length - 5)}${digits.slice(-2)}`;
 }
 
 /**
