@@ -197,8 +197,11 @@ class TreeLayout {
     }
 
     final halfWidth = spineOffset + maxColumn * pitch + nodeRadius + padding;
+    final canvasWidth = math.max(400, halfWidth * 2);
+    // 宽度兜底 (400) 生效时把内容居中, 别让根节点偏在左边
+    final centerOffsetX = canvasWidth / 2 - halfWidth;
     final canvasSize = Size(
-      math.max(400, halfWidth * 2),
+      canvasWidth,
       padding * 2 + (maxDepthSeen + 1) * levelHeight + nodeSize,
     );
 
@@ -215,7 +218,7 @@ class TreeLayout {
     // (左腿 x 是负数, 不平移会被画到 SizedBox 外面 → 点击/命中失效)
     final canvasPositions = <String, Offset>{
       for (final e in positions.entries)
-        e.key: Offset(e.value.dx + halfWidth, e.value.dy),
+        e.key: Offset(e.value.dx + halfWidth + centerOffsetX, e.value.dy),
     };
 
     return TreeLayoutResult(

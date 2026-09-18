@@ -34,6 +34,40 @@ FranchiseeTreeNode perfectTree(int levels, {String idPrefix = 'n'}) {
   return build(0, '', '');
 }
 
+/// 一条腿的链 (每层只有同侧子节点): chain(4, 'left') = L1→L2→L3→L4
+FranchiseeTreeNode chain(int length, String side, {String idPrefix = 'c'}) {
+  var counter = 0;
+  FranchiseeTreeNode build(int depth) {
+    final id = '$idPrefix${side[0]}${++counter}';
+    return FranchiseeTreeNode(
+      id: id,
+      name: id,
+      placementSide: side, // 链上每个节点都是同侧 (含根的直接子)
+      placementDepth: depth,
+      children: depth + 1 < length ? [build(depth + 1)] : const [],
+    );
+  }
+
+  return build(0);
+}
+
+/// 根 + 指定长度的左右链 (不对称树: 左 4 层 / 右 2 层 …)
+FranchiseeTreeNode asymmetricTree({
+  required int leftLength,
+  required int rightLength,
+}) {
+  final children = <FranchiseeTreeNode>[];
+  if (leftLength > 0) children.add(chain(leftLength, 'left', idPrefix: 'L'));
+  if (rightLength > 0) children.add(chain(rightLength, 'right', idPrefix: 'R'));
+  return FranchiseeTreeNode(
+    id: 'root',
+    name: 'root',
+    placementSide: null,
+    placementDepth: 0,
+    children: children,
+  );
+}
+
 void main() {
   test('31 节点 (depth 4): 画布宽度可控 + 主线严格竖直 + 同层成对', () {
     final tree = perfectTree(5); // 1+2+4+8+16 = 31
@@ -109,5 +143,98 @@ void main() {
         expect(entry.value.dx, greaterThan(layout.canvasSize.width / 2));
       }
     }
+  });
+
+
+  // ============================================
+  // 非对称生长 (主人 2026-09-17 问: 「对称不是强制的吧, 实际生产是自由生长」)
+  //   结论: 布局**不强制对称** — 对称与否完全由数据决定 (种子数据是完美二叉树才 15/15)
+  // ============================================
+
+  test('不对称: A线 4 层 / B线 2 层 → 各走各的, 不补齐不镜像', () {
+    final tree = asymmetricTree(leftLength: 4, rightLength: 2);
+    final layout = TreeLayout.compute(tree, maxDepth: 8);
+
+    // A 线 4 个节点 / B 线 2 个节点
+    expect(layout.aLineIds.length, 4);
+    expect(layout.bLineIds.length, 2);
+
+    // 两条腿的主线各自竖直 (各在自己那列)
+    final leftXs = <double>{};
+    final rightXs = <double>{};
+    void walk(FranchiseeTreeNode n) {
+      final p = layout.positions[n.id]!;
+      if (layout.aLineIds.contains(n.id)) leftXs.add(p.dx);
+      if (layout.bLineIds.contains(n.id)) rightXs.add(p.dx);
+      for (final c in n.children) {
+        walk(c);
+      }
+    }
+
+    walk(tree);
+    expect(leftXs.length, 1, reason: 'A线仍是一条竖直线');
+    expect(rightXs.length, 1, reason: 'B线仍是一条竖直线');
+    // 但两条线的长度不同 → y 范围不同 (不强制等长)
+    final leftYs = <double>[];
+    final rightYs = <double>[];
+    void walkY(FranchiseeTreeNode n) {
+      if (layout.aLineIds.contains(n.id)) leftYs.add(layout.positions[n.id]!.dy);
+      if (layout.bLineIds.contains(n.id)) rightYs.add(layout.positions[n.id]!.dy);
+      for (final c in n.children) {
+        walkY(c);
+      }
+    }
+
+    walkY(tree);
+    expect(leftYs.length, greaterThan(rightYs.length), reason: 'A线更长, B线更短');
+    expect(leftYs.reduce((a, b) => a > b ? a : b),
+        greaterThan(rightYs.reduce((a, b) => a > b ? a : b)),
+        reason: '长的那条腿往下延伸, 不截断成一样长');
+  });
+
+  test('不对称: 只有 A 线 (根只有左子) → B线为空, 不报错不占位', () {
+    final tree = asymmetricTree(leftLength: 3, rightLength: 0);
+    final layout = TreeLayout.compute(tree, maxDepth: 5);
+
+    expect(layout.bLineIds, isEmpty);
+    expect(layout.rightColumns, 0);
+    expect(layout.aLineIds.length, 3);
+    // 根仍在中轴
+    expect(layout.positions['root']!.dx, layout.canvasSize.width / 2);
+    // 画布仍有合理尺寸
+    expect(layout.canvasSize.width, greaterThan(400));
+  });
+
+  test('不对称: 只有 B 线 + 单侧链 (同侧断了用另一侧接主线)', () {
+    final tree = asymmetricTree(leftLength: 0, rightLength: 5);
+    final layout = TreeLayout.compute(tree, maxDepth: 6);
+
+    expect(layout.aLineIds, isEmpty);
+    expect(layout.bLineIds.length, 5);
+    // 5 个主线节点同 x (竖直)
+    final xs = <double>{};
+    for (final id in layout.bLineIds) {
+      xs.add(layout.positions[id]!.dx);
+    }
+    expect(xs.length, 1);
+  });
+
+  test('不对称: 混合型 — 左腿长+侧枝, 右腿短, 节点不重叠 (中心距 ≥ 半径和*0.6)', () {
+    final tree = asymmetricTree(leftLength: 5, rightLength: 2);
+    final layout = TreeLayout.compute(tree, maxDepth: 8);
+    final ids = layout.positions.keys.toList();
+    var checked = 0;
+    for (var i = 0; i < ids.length; i++) {
+      for (var j = i + 1; j < ids.length; j++) {
+        final a = layout.positions[ids[i]]!;
+        final b = layout.positions[ids[j]]!;
+        final ra = TreeLayout.radiusForColumn(layout.columns[ids[i]] ?? 0);
+        final rb = TreeLayout.radiusForColumn(layout.columns[ids[j]] ?? 0);
+        // 允许一定重叠, 但不允许完全叠死 (中心距至少 60% 半径和)
+        expect((a - b).distance, greaterThan((ra + rb) * 0.6 - 0.01));
+        checked++;
+      }
+    }
+    expect(checked, greaterThan(0));
   });
 }
