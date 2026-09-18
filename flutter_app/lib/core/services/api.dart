@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/customer.dart';
+import '../models/ai_insight.dart';
 import '../models/wellness_record.dart';
 import '../models/dictionaries.dart';
 import '../models/follow_up.dart';
@@ -397,14 +398,45 @@ class AiService {
   final Dio _dio;
   AiService(this._dio);
 
+  /// AI 客户画像 (旧接口: 只拿 content 文本)
   Future<String> profile(String customerId) async {
     final res = await _dio.get('/ai/profile/$customerId');
     return res.data['content'] as String? ?? '暂无画像';
   }
 
+  /// AI 客户画像 (结构化: 总结 + 近期记录摘要)
+  Future<CustomerProfileInsight> profileInsight(String customerId) async {
+    final res = await _dio.get('/ai/profile/$customerId');
+    return CustomerProfileInsight.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// AI 跟进话术 (可选 reason = 为什么跟进)
+  Future<FollowUpSuggestion> followUpInsight(
+    String customerId, {
+    String? reason,
+  }) async {
+    final res = await _dio.post('/ai/follow-up', data: {
+      'customerId': customerId,
+      if (reason != null && reason.isNotEmpty) 'reason': reason,
+    });
+    return FollowUpSuggestion.fromJson(res.data as Map<String, dynamic>);
+  }
+
   Future<String> followUpSuggestion(Map<String, dynamic> data) async {
     final res = await _dio.post('/ai/follow-up', data: data);
     return res.data['suggestion'] as String? ?? '暂无建议';
+  }
+
+  /// 复购预测 (纯 DB 计算, 不消耗 AI 额度)
+  Future<RepurchasePrediction> repurchasePrediction(String customerId) async {
+    final res = await _dio.get('/ai/repurchase-prediction/$customerId');
+    return RepurchasePrediction.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 效果分析 (多疗程趋势 + AI 总结)
+  Future<EffectAnalysis> effectAnalysis(String customerId) async {
+    final res = await _dio.get('/ai/effect-analysis/$customerId');
+    return EffectAnalysis.fromJson(res.data as Map<String, dynamic>);
   }
 }
 

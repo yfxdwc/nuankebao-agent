@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/models/customer.dart';
 // fix-graph-zoom-pan (2026-09-16): auto-fit initial scale, user can see whole tree on open
@@ -17,6 +18,8 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../widgets/big_fab.dart';
+import '../widgets/ai_insight_cards.dart';
+import '../widgets/customer_activity_cards.dart';
 import '../widgets/customer_row.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/franchise_chip.dart';
@@ -1123,44 +1126,163 @@ class CustomerDetailPage extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
       children: [
-        // 大头像 + 基本信息卡
-        _buildHeader(customer),
-        const SizedBox(height: 16),
+        // 1) 大头像 + 基本信息 (类型徽章 / 年龄 / 拨号)
+        _buildHeader(context, ref, customer),
+        const SizedBox(height: 12),
 
-        // 主操作按钮: + 添加记录 (大按钮 64pt)
-        BigButton(
-          label: '+ 添加记录',
-          icon: Icons.add_circle_outline,
-          onPressed: () => showAddRecordSheet(context, customerId: customerId),
-        ),
-        const SizedBox(height: 16),
+        // 2) 被动养生记录 (含汇总: 共 N 次 / 最近到店)
+        _buildWellnessSection(context, asyncRecords),
+        const SizedBox(height: 12),
 
-        // 健康标签
-        if (customer.healthTags.isNotEmpty) _buildHealthTags(customer),
-        if (customer.healthTags.isNotEmpty) const SizedBox(height: 16),
+        // 3) AI 智能区 (主人 2026-09-18 拍: 复购预测 / 客户画像 / 跟进建议 / 效果分析)
+        //    顺序按「销售员每天最用得上」排: 复购预测 (自动算, 不烧额度) →
+        //    跟进建议 (开口话术) → 客户画像 (这人是谁) → 效果分析 (疗程有没有用)
+        _buildSectionTitle('AI 助手'),
+        RepurchaseCard(customerId: customerId),
+        AiFollowUpCard(customerId: customerId),
+        AiProfileCard(customerId: customerId),
+        EffectAnalysisCard(customerId: customerId),
+        const SizedBox(height: 4),
 
-        // 时间线: 全部记录 (养生 + 后续会加联系 + 跟进)
-        _buildSectionTitle('全部记录'),
-        asyncRecords.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(16),
-            child: LoadingState(),
-          ),
-          error: (e, _) => Text('加载失败: $e'),
-          data: (records) {
-            if (records.isEmpty) {
-              return _buildEmptyHint('还没有记录', '点击上方"添加记录"开始');
-            }
-            return Column(
-              children: records.map((r) => _buildRecordTile(context, r)).toList(),
-            );
-          },
-        ),
+        // 4) 跟进任务 (该客户待办, 可直接勾完成)
+        CustomerFollowUpSection(customerId: customerId),
+
+        // 5) 互动记录 (电话/微信/到店流水)
+        CustomerInteractionSection(customerId: customerId),
       ],
     );
   }
 
-  Widget _buildHeader(Customer c) {
+  /// 养生记录区: 汇总 + 最近 5 条 + 入口
+  Widget _buildWellnessSection(
+    BuildContext context,
+    AsyncValue<List<dynamic>> asyncRecords,
+  ) {
+    final fmt = DateFormat('yyyy-MM-dd');
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.favorite, size: 26, color: AppTheme.accent),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('养生记录',
+                      style: TextStyle(
+                          fontSize: AppTheme.fontMd,
+                          fontWeight: FontWeight.w700)),
+                ),
+                asyncRecords.maybeWhen(
+                  data: (records) {
+                    if (records.isEmpty) return const SizedBox.shrink();
+                    final last = records.first.serviceDate.toString();
+                    return Text(
+                      '共 ${records.length} 次 · 最近 ${fmt.format(DateTime.parse(last))}',
+                      style: const TextStyle(
+                          fontSize: AppTheme.fontXs,
+                          color: AppTheme.textSecondary),
+                    );
+                  },
+                  orElse: () => const SizedBox.shrink(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            asyncRecords.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(8),
+                child: LoadingState(),
+              ),
+              error: (e, _) => Text('加载失败: $e',
+                  style: const TextStyle(color: AppTheme.danger)),
+              data: (records) {
+                if (records.isEmpty) {
+                  return _buildEmptyHint('还没有记录', '点下面的「添加记录」开始');
+                }
+                return Column(
+                  children: [
+                    ...records.take(5).map((r) => _buildRecordTile(context, r)),
+                    if (records.length > 5)
+                      TextButton.icon(
+                        onPressed: () => _showAllRecords(context, records),
+                        icon: const Icon(Icons.expand_more, size: 22),
+                        label: Text('查看全部 ${records.length} 条',
+                            style: const TextStyle(fontSize: AppTheme.fontSm)),
+                      ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: BigButton(
+                    label: '+ 添加记录',
+                    icon: Icons.add_circle_outline,
+                    onPressed: () =>
+                        showAddRecordSheet(context, customerId: customerId),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 全部记录 (底部弹层; 列表长了不把详情页撑爆)
+  void _showAllRecords(BuildContext context, List<dynamic> records) {
+    final fmt = DateFormat('yyyy-MM-dd');
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        maxChildSize: 0.95,
+        builder: (_, controller) => ListView.builder(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          itemCount: records.length,
+          itemBuilder: (ctx, i) {
+            final r = records[i];
+            final parts = (r.bodyParts as List?)?.join('/') ?? '';
+            return ListTile(
+              leading: const Icon(Icons.favorite, color: AppTheme.accent),
+              title: Text(fmt.format(DateTime.parse(r.serviceDate.toString())),
+                  style: const TextStyle(fontSize: AppTheme.fontMd)),
+              subtitle: Text(
+                [
+                  if (r.serviceItem != null) '${r.serviceItem}',
+                  if (parts.isNotEmpty) parts,
+                  if (r.customerFeedback != null) '反馈: ${r.customerFeedback}',
+                ].join(' · '),
+                style: const TextStyle(fontSize: AppTheme.fontSm),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/wellness-records/${r.id}');
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, WidgetRef ref, Customer c) {
+    final type = c.customerType;
+    final age = c.birthYear == null
+        ? null
+        : DateTime.now().year - c.birthYear!;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -1169,26 +1291,44 @@ class CustomerDetailPage extends ConsumerWidget {
           children: [
             CircleAvatar(
               radius: AppTheme.avatarLg / 2,
-              backgroundColor: AppTheme.primaryLight,
+              backgroundColor: type == 'franchisee'
+                  ? AppTheme.franchisee.withOpacity(0.2)
+                  : (type == 'seed'
+                      ? AppTheme.accent.withOpacity(0.2)
+                      : AppTheme.primaryLight),
               child: Text(
                 c.name.isNotEmpty ? c.name[0] : '?',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 36,
-                  color: AppTheme.primaryDark,
+                  color: type == 'franchisee'
+                      ? AppTheme.franchisee
+                      : (type == 'seed'
+                          ? AppTheme.accent
+                          : AppTheme.primaryDark),
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
             const SizedBox(height: 12),
-            Text(
-              c.name,
-              style: const TextStyle(
-                fontSize: AppTheme.fontXl,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    c.name,
+                    style: const TextStyle(
+                      fontSize: AppTheme.fontXl,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 类型徽章 (加盟紫 / 种子橙 / 普通绿) —— 跟客户列表同口径
+                FranchiseChip(type: type),
+              ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               _maskPhone(c.phone),
               style: const TextStyle(
@@ -1196,7 +1336,7 @@ class CustomerDetailPage extends ConsumerWidget {
                 color: AppTheme.textSecondary,
               ),
             ),
-            if (c.gender != null || c.birthYear != null) ...[
+            if (c.gender != null || age != null) ...[
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -1204,11 +1344,37 @@ class CustomerDetailPage extends ConsumerWidget {
                 children: [
                   if (c.gender != null)
                     Chip(label: Text(c.gender == 'F' ? '女' : c.gender == 'M' ? '男' : '未知')),
-                  if (c.birthYear != null)
-                    Chip(label: Text('${c.birthYear}年')),
+                  if (age != null) Chip(label: Text('$age 岁')),
+                  Chip(
+                    label: Text(
+                        '建档 ${DateFormat('yyyy-MM-dd').format(c.createdAt)}'),
+                  ),
                 ],
               ),
             ],
+            const SizedBox(height: 12),
+            // 快捷操作: 打电话 / 记一次互动 (拨号在 web 不支持时静默失败)
+            Row(
+              children: [
+                Expanded(
+                  child: BigActionButton(
+                    icon: Icons.phone,
+                    label: '打电话',
+                    compact: true,
+                    onTap: () => _callCustomer(context, c.phone),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: BigActionButton(
+                    icon: Icons.edit_note,
+                    label: '记一次互动',
+                    compact: true,
+                    onTap: () => _showAddInteractionSheet(context, ref, c.id),
+                  ),
+                ),
+              ],
+            ),
             if (c.diseaseHistory != null && c.diseaseHistory!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
@@ -1226,35 +1392,157 @@ class CustomerDetailPage extends ConsumerWidget {
                 ),
               ),
             ],
+            if (c.healthTags.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildHealthTags(c),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHealthTags(Customer c) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '健康标签',
-              style: TextStyle(
-                fontSize: AppTheme.fontMd,
-                fontWeight: FontWeight.w600,
+  /// 拨号 (tel:) — web 不支持时给提示, 不崩
+  Future<void> _callCustomer(BuildContext context, String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('无法拨号, 号码: $phone')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('无法拨号, 号码: $phone')),
+        );
+      }
+    }
+  }
+
+  /// 记一次互动 (电话/微信/到店/节日问候/其他 + 备注)
+  void _showAddInteractionSheet(
+    BuildContext context, WidgetRef ref, String customerId) {
+    const types = {
+      'phone': '电话',
+      'wechat': '微信',
+      'visit': '到店',
+      'holiday_greeting': '节日问候',
+      'other': '其他',
+    };
+    var selected = 'phone';
+    final summaryCtrl = TextEditingController();
+    var saving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('记一次互动',
+                  style: TextStyle(
+                      fontSize: AppTheme.fontLg, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: types.entries
+                    .map((e) => ChoiceChip(
+                          label: Text(e.value,
+                              style: const TextStyle(fontSize: AppTheme.fontSm)),
+                          selected: selected == e.key,
+                          onSelected: (_) =>
+                              setSheetState(() => selected = e.key),
+                        ))
+                    .toList(),
               ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: c.healthTags.map((t) => HealthTagChip(label: t)).toList(),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: summaryCtrl,
+                maxLines: 3,
+                style: const TextStyle(fontSize: AppTheme.fontMd),
+                decoration: const InputDecoration(
+                    labelText: '聊了什么 (可选)', hintText: '例: 说腰疼好多了, 约下周三'),
+              ),
+              const SizedBox(height: 16),
+              BigButton(
+                label: saving ? '保存中...' : '保存',
+                icon: Icons.check,
+                onPressed: saving
+                    ? () {}
+                    : () async {
+                        setSheetState(() => saving = true);
+                        try {
+                          await ref
+                              .read(interactionServiceProvider)
+                              .create({
+                            'customerId': customerId,
+                            'type': selected,
+                            if (summaryCtrl.text.isNotEmpty)
+                              'summary': summaryCtrl.text,
+                          });
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('已记录')),
+                            );
+                          }
+                          ref.invalidate(interactionsForCustomerProvider(customerId));
+                        } catch (e) {
+                          setSheetState(() => saving = false);
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text('保存失败: $e')),
+                            );
+                          }
+                        }
+                      },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHealthTags(Customer c) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryLight.withOpacity(0.25),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '健康标签',
+            style: TextStyle(
+              fontSize: AppTheme.fontSm,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: c.healthTags.map((t) => HealthTagChip(label: t)).toList(),
+          ),
+        ],
       ),
     );
   }

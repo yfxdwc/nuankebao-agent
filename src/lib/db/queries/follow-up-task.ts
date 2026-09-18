@@ -71,14 +71,19 @@ export async function createFollowUpTask(
 export async function listFollowUpTasks(options: {
   status?: "pending" | "done" | "cancelled";
   assignedTo?: string;
+  /** 只看某个客户的任务 (客户详情页用, 主人 2026-09-18) */
+  customerId?: string;
   limit?: number;
   offset?: number;
 } = {}): Promise<{ items: FollowUpTaskView[]; total: number }> {
-  const { status = "pending", assignedTo, limit = 50, offset = 0 } = options;
+  const { status = "pending", assignedTo, customerId, limit = 50, offset = 0 } = options;
 
   const conditions = [eq(followUpTask.status, status)];
   if (assignedTo) {
     conditions.push(eq(followUpTask.assignedTo, BigInt(assignedTo)));
+  }
+  if (customerId) {
+    conditions.push(eq(followUpTask.customerId, BigInt(customerId)));
   }
 
   const whereClause = and(...conditions);

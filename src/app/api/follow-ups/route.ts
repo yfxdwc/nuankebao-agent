@@ -28,10 +28,12 @@ export async function GET(request: NextRequest) {
     | "done"
     | "cancelled";
   const assignedTo = searchParams.get("assignedTo") ?? undefined;
+  // 客户详情页用: 只看这个客户的跟进任务 (主人 2026-09-18)
+  const customerId = searchParams.get("customerId") ?? undefined;
   const limit = parseInt(searchParams.get("limit") ?? "50");
   const offset = parseInt(searchParams.get("offset") ?? "0");
 
-  const result = await listFollowUpTasks({ status, assignedTo, limit, offset });
+  const result = await listFollowUpTasks({ status, assignedTo, customerId, limit, offset });
   return NextResponse.json(result);
 }
 

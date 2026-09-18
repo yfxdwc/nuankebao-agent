@@ -8,6 +8,7 @@ import '../http/api_client.dart';
 import '../services/api.dart';
 import '../models/customer.dart';
 import '../models/dashboard.dart';
+import '../models/follow_up.dart';
 
 /// 全局 ApiClient 单例
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -95,6 +96,20 @@ final customerTypeCountsProvider =
     return ref.watch(customerServiceProvider).typeCounts(search: search);
   },
 );
+
+/// 某客户的待办跟进任务 (客户详情页用, 主人 2026-09-18)
+final customerFollowUpTasksProvider =
+    FutureProvider.family<List<FollowUpTask>, String>((ref, customerId) async {
+  return ref
+      .watch(followUpServiceProvider)
+      .list(customerId: customerId, status: 'pending');
+});
+
+/// 某客户的互动记录 (客户详情页用)
+final interactionsForCustomerProvider =
+    FutureProvider.family<List<Interaction>, String>((ref, customerId) async {
+  return ref.watch(interactionServiceProvider).list(customerId: customerId);
+});
 
 /// 客户详情
 final customerDetailProvider = FutureProvider.family<dynamic, String>(
