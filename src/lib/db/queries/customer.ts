@@ -1,6 +1,22 @@
 import { db } from "@/lib/db";
-import { customer, type Customer, type NewCustomer } from "@/lib/db/schema";
-import { eq, isNull, and, desc, sql, ilike, or, type SQL } from "drizzle-orm";
+import {
+  customer,
+  franchisee,
+  type Customer,
+  type NewCustomer,
+} from "@/lib/db/schema";
+import {
+  eq,
+  isNull,
+  and,
+  not,
+  desc,
+  sql,
+  ilike,
+  inArray,
+  or,
+  type SQL,
+} from "drizzle-orm";
 import {
   encryptField,
   decryptField,
@@ -24,11 +40,73 @@ export interface CustomerView {
   notes: string | null;
   /** 客户推荐人 (客户图谱数据源), null = 无推荐人 (根/孤儿节点) */
   referrerId: string | null;
+  /** 种子客户标记 (显式勾选, 主人 2026-09-18 拍) */
+  isSeed: boolean;
+  /** 客户类型 (混合判定, 派生): 加盟 > 种子 > 普通 */
+  customerType: CustomerType;
   createdAt: Date;
   updatedAt: Date;
 }
 
-function toView(row: Customer): CustomerView {
+// ============================================
+// 客户类型 (主人 2026-09-18 拍 — 混合方案 C)
+// ============================================
+//
+//   - `franchisee` 加盟: **派生** — `franchisee` 表存在同 phone_hash 且未软删的记录
+//                       (客户与加盟商两张表靠 phone_hash 对齐, 不存冗余字段)
+//   - `seed`       种子: **显式** — `customer.is_seed = true` (潜在客户开关, 表单可勾)
+//   - `normal`     普通: 其余 (默认)
+//
+// 优先级: 加盟 > 种子 > 普通
+//   - 已加盟的客户即使被误标种子也显示「加盟」(加盟是事实关系, 更强)
+//   - 老 APK / 未升级客户端不发 is_seed 也能跑 (DB DEFAULT false, 见 drizzle/0005)
+
+export type CustomerType = "franchisee" | "seed" | "normal";
+/** 列表筛选: all = 不筛 (默认, 跟旧行为一致) */
+export type CustomerTypeFilter = CustomerType | "all";
+
+export const CUSTOMER_TYPES: readonly CustomerType[] = [
+  "franchisee",
+  "seed",
+  "normal",
+];
+
+/** SQL: 该客户是否是加盟商 (franchisee 表同手机号 hash + 未软删) */
+const isFranchiseeSql = sql`EXISTS (SELECT 1 FROM ${franchisee} WHERE ${franchisee.phoneHash} = ${customer.phoneHash} AND ${franchisee.deletedAt} IS NULL)`;
+
+/**
+ * 批量查「哪些 phone_hash 是加盟商」— 列表页一次查完, 避免 N+1
+ * (limit ≤ 50 的客户列表 → 一次 IN 查询)
+ */
+async function loadFranchiseePhoneHashes(
+  phoneHashes: string[]
+): Promise<Set<string>> {
+  if (phoneHashes.length === 0) return new Set();
+  const rows = await db
+    .select({ phoneHash: franchisee.phoneHash })
+    .from(franchisee)
+    .where(
+      and(
+        inArray(franchisee.phoneHash, phoneHashes),
+        isNull(franchisee.deletedAt)
+      )
+    );
+  return new Set(rows.map((r) => r.phoneHash));
+}
+
+/** 类型判定 (纯函数, 单测用) */
+export function resolveCustomerType(
+  row: { phoneHash: string; isSeed: boolean },
+  franchiseePhoneHashes: Set<string>
+): CustomerType {
+  if (franchiseePhoneHashes.has(row.phoneHash)) return "franchisee";
+  return row.isSeed ? "seed" : "normal";
+}
+
+function toView(
+  row: Customer,
+  franchiseePhoneHashes: Set<string> = new Set()
+): CustomerView {
   return {
     id: row.id.toString(),
     name: row.name,
@@ -43,6 +121,8 @@ function toView(row: Customer): CustomerView {
       : null,
     notes: row.notesEncrypted ? decryptField(row.notesEncrypted) : null,
     referrerId: row.referrerId?.toString() ?? null,
+    isSeed: row.isSeed,
+    customerType: resolveCustomerType(row, franchiseePhoneHashes),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -58,6 +138,8 @@ export interface CreateCustomerInput {
   notes?: string;
   /** 客户推荐人 (老带新, 客户图谱关系边). null = 无推荐人 */
   referrerId?: string | null;
+  /** 种子客户 (潜在客户开关, 主人 2026-09-18). 缺省 false */
+  isSeed?: boolean;
 }
 
 export interface UpdateCustomerInput {
@@ -70,6 +152,8 @@ export interface UpdateCustomerInput {
   notes?: string;
   /** 客户推荐人. 显式传 null 可清空推荐人 */
   referrerId?: string | null;
+  /** 种子客户开关 (true/false 双向可改) */
+  isSeed?: boolean;
 }
 
 export interface ListCustomersOptions {
@@ -77,6 +161,8 @@ export interface ListCustomersOptions {
   limit?: number;
   offset?: number;
   includeDeleted?: boolean;
+  /** 客户类型筛选 (all / 缺省 = 不筛) */
+  type?: CustomerTypeFilter;
   // W5 RBAC: 行级过滤上下文
   rbacCtx?: RbacContext;
 }
@@ -127,13 +213,22 @@ export async function getCustomerById(
     .where(conditions)
     .limit(1);
 
-  return row ? toView(row) : null;
+  return row
+    ? toView(row, await loadFranchiseePhoneHashes([row.phoneHash]))
+    : null;
 }
 
 export async function listCustomers(
   options: ListCustomersOptions = {}
 ): Promise<{ items: CustomerView[]; total: number }> {
-  const { search, limit = 20, offset = 0, includeDeleted = false, rbacCtx } = options;
+  const {
+    search,
+    limit = 20,
+    offset = 0,
+    includeDeleted = false,
+    type,
+    rbacCtx,
+  } = options;
 
   const conditions: SQL[] = [];
   if (!includeDeleted) {
@@ -148,6 +243,19 @@ export async function listCustomers(
       )!
     );
   }
+  // 客户类型筛选 (胶囊按键, 主人 2026-09-18 拍) — 判定跟 resolveCustomerType 严格对齐:
+  //   加盟 = 有 franchisee 记录; 种子 = is_seed 且非加盟; 普通 = 非加盟且非种子
+  // 存量老客户端不传 type → 不筛 (跟改动前完全一致)
+  if (type && type !== "all") {
+    if (type === "franchisee") {
+      conditions.push(isFranchiseeSql);
+    } else if (type === "seed") {
+      conditions.push(eq(customer.isSeed, true), not(isFranchiseeSql));
+    } else if (type === "normal") {
+      conditions.push(eq(customer.isSeed, false), not(isFranchiseeSql));
+    }
+  }
+
   // W5 RBAC: 行级 store_id 过滤 (Q1-A + Q4-A)
   if (rbacCtx) {
     const rbacFilter = customerRbacFilter(rbacCtx);
@@ -163,8 +271,12 @@ export async function listCustomers(
     db.select({ count: sql<number>`count(*)::int` }).from(customer).where(whereClause),
   ]);
 
+  const franchiseePhoneHashes = await loadFranchiseePhoneHashes(
+    rows.map((r) => r.phoneHash)
+  );
+
   return {
-    items: rows.map(toView),
+    items: rows.map((r) => toView(r, franchiseePhoneHashes)),
     total: count,
   };
 }
@@ -203,6 +315,7 @@ export async function updateCustomer(
     }
     updateData.referrerId = newReferrerId;
   }
+  if (input.isSeed !== undefined) updateData.isSeed = input.isSeed;
 
   const [row] = await withAuditContext(ctx, async (tx) => {
     return await tx
@@ -212,7 +325,9 @@ export async function updateCustomer(
       .returning();
   });
 
-  return row ? toView(row) : null;
+  return row
+    ? toView(row, await loadFranchiseePhoneHashes([row.phoneHash]))
+    : null;
 }
 
 /**

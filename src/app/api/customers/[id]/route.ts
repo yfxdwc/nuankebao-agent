@@ -18,6 +18,8 @@ const UpdateCustomerSchema = z.object({
   notes: z.string().optional(),
   // 客户推荐人. 显式 null = 清空推荐人
   referrerId: z.string().regex(/^\d+$/, "推荐人 ID 格式错误").nullable().optional(),
+  // 种子客户开关 (潜在客户, 主人 2026-09-18)
+  isSeed: z.boolean().optional(),
 });
 
 export async function GET(

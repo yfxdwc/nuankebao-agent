@@ -223,6 +223,13 @@ export const customer = pgTable(
     //   应用层 + service 层校验避免 referrerId == id 闭环, see customer service)
     referrerId: bigint("referrer_id", { mode: "bigint" }),
 
+    // 客户类型 (混合判定, 主人 2026-09-18 拍):
+    //   - 加盟  franchisee (派生: franchisee 表存在同手机号 hash 记录)
+    //   - 种子  is_seed=true (显式勾选, 潜在客户开关)
+    //   - 普通  其余 (默认, 不存字段)
+    // 优先级: 加盟 > 种子 > 普通 (见 queries/customer.ts resolveCustomerType)
+    isSeed: boolean("is_seed").notNull().default(false),
+
     createdBy: bigint("created_by", { mode: "bigint" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
