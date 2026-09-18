@@ -223,25 +223,28 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                   children: [
                     const Icon(Icons.phone_iphone, size: 22, color: AppTheme.primaryDark),
                     const SizedBox(width: 8),
-                    Text(
-                      _showFullPhone ? phone.full : phone.display,
-                      style: const TextStyle(
-                        fontSize: AppTheme.fontMd,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textPrimary,
+                    // Flexible + ellipsis: 号码在窄屏/特大字号下能缩, 不把这一行顶爆
+                    // (号码本身很短, 正常手机永不会真的省略)
+                    Flexible(
+                      child: Text(
+                        _showFullPhone ? phone.full : phone.display,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: AppTheme.fontMd,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textPrimary,
+                        ),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(
-                        _showFullPhone ? Icons.visibility_off : Icons.visibility,
-                        size: 24,
-                      ),
+                    _PhoneAction(
+                      icon: _showFullPhone ? Icons.visibility_off : Icons.visibility,
                       tooltip: _showFullPhone ? '隐藏' : '显示完整手机号',
                       onPressed: () =>
                           setState(() => _showFullPhone = !_showFullPhone),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.copy, size: 22),
+                    _PhoneAction(
+                      icon: Icons.copy,
                       tooltip: '复制手机号',
                       onPressed: () async {
                         await Clipboard.setData(ClipboardData(text: phone.full));

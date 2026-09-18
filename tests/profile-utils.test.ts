@@ -23,7 +23,7 @@ describe("maskPhone", () => {
   });
 
   it("非 11 位 → 头 3 尾 2, 不整串露出", () => {
-    expect(maskPhone("01012345678")).toBe("010*****78");
+    expect(maskPhone("01012345678")).toBe("010******78"); // 11 位但不是手机号 → 通用打码
     expect(maskPhone("1234567")).toBe("123**67");
   });
 
