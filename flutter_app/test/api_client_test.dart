@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:nuankebao/services/api_client.dart';
+// 路径修正 (2026-09-18): Plan F2 合并后文件在 core/http/, 老 import 让这个测试文件编译不过
+import 'package:nuankebao/core/http/api_client.dart';
 
 void main() {
   group('normalizeApiBaseUrl', () {

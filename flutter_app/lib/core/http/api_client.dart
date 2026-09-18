@@ -78,6 +78,24 @@ class ApiClient {
   static const sessionCookieNameKey = 'session_cookie_name';
   static const sessionTokenKey = 'session_token';
 
+  /// 运行时 origin —— 只从 Uri.base 推导, 且**只认 http/https**。
+  ///
+  /// 为什么必须判断 scheme (2026-09-18 修):
+  ///   `Uri.base.origin` 对非 http(s) 会直接 `StateError: Origin is only applicable
+  ///   schemes http and https`。而下面两种场景 Uri.base 就不是 http(s):
+  ///     1. widget 测试 (file:///.../flutter_app/) —— 以前一碰 ApiClient.baseUrl 就崩
+  ///     2. native (Android/iOS) 的 Uri.base 也是 file:/// (APK 必须走 dart-define)
+  ///   非 http(s) 时返回空串 → baseUrl 退化成本机相对路径 (``/api``): 请求会明确失败,
+  ///   而不是在**build 阶段**抛一个跟网络无关的 StateError 把页面打白。
+  static String get _runtimeOrigin {
+    // ignore: do_not_use_environment
+    final uri = Uri.base;
+    if (uri.scheme == 'http' || uri.scheme == 'https') {
+      return uri.origin;
+    }
+    return '';
+  }
+
   /// 规整后的 base URL (恒以 /api 结尾, dio 字符串拼接用)
   ///
   /// dart-define 优先, 空则 web 模式从 Uri.base.origin 自动推导.
@@ -86,8 +104,7 @@ class ApiClient {
       return normalizeApiBaseUrl(_rawBaseUrl);
     }
     // web 模式: 从当前页面 origin 推导 (运行时检测, IP 变不用 rebuild)
-    // ignore: do_not_use_environment
-    return '${Uri.base.origin}/api';
+    return '${_runtimeOrigin}/api';
   }
 
   /// origin (去 /api 后缀) — Auth.js callbackUrl / 登录跳转用
@@ -97,9 +114,8 @@ class ApiClient {
       final normalized = normalizeApiBaseUrl(_rawBaseUrl);
       return normalized.substring(0, normalized.length - 4);
     }
-    // web 模式: 用当前 origin
-    // ignore: do_not_use_environment
-    return Uri.base.origin;
+    // web 模式: 用当前 origin (非 http(s) 宿主→空串, 见 _runtimeOrigin)
+    return _runtimeOrigin;
   }
 
   final Dio _dio;
