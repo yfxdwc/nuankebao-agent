@@ -2,26 +2,82 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-### Changed (客户列表筛选 = 胶囊按键 4 段, 2026-09-18 主人拍)
+### Changed (客户列表胶囊筛选 + 客户类型 (加盟/种子/普通) 真过滤, 2026-09-18 主人拍)
 
 **主人要**: 「客户.列表页。把搜索栏正面的筛选标签(全部、加盟、普通、种子)组合成胶囊按键」
+→ 主人追加拍板: (1) 重新 build web (2) 胶囊接**真过滤** (3) 行徽章显示真实类型
 
-- **改**: `flutter_app/lib/modules/customer/screens/customers_page.dart`
-  - 旧 = `SizedBox(h:56)` + 横向 `ListView` + 4 个 `FilterChip` (可左右滚, 右侧留半截, 不整齐)
-  - 新 = `SegmentedButton<_CustomerFilter>` 4 段 (全部 / 🟣 加盟 / 🟢 普通 / 🌱 种子),
-    `expandedInsets: EdgeInsets.zero` → 4 段平分整行宽 (393pt − 32pt 内边距 = 361pt, 每段 ≈90pt)
-  - 跟图谱筛选 (全部/A线/B线/直推, commit 1b1de54) **同一组件同一样式**, 视觉统一
-  - 删掉不再使用的 `_buildChip()` (FilterChip 版本)
-- **验证** (widget golden, 393x852 真机尺寸, 临时测试文件已删):
-  - 4 段等宽: 段边界 x≈16 / 107 / 197 / 288 / 377; 胶囊行高 40pt (y 147–186)
-  - 4 个标签均**单行** (ink y 160–169), 无换行 / 无省略: 最宽标签「🟣 加盟」ink 53pt, 段内左右各余 17pt
-  - 点选切换正常 (选中底色随点击从第 1 段移到第 3 段), `takeException() == null` (无 RenderFlex 溢出)
-  - 截图: `/tmp/nuankebao-filter-capsule/*.png` (列表默认态 / 点「普通」后 / 放大裁剪)
-- **⚠ 未做 / 待主人拍**:
-  - `_applyFilter()` 仍是 TODO (返回全量) — 胶囊目前只是**高亮**, 真过滤要后端提供客户
-    `type` (本人/加盟/普通/种子) + API 侧过滤; 改动前的 FilterChip 版本同样如此 (非本次回归)
-  - `public/app/**` (Flutter web 构建产物) **没重新 build** — 预览页 `/app-preview` 里还是旧 chips;
-    要刷新预览需跑 `tools/build-flutter-web.sh` (涉及 preview 冻结路径 AGENTS §9, 等主人拍)
+**类型判定 = 混合方案 C** (主人选):
+
+| 类型 | 判定 | 存字段? |
+|---|---|---|
+| 🟣 加盟 franchisee | **派生** = `franchisee` 表存在同 `phone_hash` 且未软删的记录 | ❌ (不冗余存) |
+| 🌱 种子 seed | **显式** = `customer.is_seed = true` (表格勾选) | ✅ `is_seed` |
+| 🟢 普通 normal | 其余 (默认) | ❌ |
+
+优先级 **加盟 > 种子 > 普通** (已加盟的客户即使误标种子也显示「加盟」——加盟是事实关系, 更强)
+
+**Backend**
+- `drizzle/0005_customer_is_seed.sql` + `drizzle/down/0005_customer_is_seed.down.sql`:
+  `ALTER TABLE customer ADD COLUMN is_seed boolean NOT NULL DEFAULT false`
+  → ✅ 加性 + 带 DEFAULT (老 APK INSERT 不带该列也能跑), `pnpm db:compat` 0 error / 0 warning,
+  已 `pnpm db:migrate` 应用到 dev 库 (存量 15 行自动 false = 跟改动前行为一致)
+- `src/lib/db/queries/customer.ts`:
+  - `CustomerView` 加 `isSeed` + `customerType`; 删 `resolveCustomerType()` (纯函数, 单测覆盖)
+  - `loadFranchiseePhoneHashes()`: 列表一次 IN 查完 (避免 N+1), create/get/update 单条也走同一函数
+  - `listCustomers({ type })`: `franchisee` = `EXISTS (franchisee 同 phone_hash)`, `seed` = `is_seed AND NOT EXISTS(...)`,
+    `normal` = `NOT is_seed AND NOT EXISTS(...)`, `all`/缺省 = 不筛 (老客户端零影响)
+  - create/update 接 `isSeed`
+- `GET /api/customers?type=` (zod 枚举, **非法值 → 400** 不静默降级); `POST` / `PATCH` 接 `isSeed`
+- **顺手修**: `src/app/api/customers/[id]/route.ts` 缺 `isAuthSkipped()` 检查 → dev 模式 (DEV_SKIP_AUTH=1)
+  GET/PATCH/DELETE 全 401, 跟同目录 `customers/route.ts` 不一致。⚠ 全仓还有 11 个 route 同样缺该检查
+  (ai/*, dashboard, import/*, interactions, reports, wellness-records/[id], apk-*), 本次**未改** (避免扩大爆炸半径), 待主人定
+
+**Flutter**
+- `core/models/customer.dart`: freezed 加 `isSeed` (@Default false) + `customerType` (@Default 'normal') → 老后端不返回也不崩
+- `core/providers/service_providers.dart`: `customersProvider` family 从 `String?` 换 `CustomerListQuery{search,type}`
+  (== / hashCode 控制重取); 顺手删掉遗留未用的 `_CustomerQuery`
+- `core/services/api.dart`: `CustomerService.list({search, type})` → `?type=` (all 不发)
+- `modules/customer/screens/customers_page.dart`:
+  - 胶囊 = `SegmentedButton` 4 段 + `expandedInsets: EdgeInsets.zero` (4 段平分 361pt, 跟图谱筛选同一组件同一样式)
+  - 删 `_buildChip()` + `_applyFilter()` (本地全量返回的 TODO) → 真过滤走后端
+  - 空状态分场景文案 (筛出 0 条: 「没有加盟客户 / 换个筛选看看, 或点「全部」」)
+  - 行徽章/头像色按 `customerType` 渲染 (加盟紫 / 种子橙 / 普通绿)
+  - 表单加 **「🌱 种子客户」SwitchListTile** (勾选 → payload `isSeed`, 编辑页回填)
+- `core/widgets/franchise_chip.dart`: 加 `seed` 变体 (暖橙)
+- `customer_row.dart`: `isFranchisee` 降为 deprecated 兼容参数, 新增 `customerType`
+- `scripts/seed-test-data.ts`: 种子客户 payload 补 `isSeed` (之前只建数据不打标 → `?type=seed` 筛不出)
+
+**验证** (工具: vitest + flutter test golden + playwright 真浏览器; 临时验证文件已删)
+- 单测 `tests/customer-type.test.ts` (6 例): 加盟 / 种子 / 普通 / **加盟 > 种子** 优先级 / 枚举契约 ✓
+- API (curl, dev server):
+  `all=15, franchisee=0, seed=5, normal=10` (总和 = all ✓) → 建 3 条测试数据后
+  `all=20, franchisee=4, seed=6, normal=10`; 非法 `?type=bogus` → **400** ✓; 不传 type 行为跟改动前一致 ✓
+  · 测试含「已加盟 + 标种子」→ 仍显示 franchisee (优先级生效) ✓ 测试后 5 条软删回滚 (audit log 全程有记录)
+- **真机尺寸 golden** (393x852, widget): 三类徽章颜色分区 (紫/橙/绿) + 点胶囊后只剩对应类 ✓
+  并断言 Flutter 真把 `type=seed` / `type=normal` 传下去, 「全部」不发 type ✓
+- **真浏览器 E2E** (playwright + 隧道 + build 后的 /app + 真后端, 截图 `/tmp/nuankebao-filter-real/preview-*.png`):
+  初始 `GET /api/customers?limit=50` → 点「🌱 种子」`?type=seed` → 点「🟣 加盟」`?type=franchisee` → 回「全部」(缓存命中不重发)
+  截图像素分析: 全量 = 5 普通绿徽章 + 2 种子橙徽章 (屏内); 筛种子 = 5 橙徽章无绿徽章; 筛加盟 = 空状态页 ✓
+- `flutter analyze` 改动文件 0 issue; `npx tsc --noEmit` 0 error
+  (注: `flutter test` 其他单测 + `tests/integration*.test.ts` 是**改动前就挂**的——前者引用已删的 `services/api_client.dart`,
+  后者要 `DATABASE_URL` 指测试库, 非本次回归)
+
+**public/app 重新 build** (主人拍): 新 build = **`--auto` 模式** (不写死 IP, 运行时从 `Uri.base.origin` 推导 API base)
+→ 预览页同源调 API, 不再出现「隧道 https 页面调 http://192.168.1.200:3003 被浏览器拦 (mixed content)」;
+version.json `0.2.11#12 → 0.2.12#13` + SW hash 已 bump (主人侧需 Ctrl+Shift+R 硬刷新)
+
+**⚠ 发现 (不在本次范围, 待主人拍)**
+1. `tools/build-flutter-web.sh --auto` **本身有 bug**: `set -e` + 空 `DART_DEFINE` 让
+   `EXPECTED_IP=$(echo "" | grep -oE ...)` 返回 1 → 脚本在「验证」步直接退出, **永不同步到 public/app**。
+   本次是手动跑同款 rsync/version bump 完成的。脚本在冻结清单 (AGENTS §9), 没主人拍不改
+2. `/api/auth/flutter-login` 在 dev (NODE_ENV != production) 直接发 JWT, 而 dev 机器**已通过隧道暴露公网**
+   → 任何人知道 `13800138000 / 123456` 就能拿 session。之前就有, 但这次 E2E 复现了, 建议尽快关 (加 secret / 隧道限流 / 生产环境不暴露)
+
+### Changed (客户列表筛选 = 胶囊按键 4 段 — UI 部分, 2026-09-18 主人拍)
+
+- 上面那条的 UI 部分 (胶囊按键); 当时「真过滤 + 重新 build」还没拍, 主人后拍后已并入上一条
+- 截图: `/tmp/nuankebao-filter-capsule/*.png` (列表默认态 / 点「普通」后 / 放大裁剪)
 
 ### Fixed (加盟商编辑页路由缺失 + 路由兜底, 2026-09-17 主人报)
 
