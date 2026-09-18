@@ -6,6 +6,7 @@
 import { db } from "@/lib/db";
 import {
   franchisee,
+  customer,
   user,
   type Franchisee,
   type NewFranchisee,
@@ -18,6 +19,7 @@ import {
   hashForLookup,
 } from "@/lib/crypto/field";
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
+import { franchiseeCustomerValues } from "./customer";
 import { franchiseeRbacFilter, type RbacContext } from "@/lib/auth/rbac";
 import { placeNewFranchisee } from "./franchisee-tree";
 
@@ -170,6 +172,21 @@ export async function createFranchisee(
       .insert(franchisee)
       .values(encryptedData)
       .returning();
+
+    // 4. 打通: 加盟商同步落一份客户档案 (主人 2026-09-18 拍, 方案 A)
+    //    - 同一事务 → 任一步失败一起回滚 (不会出现“有加盟商没客户”)
+    //    - onConflictDoNothing: 同手机号已有客户 → 保留客户侧数据 (幂等)
+    //    - 审计: customer 表有 audit trigger, 写入自动进 audit_log
+    await tx
+      .insert(customer)
+      .values(
+        franchiseeCustomerValues({
+          name: input.name,
+          phone: input.phone,
+          createdBy,
+        })
+      )
+      .onConflictDoNothing({ target: customer.phoneHash });
 
     return toView(newFranchiseeRow);
   });

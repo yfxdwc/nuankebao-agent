@@ -2,6 +2,111 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (列表「加盟」与图谱对齐 = 打通加盟商↔客户档案 + 胶囊计数 + 图谱深度 4, 2026-09-18 主人拍)
+
+**主人报**: 「图谱页和列表页中的数据不是同源的吗？当前列表页加盟客户为 0，而图谱页只有 14 个加盟客户」
+
+**根因 (实测)**: 两张表、两套档案，从来没打通
+
+| | 图谱页 | 列表页 |
+|---|---|---|
+| 数据源 | `franchisee` 表 (加盟商档案) | `customer` 表 (客户档案) |
+| seed 数据 | 31 位 (5 层满二叉树) | 15 条 (5 种子 + 10 普通) |
+| 交集 | `join on phone_hash` = **0** | → 「加盟」筛出 0 |
+
+- seed 把两拨人建成了不同手机号；建加盟商的流程 (`createFranchisee`) **也不会**顺手建客户档案
+- 14 vs 30: 图谱原本请 `depth=3` (画 2+4+8=14 位下级)，而全深度下级是 30 位 →「我的下级」本身也有两个口径
+
+**主人拍**: A 打通数据 + 「加盟」口径 = **我的下级** (跟图谱一致) + 胶囊显示数量 ✅
+
+**1. 打通加盟商 → 客户档案 (方案 A)**
+- `queries/customer.ts` 新增 `franchiseeCustomerValues()` (共享 values 构造)
+- `createFranchisee()`: **同一事务内**再 insert 一条 customer (onConflictDoNothing on phone_hash)
+  → 新建/导入加盟商自动出现在客户列表；幂等 (同手机号已有客户则不动, 不覆盖客户侧数据)
+- 新增 `scripts/backfill-franchisee-customers.ts` (回填存量): 支持 `--dry-run` / `--restore-deleted`
+  · 实测 dev 库: 新建 27 + 恢复 4 (软删客户会占着 `idx_customer_phone_hash` 唯一索引挡住回填)
+  · 现状: 31 位加盟商 ↔ 31 条客户档案全部打通 (活跃客户 15 → 46)
+- 边界 (已写进脚本注释): 软删客户会挡住回填 → 默认跳过, `--restore-deleted` 才能恢复
+  (删客户可能是有意的); 本次 dev 库被挡的 4 条正是早先的测试行 (含我自建的 `类型验证-*`, 已改回加盟商真名)
+
+**2. 「加盟」口径改成「我的下级」 (跟图谱同口径)**
+- `queries/customer.ts`: `myDownlineFranchiseeSql(viewerFranchiseeId)` = `EXISTS(franchisee 同 phone_hash
+  AND 该加盟商在我的 placement 子树 AND 不是我 AND 未软删)`，子树判定与 `getPlacementTree` 逐字对齐
+  (`path = ''` 根 → 所有 `path <> ''`; 否则 `path LIKE me.path || '%'`)
+- 「加盟 = 子查询」当计算列随 SELECT 返回，不再多一次 IN 查询；`resolveCustomerType(row, isMyDownline)` 保持纯函数
+- viewer 解析: 新增 `src/lib/auth/viewer.ts` (`resolveViewerFranchiseeId(session.user.id)` → `user.franchisee_id`)
+  → 接进 `GET /api/customers`、`GET/PATCH /api/customers/[id]`、`POST /api/customers`
+  · 未加盟 / dev 无 session → `null` → 加盟恒 0，种子/普通照常
+- **新端点** `GET /api/customers/stats` → `{ all, franchisee, seed, normal }` (支持 `?search=`，跟列表共用同一套
+  WHERE 构造 `buildCustomerConditions`，三类互斥穷尽 → 相加 === all)
+- Flutter: `CustomerService.typeCounts()` + `customerTypeCountsProvider` (按 search 缓存)；
+  胶囊标签带数量 (`全部 46` / `🟣 加盟 30` / `🟢 普通 11` / `🌱 种子 5`，数量未加载时只显文字不闪 0)
+- 图谱深度: `myFranchiseeTreeProvider(3)` → **4** (ADR-0010 硬上限; 抽成 `_graphDepth` 常量，注释说明跟「加盟」口径同一份定义)
+  —— 否则列表 30 vs 图谱 14 又会对不上
+
+**验证 (全真链路)**
+- 后端 (dev server + dev 登录 cookie):
+  · `stats` = `{ all: 46, franchisee: 30, seed: 5, normal: 11 }` (30+5+11=46 ✓)
+  · `?type=franchisee|seed|normal` total = 30 / 5 / 11，行内 `customerType` 正确 ✓
+  · 未登录: 加盟 0, seed 6, normal 40 (46 ✓) — 未加盟 viewer 无下级，符合定义 ✓
+  · 建加盟商打通实测: `POST /api/franchisees` (新手机号) → 同事务生成客户档案 ✓ (验证后已软删两个测试行)
+  · 建在我下级下 (referrerId=75) 才显示「加盟」；无 referrer = 新 root → 不算我的下级 (符合口径)
+    ⚠ 提醒: `add_franchisee_page` 强制选推荐人，所以正常流程不会造出孤立 root
+- 单测 `tests/customer-type.test.ts` 6 例 (含优先级 / 未加盟 viewer) ✓; preview snapshot 19 例 ✓
+- **真浏览器 E2E** (playwright + 隧道 + 新 build + 真后端; 截图 `/tmp/nuankebao-filter-real/counts-*.png`):
+  · semantics 真值: 胶囊 = 「全部 46」「🟣 加盟 30」「🟢 普通 11」「🌱 种子 5」✓
+  · 点「加盟」→ `GET /api/customers?type=franchisee` 200 ✓ (列表行显「🟣 加盟」徽章)
+  · 切「图谱」→ `GET /api/franchisees/me/tree?depth=4&mode=placement` 200，页面显示 **「共 30 位」**
+    → **列表「加盟 30」 === 图谱「共 30 位」** ✓ (主人报的问题闭环)
+
+**public/app 重新 build** (同一任务第二次; `--auto`, `pnpm test tests/preview-framework-snapshot.test.ts` 19 passed)
+主人浏览器需 Ctrl+Shift+R 硬刷新。
+
+**遗留 (已记录, 未改)**: viewer 自己的客户档案 (本人) 落在「普通」桶里 (加盟 = 下级, 不含自己)；
+若不想看到自己，可后续加「排除自己」规则 (需主人拍，会影响 all 计数口径)。
+
+### Fixed (DEV_SKIP_AUTH 白名单全仓补齐 + migration 进 git + build 脚本 --auto 修复, 2026-09-18 主人拍)
+
+上一条列了 4 个发现, 主人拍: 全仓补 auth skip ✅ / migration 进 git ✅ / build 脚本修 ✅ / dev 免密登录**接受风险** ⚠
+
+**1. API route `isAuthSkipped()` 全仓补齐 (11 个文件)**
+- 之前只有 10 个 route 支持 `DEV_SKIP_AUTH=1`; 其余 12 个 dev 模式仍 401 (同目录路由行为不一致)
+- 本次: `ai/effect-analysis|profile|repurchase-prediction/[id]`、`apk-download`、`apk-qr`、
+  `dashboard/stats`、`import/customers`、`import/template`、`interactions`、`reports/overview`、
+  `wellness-records/[id]` (上轮已修 `customers/[id]`) → 每个 = 1 行 import + `!isAuthSkipped() &&`
+- **并发修正** (TS 收窄丢失): 放开 guard 后 `session` 可为 null, `import/customers` 与 `interactions`
+  的 `BigInt(session.user.id)` 改为 `session?.user?.id ? BigInt(session.user.id) : BigInt(0)`
+  (跟 `customers/route.ts` 已约定一致; createdBy=0 = dev 写入)
+- **验证**: `npx tsc --noEmit` 0 error; dev server 实测 `dashboard/stats` `reports/overview` `import/template`
+  `apk-download` `apk-qr` `ai/profile/1` `wellness-records/1` `franchisees` `customers?type=seed` 全 200
+  (改前这些接口 dev 模式全是 401); 生产不设 `DEV_SKIP_AUTH` → `isAuthSkipped()=false` → 行为不变
+
+**2. migration 进 git (以前整个 `drizzle/` 被 `.gitignore` 挡住)**
+- 根因: `.gitignore` 的 `*.sql` + `drizzle/meta/` + `drizzle/*.json` 把整个目录遮了 →
+  7 个 migration + 3 个 down.sql + `meta/` 快照**从未入过 git** (`git ls-files drizzle/` 为空)
+  → git clone 拿不到 migration, CI `db:compat` 也扫不到东西
+- 修复: `.gitignore` 加负向规则 (`!drizzle/*.sql` / `!drizzle/down/*.sql` / `!drizzle/meta/` /
+  `!drizzle/meta/*.json` / `!drizzle/audit_trigger.sql`), **负向规则必须紧跟被忽略的目录本身**
+  (否则 git 不会下沉看子文件); `*.sql.gz` / `*.sql.gpg` 仍忽略 (备份副本)
+- 补登 16 个文件 (8 个 up + 3 个 down + audit_trigger + 4 个 meta); 已扫无密钥泄漏
+
+**3. `tools/build-flutter-web.sh --auto` 的 `set -e` bug 修复** (preview 冻结文件 → 主人拍 + `--no-verify`)
+- 根因: `DART_DEFINE` 为空时 `EXPECTED_IP=$(echo "" | grep -oE ...)` 返回 1 → `set -e` 直接退出,
+  **永不同步到 `public/app/`** (上轮「--auto 后预览没变」就是这个)
+- 修: 赋值处兜 `|| true` (+ 注释记录原因/拍板来源)
+- **验证 (全流程真跑一次)**: `bash tools/build-flutter-web.sh --auto` 跑到底 →
+  `✓ 含 Uri.base / location.origin` → `✓ 已同步` → `✓ version.json bump` → `✓ SW hash` → 总结打印 ✓;
+  再用 playwright 跑新 bundle 的 E2E (`?type=seed` / `?type=franchisee` 全 200) ✓
+- 顺带观察 (未改, 不是本次范围): 脚本 bump version 时读的是 `flutter build web` 刚写回的
+  pubspec 版本 (`0.2.2#3`) → 每次 build 都 bump 成 `0.2.3#4` (**非单调**, 连续两次 build 版本相同)。
+  实际无人消费该字段 (grep 全仓只有 preview 测试校验格式), SW 缓存破坏靠 `flutter_service_worker.js` hash (已正确更新)
+
+**4. dev 免密登录公网可达 — 主人拍「接受风险」(未改) ⚠**
+- `/api/auth/flutter-login` 在 `NODE_ENV != production` 用 `13800138000 / 123456` 直发 JWT;
+  dev 机经 cloudflared 隧道**公网可达** → 知道地址就能拿 session (本次 E2E 即利用此路径)
+- 主人 2026-09-18 ask 拍「先保持 (我知道风险)」→ 不动, 仅留档
+- 将来要关时的候选: 加 dev secret header / 只允许 127.0.0.1 或 LAN 网段 / 隧道层墙掉该 path
+
 ### Changed (客户列表胶囊筛选 + 客户类型 (加盟/种子/普通) 真过滤, 2026-09-18 主人拍)
 
 **主人要**: 「客户.列表页。把搜索栏正面的筛选标签(全部、加盟、普通、种子)组合成胶囊按键」

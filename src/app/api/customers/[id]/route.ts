@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
+import { resolveViewerFranchiseeId } from "@/lib/auth/viewer";
 import { z } from "zod";
 import {
   getCustomerById,
@@ -33,7 +34,8 @@ export async function GET(
   }
 
   const { id } = await params;
-  const customer = await getCustomerById(BigInt(id));
+  const viewerFranchiseeId = await resolveViewerFranchiseeId(session?.user?.id);
+  const customer = await getCustomerById(BigInt(id), { viewerFranchiseeId });
   if (!customer) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -55,7 +57,12 @@ export async function PATCH(
     const input = UpdateCustomerSchema.parse(body);
 
     const ctx = getAuditContextFromRequest(request, session);
-    const customer = await updateCustomer(BigInt(id), input, ctx);
+    const customer = await updateCustomer(
+      BigInt(id),
+      input,
+      ctx,
+      await resolveViewerFranchiseeId(session?.user?.id)
+    );
 
     if (!customer) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });

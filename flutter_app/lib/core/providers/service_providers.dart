@@ -87,6 +87,15 @@ final customersProvider = FutureProvider.family<List<dynamic>, CustomerListQuery
   },
 );
 
+/// 客户类型计数 (胶囊按键上的数量) — 按 search 缓存 (family 参数 = 搜索词)
+/// 注: 计数不带 type (就是四个桶的总数), 所以传的是 String? 而不是 CustomerListQuery
+final customerTypeCountsProvider =
+    FutureProvider.family<Map<String, int>, String?>(
+  (ref, search) async {
+    return ref.watch(customerServiceProvider).typeCounts(search: search);
+  },
+);
+
 /// 客户详情
 final customerDetailProvider = FutureProvider.family<dynamic, String>(
   (ref, id) async => ref.watch(customerServiceProvider).getById(id),

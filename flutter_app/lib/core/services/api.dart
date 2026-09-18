@@ -152,6 +152,22 @@ class CustomerService {
     return items.map(Customer.fromJson).toList();
   }
 
+  /// 客户类型计数 (胶囊上的数量, 主人 2026-09-18 拍)
+  /// GET /api/customers/stats → { all, franchisee, seed, normal }
+  /// 口径与 list() 一致 (同名 search); 三类互斥穷尽 → 相加 == all
+  Future<Map<String, int>> typeCounts({String? search}) async {
+    final res = await _dio.get('/customers/stats', queryParameters: {
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    final data = res.data as Map<String, dynamic>;
+    return {
+      'all': (data['all'] as num?)?.toInt() ?? 0,
+      'franchisee': (data['franchisee'] as num?)?.toInt() ?? 0,
+      'seed': (data['seed'] as num?)?.toInt() ?? 0,
+      'normal': (data['normal'] as num?)?.toInt() ?? 0,
+    };
+  }
+
   Future<Customer> getById(String id) async {
     final res = await _dio.get('/customers/$id');
     return Customer.fromJson(res.data as Map<String, dynamic>);

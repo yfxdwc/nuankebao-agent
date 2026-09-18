@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
+import { resolveViewerFranchiseeId } from "@/lib/auth/viewer";
 import { z } from "zod";
 import {
   listCustomers,
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
     limit,
     offset,
     type: parsedType.success ? parsedType.data : undefined,
+    viewerFranchiseeId: await resolveViewerFranchiseeId(session?.user?.id),
   });
   return NextResponse.json(result);
 }
@@ -67,7 +69,12 @@ export async function POST(request: NextRequest) {
 
     const ctx = getAuditContextFromRequest(request, session);
     const userId = session?.user?.id ? BigInt(session.user.id) : BigInt(0);
-    const customer = await createCustomer(input, ctx, userId);
+    const customer = await createCustomer(
+      input,
+      ctx,
+      userId,
+      await resolveViewerFranchiseeId(session?.user?.id)
+    );
 
     return NextResponse.json(customer, { status: 201 });
   } catch (error) {

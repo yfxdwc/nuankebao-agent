@@ -43,6 +43,9 @@ class CustomersListPage extends ConsumerStatefulWidget {
 }
 
 class _CustomersListPageState extends ConsumerState<CustomersListPage> {
+  /// 图谱请求/布局深度 (ADR-0010 硬上限 4) — 跟列表「加盟」胶囊口径保持同一个数
+  static const int _graphDepth = 4;
+
   final _searchController = TextEditingController();
   String _search = '';
   _CustomerFilter _filter = _CustomerFilter.all;
@@ -107,9 +110,19 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       type: _filter == _CustomerFilter.all ? null : _filterToApi,
     );
     final asyncCustomers = ref.watch(customersProvider(query));
+    // 胶囊数量 (跟当前搜索词联动; 加载中 = 不显示数字, 不闪 0)
+    final typeCounts = ref
+        .watch(customerTypeCountsProvider(_search.isEmpty ? null : _search))
+        .valueOrNull;
     // 图谱 tab 数据源: 加盟客户的 2 线图谱 (复用 franchisee/me/tree)
-    // 普通 / 种子客户不参与图谱, 由 type 字段 + 后端过滤保证 (待补)
-    final asyncTree = ref.watch(myFranchiseeTreeProvider(3));
+    //
+    // ★ 深度 = 4 (ADR-0010 硬上限), 主人 2026-09-18 拍:
+    //   列表胶囊「加盟」口径 = 我的下级加盟商 (**全深度**, 见后端 myDownlineFranchiseeSql),
+    //   图谱原先只请 depth=3 → 画 14 位, 列表却有 30 位 → 又是“两边对不上”.
+    //   本 seed 数据是 5 层满二叉树 (1+2+4+8+16=31) → depth=4 刚好画全
+    //   (将来层级更深时, 图谱仍受 ADR-0010 ≤4 限制, 胶囊数字会大于画面节点数 — 已知,
+    //    真要一致得改 ADR-0010 或分页加载)
+    final asyncTree = ref.watch(myFranchiseeTreeProvider(_graphDepth));
 
     return Scaffold(
       appBar: AppBar(
@@ -174,27 +187,28 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           ),
           // 筛选 (胶囊按键, 主人 2026-09-18 拍): 全部 / 加盟 / 普通 / 种子
           // 4 段平分整行宽, 选中 = 主题色实心; 跟图谱筛选 (全部/A线/B线/直推) 视觉一致
-          // 旧版 = 横向 ListView + FilterChip (可左右滚, 右侧留半截, 不够整齐)
+          // 2026-09-18 追加: 胶囊上显示数量 (跟图谱筛选同风格), 数量走 /api/customers/stats
+          //   口径: 加盟 = 我的下级加盟商 (跟图谱 tab 同口径), 三类互斥穷尽 → 相加 = 全部
           if (_viewMode == _CustomerViewMode.list)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: SegmentedButton<_CustomerFilter>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: _CustomerFilter.all,
-                    label: Text('全部', style: TextStyle(fontSize: 14)),
+                    label: _capsuleLabel('全部', 'all', typeCounts),
                   ),
                   ButtonSegment(
                     value: _CustomerFilter.franchisee,
-                    label: Text('🟣 加盟', style: TextStyle(fontSize: 14)),
+                    label: _capsuleLabel('🟣 加盟', 'franchisee', typeCounts),
                   ),
                   ButtonSegment(
                     value: _CustomerFilter.normal,
-                    label: Text('🟢 普通', style: TextStyle(fontSize: 14)),
+                    label: _capsuleLabel('🟢 普通', 'normal', typeCounts),
                   ),
                   ButtonSegment(
                     value: _CustomerFilter.seed,
-                    label: Text('🌱 种子', style: TextStyle(fontSize: 14)),
+                    label: _capsuleLabel('🌱 种子', 'seed', typeCounts),
                   ),
                 ],
                 selected: {_filter},
@@ -309,7 +323,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             : _countMatches(tree, searchQuery.toLowerCase());
 
         // 双主线「对碰」布局: 两条主线平行直下, 侧枝往外侧展开
-        const depth = 3;
+        const depth = _graphDepth;
         final layout = TreeLayout.compute(tree, maxDepth: depth);
         final canvasSize = layout.canvasSize;
         final positions = layout.positions;
@@ -772,11 +786,12 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     final viewport = _graphViewport;
     final canvasSize = _graphCanvasSize;
     if (viewport == null || canvasSize == null) return;
-    final tree = ref.read(myFranchiseeTreeProvider(3)).valueOrNull as FranchiseeTreeNode?;
+    final tree = ref.read(myFranchiseeTreeProvider(_graphDepth)).valueOrNull as FranchiseeTreeNode?;
     if (tree == null) return;
     final hit = _firstMatchNode(tree, lower);
     if (hit == null) return;
-    final center = TreeLayout.compute(tree, maxDepth: 3).positions[hit.id];
+    final center =
+        TreeLayout.compute(tree, maxDepth: _graphDepth).positions[hit.id];
     if (center == null) return;
     setState(() {
       _graphTransformController.value = Matrix4.identity()
@@ -916,6 +931,17 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     }
 
     return dfs(root) ? path.toSet() : null;
+  }
+
+  /// 胶囊标签 (带数量): 数量拿到前只显示文字, 不闪 0 / 不闪占位
+  Widget _capsuleLabel(String text, String typeKey, Map<String, int>? counts) {
+    final n = counts?[typeKey];
+    return Text(
+      n == null ? text : '$text $n',
+      style: const TextStyle(fontSize: 14),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
   }
 
   /// 胶囊筛选 → 后端 type 参数 (all 不发)
