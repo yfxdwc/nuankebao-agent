@@ -50,6 +50,16 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   ///   其余层级走懒加载: 用户选中某节点 → 点「展开下级」才拉一级 (GET :id/children)
   static const int _graphInitialDepth = 2;
 
+  /// 折叠门槛 (主人 2026-09-18 拍): 全树加盟客户 **< 50** → 不折叠 (一次拉全树)
+  ///   ≥ 50 → 折叠: 初始只画 [_graphInitialDepth] 层, 单击节点自动展开它正面 3 层
+  static const int _graphNoFoldMaxNodes = 50;
+
+  /// 单击节点时自动展开的层数 (主人: 「确保当前节点正面的 3 层都是展开的」)
+  static const int _graphTapExpandLevels = 3;
+
+  /// 「全树」请求深度 (≤50 节点时一次拉完; 服务端每次请求上限 16 层)
+  static const int _graphFullDepth = 12;
+
   /// 布局深度上限 (纯布局保护; 实际节点由懒加载决定)
   static const int _graphLayoutMaxDepth = 12;
 
@@ -57,6 +67,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   final Map<String, List<FranchiseeTreeNode>> _lazyChildren = {};
   /// 正在拉子级的节点 id (按钮 loading + 防重入)
   final Set<String> _loadingChildren = {};
+  /// 当前是否「不折叠」模式 (全树 < 50 个节点 → 一次全展开; 隐藏 收起 按钮)
+  bool _graphNoFold = false;
+
   /// 本次树变化是否由懒加载展开/收起引起 → 保留用户当前视窗 (不弹回根部)
   bool _keepCameraOnTreeChange = false;
 
@@ -133,7 +146,17 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     // ★ 层级不限 + 懒加载 (ADR-0011, 主人 2026-09-18 拍):
     //   旧版硬限 4 层 → 现在只请初始 2 层 (载荷 O(前两层)), 深节点由用户展开
     //   (「上限」本身已从服务层去掉 —— 第 5 层、第 6 层都能建)
-    final asyncTree = ref.watch(myFranchiseeTreeProvider(_graphInitialDepth));
+    // ★ 折叠策略 (主人 2026-09-18 拍):
+    //   全树 < 50 个加盟客户 → 不折叠 (一次把全树拉回来, 小树别让用户一层层点)
+    //   ≥ 50 → 折叠 (懒加载: 初始 _graphInitialDepth 层 + 单击节点自动展开正面 3 层)
+    final asyncShallowTree =
+        ref.watch(myFranchiseeTreeProvider(_graphInitialDepth));
+    final shallowTotal = _rawTotalOf(asyncShallowTree);
+    _graphNoFold =
+        shallowTotal != null && shallowTotal < _graphNoFoldMaxNodes;
+    final asyncTree = _graphNoFold
+        ? ref.watch(myFranchiseeTreeProvider(_graphFullDepth))
+        : asyncShallowTree;
 
     return Scaffold(
       appBar: AppBar(
@@ -398,7 +421,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                           // 共 N = 服务端全深度真值 (懒加载不缩水); 已展开 M = 当前画布上的下级数
                           (tree.totalDescendants ?? stats.total) >
                                   (_countDescendants(tree) - 1)
-                              ? '共 ${tree.totalDescendants ?? stats.total} 位 · 已展开 ${_countDescendants(tree) - 1}'
+                              ? (_graphNoFold
+                                  ? '共 ${tree.totalDescendants ?? stats.total} 位'
+                                  : '共 ${tree.totalDescendants ?? stats.total} 位 · 已展开 ${_countDescendants(tree) - 1}')
                               : '共 ${tree.totalDescendants ?? stats.total} 位',
                           style: const TextStyle(
                             fontSize: AppTheme.fontSm,
@@ -636,7 +661,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             label: const Text('展开下级', style: TextStyle(fontSize: 14)),
             style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
           )
-        else if (childrenLoaded)
+        else if (childrenLoaded && !_graphNoFold)
           TextButton.icon(
             onPressed: () => _collapseNode(node),
             icon: const Icon(Icons.unfold_less, size: 20),
@@ -655,24 +680,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 
   /// 懒加载: 拉某个节点的直接子级并缓入 (ADR-0011)
   Future<void> _expandNode(FranchiseeTreeNode node) async {
-    if (_loadingChildren.contains(node.id)) return;
-    setState(() => _loadingChildren.add(node.id));
-    try {
-      final children =
-          await ref.read(franchiseeServiceProvider).getChildren(node.id);
-      if (!mounted) return;
-      setState(() {
-        _lazyChildren[node.id] = children;
-        _loadingChildren.remove(node.id);
-        _keepCameraOnTreeChange = true; // 展开不重置视窗
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loadingChildren.remove(node.id));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('展开失败: $e')),
-      );
-    }
+    await _ensureChildrenLoaded(node);
   }
 
   /// 收起 (只清本地展开缓存; 服务端不动)
@@ -819,6 +827,12 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       if (hit != null) return hit;
     }
     return null;
+  }
+
+  /// 服务端直报的「全树下级数」(懒加载不缩水); 拿不到 → null
+  static int? _rawTotalOf(AsyncValue<dynamic> async) {
+    final raw = async.valueOrNull as FranchiseeTreeNode?;
+    return raw?.totalDescendants;
   }
 
   /// 递归统计全树节点数 (含根)
@@ -1008,8 +1022,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 
   /// 单击节点: 选中 (再点一下取消选中)
   void _selectNode(FranchiseeTreeNode root, FranchiseeTreeNode node) {
+    final wasSelected = _selectedNodeId == node.id;
     setState(() {
-      if (_selectedNodeId == node.id) {
+      if (wasSelected) {
         _selectedNodeId = null;
         _graphPathIds = const {};
       } else {
@@ -1017,6 +1032,54 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         _graphPathIds = _pathIdsTo(root, node.id) ?? {node.id};
       }
     });
+    // 主人 2026-09-18 拍: 单击节点时, 确保它正面 3 层都是展开的
+    //   (折叠模式下; 不折叠模式本来就是全展开 → 直接跳过)
+    if (!wasSelected) {
+      _ensureExpandedBelow(node, _graphTapExpandLevels);
+    }
+  }
+
+  /// 确保 [node] 下面 [levels] 层都已展开 (逐层懒加载; 不折叠模式跳过)
+  Future<void> _ensureExpandedBelow(FranchiseeTreeNode node, int levels) async {
+    if (_graphNoFold || levels <= 0) return;
+    var frontier = <FranchiseeTreeNode>[node];
+    for (var lv = 0; lv < levels && frontier.isNotEmpty; lv++) {
+      final next = <FranchiseeTreeNode>[];
+      for (final n in frontier) {
+        next.addAll(await _ensureChildrenLoaded(n));
+      }
+      frontier = next;
+    }
+  }
+
+  /// 取某节点的直接子级: 缓存优先 → 树里已有就用树里的 → 否则拉一级 (ADR-0011)
+  Future<List<FranchiseeTreeNode>> _ensureChildrenLoaded(
+    FranchiseeTreeNode node,
+  ) async {
+    final cached = _lazyChildren[node.id];
+    if (cached != null) return cached;
+    if (node.children.isNotEmpty) {
+      // 初始 1-2 层的子级本来就在树里 → 记进缓存, 语义跟「已展开」一致
+      _lazyChildren[node.id] = node.children;
+      return node.children;
+    }
+    if (!node.hasChildren) return const [];
+    if (_loadingChildren.contains(node.id)) return const [];
+    setState(() => _loadingChildren.add(node.id));
+    try {
+      final children =
+          await ref.read(franchiseeServiceProvider).getChildren(node.id);
+      if (!mounted) return const [];
+      setState(() {
+        _lazyChildren[node.id] = children;
+        _loadingChildren.remove(node.id);
+        _keepCameraOnTreeChange = true; // 展开不重置视窗
+      });
+      return children;
+    } catch (e) {
+      if (mounted) setState(() => _loadingChildren.remove(node.id));
+      return const [];
+    }
   }
 
   /// 取消选中 (点空白画布)
