@@ -1785,6 +1785,97 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     super.dispose();
   }
 
+  // ===== 生日: 年/月/日 各自可选填 (不知道就留空) =====
+
+  /// 生日选择按钮 (值 == null 显示「不清楚」)
+  Widget _birthPickerButton({
+    required String label,
+    required String? value,
+    required VoidCallback onPick,
+  }) {
+    return OutlinedButton(
+      onPressed: onPick,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 52),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$label ${value ?? '不清楚'}',
+              style: TextStyle(
+                fontSize: AppTheme.fontSm,
+                fontWeight: value == null ? FontWeight.w400 : FontWeight.w600,
+                color: value == null
+                    ? AppTheme.textSecondary
+                    : AppTheme.textPrimary,
+              )),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickBirthYear() async {
+    final year = await showDialog<int>(
+      context: context,
+      builder: (_) => _YearPickerDialog(initial: _birthYear?.year ?? 1965),
+    );
+    if (year == null) return;
+    setState(() => _birthYear = DateTime(year, 1, 1));
+  }
+
+  /// 月 / 日 选择 (含「不清楚」= 清空)
+  Future<void> _pickBirthPart({required bool isMonth}) async {
+    final current = isMonth ? _birthMonth : _birthDay;
+    final max = isMonth ? 12 : 31;
+    final picked = await showDialog<int?>(
+      context: context,
+      builder: (_) => _NumberPickerDialog(
+        title: isMonth ? '选择出生月份' : '选择出生日期',
+        max: max,
+        initial: current,
+        suffix: isMonth ? '月' : '日',
+      ),
+    );
+    if (picked == null && current == null) return;
+    setState(() {
+      if (isMonth) {
+        _birthMonth = picked;
+      } else {
+        _birthDay = picked;
+      }
+      // 月+日 都有 → 默认开启提醒 (3 天前); 任一清空 → 关掉
+      if (_birthMonth == null || _birthDay == null) {
+        _birthdayRemindDays = null;
+      } else if (_birthdayRemindDays == null) {
+        _birthdayRemindDays = 3;
+      }
+    });
+  }
+
+  /// 自定义健康标签 (≤6 汉字, 去重, 空/超长给提示)
+  void _addCustomTag() {
+    final v = _customTagController.text.trim();
+    if (v.isEmpty) return;
+    if (v.runes.length > _maxTagLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('标签最多 6 个字')),
+      );
+      return;
+    }
+    if (_healthTags.contains(v)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('这个标签已经有了')),
+      );
+      _customTagController.clear();
+      return;
+    }
+    setState(() {
+      _healthTags.add(v);
+      _customTagController.clear();
+    });
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
@@ -1872,50 +1963,191 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               ],
             ),
             const SizedBox(height: 16),
-            // 出生年 (大按钮)
-            OutlinedButton.icon(
-              onPressed: () async {
-                final year = await showDialog<int>(
-                  context: context,
-                  builder: (_) => _YearPickerDialog(initial: _birthYear?.year),
-                );
-                if (year != null) setState(() => _birthYear = DateTime(year, 1, 1));
-              },
-              icon: const Icon(Icons.cake_outlined, size: 24),
-              label: Text(
-                _birthYear == null ? '选择出生年份' : '${_birthYear!.year}年',
-                style: const TextStyle(fontSize: AppTheme.fontMd),
-              ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 56),
-              ),
+            // ===== 生日 (主人 2026-09-18: 年月日可选填 + 农历/阳历 + 生日提醒) =====
+            const Text('生日', style: TextStyle(fontSize: AppTheme.fontMd)),
+            const SizedBox(height: 4),
+            const Text(
+              '知道多少填多少, 不知道的留空 (例: 只记得属相/年份 → 只填年; 过农历生日 → 切「农历」)',
+              style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _birthPickerButton(
+                    label: '年',
+                    value: _birthYear == null ? null : '${_birthYear!.year}',
+                    onPick: _pickBirthYear,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _birthPickerButton(
+                    label: '月',
+                    value: _birthMonth == null ? null : '$_birthMonth',
+                    onPick: () => _pickBirthPart(isMonth: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _birthPickerButton(
+                    label: '日',
+                    value: _birthDay == null ? null : '$_birthDay',
+                    onPick: () => _pickBirthPart(isMonth: false),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // 历法 (阳历 / 农历)
+            Row(
+              children: [
+                const Text('历法:', style: TextStyle(fontSize: AppTheme.fontSm)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'solar', label: Text('阳历', style: TextStyle(fontSize: 14))),
+                      ButtonSegment(value: 'lunar', label: Text('农历', style: TextStyle(fontSize: 14))),
+                    ],
+                    selected: {_birthCalendar},
+                    showSelectedIcon: false,
+                    expandedInsets: EdgeInsets.zero,
+                    onSelectionChanged: (v) =>
+                        setState(() => _birthCalendar = v.first),
+                  ),
+                ),
+              ],
+            ),
+            // 月+日 都填了 = 开启生日提醒 (提醒强度可选)
+            if (_birthMonth != null && _birthDay != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.notifications_active_outlined,
+                            size: 20, color: AppTheme.accent),
+                        SizedBox(width: 6),
+                        Text('生日提醒 (已开启)',
+                            style: TextStyle(
+                                fontSize: AppTheme.fontSm,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final d in const [7, 3, 0])
+                          ChoiceChip(
+                            label: Text(
+                              d == 0 ? '生日当天' : '提前 $d 天',
+                              style: const TextStyle(fontSize: AppTheme.fontSm),
+                            ),
+                            selected: _birthdayRemindDays == d,
+                            onSelected: (_) =>
+                                setState(() => _birthdayRemindDays = d),
+                          ),
+                        ChoiceChip(
+                          label: const Text('不提醒',
+                              style: TextStyle(fontSize: AppTheme.fontSm)),
+                          selected: _birthdayRemindDays == null,
+                          onSelected: (_) =>
+                              setState(() => _birthdayRemindDays = null),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
-            // 健康标签
+            // ===== 健康标签 (默认候选 + 自定义, 单个 ≤6 汉字; 主人 2026-09-18) =====
             const Text('健康标签', style: TextStyle(fontSize: AppTheme.fontMd)),
+            const SizedBox(height: 4),
+            const Text(
+              '点一下选中/取消; 也可以自己加 (最多 6 个字)',
+              style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _healthTags.map((t) => InputChip(
-                label: Text(t),
-                onDeleted: () => setState(() => _healthTags.remove(t)),
-              )).toList(),
+              children: [
+                // 已选中的标签 (排前面, 一眼看全)
+                ..._healthTags.map((t) => InputChip(
+                      label: Text(t, style: const TextStyle(fontSize: AppTheme.fontSm)),
+                      selected: true,
+                      selectedColor: AppTheme.primaryLight,
+                      onDeleted: () => setState(() => _healthTags.remove(t)),
+                    )),
+                // 默认候选 (未选中的)
+                ..._defaultHealthTags
+                    .where((t) => !_healthTags.contains(t))
+                    .map((t) => FilterChip(
+                          label: Text(t,
+                              style: const TextStyle(fontSize: AppTheme.fontSm)),
+                          selected: false,
+                          onSelected: (_) =>
+                              setState(() => _healthTags.add(t)),
+                        )),
+              ],
             ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () async {
-                  final tag = await showDialog<String>(
-                    context: context,
-                    builder: (_) => const _TagInputDialog(),
-                  );
-                  if (tag != null && !_healthTags.contains(tag)) {
-                    setState(() => _healthTags.add(tag));
-                  }
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('添加标签', style: TextStyle(fontSize: AppTheme.fontMd)),
+            const SizedBox(height: 8),
+            // 自定义标签输入 (≤6 汉字)
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _customTagController,
+                    style: const TextStyle(fontSize: AppTheme.fontMd),
+                    maxLength: _maxTagLength,
+                    decoration: const InputDecoration(
+                      hintText: '自定义 (最多 6 个字)',
+                      counterText: '',
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _addCustomTag(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: _addCustomTag,
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text('添加', style: TextStyle(fontSize: AppTheme.fontSm)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // ===== 既往病史 / 过敏史 (主人 2026-09-18: 过敏史新增) =====
+            TextField(
+              controller: _diseaseController,
+              style: const TextStyle(fontSize: AppTheme.fontMd),
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: '既往病史',
+                hintText: '例: 高血压(服药中) / 腰椎间盘突出',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _allergyController,
+              style: const TextStyle(fontSize: AppTheme.fontMd),
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: '过敏史',
+                hintText: '例: 青霉素过敏 / 对薰衣草精油过敏 / 皮肤敏感',
               ),
             ),
             const SizedBox(height: 16),
@@ -2078,6 +2310,51 @@ class _YearPickerDialogState extends State<_YearPickerDialog> {
                 setState(() => _year = y);
                 Navigator.of(context).pop(y);
               },
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// 月 / 日 数字选择器 (含「不清楚」= 返回 null 清空)
+class _NumberPickerDialog extends StatelessWidget {
+  final String title;
+  final int max;
+  final int? initial;
+  final String suffix;
+
+  const _NumberPickerDialog({
+    required this.title,
+    required this.max,
+    required this.suffix,
+    this.initial,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(title, style: const TextStyle(fontSize: AppTheme.fontLg)),
+      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      content: SizedBox(
+        height: 300,
+        width: 240,
+        child: ListView.builder(
+          itemCount: max + 1, // 第 0 项 = 不清楚
+          itemBuilder: (context, i) {
+            if (i == 0) {
+              return ListTile(
+                title: const Text('不清楚 / 清空',
+                    style: TextStyle(fontSize: AppTheme.fontMd)),
+                selected: initial == null,
+                onTap: () => Navigator.of(context).pop(null),
+              );
+            }
+            return ListTile(
+              title: Text('$i$suffix', style: const TextStyle(fontSize: AppTheme.fontMd)),
+              selected: i == initial,
+              onTap: () => Navigator.of(context).pop(i),
             );
           },
         ),
