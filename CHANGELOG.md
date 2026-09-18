@@ -45,10 +45,16 @@
   1. `ApiClient.baseUrl` / `baseOrigin` 直接 `Uri.base.origin` —— 非 http(s) 宿主
      (widget 测试 `file://`、native `file://` 漏传 dart-define) 下 `Uri.origin` 抛
      `StateError: Origin is only applicable schemes http and https`, **在 build 阶段把页面打白**。
-     改为只认 http/https, 其余返回空串 (请求明确失败 > 跟网络无关的崩溃)
+     改为只认 http/https, 其余退回 dev 默认 origin `http://127.0.0.1:3003`
+     (不能退成相对路径 —— dio 在非 web 平台直接 `ArgumentError: Must be a valid URL`,
+     而 ApiClient 在 app 启动 (router → provider) 就建好了, 会首帧打挂整个 app)
   2. 个人资料头部手机号行的 2 个 `IconButton` (各 48pt) + 号码文本在窄屏/特大字号下
      水平溢出 30px —— 改 44pt 自绘按钮 + 号码 `Flexible` + ellipsis
-  3. `flutter_app/test/api_client_test.dart` import 还指向 Plan F2 之前的
+  3. ❗**登录页 logo 从来没进过包**: `flutter_app/pubspec.yaml` 只声明 `assets/` ——
+     目录声明**不递归**, `assets/icons/nuankebao-logo.png` 一直不在 AssetManifest 里
+     (web 产物 `public/app/assets/AssetManifest.json` 里也搜不到它) → 登录页是破图。
+     已补 `- assets/icons/` (扫过资产目录, 只有 icons/ 一层子目录)
+  4. `flutter_app/test/api_client_test.dart` import 还指向 Plan F2 之前的
      `package:nuankebao/services/api_client.dart` (文件早不存在) —— `flutter test` 整仓跑必红, 已修正路径
 - `widget_test.dart` 不 override `sharedPreferencesProvider` 也会挂 (字号设置引入的新前置条件), 已补 override
 
@@ -57,6 +63,7 @@
 - `flutter test test/me_model_test.dart test/settings_provider_test.dart`: 21 pass (模型空态/脏数据/版本比较/落盘)
 - `flutter test test/profile_page_test.dart`: 9 个用例 (四块内容 + 3 种空态 + 「特大」点下去真落盘 +
   **窄屏 320×特大字号滚完整页不溢出**) —— 首次运行当场抓出 2 个真 bug (见上), 修复后复跑
+- `flutter test` (全仓): **64 pass / 0 fail** (含 profile_page 9 + api_client 7 + widget_test smoke + 模型/设置/图谱/生日等)
 - `npx vitest run tests/profile-utils.test.ts`: 9 pass (maskPhone 不变量 + 版本号解析)
 - `npx tsc --noEmit`: 0 error; `curl /api/me` + `/api/app-version`: 返回见 `docs/api.md §13`
 - 文档同步: `docs/api.md §13` / `docs/profile-and-settings.md` (新增) / `docs/user-manual.md` 「我的」章节 / `AGENTS.md §4.5`

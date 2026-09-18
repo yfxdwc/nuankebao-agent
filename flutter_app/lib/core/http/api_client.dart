@@ -78,22 +78,31 @@ class ApiClient {
   static const sessionCookieNameKey = 'session_cookie_name';
   static const sessionTokenKey = 'session_token';
 
+  /// 非 http(s) 宿主的兜底 origin
+  ///
+  /// 为什么不能用空串 / 相对路径: dio 在非 web 平台**不接受**相对 baseUrl
+  /// (`ArgumentError: Must be a valid URL on platforms other than Web`),
+  /// 而 ApiClient 在 app 启动 (router → apiClientProvider) 就创建了 → 相对路径会
+  /// 把整个 app 在首帧打挂。用 dev 默认端口兜底 (跟 src/middleware.ts 的兜底一致):
+  /// 至少是合法 URL; 真连不上时「我的 → 网络自检」会把服务地址显示出来, 一眼能看出漏了
+  /// dart-define。
+  static const String _fallbackOrigin = 'http://127.0.0.1:3003';
+
   /// 运行时 origin —— 只从 Uri.base 推导, 且**只认 http/https**。
   ///
   /// 为什么必须判断 scheme (2026-09-18 修):
   ///   `Uri.base.origin` 对非 http(s) 会直接 `StateError: Origin is only applicable
   ///   schemes http and https`。而下面两种场景 Uri.base 就不是 http(s):
-  ///     1. widget 测试 (file:///.../flutter_app/) —— 以前一碰 ApiClient.baseUrl 就崩
+  ///     1. widget 测试 (file:///.../flutter_app/)
   ///     2. native (Android/iOS) 的 Uri.base 也是 file:/// (APK 必须走 dart-define)
-  ///   非 http(s) 时返回空串 → baseUrl 退化成本机相对路径 (``/api``): 请求会明确失败,
-  ///   而不是在**build 阶段**抛一个跟网络无关的 StateError 把页面打白。
+  ///   非 http(s) 时退回 `_fallbackOrigin` (见上)。
   static String get _runtimeOrigin {
     // ignore: do_not_use_environment
     final uri = Uri.base;
     if (uri.scheme == 'http' || uri.scheme == 'https') {
       return uri.origin;
     }
-    return '';
+    return _fallbackOrigin;
   }
 
   /// 规整后的 base URL (恒以 /api 结尾, dio 字符串拼接用)

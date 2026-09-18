@@ -63,5 +63,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # ⚠ 目录声明**不递归**: `assets/` 只收本层文件, 子目录要单独列
+  #   (2026-09-18: `assets/icons/nuankebao-logo.png` 一直没进包 → 登录页 logo 是破图,
+  #    widget 测试当场报 "Unable to load asset" 才发现。扫了一遍资产目录, 现只有 icons/ 一层)
   assets:
     - assets/
+    - assets/icons/
