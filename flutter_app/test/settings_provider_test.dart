@@ -35,6 +35,12 @@ void main() {
     expect(container.read(settingsProvider).fontSize, AppFontSize.standard);
   });
 
+  test('存过「小」→ 启动就是小', () async {
+    final container = await _containerWith({'settings.font_size': 'small'});
+    expect(container.read(settingsProvider).fontSize, AppFontSize.small);
+    expect(container.read(settingsProvider).fontScale, lessThan(1.0));
+  });
+
   test('切换字号立即生效 + 落盘', () async {
     final container = await _containerWith({});
     await container
@@ -52,11 +58,17 @@ void main() {
     expect(reopened.read(settingsProvider).fontSize, AppFontSize.large);
   });
 
-  test('字号档位: 单调递增 + 上限 1.3 (再大布局会炸)', () {
+  test('字号档位: 单调递增 + 上限 1.3 (再大布局会炸) + 「小」比标准小', () {
+    // 「小」是主人 2026-09-18 要的 (标准下面加一档)
+    expect(AppFontSize.small.scale, lessThan(AppFontSize.standard.scale));
+    expect(AppFontSize.small.scale, greaterThanOrEqualTo(0.8)); // 再小低于可读性底线
     expect(AppFontSize.standard.scale, 1.0);
     expect(AppFontSize.large.scale, greaterThan(AppFontSize.standard.scale));
     expect(AppFontSize.xlarge.scale, greaterThan(AppFontSize.large.scale));
     expect(AppFontSize.xlarge.scale, lessThanOrEqualTo(1.3));
+    // 档位顺序 = UI 里的展示顺序 (小 → 标准 → 大 → 特大)
+    expect(AppFontSize.values.first, AppFontSize.small);
+    expect(AppFontSize.values[1], AppFontSize.standard);
     // 每档都有中文名 (UI 不显示枚举名)
     for (final v in AppFontSize.values) {
       expect(v.label, isNotEmpty);

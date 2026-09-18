@@ -30,6 +30,8 @@ const UpdateCustomerSchema = z.object({
   referrerId: z.string().regex(/^\d+$/, "推荐人 ID 格式错误").nullable().optional(),
   // 种子客户开关 (潜在客户, 主人 2026-09-18)
   isSeed: z.boolean().optional(),
+  // 客户头像: 传 null = 恢复默认首字 (白名单校验在 query 层)
+  avatar: z.string().max(300).nullable().optional(),
 });
 
 export async function GET(
@@ -79,6 +81,10 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+    }
+    // 头像白名单等业务校验错误 → 400 (把原因透给客户端, 不吞成 500)
+    if (error instanceof Error && error.message.startsWith("头像值不合法")) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("[PATCH /api/customers/[id]]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

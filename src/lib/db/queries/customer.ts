@@ -22,6 +22,7 @@ import {
   hashForLookup,
 } from "@/lib/crypto/field";
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
+import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
 import { customerRbacFilter, type RbacContext } from "@/lib/auth/rbac";
 
 // ============================================
@@ -48,6 +49,8 @@ export interface CustomerView {
   notes: string | null;
   /** 客户推荐人 (客户图谱数据源), null = 无推荐人 (根/孤儿节点) */
   referrerId: string | null;
+  /** 客户头像 (null / 'preset:x' / '/uploads/x.jpg') */
+  avatar: string | null;
   /** 种子客户标记 (显式勾选, 主人 2026-09-18 拍) */
   isSeed: boolean;
   /** 客户类型 (混合判定, 派生): 加盟 > 种子 > 普通 (「加盟」= 我的下级加盟商) */
@@ -177,6 +180,8 @@ function toView(
       : null,
     notes: row.notesEncrypted ? decryptField(row.notesEncrypted) : null,
     referrerId: row.referrerId?.toString() ?? null,
+    // 读侧兜底: 库里万一有脏值 → null (跟 user 头像同一套 readAvatarValue)
+    avatar: readAvatarValue(row.avatar),
     isSeed: row.isSeed,
     customerType: resolveCustomerType(row, isMyDownline),
     createdAt: row.createdAt,
@@ -203,6 +208,8 @@ export interface CreateCustomerInput {
   notes?: string;
   /** 客户推荐人 (老带新, 客户图谱关系边). null = 无推荐人 */
   referrerId?: string | null;
+  /** 客户头像: 'preset:<id>' / '/uploads/x.jpg' / null (= 默认首字) */
+  avatar?: string | null;
   /** 种子客户 (潜在客户开关, 主人 2026-09-18). 缺省 false */
   isSeed?: boolean;
 }
@@ -226,6 +233,8 @@ export interface UpdateCustomerInput {
   referrerId?: string | null;
   /** 种子客户开关 (true/false 双向可改) */
   isSeed?: boolean;
+  /** 客户头像: 传 null = 恢复默认首字 */
+  avatar?: string | null;
 }
 
 export interface ListCustomersOptions {
@@ -251,6 +260,18 @@ export interface CustomerTypeCounts {
   franchisee: number;
   seed: number;
   normal: number;
+}
+
+/**
+ * 头像值: 写库前过服务端白名单 (跟 user.avatar_url 同一套 src/lib/avatar.ts)
+ * 非法值 → 抛错 (路由转 400), 不静默丢掉用户的选择
+ */
+function parseAvatarForWrite(raw: string | null | undefined): string | null {
+  const parsed = parseAvatarValue(raw ?? null);
+  if (!parsed.ok) {
+    throw new Error(`头像值不合法: ${parsed.reason}`);
+  }
+  return parsed.value;
 }
 
 // ============================================
@@ -318,6 +339,7 @@ export async function createCustomer(
       : null,
     notesEncrypted: input.notes ? encryptField(input.notes) : null,
     referrerId: input.referrerId ? BigInt(input.referrerId) : null,
+    avatar: parseAvatarForWrite(input.avatar),
     isSeed: input.isSeed ?? false,
     createdBy,
   };
@@ -542,6 +564,9 @@ export async function updateCustomer(
     updateData.referrerId = newReferrerId;
   }
   if (input.isSeed !== undefined) updateData.isSeed = input.isSeed;
+  if (input.avatar !== undefined) {
+    updateData.avatar = parseAvatarForWrite(input.avatar);
+  }
 
   const [row] = await withAuditContext(ctx, async (tx) => {
     return await tx

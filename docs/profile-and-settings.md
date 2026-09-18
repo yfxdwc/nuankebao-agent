@@ -24,10 +24,10 @@
 
 | 区块 | 内容 | 数据源 |
 |---|---|---|
-| 个人资料 | 真实姓名 (加盟名优先) + 账号名 alias + 角色 + 门店 + 手机号 (默认打码 / 点 👁 看全号 / 📋 复制) + 「编辑我的资料」 | `GET /api/me` |
+| 个人资料 | 真实姓名 (加盟名优先) + 账号名 alias + 角色 + 门店 + 手机号 (默认打码 / 点 👁 看全号 / 📋 复制) + **头像 (可点, 换头像)** + 「编辑我的资料」 | `GET /api/me` |
 | 我的加盟身份 | 编号 / 位置 (A线·B线) / 层级 / 路径 / 我的上级 (可点进 `/franchisees/:id`) / 加入时间 / 状态 / 我的下线 N 人 (A线 x · B线 y) / 备注 | `GET /api/me` |
 | 数据概览 | 客户 / 待办跟进 / 本月拜访 / 本月新增客户 + 累计互动 + 「我的加盟网络」入口 | `GET /api/me` |
-| 显示与存储 | 字号 标准·大·特大 (立即生效) + 清理图片缓存 | 本机 `shared_preferences` |
+| 显示与存储 | 字号 **小·标准·大·特大** (立即生效) + 清理图片缓存 | 本机 `shared_preferences` |
 | 账号与安全 | 登录手机号 (只读 + 复制) / 30 天登录有效期 / 账号编号 | `GET /api/me` |
 | 关于与帮助 | 当前版本 / 检查更新 (服务器版本 + 安装包时间·大小 + 下载 + 扫码) / 使用帮助·数据安全页 (`/profile/about`) / 网络自检 / 服务地址 (debug) | `GET /api/app-version` + `GET /api/health` |
 | 退出登录 | 危险操作, 二次确认 (数据不受影响) | — |
@@ -86,16 +86,44 @@
 
 ```
 core/providers/settings_provider.dart
-  AppFontSize.standard = 1.0 / large = 1.15 / xlarge = 1.3   (上限 1.3: 再大固定高度按钮会挤破)
+  AppFontSize.small = 0.85 / standard = 1.0 / large = 1.15 / xlarge = 1.3
+    (2026-09-18 主人要「在标准下再加一档小」; 上限 1.3: 再大固定高度按钮会挤破;
+     下限 0.85 ≈ 15.3pt: 再小就低于本项目可读性底线)
   存 key: settings.font_size (shared_preferences, 设备本地, 不跟账号走)
   main() 先 await SharedPreferences.getInstance() 再 runApp
     → 否则首帧按标准字号画、随后跳成特大, 老人看到界面闪一下
-  app.dart builder: textScaler = clamp(用户档位 × 系统字号, 0.9, 1.6)
+  app.dart builder: textScaler = clamp(用户档位 × 系统字号, 0.7, 1.6)
     → 尊重手机系统「超大字体」设置, 但不允许叠出不可用的界面
+    → 下限取 0.7 (不是 0.9): 否则系统字号 < 1 时「小」档被夹平、点了没反应
 ```
 
 放 `MediaQuery.textScaler` 而不是 `ThemeData.textTheme` 的原因: 页面里写死的
 `TextStyle(fontSize: AppTheme.fontMd)` 不跟 theme 变, 而 textScaler 对**所有**文字生效。
+
+---
+
+## 5.1 自定义头像 (2026-09-18 主人要)
+
+「用户头像要能够自定义（上传头像），增加几个候选头像供不希望用真人头像的用户选择」
+
+**一句话**: 头像值只存**一个字符串** (`user.avatar_url`), 三种合法形态 ——
+默认 / `preset:<id>` / `/uploads/<file>`; 候选头像是客户端本地画的图标, 上传的照片复用
+现成的 `POST /api/photos`。
+
+| 决策 | 选择 | 理由 |
+|---|---|---|
+| 存哪 | **服务器** `user.avatar_url` (migration `0007_user_avatar_url`) | 换手机/重装 App 头像还在; 只存本机的话第一次换手机就"头像没了" |
+| 候选头像怎么做 | **图标 + 配色本地画** (8 个: 绿叶/花朵/喝茶/静心/爱心/暖阳/养生/清泉) | 矢量不糊、不增包体、不动 assets; 中老年用户"挑一个颜色好看的花草"比挑卡通人脸容易 |
+| 上传走哪 | 复用 `POST /api/photos` (base64 → `public/uploads/`) | 不新增存储设施; 白得体积/格式/限流校验 |
+| 白名单在哪 | 服务端 `src/lib/avatar.ts` + 客户端 `core/models/me.dart` 各一份 | 客户端可被反编译, 落库的值必须服务端说了算; 客户端那份只为"不渲染破图" |
+| 外链 | **拒** (`http(s)://`) | ① 帮第三方跑统计 ② 对方删图 = 白框, 用户以为 App 坏了 ③ 违背数据自托管 (CHARTER §3.2) |
+| 审计 | `user` 表已挂 `user_audit` 触发器 | 改头像自动进审计日志 (谁/何时/改成什么/IP), 满足"任何数据库写都要走 audit log" |
+
+**接口**: `PATCH /api/me { avatarUrl }` (只此一个字段, 多传别的一律 400) ——
+详见 [`docs/api.md §13`](./api.md)。上传前的本地压缩: `maxWidth/maxHeight=512`,
+`imageQuality=85`, 字节头嗅探真实 mime (web 上 `image_picker` 不改后缀)。
+
+**渲染**: `core/widgets/user_avatar.dart` —— 未知/脏值一律退回首字分支, 永远不出现白框。
 
 ---
 
@@ -104,6 +132,7 @@ core/providers/settings_provider.dart
 | 不做 | 原因 |
 |---|---|
 | 暗色模式开关 | AGENTS §1 反 vibe + 全局 `themeMode: light` 已锁 |
+| 把头像存成"只在当前手机" | 换手机就没了, 用户会当成丢数据 (选了服务器侧) |
 | 「生日提醒开关」等通知设置 | App 里没有本地通知/推送能力 (`flutter_local_notifications` 未接) —— 放了就是假开关。生日提醒目前是**客户维度**字段 (客户表单里填提前几天) |
 | 「默认视图/默认首页」 | 要改客户列表与路由初始态, 会跟并发改 `customers_page.dart` 的改动打架; 且改字号时路由重建会把用户弹回首页 |
 | 自助改手机号 | 手机号 = 登录账号, 换号要重新验证新旧号 (W3 阿里云短信没接完) → 页面写「换号找管理员」 |
@@ -117,6 +146,7 @@ core/providers/settings_provider.dart
 
 ```bash
 # 后端
+npx vitest run tests/profile-avatar.test.ts        # 头像白名单 (正例 + 负例 + 脏数据兜底)
 npx tsc --noEmit
 npx vitest run tests/profile-utils.test.ts            # maskPhone / parseAppVersionSpec
 curl -s http://127.0.0.1:3003/api/me | python3 -m json.tool
@@ -145,6 +175,5 @@ flutter test                                            # 全量回归 (含 widg
 
 1. **通知设置** —— 先有本地通知能力 (跟进到期 / 生日), 再放开关; 否则又是假开关
 2. **默认视图 / 默认首页** —— 等 `customers_page.dart` 的并发改动落地, 且路由不因设置重建
-3. **头像上传** —— 需要存储策略 (现在照片走 `/api/photos`), 且要考虑「设备本地 vs 账号同步」
 4. **客户端上传诊断日志** —— 现在只支持「复制诊断信息发给管理员」, 未来可一键上报
 5. **W3 真实短信** —— 自助换号/找回登录的一环

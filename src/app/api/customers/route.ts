@@ -27,6 +27,9 @@ const CreateCustomerSchema = z.object({
   notes: z.string().optional(),
   // 客户推荐人 (客户页图谱关系边). null/undefined = 无推荐人
   referrerId: z.string().regex(/^\d+$/, "推荐人 ID 格式错误").nullable().optional(),
+  // 客户头像: 'preset:<id>' / '/uploads/x.jpg' / null(= 默认首字)
+  // 白名单/格式校验在 src/lib/avatar.ts (query 层执行, 非法值 → 400)
+  avatar: z.string().max(300).nullable().optional(),
   // 种子客户 (潜在客户开关, 主人 2026-09-18). 缺省 false (老客户端不发也能跑)
   isSeed: z.boolean().optional(),
 });

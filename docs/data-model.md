@@ -240,6 +240,10 @@ export const user = pgTable('user', {
   role: userRoleEnum('role').notNull().default('sales'),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  // 自定义头像 (2026-09-18, migration 0007_user_avatar_url)
+  //   null = 默认(姓名首字) / 'preset:<id>' = 内置候选 / '/uploads/x.jpg' = 自己上传
+  //   白名单校验: src/lib/avatar.ts; 自助修改: PATCH /api/me (user_audit 触发器记录)
+  avatarUrl: text('avatar_url'),
 });
 
 // ========== Audit Log ==========

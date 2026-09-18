@@ -459,7 +459,8 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
   "user": {
     "id": "1", "name": "张三", "role": "sales", "roleLabel": "销售员",
     "isActive": true, "createdAt": "2026-09-16T11:37:31.156Z",
-    "hasUserRecord": true
+    "hasUserRecord": true,
+    "avatarUrl": "preset:leaf"
   },
   "phone": { "full": "13800138000", "masked": "138****8000" },
   "store": { "id": "3", "name": "城南店" },
@@ -496,6 +497,30 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
   切换点在 `src/lib/db/queries/dashboard.ts` 的 `getStatsOverview(ctx)` (传 ctx 即收紧)
 - `phone` 同时给 full + masked: masked 给默认展示, full 只在用户点"显示"时用 (自己的号)
 - 不返回任何金额/业绩字段 (ADR-0006 边界)
+
+### `PATCH /api/me`
+自助改头像 (只此一个字段)。
+
+**Body**:
+```json
+{ "avatarUrl": "preset:leaf" }
+```
+
+| 取值 | 含义 |
+|---|---|
+| `null` / `""` / 不传 | 恢复默认 (客户端画姓名首字) |
+| `"preset:<id>"` | 内置候选头像, id ∈ `leaf blossom tea zen heart sun sprout water` |
+| `"/uploads/<file>.jpg"` | 本站上传 (先 `POST /api/photos` 拿 URL), 仅 jpg/png/webp |
+
+**边界**:
+- 只接受 `avatarUrl` 一个字段 (多传字段 → 400), 防止客户端顺手改 role/name
+- **拒外链** (`http(s)://` / 协议相对): 头像值会变成 `<img src>`, 外链 = 帮第三方跑统计 +
+  对方删图就变白框 + 违背数据自托管 (CHARTER §3.2)
+- 白名单与归一化在 `src/lib/avatar.ts` (`parseAvatarValue`), 客户端只是提前拦
+- 写库走 `user` 表 → `user_audit` 触发器自动写审计日志 (谁/什么时候/改成什么/IP)
+- 未登录 → 401 (dev `DEV_SKIP_AUTH` 且无 cookie 时不猜"你是 1 号")
+
+**响应**: `{ "ok": true, "avatarUrl": "preset:leaf" }`
 
 ### `GET /api/app-version`
 服务器版本 + 可下载安装包元数据 (Flutter 「检查更新」)。

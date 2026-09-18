@@ -2,6 +2,56 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (「我的」页追加: 字号「小」档 + 自定义头像 (上传 / 8 个候选), 2026-09-18 主人要)
+
+**主人要**: 「显示与存储区块。在标准下增加1个：小，比标准小。用户头像要能够自定义（上传头像），
+增加几个候选头像供不希望用真人头像的用户选择」
+
+**1) 字号加「小」档 (比标准小)**
+
+| 档位 | 倍率 | 说明 |
+|---|---|---|
+| **小** (新) | 0.85 (≈15.3pt) | 屏幕小 / 觉得字大一屏看不全 |
+| 标准 | 1.0 | 默认 |
+| 大 | 1.15 | |
+| 特大 | 1.3 | |
+
+- 档位名的字号也体现大小 (小 -2 / 标准 0 / 大 +2 / 特大 +4), 不让用户看倍率数字
+- `app.dart` 缩放夹取区间从 `[0.9, 1.6]` 放宽到下界 `0.7` —— 否则系统字号 < 1 时「小」被夹平, 点了没反应
+
+**2) 自定义头像**
+
+| 能力 | 实现 |
+|---|---|
+| 换头像入口 | 头部头像可点 (带相机角标) + 「换头像」按钮 → 底部弹层 |
+| 上传 | 「拍一张」/「从相册选」→ 本地压到 512×512 / q85 → `POST /api/photos` → `PATCH /api/me` |
+| 候选头像 | 8 个 (绿叶/花朵/喝茶/静心/爱心/暖阳/养生/清泉), **客户端本地画图标** (不占服务器/不跑流量) |
+| 恢复默认 | 一个按钮回到"姓名首字" |
+| 存储 | 服务器 `user.avatar_url` (migration `0007_user_avatar_url`, 加性 nullable) — 换手机还在 |
+| 安全 | 白名单 `src/lib/avatar.ts`: 只收 `preset:<id>` 与本站 `/uploads/*.(jpg\|png\|webp)`; **拒外链**; `PATCH /api/me` 只接受 `avatarUrl` 一个字段; 写库走 `user_audit` 触发器进审计日志 |
+| 渲染兜底 | `core/widgets/user_avatar.dart`: 未知/脏值一律退回首字, 永不出现白框/破图 |
+
+**新增/改动文件**
+
+- 后端: `src/lib/avatar.ts` (新) / `src/app/api/me/route.ts` (+PATCH, GET 回 avatarUrl) /
+  `src/lib/db/schema.ts` (+avatarUrl) / `drizzle/0007_user_avatar_url.sql` + `drizzle/down/0007_*.down.sql` (新)
+- Flutter: `core/widgets/user_avatar.dart` (新) / `core/models/me.dart` (+avatarUrl) /
+  `core/services/api.dart` (+`MeService.updateAvatar`) / `core/providers/settings_provider.dart` (+small) /
+  `app.dart` (夹取下界) / `screens/profile_sheets.dart` (+换头像弹层) / `screens/profile_page.dart` (可点头像)
+- 测试: `tests/profile-avatar.test.ts` (新, 12 例) / Flutter `test/me_model_test.dart` + `test/profile_page_test.dart`
+  + `test/settings_provider_test.dart` 各加用例
+- 文档: `docs/api.md §13` (+PATCH /api/me) / `docs/profile-and-settings.md §5.1` (新章节) /
+  `docs/user-manual.md` (换头像 + 4 档字号) / `docs/data-model.md` (user.avatar_url)
+
+**验证**
+
+- `npx vitest run tests/profile-avatar.test.ts`: 12 pass (外链/穿越/未知 preset/超长/非字符串 全被拒)
+- `curl PATCH /api/me`: `preset:leaf` ✓ / 外链 400 ✓ / `preset:hacker` 400 ✓ / 多字段 400 ✓ /
+  `/uploads/../../etc/passwd.jpg` 400 ✓ / `null` 恢复默认 ✓; `GET /api/me` 回读一致 ✓
+- 审计日志实测有行: `user | UPDATE | user_id=1 | ip=127.0.0.1 | {"avatar_url":"preset:leaf"}`
+- `pnpm db:compat` 0 error 0 warning; migration 应用后 `\d user` 有 `avatar_url text` (nullable)
+- `flutter analyze` (改动文件) 0 issue; `npx tsc --noEmit` 0 error
+
 ### Changed (「我的」页工业级完善: 个人资料 + 加盟身份 + 数据概览 + 系统设置, 2026-09-18 主人要)
 
 **主人要**: 「'我的'页中。丰富个人和系统设置信息。我没有具体要求，你根据当前项目情况做工业级完善」

@@ -248,6 +248,13 @@ export const customer = pgTable(
     //   - 种子  is_seed=true (显式勾选, 潜在客户开关)
     //   - 普通  其余 (默认, 不存字段)
     // 优先级: 加盟 > 种子 > 普通 (见 queries/customer.ts resolveCustomerType)
+    // 客户头像 (主人 2026-09-18 拍: 详情页头像右下角相机图标可设)
+    //   取值约定与 user.avatar_url 完全一致 (src/lib/avatar.ts 白名单):
+    //     null            → 默认: 姓名首字
+    //     'preset:<id>'   → 内置候选 (前端本地画, 不占存储)
+    //     '/uploads/x.jpg'→ 自己上传 (POST /api/photos 产物)
+    avatar: text("avatar"),
+
     isSeed: boolean("is_seed").notNull().default(false),
 
     createdBy: bigint("created_by", { mode: "bigint" }).notNull(),

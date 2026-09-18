@@ -234,6 +234,10 @@ void main() {
   });
 
   testWidgets('换头像: 入口可见 + 候选头像弹层能出 8 个候选', (tester) async {
+    // bySemanticsLabel 需要语义树 (widget 测试默认不开, 跟线上不同)
+    final semantics = tester.ensureSemantics();
+    addTearDown(semantics.dispose);
+
     final container = await _container(_fullProfile());
     await _pumpProfile(tester, container);
 
