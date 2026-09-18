@@ -352,7 +352,8 @@ class AppRelease {
     );
   }
 
-  String get label => buildNumber > 0 ? 'v$version ($buildNumber)' : 'v$version';
+  String get label =>
+      buildNumber > 0 ? 'v$version ($buildNumber)' : 'v$version';
 }
 
 /// GET /api/health (不需要登录, 网络自检用)

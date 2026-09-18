@@ -215,12 +215,14 @@ class _UpdateSheetBody extends ConsumerWidget {
                 OutlinedButton.icon(
                   onPressed: () => ref.invalidate(appReleaseProvider),
                   icon: const Icon(Icons.refresh, size: 22),
-                  label: const Text('重试', style: TextStyle(fontSize: AppTheme.fontMd)),
+                  label: const Text('重试',
+                      style: TextStyle(fontSize: AppTheme.fontMd)),
                 ),
               ],
             ),
             data: (release) {
-              final hasNewer = _isNewerThanInstalled(release, infoAsync.valueOrNull);
+              final hasNewer =
+                  _isNewerThanInstalled(release, infoAsync.valueOrNull);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -266,7 +268,8 @@ class _UpdateSheetBody extends ConsumerWidget {
                       width: double.infinity,
                       height: AppTheme.buttonLgHeight,
                       child: FilledButton.icon(
-                        onPressed: () => _openDownload(release.apk!.downloadUrl),
+                        onPressed: () =>
+                            _openDownload(release.apk!.downloadUrl),
                         icon: const Icon(Icons.download, size: 26),
                         label: const Text(
                           '下载 / 更新安装包',
@@ -304,13 +307,15 @@ class _UpdateSheetBody extends ConsumerWidget {
                                 content: SizedBox(
                                   width: 260,
                                   height: 260,
-                                  child: _QrImage(url: release.apk!.downloadUrl),
+                                  child:
+                                      _QrImage(url: release.apk!.downloadUrl),
                                 ),
                                 actions: [
                                   TextButton(
                                     onPressed: () => Navigator.of(dctx).pop(),
                                     child: const Text('关闭',
-                                        style: TextStyle(fontSize: AppTheme.fontMd)),
+                                        style: TextStyle(
+                                            fontSize: AppTheme.fontMd)),
                                   ),
                                 ],
                               ),
@@ -439,9 +444,8 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
             error: (_, __) => const _Line(label: '登录账号', value: '读取失败'),
             data: (p) => _Line(
               label: '登录账号',
-              value: p.user == null
-                  ? '未知'
-                  : '#${p.user!.id} ${p.user!.roleLabel}',
+              value:
+                  p.user == null ? '未知' : '#${p.user!.id} ${p.user!.roleLabel}',
             ),
           ),
           healthAsync.when(
@@ -505,7 +509,8 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: AppTheme.fontMd,
                         fontWeight: FontWeight.w600,
-                        color: h.healthy ? AppTheme.primaryDark : AppTheme.danger,
+                        color:
+                            h.healthy ? AppTheme.primaryDark : AppTheme.danger,
                       ),
                     ),
                   ],

@@ -87,7 +87,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
   Future<void> setFontSize(AppFontSize size) async {
     if (state.fontSize == size) return;
     state = state.copyWith(fontSize: size);
-    await ref.read(sharedPreferencesProvider).setString(_kFontSizeKey, size.name);
+    await ref
+        .read(sharedPreferencesProvider)
+        .setString(_kFontSizeKey, size.name);
   }
 }
 

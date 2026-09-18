@@ -145,7 +145,8 @@ class ProfileTile extends StatelessWidget {
             if (trailing != null)
               trailing!
             else if (onTap != null)
-              const Icon(Icons.chevron_right, size: 28, color: AppTheme.textSecondary),
+              const Icon(Icons.chevron_right,
+                  size: 28, color: AppTheme.textSecondary),
           ],
         ),
       ),

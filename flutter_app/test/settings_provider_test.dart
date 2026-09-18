@@ -37,7 +37,9 @@ void main() {
 
   test('切换字号立即生效 + 落盘', () async {
     final container = await _containerWith({});
-    await container.read(settingsProvider.notifier).setFontSize(AppFontSize.large);
+    await container
+        .read(settingsProvider.notifier)
+        .setFontSize(AppFontSize.large);
     expect(container.read(settingsProvider).fontSize, AppFontSize.large);
     expect(container.read(settingsProvider).fontScale, 1.15);
 

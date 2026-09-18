@@ -52,7 +52,8 @@ class AboutPage extends ConsumerWidget {
                       color: AppTheme.primaryLight.withOpacity(0.4),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(Icons.spa, size: 44, color: AppTheme.primaryDark),
+                    child: const Icon(Icons.spa,
+                        size: 44, color: AppTheme.primaryDark),
                   ),
                   const SizedBox(height: 12),
                   const Text(
@@ -92,7 +93,9 @@ class AboutPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    kIsWeb ? '运行环境: Web 预览' : '运行环境: ${defaultTargetPlatform.name}',
+                    kIsWeb
+                        ? '运行环境: Web 预览'
+                        : '运行环境: ${defaultTargetPlatform.name}',
                     style: const TextStyle(
                       fontSize: AppTheme.fontXs,
                       color: AppTheme.textSecondary,

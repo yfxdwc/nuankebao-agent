@@ -235,7 +235,8 @@ void main() {
   testWidgets('窄屏 320 + 特大字号 1.3: 滚完整页不溢出', (tester) async {
     final container = await _container(_fullProfile());
     // 真实手机尺寸 (红米/老安卓常见 320 宽) + 特大字号 —— 最容易挤破的组合
-    await _pumpProfile(tester, container, width: 320, height: 852, fontScale: 1.3);
+    await _pumpProfile(tester, container,
+        width: 320, height: 852, fontScale: 1.3);
 
     await _scrollToBottom(tester);
 

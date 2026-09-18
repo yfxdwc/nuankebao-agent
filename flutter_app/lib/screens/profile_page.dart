@@ -70,7 +70,8 @@ class ProfilePage extends ConsumerWidget {
             ],
           ),
           data: (profile) => _ProfileBody(profile: profile),
-        ),      ),
+        ),
+      ),
     );
   }
 }
@@ -123,7 +124,7 @@ class _ProfileBody extends ConsumerWidget {
         profileSectionGap,
         _AccountCard(profile: profile),
         profileSectionGap,
-        _AboutCard(profile: profile),
+        const _AboutCard(),
         const SizedBox(height: 20),
         const _LogoutButton(),
       ],
@@ -213,7 +214,8 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
             if (phone != null && !phone.isEmpty) ...[
               const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppTheme.bgWarm,
                   borderRadius: BorderRadius.circular(12),
@@ -221,7 +223,8 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.phone_iphone, size: 22, color: AppTheme.primaryDark),
+                    const Icon(Icons.phone_iphone,
+                        size: 22, color: AppTheme.primaryDark),
                     const SizedBox(width: 8),
                     // Flexible + ellipsis: 号码在窄屏/特大字号下能缩, 不把这一行顶爆
                     // (号码本身很短, 正常手机永不会真的省略)
@@ -238,7 +241,9 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                       ),
                     ),
                     _PhoneAction(
-                      icon: _showFullPhone ? Icons.visibility_off : Icons.visibility,
+                      icon: _showFullPhone
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                       tooltip: _showFullPhone ? '隐藏' : '显示完整手机号',
                       onPressed: () =>
                           setState(() => _showFullPhone = !_showFullPhone),
@@ -247,7 +252,8 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                       icon: Icons.copy,
                       tooltip: '复制手机号',
                       onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: phone.full));
+                        await Clipboard.setData(
+                            ClipboardData(text: phone.full));
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -395,7 +401,8 @@ class _FranchiseCard extends StatelessWidget {
               : '${referrer.name}${referrer.phone == null ? '' : ' · ${referrer.phone!.display}'}',
           trailing: referrer == null
               ? null
-              : const Icon(Icons.chevron_right, size: 28, color: AppTheme.textSecondary),
+              : const Icon(Icons.chevron_right,
+                  size: 28, color: AppTheme.textSecondary),
           onTap: referrer == null
               ? null
               : () => context.push('/franchisees/${referrer.id}'),
@@ -486,7 +493,8 @@ class _StatsCard extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Text(
               '这次没拿到统计数据, 下拉页面刷新试试',
-              style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+              style: TextStyle(
+                  fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
             ),
           )
         else ...[
@@ -496,7 +504,8 @@ class _StatsCard extends StatelessWidget {
               StatBox(
                 label: '待办跟进',
                 value: '${s.pendingFollowUps}',
-                color: s.pendingFollowUps > 0 ? AppTheme.danger : AppTheme.primary,
+                color:
+                    s.pendingFollowUps > 0 ? AppTheme.danger : AppTheme.primary,
               ),
             ],
           ),
@@ -554,7 +563,8 @@ class _DisplaySettingsCardState extends ConsumerState<_DisplaySettingsCard> {
           padding: EdgeInsets.only(top: 4, bottom: 8),
           child: Text(
             '字太小看不清楚? 选一档 (选完立即生效, 全 App 都变大)',
-            style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+            style: TextStyle(
+                fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
           ),
         ),
         Wrap(
@@ -662,7 +672,8 @@ class _AccountCard extends StatelessWidget {
           padding: EdgeInsets.only(top: 4, bottom: 8),
           child: Text(
             '手机号就是登录账号, 要换号 / 停用账号请联系管理员',
-            style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+            style: TextStyle(
+                fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
           ),
         ),
       ],
@@ -675,8 +686,7 @@ class _AccountCard extends StatelessWidget {
 // ============================================
 
 class _AboutCard extends ConsumerWidget {
-  final MeProfile profile;
-  const _AboutCard({required this.profile});
+  const _AboutCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -795,12 +805,14 @@ class _LogoutButton extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+            child:
+                const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            child: const Text('退出', style: TextStyle(fontSize: AppTheme.fontMd)),
+            child:
+                const Text('退出', style: TextStyle(fontSize: AppTheme.fontMd)),
           ),
         ],
       ),
