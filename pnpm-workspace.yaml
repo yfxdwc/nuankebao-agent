@@ -1,3 +1,13 @@
+# pnpm workspace 清单
+#
+# ⚠️ pnpm@9 (Docker 构建器里固的版本) 要求本文件含 `packages` 字段:
+#    否则 builder 阶段 `pnpm build` 报 "packages field missing or empty",
+#    生产镜像构建失败 (2026-09-19 修, docs/deploy/production-plan.md §3.A1)。
+#    根目录即唯一包 (lockfile 只有 importer `.:`), 已与 pnpm-lock.yaml 一致。
+packages:
+  - "."
+
+# 允许构建的依赖 (esbuild / unrs-resolver 需要 postinstall)
 allowBuilds:
   esbuild: true
   unrs-resolver: true

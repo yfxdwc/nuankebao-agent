@@ -1,39 +1,11 @@
 -- ============================================
--- 暖客宝 审计触发器
--- 在敏感表上挂触发器, 自动写 audit_log
+-- 暖客宝 审计触发器 (挂到敏感表上, 自动写 audit_log)
 -- 详见 docs/security-compliance.md §5
+--
+-- ⚠️ 函数 audit_trigger() 定义已拆到 drizzle/audit_function.sql:
+--    它必须先于 up migration 创建 (0010 会引用), 由 src/lib/db/migrate.ts 控制顺序。
+--    手工执行本文件前, 先执行 audit_function.sql。
 -- ============================================
-
--- 触发器函数
-CREATE OR REPLACE FUNCTION audit_trigger() RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO audit_log (
-    table_name,
-    record_id,
-    operation,
-    user_id,
-    changed_fields,
-    ip_address
-  )
-  VALUES (
-    TG_TABLE_NAME,
-    COALESCE(NEW.id, OLD.id)::BIGINT,
-    TG_OP,
-    NULLIF(current_setting('app.current_user_id', true), '')::BIGINT,
-    CASE TG_OP
-      WHEN 'INSERT' THEN to_jsonb(NEW)
-      WHEN 'UPDATE' THEN (
-        SELECT jsonb_object_agg(key, value)
-        FROM jsonb_each(to_jsonb(NEW))
-        WHERE to_jsonb(NEW) -> key IS DISTINCT FROM to_jsonb(OLD) -> key
-      )
-      WHEN 'DELETE' THEN to_jsonb(OLD)
-    END,
-    NULLIF(current_setting('app.client_ip', true), '')::INET
-  );
-  RETURN COALESCE(NEW, OLD);
-END;
-$$ LANGUAGE plpgsql;
 
 -- 删除已有触发器 (重入安全)
 DROP TRIGGER IF EXISTS customer_audit ON customer;

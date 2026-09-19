@@ -1,12 +1,30 @@
+# ============================================
+# 暖客宝 生产栈 (tc 本机 Docker 隔离; 后续可整体搬云)
+#
+# 用法:
+#   docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file .env.prod up -d
+#   docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file .env.prod \
+#     run --rm migrate pnpm db:migrate
+#   bash deploy/prod-deploy.sh   (封装以上流程 + 健康检查/回滚)
+#
+# 与 dev 的隔离 (docs/deploy/production-plan.md §2):
+#   - 项目名 nuankebao-prod / 容器 nuankebao-prod-*
+#   - 数据卷 nuankebao-prod-postgres-data / nuankebao-prod-uploads (dev 卷不动)
+#   - web 只绑 127.0.0.1:${PROD_WEB_PORT:-3004} (dev 是 3003)
+#   - postgres 不映射 host 端口
+# 反代: tc 由 cloudflared-tc-prod.service 指 127.0.0.1:3004 (不跑 nginx 容器;
+#      上云后用 host nginx, 见 production-plan 附录 A)
+# ============================================
+
 services:
   postgres:
-    # container_name 保留 nuankebao-postgres (主人机器内部代号, 跟产品名 nuankebao 解耦)
     image: pgvector/pgvector:pg16
-    container_name: nuankebao-postgres
-    restart: always
+    container_name: nuankebao-prod-postgres
+    restart: unless-stopped
+    env_file: .env.prod
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-nuankebao}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}
       POSTGRES_DB: ${POSTGRES_DB:-nuankebao}
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -16,57 +34,65 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    # 不暴露端口到 host (只让 web 容器访问)
-    # ports:
-    #   - "5432:5432"
     networks:
-      - nuankebao-net
+      - prod-net
 
   web:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: nuankebao-web
-    restart: always
+      target: runner
+    container_name: nuankebao-prod-web
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-nuankebao}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nuankebao}
+      NODE_ENV: production
+      # Next.js standalone 默认用 $HOSTNAME 绑定 (Docker 会注入容器 ID 主机名)
+      # → 只绑容器 IP, 容器内 127.0.0.1 healthcheck 失败 (2026-09-19 实测)
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "127.0.0.1:${PROD_WEB_PORT:-3004}:3000"
+    volumes:
+      - uploads:/app/public/uploads
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - prod-net
+
+  # migration runner (tools profile):
+  #   docker compose ... run --rm migrate pnpm db:migrate
+  # 说明: 运行镜像只有 standalone 产物, 没有 tsx/drizzle/tools; 本 target 专门跑迁移。
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: migrate
+    profiles: ["tools"]
+    env_file: .env.prod
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-nuankebao}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nuankebao}
-      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
-      AUTH_URL: ${AUTH_URL:-https://nuankebao.tooyang.top}
-      PGCRYPTO_KEY: ${PGCRYPTO_KEY:?PGCRYPTO_KEY must be set}
-      NODE_ENV: production
-      # 主机可访问
-      APP_PORT: 3000
-    networks:
-      - nuankebao-net
-      - web-net  # 暴露给 host / nginx
-
-  # 可选: nginx 反向代理 (推荐但可选, 也可用 host nginx)
-  nginx:
-    image: nginx:alpine
-    container_name: nuankebao-nginx
-    restart: always
     depends_on:
-      - web
-    volumes:
-      # 主机上传目录 (host → container 映射, 主人部署时填: UPLOADS_HOST_DIR=/path/to/uploads)
-      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ${UPLOADS_HOST_DIR:-/opt/nuankebao/public/uploads}:${UPLOADS_CONTAINER_DIR:-/opt/nuankebao/public/uploads}:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    ports:
-      - "80:80"
-      - "443:443"
+      postgres:
+        condition: service_healthy
     networks:
-      - web-net
+      - prod-net
+    restart: "no"
 
 networks:
-  nuankebao-net:
-    driver: bridge
-  web-net:
+  prod-net:
+    name: nuankebao-prod-net
     driver: bridge
 
 volumes:
   postgres-data:
-    name: nuankebao-postgres-data
+    name: nuankebao-prod-postgres-data
+  uploads:
+    name: nuankebao-prod-uploads

@@ -16,7 +16,7 @@
 | 域名 | 生产 `nuankebao.tooyang.top` → prod web :3004；dev `nuankebao-dev.tooyang.top` → dev :3003 | 主人 2026-09-19 |
 | 数据 | **生产空库启动**（不迁 dev 的 61 客户 / 35 养生记录） | 主人 2026-09-19 |
 | 登录 | **账号 + 密码**，邀请制（不开放自助注册） | 主人 2026-09-19 |
-| 系统管理员 | `tooyan`（初始口令由主人提供，**不写入 git**；建议首登后改密） | 主人 2026-09-19 |
+| 系统管理员 | `admin`（初始口令由主人提供，**不写入 git**；建议首登后改密） | 主人 2026-09-19 |
 | 照片/文件 | **本盘**（Docker 卷持久化；后续可迁 COS） | 主人 2026-09-19 |
 | APK | 正式 release keystore | 主人 2026-09-19 |
 | 实施方式 | 先方案、主人确认后按 §6 分阶段实施 | 主人 2026-09-19 |
@@ -45,7 +45,7 @@
 - 邀请制：管理员建号 → 给初始密码 → 建议首登后修改（自助改密入口做进"我的"页，工作量 ~0.5h）
 - 密码强度校验（长度 ≥ 8，含字母+数字）
 
-⚠️ 主人对话里给出的 `tooyan` 口令不会写进仓库：建档时通过环境变量一次性传入，只落库哈希。因口令已出现在聊天记录里，建议首次登录后更换。
+⚠️ 主人对话里给出的 `admin` 口令不会写进仓库：建档时通过环境变量一次性传入，只落库哈希。因口令已出现在聊天记录里，建议首次登录后更换。
 
 ### 1.2 为什么先 tc 本机 Docker 隔离（而不是直接上云）
 
@@ -120,7 +120,7 @@
 | B4 | ⚠️ Auth.js Edge/Node 拆分 | `middleware.ts` 目前直接 import 带 DB 的 auth（有 Edge 500 前科）。按 Auth.js v5 标准拆 `auth.config.ts`（edge 安全）+ `auth.ts`（Node） |
 | B5 | 登录限流 | 复用 `src/lib/rate-limit.ts`：每账号/IP 失败限速；统一错误文案 |
 | B6 | Flutter 登录页 | 验证码输入改为密码输入（去掉"发送验证码"）；`AuthService.login(username/phone, password)`；web dev 预览的 `flutter-login`（dev-only）同步改为密码校验 |
-| B7 | 管理员建档 | `scripts/create-admin.ts`：读 `ADMIN_USERNAME`/`ADMIN_PASSWORD` 环境变量，scrypt 哈希后 upsert —— 用于创建 `tooyan`；**口令不落 git** |
+| B7 | 管理员建档 | `scripts/create-admin.ts`：读 `ADMIN_USERNAME`/`ADMIN_PASSWORD` 环境变量，scrypt 哈希后 upsert —— 用于创建 `admin`；**口令不落 git** |
 | B8 | 邀请制导入 | `scripts/import-users.ts`：CSV（姓名/手机号/角色/初始密码）幂等导入；不生成初始密码时随机生成并只打印一次，由主人分发 |
 | B9 | 自助改密（推荐） | `PATCH /api/me/password` + Flutter「我的 → 修改密码」；否则改密只能找管理员 |
 | B10 | 生产 env 安全 | 实测 `DEV_SKIP_AUTH` 目前**不受 NODE_ENV 保护**（`skip-auth.ts` 只认变量值）。生产 `.env.prod` 严禁出现该变量，并顺手加 NODE_ENV 硬门闸 |
@@ -190,7 +190,7 @@
 |---|---|---|---|
 | **P0 准备**（✅ 已完成） | 停用 `nuankebao-stack.service`；端口 3004 确认；决策拍板 | unit inactive/disabled；dev 正常 | — |
 | **P1 生产栈修复** | §3.A 全部 + `prod-deploy.sh` + 本地容器跑通 | `docker build` 通过；本地起 prod 容器连临时库 `/api/health` 200 | 1–2 天 |
-| **P2 账号密码登录** | §3.B 全部（含 `tooyan` 建档） | 密码登录成功；两个账号 = 两个身份；错误密码被限流；首登改密可用 | ~1 天 |
+| **P2 账号密码登录** | §3.B 全部（含 `admin` 建档） | 密码登录成功；两个账号 = 两个身份；错误密码被限流；首登改密可用 | ~1 天 |
 | **P3 tc 生产部署** | §3.C/E：空库 migrate + seed、prod 栈起在 :3004、备份/健康检查 | LAN `http://192.168.1.99:3004/api/health` 200；第一份加密备份；恢复演练 | ~1 天 |
 | **P4 APK 签名发布** | §3.D | 真机安装 release APK → 登录 → 录入养生记录 | 0.5 天 |
 | **P5 域名切换 + 内测** | §4；邀请 1–2 销售 | 销售日常可用；dev 预览不受影响 | 0.5 天 + 内测周期 |
@@ -208,7 +208,7 @@
 
 ## 8. 需要主人提供 / 确认
 
-1. `tooyan` 初始口令已给（建档时一次性传入；建议首登后更换）
+1. `admin` 初始口令已给（建档时一次性传入；建议首登后更换）
 2. 首批邀请用户名单（姓名 + 手机号 + 角色）——P2 后提供即可
 3. release keystore 口令（P4 时主人设定）
 4. 是否保留自助改密入口（建议保留，B9）
@@ -219,7 +219,7 @@
 
 - [ ] prod compose 本地构建通过，容器名/卷/端口与 dev 零冲突
 - [ ] prod 空库 migrate + seed + 审计触发器生效
-- [ ] `tooyan` 管理员可登录；邀请制建号可用；改密可用
+- [ ] `admin` 管理员可登录；邀请制建号可用；改密可用
 - [ ] APK：release 签名、指向 `nuankebao.tooyang.top`、`/download` 可下载
 - [ ] 生产备份每日执行 + 恢复演练 ≥ 1 次
 - [ ] 健康检查 timer 生效；`/app-preview` 在生产关闭

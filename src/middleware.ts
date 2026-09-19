@@ -55,6 +55,23 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const base = getPublicBaseUrl(req as unknown as Request);
 
+  // A6 (2026-09-19, docs/deploy/production-plan.md §3.A):
+  // 生产环境关闭 dev 预览路由 (/app-preview /preview), dev 保留。
+  // 注: middleware (Edge) 里 process.env 非 NEXT_PUBLIC_* 变量可能在构建期内联,
+  //     要打开开关可能需重新 build; 默认不设 = 生产 404。
+  const isAppPreviewPath =
+    nextUrl.pathname === "/app-preview" ||
+    nextUrl.pathname.startsWith("/app-preview/") ||
+    nextUrl.pathname === "/preview" ||
+    nextUrl.pathname.startsWith("/preview/");
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.APP_PREVIEW_ENABLED !== "1" &&
+    isAppPreviewPath
+  ) {
+    return new Response("Not Found", { status: 404 });
+  }
+
   // 双门闸: dev 模式 + 显式 opt-in 才跳过 auth
   // 生产环境也允许跳过 (同名字 var 本身就表达了 dev intent)
   // 主人部署时如果不想跳过, 删掉 env var 即可

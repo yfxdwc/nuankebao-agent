@@ -1,7 +1,7 @@
 [Unit]
-Description=NuankeBao Application Stack (Docker Compose)
+Description=NuankeBao Production Stack (Docker Compose, tc 隔离; 2026-09-19 修正)
 # Documentation + WorkingDirectory 由 tools/install-guards.sh sed 渲染
-Documentation=file://__PROJECT_DIR__/AGENTS.md
+Documentation=file://__PROJECT_DIR__/docs/deploy/production-plan.md
 Requires=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
@@ -11,22 +11,22 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=__PROJECT_DIR__
 
-# 起: docker compose up -d (后台, 自愈靠容器内 restart=always)
-ExecStart=/usr/bin/docker compose up -d
+# 起: 生产 compose (独立 project/容器/卷/端口; dev 不受影响)
+ExecStart=/usr/bin/docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file __PROJECT_DIR__/.env.prod up -d
 
-# 停: 保留 named volume (postgres-data 不会丢)
-ExecStop=/usr/bin/docker compose down
+# 停: 只停生产栈 (保留 named volume); dev 的 next dev / postgres 不动
+ExecStop=/usr/bin/docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file __PROJECT_DIR__/.env.prod down
 
 # 重载: 重新拉起 (配置改了用)
-ExecReload=/usr/bin/docker compose up -d
+ExecReload=/usr/bin/docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file __PROJECT_DIR__/.env.prod up -d
 
 # 慢启动容忍 (首次 build / 拉镜像)
-TimeoutStartSec=300
+TimeoutStartSec=600
 TimeoutStopSec=60
 
-# 失败自动重启 unit (但容器内 restart 才是常态)
-Restart=on-failure
-RestartSec=30
+# 不自动重启 unit: 容器自身 restart: unless-stopped 负责自愈;
+# unit 反复拉起只会在配置错时刷日志 (2026-09-19 失败循环教训)
+Restart=no
 
 StandardOutput=journal
 StandardError=journal

@@ -29,7 +29,7 @@ if (!connectionString) {
 // 检查 migration 兼容性 (CHARTER §3.5)
 // ============================================
 function checkMigrationCompat(): boolean {
-  console.log("[0/3] 检查 migration 兼容性 (CHARTER §3.5)...");
+  console.log("[0/4] 检查 migration 兼容性 (CHARTER §3.5)...");
   try {
     execSync("bash tools/check-migration-compat.sh", {
       stdio: "inherit",
@@ -48,16 +48,33 @@ function checkMigrationCompat(): boolean {
 // 应用 up migration (drizzle 自动)
 // ============================================
 async function applyUpMigrations(sql: postgres.Sql, db: ReturnType<typeof drizzle>) {
-  console.log("[1/3] 应用 Drizzle up migration...");
+  console.log("[2/4] 应用 Drizzle up migration...");
   await migrate(db, { migrationsFolder: "./drizzle" });
   console.log("✓ Drizzle up migration 完成\n");
+}
+
+// ============================================
+// 审计触发器函数 (必须先于 up migration)
+//
+// 背景 (2026-09-19 P1, 新库首部署暴露):
+//   migration 0010 里直接 CREATE TRIGGER ... EXECUTE FUNCTION audit_trigger(),
+//   而函数原先只在 up migration **之后** 才创建 → 全新库跑到 0010 必报
+//   "function audit_trigger() does not exist" (dev 库因历史增量迁移掩盖了此问题)。
+//   修法: 函数定义拆到 drizzle/audit_function.sql, 在 up migration 之前先建。
+// ============================================
+async function applyAuditFunction(sql: postgres.Sql) {
+  console.log("[1/4] 创建审计触发器函数...");
+  const fnPath = join(process.cwd(), "drizzle", "audit_function.sql");
+  const fnSql = readFileSync(fnPath, "utf-8");
+  await sql.unsafe(fnSql);
+  console.log("✓ 审计触发器函数创建完成\n");
 }
 
 // ============================================
 // 应用审计触发器 (CHARTER §3.1)
 // ============================================
 async function applyAuditTriggers(sql: postgres.Sql) {
-  console.log("[2/3] 创建审计触发器...");
+  console.log("[3/4] 创建审计触发器...");
   const auditSqlPath = join(process.cwd(), "drizzle", "audit_trigger.sql");
   const auditSql = readFileSync(auditSqlPath, "utf-8");
   await sql.unsafe(auditSql);
@@ -153,6 +170,7 @@ async function runMigrations() {
     }
     console.log("");
 
+    await applyAuditFunction(sql);
     await applyUpMigrations(sql, db);
     await applyAuditTriggers(sql);
 

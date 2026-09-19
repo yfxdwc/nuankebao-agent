@@ -34,8 +34,8 @@ if [ ! -d "$DRIZZLE_DIR" ]; then
   exit 2
 fi
 
-# 收集 migration (排除 audit_trigger.sql 和 meta/)
-MIGRATIONS=$(find "$DRIZZLE_DIR" -maxdepth 1 -name "*.sql" -type f ! -name "audit_trigger.sql" -printf "%f\n" | sort)
+# 收集 migration (排除 audit_trigger.sql / audit_function.sql 和 meta/)
+MIGRATIONS=$(find "$DRIZZLE_DIR" -maxdepth 1 -name "*.sql" -type f ! -name "audit_trigger.sql" ! -name "audit_function.sql" -printf "%f\n" | sort)
 
 if [ -z "$MIGRATIONS" ]; then
   echo -e "${YELLOW}⚠️ 没找到任何 migration SQL 文件${NC}"

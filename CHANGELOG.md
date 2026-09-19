@@ -2,6 +2,66 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (生产栈 P1: 首次生产构建/全新库部署打通 — 5 个生产路径缺陷, 2026-09-19)
+
+**背景**: 主人 2026-09-19 拍板「先用自有服务器, tc 本机 Docker 隔离」后, 首次真正尝试
+生产镜像构建 + 全新库部署。以下缺陷全部只在生产路径暴露, dev 长期运行掩盖了它们。
+方案: `docs/deploy/production-plan.md` v2 §3.A。
+
+**1) Docker 构建失败 (pnpm@9 workspace)**
+
+- 根因: `pnpm-workspace.yaml` 缺 `packages` 字段, builder 阶段 `pnpm build` 报
+  `packages field missing or empty` → **生产镜像从未构建成功过**。
+- 修: 补 `packages: ["."]` (lockfile 本就是 workspace 结构, 仅根 importer)。
+
+**2) 构建期模块加载缺 env (next build "Collecting page data")**
+
+- 根因: `src/lib/db/index.ts` / crypto 在模块加载时校验 env, `next build` 收集页面数据
+  会导入全部 route → 缺 `DATABASE_URL` 必炸 (之前卡在更早的 pnpm 错, 从未走到该阶段)。
+- 修: builder 阶段注入构建期占位 env (`DATABASE_URL` / `AUTH_SECRET` / `PGCRYPTO_KEY`);
+  Next 只内联 `NEXT_PUBLIC_*`, 服务端 env 运行时由 compose 注入, 占位值不进运行时。
+
+**3) 全新库 migration 0010 引用不存在的 audit_trigger() (首部署阻断)**
+
+- 根因: 0010 直接 `EXECUTE FUNCTION audit_trigger()`, 而函数原本在 migration **之后**才创建;
+  dev 库因增量历史一直存在该函数, 掩盖了顺序问题。
+- 修: 函数定义拆到 `drizzle/audit_function.sql`; `src/lib/db/migrate.ts` 顺序改为
+  `[1/4] 创建函数 → [2/4] up migration → [3/4] 挂触发器`。
+
+**4) migrate 容器里 compat 检查静默假通过 (Alpine BusyBox find)**
+
+- 根因: `tools/check-migration-compat.sh` 用 GNU `find -printf`, Alpine 的 BusyBox find
+  不支持 → 扫描到 0 个 migration 却输出「✓ 兼容性通过」。
+- 修: migrate 镜像 `apk add bash findutils`; 兼容脚本排除表加 `audit_function.sql`。
+
+**5) Next standalone 生产容器 healthcheck 失败**
+
+- 根因: standalone server 默认用 `$HOSTNAME` 绑定, Docker 注入容器 ID 主机名
+  → 只监听容器 IP, 容器内 127.0.0.1 healthcheck 一直 unhealthy (宿主访问却 200)。
+- 修: prod compose 显式 `HOSTNAME: "0.0.0.0"`。
+
+**新增 (tc 生产隔离栈)**
+
+- `docker-compose.prod.yml` 重写: project `nuankebao-prod`, 容器 `nuankebao-prod-*`,
+  卷 `nuankebao-prod-postgres-data` / `nuankebao-prod-uploads`, web 仅绑
+  `127.0.0.1:3004`, postgres 不对外, uploads 命名卷, healthcheck, `migrate` tools profile。
+- `docker/Dockerfile`: 新增 `migrate` stage; runner 的 `public/` 加 `--chown=nextjs`
+  (修复 uploads 因 root 属主不可写)。
+- `deploy/prod-deploy.sh`: build → migrate → up → 健康检查 → 失败回滚 (含 rollback 镜像 tag)。
+- `.dockerignore` / `.env.prod.example` / `.gitignore` (`.env.prod`, `key.properties`,
+  `*.jks`/`*.keystore`)。
+- `tools/nuankebao-stack.service` 修正: 用 prod compose + `-p nuankebao-prod --env-file`,
+  `Restart=no` (消除失败重启循环; 旧 unit 已在机器上 stop + disable)。
+- `src/middleware.ts`: 生产关闭 dev 预览路由 `/app-preview` `/preview` (A6)。
+
+**验证 (2026-09-19)**:
+
+- `docker build` 首发通过; 全新 prod 库 migrate + seed 成功 (24 表 / 12 审计触发器);
+  容器 healthcheck `healthy`; `http://127.0.0.1:3004/api/health` 200;
+  `/app-preview` → 404, `/login` → 200; uploads 可写; dev 3003 全程 200 未受影响。
+- `pnpm test:run` 对全新 `nuankebao_test` 库 (migrate + seed 后): **108/108 通过**。
+- `pnpm db:compat` 通过。
+
 ### Changed (沙龙列表「创建沙龙」改纯图标 FAB, 2026-09-19 主人拍)
 
 **主人要**: 「创建沙龙改为纯图标」(附图: 带文字的 extended FAB 占地方)。

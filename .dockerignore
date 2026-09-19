@@ -1,0 +1,58 @@
+# ============================================
+# Docker 构建上下文裁剪 (2026-09-19, P1)
+#
+# 目标:
+#   1. build 上下文小 (node_modules / .next / flutter_app 不进 context)
+#   2. dev 产物与密钥不进镜像 (.env* / *.jks / data/)
+#   3. 保留 next build + migrate 阶段必需文件:
+#      src/ public/(含 public/app 编译产物) drizzle/ tools/ package.json 等
+# ============================================
+
+# 依赖 / 构建产物 (镜像内重新装/编译)
+node_modules
+.next
+out
+coverage
+test-results
+playwright-report
+.playwright
+tsconfig.tsbuildinfo
+
+# git / 元数据 / 工具链
+.git
+.github
+.pi
+.muse
+.vscode
+.idea
+
+# env / secrets (绝不进镜像)
+.env
+.env.local
+.env.prod
+.env.*.local
+*.pem
+*.key
+*.jks
+*.keystore
+key.properties
+
+# 备份 / 数据
+data
+/backups
+*.sql.gz
+*.sql.gpg
+
+# 非构建所需 (镜像里用不到)
+docs
+deploy
+e2e
+tests
+flutter_app
+tools/branding
+AGENTS.md
+CHANGELOG.md
+README.md
+RELEASE_NOTES.md
+PHYSICAL_OPS.md
+Makefile
