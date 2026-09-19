@@ -179,7 +179,9 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
             Row(
               children: [
                 Icon(
-                  r.kind == 'create' ? Icons.person_add_alt : Icons.swap_horiz,
+                  r.kind == 'create'
+                      ? Icons.person_add_alt
+                      : Icons.link_off,
                   size: 22,
                   color: AppTheme.primary,
                 ),

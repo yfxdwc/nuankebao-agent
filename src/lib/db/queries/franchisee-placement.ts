@@ -27,7 +27,8 @@ import { franchiseeCustomerValues } from "./customer";
 /** Q3: 待确认超时 (小时) */
 export const PLACEMENT_TIMEOUT_HOURS = 72;
 
-export type PlacementRequestKind = "create" | "move" | "unjoin";
+// 主人 2026-09-19 拍: 'move' (直接移动点位) 已下线 → 点位变更只能「解除加盟 → 重新加盟落位」
+export type PlacementRequestKind = "create" | "unjoin";
 export type PlacementConfirmerRole =
   | "initiator"
   | "new_franchisee"
@@ -57,8 +58,9 @@ export interface PlacementRequestView {
   initiatorFid: string;
   initiatorName: string;
   newName: string | null;
-  moveFid: string | null;
-  moveName: string | null;
+  /** unjoin 单主体节点 (兼容旧客户端字段名 moveFid/moveName, 语义相同) */
+  unjoinFid: string | null;
+  unjoinName: string | null;
   targetParentFid: string;
   targetParentName: string;
   targetSide: "left" | "right";
@@ -102,6 +104,7 @@ interface RawRequest {
   newName: string | null;
   newPhoneEncrypted: string | null;
   newPhoneHash: string | null;
+  /** unjoin 单: 要解除的加盟商节点 id (DB 列名历史遗留 move_fid; 语义 = 单子主体) */
   moveFid: bigint | null;
   targetParentFid: bigint;
   targetSide: "left" | "right";
@@ -120,7 +123,7 @@ function roleFor(
   const needed = requiredRoles(raw.initiatorFid, raw.targetParentFid);
   const candidates: PlacementConfirmerRole[] = [];
   if (
-    (raw.kind === "move" || raw.kind === "unjoin") &&
+    raw.kind === "unjoin" &&
     raw.moveFid != null &&
     actor.fid === raw.moveFid
   ) {
@@ -203,8 +206,8 @@ async function toViews(
       initiatorFid: r.initiatorFid.toString(),
       initiatorName: names.get(r.initiatorFid.toString()) ?? '?',
       newName: r.newName,
-      moveFid: r.moveFid?.toString() ?? null,
-      moveName:
+      unjoinFid: r.moveFid?.toString() ?? null,
+      unjoinName:
         r.moveFid != null ? names.get(r.moveFid.toString()) ?? '?' : null,
       targetParentFid: r.targetParentFid.toString(),
       targetParentName: names.get(r.targetParentFid.toString()) ?? '?',
@@ -263,7 +266,8 @@ export interface CreatePlacementRequestInput {
   newPhone?: string;
   newNotes?: string;
   /** kind=move / unjoin: 被移动 / 被解除的节点 */
-  moveFid?: bigint;
+  /** unjoin: 要解除的加盟商节点 id */
+  unjoinFid?: bigint;
 }
 
 /** 点位是否被占 (placement 树口径: 看 path, 不是 referrer_id) */
@@ -357,7 +361,7 @@ export async function createPlacementRequest(
     let newPhoneHash: string | null = null;
     let newPhoneEncrypted: string | null = null;
     let newNotesEncrypted: string | null = null;
-    let moveFid: bigint | null = null;
+    let unjoinNodeId: bigint | null = null;
 
     if (input.kind === "create") {
       if (!input.newName || !input.newPhone) {
@@ -389,8 +393,8 @@ export async function createPlacementRequest(
     } else if (input.kind === "unjoin") {
       // 解除加盟 (主人 2026-09-18 拍 Q3): 本人 + 上级 + 设置者三方确认;
       //   **有下线的节点不允许解除** (要先处理完下线)
-      if (input.moveFid == null) throw new Error("解除加盟必须给节点 id");
-      const unjoinFid = input.moveFid;
+      if (input.unjoinFid == null) throw new Error("解除加盟必须给节点 id");
+      const unjoinFid = input.unjoinFid;
       const [node] = await tx
         .select()
         .from(franchisee)
@@ -433,7 +437,7 @@ export async function createPlacementRequest(
         .limit(1);
       if (pendingUnjoin) throw new Error("这个加盟商已有待确认的解除申请");
 
-      moveFid = unjoinFid;
+      unjoinNodeId = unjoinFid;
       // 目标点位 = 该节点在**二叉树上的父节点** (不是 referrer: 新落位流程里
       //   referrer = 设置者, 而 placement 父节点可能更深 → 三方里的「上级」必须按点位算)
       const pp = parentPathOf(node.placementPath);
@@ -454,26 +458,10 @@ export async function createPlacementRequest(
         targetSide: (node.placementSide ?? "left") as "left" | "right",
       };
     } else {
-      if (input.moveFid == null) throw new Error("移动节点必须给 moveFid");
-      moveFid = input.moveFid;
-      const [moved] = await tx
-        .select()
-        .from(franchisee)
-        .where(and(eq(franchisee.id, moveFid), isNull(franchisee.deletedAt)))
-        .limit(1);
-      if (!moved) throw new Error("被移动的加盟商不存在");
-      if (moved.placementPath === "") throw new Error("根节点不能移动");
-      if (
-        !isAdmin &&
-        initiator != null &&
-        !moved.placementPath.startsWith(initiator.placementPath)
-      ) {
-        throw new Error("被移动的加盟商不在我的图谱里");
-      }
-      // 防环: 不能挪到自己的子孙下面 (含自己)
-      if (parent.placementPath.startsWith(moved.placementPath)) {
-        throw new Error("不能把节点挪到它自己的子孙下面");
-      }
+      // 主人 2026-09-19 拍: 点位不能直接移动 —— 必须先解除加盟, 再重新加盟落位
+      throw new Error(
+        "点位不能直接移动: 请先「解除加盟」, 再重新加盟落位 (新点位走三方确认)"
+      );
     }
 
     const expiresAt = new Date(Date.now() + PLACEMENT_TIMEOUT_HOURS * 3600 * 1000);
@@ -490,7 +478,7 @@ export async function createPlacementRequest(
         newPhoneEncrypted,
         newPhoneHash,
         newNotesEncrypted,
-        moveFid,
+        moveFid: unjoinNodeId,
         targetParentFid: input.targetParentFid,
         targetSide: input.targetSide,
         expiresAt,
@@ -853,31 +841,10 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<void> {
       .where(eq(franchisee.id, raw.moveFid));
     resultFid = raw.moveFid;
   } else {
-    if (raw.moveFid == null) throw new Error("move 单缺 moveFid");
-    const [moved] = await tx
-      .select()
-      .from(franchisee)
-      .where(eq(franchisee.id, raw.moveFid))
-      .limit(1);
-    if (!moved) throw new Error("被移动节点不存在");
-
-    const oldPrefix = moved.placementPath;
-    const delta = newDepth - moved.placementDepth;
-
-    // 整棵子树搬迁: path 前缀替换 + depth 平移 (含被移动节点自己)
-    await tx.execute(sql`
-      UPDATE franchisee
-      SET placement_path = ${newPath} || substring(placement_path from ${oldPrefix.length + 1}::int),
-          placement_depth = placement_depth + ${delta},
-          updated_at = NOW()
-      WHERE placement_path LIKE ${oldPrefix + "%"} AND deleted_at IS NULL
-    `);
-    // 被移动节点: 更新自己的 side (推荐人不变 = Q5)
-    await tx
-      .update(franchisee)
-      .set({ placementSide: raw.targetSide, updatedAt: sql`NOW()` })
-      .where(eq(franchisee.id, raw.moveFid));
-    resultFid = raw.moveFid;
+    // 主人 2026-09-19: 'move' 已下线 (点位变更走 解除 → 重新加盟)
+    throw new Error(
+      "「移动到其他点位」功能已下线: 请解除加盟后重新落位"
+    );
   }
 
   await tx
@@ -927,6 +894,9 @@ export async function listPendingPlacementsUnder(
     .where(
       and(
         eq(franchisePlacementRequest.status, "pending"),
+        // 只有「新增加盟商」(create) 会在未来占一个**空位** → 才画虚位。
+        //   解除加盟 (unjoin) 单不画 (那个点位本来就有人, 画虚位会误导)
+        eq(franchisePlacementRequest.kind, "create"),
         sql`${franchisee.placementPath} LIKE ${root.path + "%"}`
       )
     );
@@ -935,10 +905,7 @@ export async function listPendingPlacementsUnder(
     requestId: r.id.toString(),
     targetParentFid: r.targetParentFid.toString(),
     targetSide: r.targetSide,
-    label:
-      r.kind === "create"
-        ? `${r.newName ?? "新加盟商"} (待确认)`
-        : `节点 #${r.moveFid} (待移动)`,
+    label: `${r.newName ?? "新加盟商"} (待确认)`,
     initiatorFid: r.initiatorFid.toString(),
   }));
 }

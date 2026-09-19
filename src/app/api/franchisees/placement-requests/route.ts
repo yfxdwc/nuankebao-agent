@@ -1,8 +1,10 @@
 // /api/franchisees/placement-requests
 // 加盟落位「三方确认」工作流 (主人 2026-09-18 拍; 见 docs/placement-confirmation-design.md)
 //
-// POST 发起: { kind: 'create'|'move'|'unjoin', targetParentId, side, newName?, newPhone?, newNotes?, moveFid? }
-//   - unjoin (解除加盟): 传 kind='unjoin' + moveFid=要解除的节点; targetParentId/side 可省 (服务端按节点推)
+// POST 发起: { kind: 'create'|'unjoin', targetParentId, side, newName?, newPhone?, newNotes?, unjoinFid? }
+//   - unjoin (解除加盟): 传 kind='unjoin' + unjoinFid=要解除的节点; targetParentId/side 可省 (服务端按节点推)
+//   - ⚠ kind='move' (直接移动点位) 已下线 (主人 2026-09-19 拍): 点位变更必须先解除加盟再重新落位
+//     （老的 moveFid 字段名仍接受作为 unjoin 的兼容别名, 但 kind='move' 会被明确拒绝）
 //   - 发起人自动记 1 票 (设置者本人)
 //   - 点位 pending 期间预占 (DB 部分唯一索引兜底)
 // GET  列表: ?scope=mine|to_confirm&status=pending|executed|...
@@ -41,6 +43,8 @@ export async function POST(request: NextRequest) {
     newName?: string;
     newPhone?: string;
     newNotes?: string;
+    unjoinFid?: string;
+    /** @deprecated 老客户端字段 (语义 = unjoin 主体); 新代码用 unjoinFid */
     moveFid?: string;
   };
   try {
@@ -49,16 +53,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const kind: "create" | "move" | "unjoin" =
-    body.kind === "move" ? "move" : body.kind === "unjoin" ? "unjoin" : "create";
+  // 主人 2026-09-19 拍: 「移动到其他点位」下线 → kind='move' 明确拒绝, 不静默当 create
+  if (body.kind === "move") {
+    return NextResponse.json(
+      {
+        error:
+          "点位不能直接移动: 请先「解除加盟」, 再重新加盟落位 (新点位走三方确认)",
+      },
+      { status: 400 }
+    );
+  }
+  const kind: "create" | "unjoin" = body.kind === "unjoin" ? "unjoin" : "create";
+  const unjoinFidRaw = body.unjoinFid ?? body.moveFid;
   if (
     kind !== "unjoin" &&
     (!body.targetParentId || !/^\d+$/.test(body.targetParentId))
   ) {
     return NextResponse.json({ error: "targetParentId 必填" }, { status: 400 });
   }
-  if (kind === "unjoin" && (!body.moveFid || !/^\d+$/.test(body.moveFid))) {
-    return NextResponse.json({ error: "unjoin 必须给 moveFid" }, { status: 400 });
+  if (kind === "unjoin" && (!unjoinFidRaw || !/^\d+$/.test(unjoinFidRaw))) {
+    return NextResponse.json({ error: "unjoin 必须给 unjoinFid" }, { status: 400 });
   }
   const side = body.side === "right" ? "right" : "left";
 
@@ -77,9 +91,9 @@ export async function POST(request: NextRequest) {
         newName: body.newName,
         newPhone: body.newPhone,
         newNotes: body.newNotes,
-        moveFid:
-          body.moveFid && /^\d+$/.test(body.moveFid)
-            ? BigInt(body.moveFid)
+        unjoinFid:
+          unjoinFidRaw && /^\d+$/.test(unjoinFidRaw)
+            ? BigInt(unjoinFidRaw)
             : undefined,
       },
       getAuditContextFromRequest(request, session)

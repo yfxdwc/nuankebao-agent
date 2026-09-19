@@ -39,8 +39,9 @@ class PlacementRequest {
   final String initiatorFid;
   final String initiatorName;
   final String? newName;
-  final String? moveFid;
-  final String? moveName;
+  /// unjoin 单: 要解除的加盟商节点 id / 名字 (字段名沿用后端 JSON: unjoinFid/unjoinName)
+  final String? unjoinFid;
+  final String? unjoinName;
   final String targetParentFid;
   final String targetParentName;
   final String targetSide; // left | right
@@ -59,8 +60,8 @@ class PlacementRequest {
     required this.initiatorFid,
     required this.initiatorName,
     this.newName,
-    this.moveFid,
-    this.moveName,
+    this.unjoinFid,
+    this.unjoinName,
     required this.targetParentFid,
     required this.targetParentName,
     required this.targetSide,
@@ -81,8 +82,8 @@ class PlacementRequest {
       initiatorFid: json['initiatorFid']?.toString() ?? '',
       initiatorName: (json['initiatorName'] as String?) ?? '?',
       newName: json['newName'] as String?,
-      moveFid: json['moveFid']?.toString(),
-      moveName: json['moveName'] as String?,
+      unjoinFid: (json['unjoinFid'] ?? json['moveFid'])?.toString(),
+      unjoinName: (json['unjoinName'] ?? json['moveName']) as String?,
       targetParentFid: json['targetParentFid']?.toString() ?? '',
       targetParentName: (json['targetParentName'] as String?) ?? '?',
       targetSide: (json['targetSide'] as String?) ?? 'left',
@@ -125,15 +126,15 @@ class PlacementRequest {
   String get summary {
     switch (kind) {
       case 'unjoin':
-        return '${initiatorName} 想解除「${moveName ?? "加盟商"}」的加盟';
-      case 'move':
-        return '${initiatorName} 想把「${moveName ?? "节点"}」挪到 ${targetParentName} 的${sideText}';
+        return '${initiatorName} 想解除「${unjoinName ?? "加盟商"}」的加盟';
       default:
         return '${initiatorName} 想把「${newName ?? "新加盟商"}」加到 ${targetParentName} 的${sideText}';
     }
   }
 
   bool get isUnjoin => kind == 'unjoin';
+
+  /// 「移动到其他点位」已下线 (主人 2026-09-19 拍): 老存量单只读展示, 不再产生新单
 
   int get approvedCount =>
       confirms.where((c) => c.decision == 'approve').length;

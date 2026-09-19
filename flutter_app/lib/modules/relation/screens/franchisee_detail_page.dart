@@ -5,6 +5,7 @@
 // ============================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,7 +16,6 @@ import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../lib/franchisee_detail_provider.dart';
 import '../../../core/widgets/franchise_chip.dart';
-import '../../../core/widgets/placement_target_sheet.dart';
 
 class FranchiseeDetailPage extends ConsumerWidget {
   final String franchiseeId;
@@ -34,16 +34,6 @@ class FranchiseeDetailPage extends ConsumerWidget {
             icon: const Icon(Icons.edit, size: 28),
             tooltip: '编辑',
             onPressed: () => context.push('/franchisees/$franchiseeId/edit'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.swap_horiz, size: 28),
-            tooltip: '移动到其他点位',
-            onPressed: () => _moveToOtherSlot(context, ref),
-          ),
-          IconButton(
-            icon: const Icon(Icons.link_off, size: 28),
-            tooltip: '解除加盟',
-            onPressed: () => _confirmUnjoin(context, ref),
           ),
           // admin 强删 (主人 2026-09-18 拍): 死账兜底, 绕过三方确认
           if (ref.watch(meProfileProvider).valueOrNull?.user?.role == 'admin')
@@ -67,7 +57,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
         // 头部
-        _buildHeader(f),
+        _buildHeader(context, ref, f),
         const SizedBox(height: 16),
 
         // 上级信息
@@ -103,7 +93,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(Franchisee f) {
+  Widget _buildHeader(BuildContext context, WidgetRef ref, Franchisee f) {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -131,12 +121,36 @@ class FranchiseeDetailPage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 8),
-            const FranchiseChip(type: 'franchisee'),
+            // 解除加盟入口 = 长按「加盟」标签 (主人 2026-09-19 拍:
+            //   不再放右上角图标; 点位不能直接移动 —— 必须先解除, 再重新加盟落位)
+            Semantics(
+              button: true,
+              label: '加盟标签, 长按可解除加盟',
+              child: GestureDetector(
+                onLongPress: () {
+                  HapticFeedback.mediumImpact();
+                  _confirmUnjoin(context, ref);
+                },
+                child: Tooltip(
+                  message: '长按可解除加盟',
+                  child: const FranchiseChip(type: 'franchisee', fontSize: AppTheme.fontMd),
+                ),
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               _maskPhone(f.phone),
               style: const TextStyle(
                 fontSize: AppTheme.fontMd,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            // 长按是隐藏手势 —— 给中老年用户留一行小字提示 (不抢视觉)
+            const SizedBox(height: 4),
+            const Text(
+              '长按上方「加盟」标签可解除加盟',
+              style: TextStyle(
+                fontSize: AppTheme.fontXs,
                 color: AppTheme.textSecondary,
               ),
             ),
@@ -327,71 +341,6 @@ class FranchiseeDetailPage extends ConsumerWidget {
         SnackBar(content: Text('强删失败: $e')),
       );
     }
-  }
-
-  /// 移动节点到图谱里另一个点位 (主人 2026-09-18 拍: 后端 kind=move + 三方确认)
-  ///   - 三方: 设置者(我/发起) + 该加盟商本人 + 新位置上级; 原父节点不需要确认
-  ///   - 通过后: 整棵子树跟着搬 (path 前缀替换), 推荐人不变
-  Future<void> _moveToOtherSlot(BuildContext context, WidgetRef ref) async {
-    FranchiseeTreeNode tree;
-    try {
-      tree = await ref
-          .read(franchiseeServiceProvider)
-          .getMyTree(depth: 12, mode: 'placement');
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('读取我的图谱失败: $e')),
-      );
-      return;
-    }
-    if (!context.mounted) return;
-    final name = _findName(tree, franchiseeId) ?? '这位加盟商';
-    final target = await showModalBottomSheet<PlacementTarget>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => PlacementTargetSheet(
-        tree: tree,
-        title: '把「$name」挪到新的点位',
-        hint: '选新的上级点位 → 需要三方确认才生效 (你的下线整棵子树会跟着搬)',
-      ),
-    );
-    if (target == null || !context.mounted) return;
-    try {
-      final req = await ref
-          .read(franchiseeServiceProvider)
-          .createPlacementRequest(
-            targetParentId: target.parentId,
-            side: target.side,
-            moveFid: franchiseeId,
-          );
-      if (!context.mounted) return;
-      final done = req.status == 'executed';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            done ? '已移动 (管理员操作, 立即生效)' : '已提交移动申请, 等三方确认',
-            style: const TextStyle(fontSize: AppTheme.fontMd),
-          ),
-        ),
-      );
-      context.pop();
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('提交失败: $e')),
-      );
-    }
-  }
-
-  /// 在树里按 id 找名字 (移动弹层标题用)
-  String? _findName(FranchiseeTreeNode node, String id) {
-    if (node.id == id) return node.name;
-    for (final c in node.children) {
-      final hit = _findName(c, id);
-      if (hit != null) return hit;
-    }
-    return null;
   }
 
   /// 解除加盟 (主人 2026-09-18 拍 Q2/Q3):

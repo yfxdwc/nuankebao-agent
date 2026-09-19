@@ -141,7 +141,9 @@ export const franchisePlacementRequest = pgTable(
   {
     id: bigserial("id", { mode: "bigint" }).primaryKey(),
     // create 新设 / move 改位置 / unjoin 解除加盟 (主人 2026-09-18 拍)
-    kind: text("kind", { enum: ["create", "move", "unjoin"] }).notNull(),
+    // 主人 2026-09-19 拍: 「移动到其他点位」功能下线 (点位不能直接移动, 必须先解除再重新加盟)
+    //   → kind 不再产生 'move'; 列类型保留 text (DB 无 enum 约束, 存量无 move 行)
+    kind: text("kind", { enum: ["create", "unjoin"] }).notNull(),
     status: text("status", {
       enum: ["pending", "executed", "rejected", "expired", "cancelled"],
     })

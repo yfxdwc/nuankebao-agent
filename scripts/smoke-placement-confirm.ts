@@ -309,58 +309,26 @@ async function main() {
     phoneHash: hashForLookup(NEW_PHONE),
   };
 
-  // 8.5) 移动节点 (kind=move): 三方确认 → 整棵子树跟着搬 + 推荐人不变
-  const parentBRows = (await db.execute(sql`
-    SELECT f.id, f.name, f.placement_path, f.placement_depth
-    FROM franchisee f
-    WHERE f.deleted_at IS NULL
-      AND f.id <> ${parent.id}
-      AND f.placement_path <> ''
-      AND NOT EXISTS (
-        SELECT 1 FROM franchisee c
-        WHERE c.deleted_at IS NULL AND c.placement_path = f.placement_path || 'R.'
-      )
-    ORDER BY f.placement_depth, f.id LIMIT 1
-  `)) as unknown as { id: string; name: string; placement_path: string }[];
-  assert(parentBRows.length > 0, "找到第二个空位 (移动目标)");
-  const parentBId = BigInt(parentBRows[0].id);
-  const parentBPath = parentBRows[0].placement_path;
-  const parentBUser = await ensureUser("13900000089", "冒烟-移动目标上级", parentBId);
-  const actorParentB: PlacementActor = {
-    userId: parentBUser.id,
-    fid: parentBId,
-    phoneHash: hashForLookup("13900000089"),
-  };
-  const mv = await createPlacementRequest(
-    {
-      kind: "move",
-      initiatorFid: root.id,
-      initiatorUserId: BigInt(1),
-      targetParentFid: parentBId,
-      targetSide: "right",
-      moveFid: created.id,
-    },
-    ctx
-  );
-  assert(mv.kind === "move" && mv.status === "pending", "移动申请 pending (三方)");
-  await decidePlacementRequest(BigInt(mv.id), actorSelf, "approve", ctx);
-  const mvDone = await decidePlacementRequest(
-    BigInt(mv.id),
-    actorParentB,
-    "approve",
-    ctx
-  );
-  assert(mvDone.status === "executed", "移动三方齐 → executed");
-  const [movedRow] = await db
-    .select()
-    .from(franchisee)
-    .where(eq(franchisee.id, created.id));
-  assert(
-    movedRow.placementPath === parentBPath + "R.",
-    `移动后 path = ${parentBPath}R.`
-  );
-  assert(movedRow.placementSide === "right", "移动后方向 = 右");
-  assert(movedRow.referrerId === root.id, "推荐人不变 (Q5)");
+  // 8.5) 「移动到其他点位」已下线 (主人 2026-09-19 拍) → kind=move 必须被明确拒绝
+  let moveRejected = false;
+  try {
+    await createPlacementRequest(
+      {
+        // @ts-expect-error 类型层已不允许 'move'; 这里模拟老客户端硬发
+        kind: "move",
+        initiatorFid: root.id,
+        initiatorUserId: BigInt(1),
+        targetParentFid: parent.id,
+        targetSide: "right",
+        unjoinFid: created.id,
+      },
+      ctx
+    );
+  } catch (e) {
+    moveRejected = true;
+    console.log("  移动点位被拒 →", (e as Error).message);
+  }
+  assert(moveRejected, "「移动到其他点位」下线: kind=move 被拒 (点位变更走 解除→重新加盟)");
 
   // 9) 解除加盟 (Q2/Q3): 有下线的节点不允许
   let blockedUnjoin = false;
@@ -372,7 +340,7 @@ async function main() {
         initiatorUserId: BigInt(1),
         targetParentFid: root.id,
         targetSide: "left",
-        moveFid: parentWithChildren ?? created.id, // 根子树内一个「有下线」的节点
+        unjoinFid: parentWithChildren ?? created.id, // 根子树内一个「有下线」的节点
       },
       ctx
     );
@@ -390,17 +358,17 @@ async function main() {
       initiatorUserId: BigInt(1),
       targetParentFid: parent.id,
       targetSide: "left",
-      moveFid: created.id,
+      unjoinFid: created.id,
     },
     ctx
   );
   assert(un.kind === "unjoin" && un.status === "pending", "解除申请 pending");
   const un2 = await decidePlacementRequest(BigInt(un.id), actorSelf, "approve", ctx);
   assert(un2.status === "pending", "本人同意后仍待上级确认");
-  // 注意: 节点前面被移动过 → 它现在的「点位上级」是 parentB 的账号
+  // 点位上级 = 发起落位时的那个父节点 (移动已下线 → 节点没被挪过)
   const un3 = await decidePlacementRequest(
     BigInt(un.id),
-    actorParentB,
+    actorParent,
     "approve",
     ctx
   );
