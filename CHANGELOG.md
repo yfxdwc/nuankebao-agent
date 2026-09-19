@@ -2,6 +2,16 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (沙龙列表「创建沙龙」改纯图标 FAB, 2026-09-19 主人拍)
+
+**主人要**: 「创建沙龙改为纯图标」(附图: 带文字的 extended FAB 占地方)。
+
+- 沙龙列表 FAB: `FloatingActionButton.extended` (文字「创建沙龙」) → `BigFab`
+  (80pt 圆形 + 加号, 与客户页「添加客户」完全一致; tooltip 保留「创建沙龙」)
+- `BigFab` 组件从 `modules/customer/widgets/` 上提到 **`core/widgets/`**
+  (客户页 + 沙龙页共用; AGENTS §4.5 禁止跨模块直接 import); 客户页 import + 两处 README 同步
+- 验证 (预览页真实浏览器): FAB 语义节点 80×80 (纯图标), 无宽幅文字节点, 0 console error
+
 ### Fixed (预览可用性三连修: 多账号身份 / 创建入口路由 / APK 依赖, 2026-09-18 主人要预览)
 
 主人要「所有修改我都要预览」(http://192.168.1.99:3003/app-preview), 实测发现问题并修复:
