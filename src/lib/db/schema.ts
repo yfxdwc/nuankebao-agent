@@ -140,7 +140,8 @@ export const franchisePlacementRequest = pgTable(
   "franchise_placement_request",
   {
     id: bigserial("id", { mode: "bigint" }).primaryKey(),
-    kind: text("kind", { enum: ["create", "move"] }).notNull(),
+    // create 新设 / move 改位置 / unjoin 解除加盟 (主人 2026-09-18 拍)
+    kind: text("kind", { enum: ["create", "move", "unjoin"] }).notNull(),
     status: text("status", {
       enum: ["pending", "executed", "rejected", "expired", "cancelled"],
     })
@@ -157,7 +158,7 @@ export const franchisePlacementRequest = pgTable(
     newPhoneHash: text("new_phone_hash"),
     newNotesEncrypted: text("new_notes_encrypted"),
 
-    // kind=move: 被移动的节点
+    // kind=move / unjoin: 被移动 / 被解除的节点
     moveFid: bigint("move_fid", { mode: "bigint" }),
 
     // 目标点位 = 父节点 + 左/右

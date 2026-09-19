@@ -6,6 +6,8 @@
 > 实施: drizzle/0010_placement_confirm.sql + src/lib/db/queries/franchisee-placement.ts +
 >   /api/franchisees/placement-requests(/[id]/decide|cancel) + Flutter「加盟落位确认」页 + 图谱「加下线到此点位」
 > 冒烟: scripts/smoke-placement-confirm.ts (三方确认全流程) ✓; 历史回填: scripts/backfill-placement-confirms.ts (32 条已补) ✓
+> 追加 (ask_user 66ec03da): Q1 = 客户详情「发展为加盟商」快捷入口 / Q2 = 正式「解除加盟」(kind=unjoin, 三方确认)
+>   / Q3 = **有下线不允许解除** —— 均已实现 ✓ (冒烟: scripts/smoke-placement-confirm.ts)
 > 未做: 移动节点 UI (后端 kind=move 已通) + 图谱「待确认虚位」渲染 (API 已返回 pendingPlacements)
 > 关联: ADR-0006 (加盟体系) / ADR-0011 (层级不限 + 懒加载) / `docs/data-model.md`
 > 触发: 主人 2026-09-18 需求 (原文见 §0)

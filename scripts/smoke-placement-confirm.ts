@@ -141,6 +141,11 @@ async function main() {
     parent.id
   );
   const newUser = await ensureUser(NEW_PHONE, "冒烟-新加盟商", null);
+  // 清掉测试账号残留的旧绑定 (上次跑指向已删节点会干扰断言)
+  await db
+    .update(user)
+    .set({ franchiseeId: null })
+    .where(eq(user.id, newUser.id));
   assert(parentUser.franchiseeId === parent.id, "父节点账号已绑定 franchisee");
   assert(!!newUser, "新加盟商账号就绪 (未绑 franchisee)");
 
@@ -268,6 +273,86 @@ async function main() {
   const view = await getPlacementRequest(BigInt(req.id), actorParent);
   assert(view?.myRole === "target_parent", "父节点账号判定为 target_parent");
   assert(view?.myDecision === "approve", "并看到自己已 approve");
+
+  // 8) 落位后: 新加盟商账号应已绑定 franchisee_id (之后才能作为「本人」拍板)
+  //     (先确认账号当前绑定是空的 — 测试账号可能残留上次跑的数据)
+  const parentWithChildrenRows = (await db.execute(sql`
+    SELECT f.id FROM franchisee f
+    WHERE f.deleted_at IS NULL
+      AND f.placement_path <> ''
+      AND EXISTS (
+        SELECT 1 FROM franchisee c
+        WHERE c.deleted_at IS NULL AND c.placement_path LIKE f.placement_path || '%'
+          AND c.placement_path <> f.placement_path
+      )
+    ORDER BY f.placement_depth LIMIT 1
+  `)) as unknown as { id: string }[];
+  const parentWithChildren =
+    parentWithChildrenRows.length > 0
+      ? BigInt(parentWithChildrenRows[0].id)
+      : null;
+  const [boundUser] = await db
+    .select()
+    .from(user)
+    .where(eq(user.id, newUser.id))
+    .limit(1);
+  assert(
+    boundUser.franchiseeId === created.id,
+    "落位后新加盟商账号已绑定 franchisee_id"
+  );
+
+  // 9) 解除加盟 (Q2/Q3): 有下线的节点不允许
+  let blockedUnjoin = false;
+  try {
+    await createPlacementRequest(
+      {
+        kind: "unjoin",
+        initiatorFid: root.id,
+        initiatorUserId: BigInt(1),
+        targetParentFid: root.id,
+        targetSide: "left",
+        moveFid: parentWithChildren ?? created.id, // 根子树内一个「有下线」的节点
+      },
+      ctx
+    );
+  } catch (e) {
+    blockedUnjoin = true;
+    console.log("  有下线不允许解除 →", (e as Error).message);
+  }
+  assert(blockedUnjoin, "有下线的节点不允许解除 (Q3)");
+
+  // 10) 解除加盟 (叶子节点, 三方确认)
+  const un = await createPlacementRequest(
+    {
+      kind: "unjoin",
+      initiatorFid: root.id,
+      initiatorUserId: BigInt(1),
+      targetParentFid: parent.id,
+      targetSide: "left",
+      moveFid: created.id,
+    },
+    ctx
+  );
+  assert(un.kind === "unjoin" && un.status === "pending", "解除申请 pending");
+  const actorSelf: PlacementActor = {
+    userId: boundUser.id,
+    fid: created.id,
+    phoneHash: hashForLookup(NEW_PHONE),
+  };
+  const un2 = await decidePlacementRequest(BigInt(un.id), actorSelf, "approve", ctx);
+  assert(un2.status === "pending", "本人同意后仍待上级确认");
+  const un3 = await decidePlacementRequest(
+    BigInt(un.id),
+    actorParent,
+    "approve",
+    ctx
+  );
+  assert(un3.status === "executed", "三方齐 → 解除生效");
+  const [gone] = await db
+    .select()
+    .from(franchisee)
+    .where(eq(franchisee.id, created.id));
+  assert(gone.deletedAt != null, "加盟记录已软删 (点位释放)");
 
   console.log("\n✅ 冒烟通过 (测试数据保留: 冒烟-新加盟商, 需要清理跑 scripts/cleanup-smoke-placement.ts)");
 }

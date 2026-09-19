@@ -122,9 +122,18 @@ class PlacementRequest {
   String get sideText => sideLabel(targetSide);
 
   /// 一句话说明 (列表里显示)
-  String get summary => kind == 'create'
-      ? '${initiatorName} 想把「${newName ?? "新加盟商"}」加到 ${targetParentName} 的${sideText}'
-      : '${initiatorName} 想把「${moveName ?? "节点"}」挪到 ${targetParentName} 的${sideText}';
+  String get summary {
+    switch (kind) {
+      case 'unjoin':
+        return '${initiatorName} 想解除「${moveName ?? "加盟商"}」的加盟';
+      case 'move':
+        return '${initiatorName} 想把「${moveName ?? "节点"}」挪到 ${targetParentName} 的${sideText}';
+      default:
+        return '${initiatorName} 想把「${newName ?? "新加盟商"}」加到 ${targetParentName} 的${sideText}';
+    }
+  }
+
+  bool get isUnjoin => kind == 'unjoin';
 
   int get approvedCount =>
       confirms.where((c) => c.decision == 'approve').length;

@@ -10,7 +10,7 @@
 import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local" });
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   customer,
@@ -25,10 +25,24 @@ const PHONES = ["13900009999", "13900007777", "13900008888"];
 async function main() {
   for (const phone of PHONES) {
     const h = hashForLookup(phone);
+    // 测试加盟商 id (unjoin 单挂在 move_fid 上, 不挂 phone hash)
+    const fids = (
+      await db
+        .select({ id: franchisee.id })
+        .from(franchisee)
+        .where(eq(franchisee.phoneHash, h))
+    ).map((r) => r.id);
     const reqs = await db
       .select({ id: franchisePlacementRequest.id })
       .from(franchisePlacementRequest)
-      .where(eq(franchisePlacementRequest.newPhoneHash, h));
+      .where(
+        fids.length > 0
+          ? or(
+              eq(franchisePlacementRequest.newPhoneHash, h),
+              inArray(franchisePlacementRequest.moveFid, fids)
+            )!
+          : eq(franchisePlacementRequest.newPhoneHash, h)
+      );
     for (const r of reqs) {
       await db
         .delete(franchisePlacementConfirm)

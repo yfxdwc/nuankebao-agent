@@ -1,7 +1,8 @@
 // /api/franchisees/placement-requests
 // 加盟落位「三方确认」工作流 (主人 2026-09-18 拍; 见 docs/placement-confirmation-design.md)
 //
-// POST 发起: { kind: 'create'|'move', targetParentId, side, newName?, newPhone?, newNotes?, moveFid? }
+// POST 发起: { kind: 'create'|'move'|'unjoin', targetParentId, side, newName?, newPhone?, newNotes?, moveFid? }
+//   - unjoin (解除加盟): 传 kind='unjoin' + moveFid=要解除的节点; targetParentId/side 可省 (服务端按节点推)
 //   - 发起人自动记 1 票 (设置者本人)
 //   - 点位 pending 期间预占 (DB 部分唯一索引兜底)
 // GET  列表: ?scope=mine|to_confirm&status=pending|executed|...
@@ -47,9 +48,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const kind = body.kind === "move" ? "move" : "create";
-  if (!body.targetParentId || !/^\d+$/.test(body.targetParentId)) {
+  const kind: "create" | "move" | "unjoin" =
+    body.kind === "move" ? "move" : body.kind === "unjoin" ? "unjoin" : "create";
+  if (
+    kind !== "unjoin" &&
+    (!body.targetParentId || !/^\d+$/.test(body.targetParentId))
+  ) {
     return NextResponse.json({ error: "targetParentId 必填" }, { status: 400 });
+  }
+  if (kind === "unjoin" && (!body.moveFid || !/^\d+$/.test(body.moveFid))) {
+    return NextResponse.json({ error: "unjoin 必须给 moveFid" }, { status: 400 });
   }
   const side = body.side === "right" ? "right" : "left";
 
@@ -59,7 +67,9 @@ export async function POST(request: NextRequest) {
         kind,
         initiatorFid: actor.fid,
         initiatorUserId: actor.userId,
-        targetParentFid: BigInt(body.targetParentId),
+        targetParentFid: body.targetParentId
+          ? BigInt(body.targetParentId)
+          : BigInt(0), // unjoin: 服务端会用节点自己的位置覆盖
         targetSide: side,
         newName: body.newName,
         newPhone: body.newPhone,

@@ -13,9 +13,6 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../lib/relation_system_provider.dart';
-import '../lib/franchise_relation.dart';
-import '../lib/relation_node.dart';
 import '../lib/franchisee_detail_provider.dart';
 import '../../../core/widgets/franchise_chip.dart';
 
@@ -38,9 +35,9 @@ class FranchiseeDetailPage extends ConsumerWidget {
             onPressed: () => context.push('/franchisees/$franchiseeId/edit'),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, size: 28),
-            tooltip: '软删',
-            onPressed: () => _confirmDelete(context, ref),
+            icon: const Icon(Icons.link_off, size: 28),
+            tooltip: '解除加盟',
+            onPressed: () => _confirmUnjoin(context, ref),
           ),
         ],
       ),
@@ -275,12 +272,19 @@ class FranchiseeDetailPage extends ConsumerWidget {
     return phone;
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+  /// 解除加盟 (主人 2026-09-18 拍 Q2/Q3):
+  ///   正式流程 = 三方确认 (设置者/发起人 + 该加盟商本人 + 其上级); 有下线不允许解除
+  ///   —— 不再直接软删 (旧版 removeRelation 一键删, 没有确认也没有审计语义)
+  Future<void> _confirmUnjoin(BuildContext context, WidgetRef ref) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('确定删除?'),
-        content: const Text('加盟商将被软删除, 不能恢复'),
+        title: const Text('解除加盟?'),
+        content: const Text(
+          '解除需要三方确认: 你 (发起) + 该加盟商本人 + 他的上级。\n'
+          '三方都同意后才真正解除 (点位释放, 该客户退回 种子/普通)。\n'
+          '有下线的加盟商不能解除 (要先处理完下线)。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -289,26 +293,32 @@ class FranchiseeDetailPage extends ConsumerWidget {
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            child: const Text('删除', style: TextStyle(fontSize: AppTheme.fontMd)),
+            child: const Text('提交解除申请', style: TextStyle(fontSize: AppTheme.fontMd)),
           ),
         ],
       ),
     );
-    if (ok == true) {
-      try {
-        await ref.read(relationSystemProvider).removeRelation(
-          fromId: franchiseeId,
-          toId: franchiseeId,
-        );
-        ref.invalidate(myFranchiseeTreeProvider);
-        if (!context.mounted) return;
-        context.pop();
-      } catch (e) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('删除失败: $e')),
-        );
-      }
+    if (ok != true) return;
+    try {
+      await ref
+          .read(franchiseeServiceProvider)
+          .createPlacementRequest(
+            targetParentId: franchiseeId,
+            side: 'left',
+            unjoinFid: franchiseeId,
+          );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('已提交解除申请, 等三方确认', style: TextStyle(fontSize: AppTheme.fontMd)),
+        ),
+      );
+      context.pop();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('提交失败: $e')),
+      );
     }
   }
 }

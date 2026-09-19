@@ -414,15 +414,20 @@ class FranchiseeService {
     String? newPhone,
     String? newNotes,
     String? moveFid,
+    String? unjoinFid,
   }) async {
+    final kind = unjoinFid != null
+        ? 'unjoin'
+        : (moveFid == null ? 'create' : 'move');
     final res = await _dio.post('/franchisees/placement-requests', data: {
-      'kind': moveFid == null ? 'create' : 'move',
+      'kind': kind,
       'targetParentId': targetParentId,
       'side': side,
       if (newName != null) 'newName': newName,
       if (newPhone != null) 'newPhone': newPhone,
       if (newNotes != null) 'newNotes': newNotes,
       if (moveFid != null) 'moveFid': moveFid,
+      if (unjoinFid != null) 'moveFid': unjoinFid,
     });
     return PlacementRequest.fromJson(res.data as Map<String, dynamic>);
   }
