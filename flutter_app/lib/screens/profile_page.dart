@@ -127,7 +127,7 @@ class _ProfileBody extends ConsumerWidget {
         profileSectionGap,
         _AccountCard(profile: profile),
         profileSectionGap,
-        const _AboutCard(),
+        _AboutCard(profile: profile),
         const SizedBox(height: 20),
         const _LogoutButton(),
       ],
@@ -743,7 +743,8 @@ class _AccountCard extends ConsumerWidget {
 // ============================================
 
 class _AboutCard extends ConsumerWidget {
-  const _AboutCard();
+  final MeProfile profile;
+  const _AboutCard({required this.profile});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -771,6 +772,16 @@ class _AboutCard extends ConsumerWidget {
           color: AppTheme.accent,
           onTap: () => showDiagnosticsSheet(context, ref),
         ),
+        // 管理员工具: 只有 admin 角色能看见 (内测人工收款核销 + 设置收款码)
+        // 客户端只是隐藏入口; 服务端每次写操作重新查 role
+        if (profile.user?.role == 'admin')
+          ProfileTile(
+            icon: Icons.admin_panel_settings_outlined,
+            title: '管理员工具',
+            subtitle: '收款码设置 · 付款申请核销',
+            color: AppTheme.danger,
+            onTap: () => context.push('/profile/admin'),
+          ),
         // 服务地址: 开发/排障可见 (生产用户看到 IP 只会困惑)
         if (kDebugMode)
           ProfileTile(

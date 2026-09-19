@@ -87,6 +87,13 @@ final manualPayInfoProvider = FutureProvider.autoDispose<ManualPayInfo>(
   (ref) async => ref.watch(billingServiceProvider).manualPayInfo(),
 );
 
+/// 管理员: 付款申请列表 (按状态; 内测人工核销用)
+final adminPaymentsProvider =
+    FutureProvider.family.autoDispose<List<AdminPayRequest>, String>(
+  (ref, status) async =>
+      ref.watch(billingServiceProvider).adminManualPayments(status: status),
+);
+
 /// 网络自检 (GET /api/health, 不需要登录): autoDispose —— 每次打开"网络自检"都要拿当前状态
 final healthCheckProvider = FutureProvider.autoDispose<HealthInfo>(
   (ref) async => ref.watch(systemServiceProvider).health(),

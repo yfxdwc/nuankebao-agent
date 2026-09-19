@@ -13,9 +13,11 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  billingConfig,
   customer,
   entitlementGrant,
   franchisee,
+  manualPaymentRequest,
   membership,
   referralCode,
   referralReward,
@@ -30,6 +32,13 @@ import {
   rewardReferrerOnFranchisee,
 } from "@/lib/billing/entitlements";
 import { createFranchisee } from "@/lib/db/queries/franchisee";
+import {
+  decideManualPayment,
+  getManualPayInfo,
+  listManualPaymentsForAdmin,
+  setManualPayConfig,
+  submitManualPayment,
+} from "@/lib/billing/manual-pay";
 
 const TAG = `billing-test-${Date.now()}`;
 const phoneA = "13900002001"; // 推荐人
@@ -76,6 +85,12 @@ afterAll(async () => {
         )
       );
     await db.delete(referralCode).where(inArray(referralCode.userId, uids));
+    await db
+      .delete(manualPaymentRequest)
+      .where(inArray(manualPaymentRequest.userId, uids));
+    await db
+      .delete(billingConfig)
+      .where(inArray(billingConfig.key, ["manual_wechat_qr_url", "manual_payee_name"]));
     // 加盟商/客户 (本测试造的, 按手机号 hash 删)
     const hashes = [phoneA, phoneB, phoneC].map((p) => hashForLookup(p));
     await db.delete(franchisee).where(inArray(franchisee.phoneHash, hashes));
@@ -184,5 +199,88 @@ describe("会员/推荐 S0 闭环", () => {
     expect(after.isMember).toBe(true);
     expect(after.planCode).toBe("member");
     expect(after.features.length).toBe(9);
+  });
+});
+
+describe("人工收款 (内测: 个人微信收款码 + 管理员核销)", () => {
+  it("收款信息有默认值, 且商品是 ¥69/月 (30 天)", async () => {
+    const info = await getManualPayInfo();
+    expect(info.enabled).toBe(true);
+    expect(info.qrUrl).toContain("/payment/"); // 还没上传 → 静态兜底
+    expect(info.isFallbackQr).toBe(true);
+    const monthly = info.products.find((p) => p.planCode === "monthly")!;
+    expect(monthly.amountCents).toBe(6900);
+    expect(monthly.days).toBe(30);
+  });
+
+  it("管理员设置收款码 → 用户看到的就是上传的那张 (不再是兜底)", async () => {
+    await setManualPayConfig({
+      actorUserId: userA,
+      qrUrl: "/uploads/fake-qr.png",
+      payeeName: "测试收款人",
+    });
+    const info = await getManualPayInfo();
+    expect(info.qrUrl).toBe("/uploads/fake-qr.png");
+    expect(info.isFallbackQr).toBe(false);
+    expect(info.payeeName).toBe("测试收款人");
+  });
+
+  it("用户提交「我已支付」→ 进待审列表 → 管理员通过 → 会员立刻生效", async () => {
+    const req = await submitManualPayment({
+      userId: userC,
+      planCode: "monthly",
+      payerNote: "微信昵称: 小C",
+    });
+    expect(req.status).toBe("pending");
+    expect(req.amountCents).toBe(6900);
+
+    const pending = await listManualPaymentsForAdmin({ status: "pending" });
+    expect(pending.some((r) => r.id === req.id)).toBe(true);
+
+    const before = await getMembershipView(userC);
+    const startUntil = new Date(before.memberUntil ?? Date.now());
+
+    const decided = await decideManualPayment({
+      requestId: req.id,
+      actorUserId: userA,
+      decision: "approve",
+    });
+    expect(decided.status).toBe("approved");
+    expect(decided.grantedDays).toBe(30);
+
+    const after = await getMembershipView(userC);
+    expect(after.isMember).toBe(true);
+    // 30 天 (允许几秒误差)
+    const diffDays = Math.round(
+      (new Date(after.memberUntil!).getTime() - startUntil.getTime()) / 86400000
+    );
+    expect(diffDays).toBe(30);
+  });
+
+  it("重复提交被拒 (已经有 pending) / 重复核销被拒 (已经处理过)", async () => {
+    // 上面那条已经 approved → 再提一条新的 pending
+    const req2 = await submitManualPayment({ userId: userB, planCode: "monthly" });
+    await expect(
+      submitManualPayment({ userId: userB, planCode: "monthly" })
+    ).rejects.toThrow();
+
+    await decideManualPayment({
+      requestId: req2.id,
+      actorUserId: userA,
+      decision: "reject",
+      rejectReason: "没查到这笔到账",
+    });
+    await expect(
+      decideManualPayment({
+        requestId: req2.id,
+        actorUserId: userA,
+        decision: "approve",
+      })
+    ).rejects.toThrow();
+  });
+
+  it("驳回不给天数 (被推荐人之外的人也不会白拿会员)", async () => {
+    const view = await getMembershipView(userB);
+    expect(view.isMember).toBe(false); // userB 只被驳回, 没有会员
   });
 });

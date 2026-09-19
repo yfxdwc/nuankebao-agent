@@ -19,6 +19,7 @@ import '../../modules/relation/screens/add_franchisee_page.dart';
 import '../../modules/relation/screens/edit_franchisee_page.dart';
 import '../../modules/relation/screens/placement_requests_page.dart';
 import '../../screens/about_page.dart';
+import '../../screens/admin_tools_page.dart';
 import '../../screens/profile_page.dart';
 import '../../modules/wellness/screens/wellness_record_form_page.dart';
 import '../../modules/wellness/screens/wellness_record_detail_page.dart';
@@ -166,6 +167,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'about',
                 name: 'profile-about',
                 builder: (context, state) => const AboutPage(),
+              ),
+              // 管理员工具 (内测人工收款核销; 入口只对 admin 显示, 服务端也会 403)
+              GoRoute(
+                path: 'admin',
+                name: 'profile-admin',
+                builder: (context, state) => const AdminToolsPage(),
               ),
             ],
           ),
