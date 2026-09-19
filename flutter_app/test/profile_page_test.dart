@@ -64,19 +64,33 @@ MeProfile _fullProfile() => MeProfile.fromJson({
       'dev': {'authSkipped': false, 'sessionUserId': '1'},
     });
 
-/// 复用 _container 的 override 列表 (给需要额外 override 的用例)
-List<Override> _overrides(ProviderContainer c) => const [];
-
-Future<ProviderContainer> _container(MeProfile profile) async {
+Future<ProviderContainer> _container(
+  MeProfile profile, {
+  List<Override> extraOverrides = const [],
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   final container = ProviderContainer(overrides: [
     sharedPreferencesProvider.overrideWithValue(prefs),
     meProfileProvider.overrideWith((ref) async => profile),
+    ...extraOverrides,
   ]);
   addTearDown(container.dispose);
   return container;
 }
+
+/// 假的收款信息 (真接口在 curl 冒烟里验过, 这里只测 UI)
+const _fakePayInfo = ManualPayInfo(
+  enabled: true,
+  qrUrl: '/payment/wechat-qr.png',
+  isFallbackQr: false,
+  payeeName: '管理员小张',
+  noteHint: '写手机号后 4 位',
+  products: [
+    ManualPayProduct(planCode: 'monthly', label: '1 个月', amountCents: 6900, days: 30),
+    ManualPayProduct(planCode: 'quarterly', label: '3 个月', amountCents: 18900, days: 90),
+  ],
+);
 
 Future<void> _pumpProfile(
   WidgetTester tester,
@@ -318,39 +332,22 @@ void main() {
     expect(find.text('复制推荐码'), findsNothing); // tooltip 不渲染成文字
   });
 
-  testWidgets('开通会员弹层 (内测人工通道): 收款码 + 金额 + 我已支付', (tester) async {
-    // 假收款信息: 省掉网络 (真接口在 curl 冒烟里验过)
-    final container = await _container(_fullProfile());
-    container.read(manualPayInfoProvider); // 先读一次, 后面 override 无效 → 用 ProviderScope override 更干净
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: ProviderContainer(overrides: [
-          ..._overrides(container),
-          manualPayInfoProvider.overrideWith((ref) async => const ManualPayInfo(
-                enabled: true,
-                qrUrl: '/payment/wechat-qr.png',
-                isFallbackQr: false,
-                payeeName: '管理员小张',
-                noteHint: '写手机号后 4 位',
-                products: [
-                  ManualPayProduct(
-                      planCode: 'monthly', label: '1 个月', amountCents: 6900, days: 30),
-                  ManualPayProduct(
-                      planCode: 'quarterly', label: '3 个月', amountCents: 18900, days: 90),
-                ],
-              )),
-        ]),
-        child: const MaterialApp(home: ProfilePage()),
-      ),
+  testWidgets('开通会员弹层 (内测人工通道): 金额 + 收款人 + 我已支付', (tester) async {
+    final container = await _container(
+      _fullProfile(),
+      extraOverrides: [
+        manualPayInfoProvider.overrideWith((ref) async => _fakePayInfo),
+      ],
     );
-    await tester.pumpAndSettle();
+    await _pumpProfile(tester, container);
 
     await tester.tap(find.text('开通会员'));
     await tester.pumpAndSettle();
 
-    expect(find.text('¥69'), findsWidgets); // 金额
+    expect(find.textContaining('¥69'), findsWidgets); // 1 个月金额
+    expect(find.textContaining('¥189'), findsWidgets); // 3 个月金额
     expect(find.textContaining('管理员小张'), findsOneWidget); // 收款人
-    expect(find.text('我已支付'), findsOneWidget);
+    expect(find.text('我已支付'), findsOneWidget); // 提交按钮
     expect(find.textContaining('写手机号后 4 位'), findsWidgets); // 备注提示
     expect(find.textContaining('暂不支持自动续费'), findsOneWidget);
   });

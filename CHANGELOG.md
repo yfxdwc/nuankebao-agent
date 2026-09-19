@@ -2,6 +2,42 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (S0.5 人工收款闭环: 个人微信收款码 + App 内核销, 2026-09-19 主人拍)
+
+**主人要**: 「当前内测阶段，暂时用我个人的微信收款码实现。继续完成全部剩余步骤」
+
+**闭环 (全程手机内完成, 管理员不用开电脑)**
+
+```
+用户  我的 → 会员 → 开通会员 → 看收款码 (¥69/月 · ¥189/3月) → 微信扫码付款
+      → 回 App 填备注 (手机号后4位) ± 传付款截图 → 点「我已支付」(pending)
+管理员 我的 → 管理员工具 → 付款申请(待审) → 核对到账 → 「通过并开通」→ 对方 +30 天
+用户  我的 → 会员 → 会员中 · 有效期至 X 月 X 日
+```
+
+| 层 | 内容 |
+|---|---|
+| 表 (migration `0013_manual_payment`) | `billing_config` (收款码 URL / 收款人 / 备注提示 / 开关) + `manual_payment_request` (金额/天数/备注/截图/状态/核销人/实际天数), 两张都挂审计触发器 |
+| 用户接口 | `GET /api/billing/pay-info` (收款信息 + 我的申请状态)、`POST/GET /api/billing/manual-payments` |
+| 管理员接口 | `GET /api/billing/admin/manual-payments?status=`、`POST .../[id]` (approve/reject)、`POST /api/billing/admin/pay-info` (换收款码) — 全部服务端查 `role=admin` |
+| 收款码来源 | `billing_config.manual_wechat_qr_url` (App 内上传→`/uploads/`) > 静态兜底 `public/payment/wechat-qr.png` |
+| Flutter | `screens/profile_sheets.dart` 新增「开通会员」弹层 (收款码/金额/备注/截图/我已支付/申请状态) + `screens/admin_tools_page.dart` (管理员工具: 上传收款码 + 待审列表 + 通过/驳回 + 截图查看) + 路由 `/profile/admin` + 「我的」页 admin 入口 (按 role 显示) |
+| 免费上传 | `POST /api/photos` 新增免费 purpose: `payment_proof` (付钱的人还不是会员, 拦了就没法核对) / `payment_qr` (管理员传收款码) |
+
+**顺手修一个真 bug (集成测试当场抓出)**
+- `audit_trigger()` 用 `COALESCE(NEW.id, OLD.id)::BIGINT` —— **没有 `id` 列的表 (键值型 `billing_config`) 写入直接报
+  `record "new" has no field "id"`, 该表所有写操作全挂**。改为从 `to_jsonb()` 取值 + 缺 id 退化成 0
+  (`drizzle/audit_function.sql`) → 以后任何 kv 表都能安全挂审计
+
+**验证**
+- `tests/billing-integration.test.ts`: **12 pass** (新增 5 例: 默认收款信息/管理员换收款码/提交→通过→会员生效 30 天/重复提交与重复核销被拒/驳回不加天数)
+- `tests/billing-rules.test.ts`: 23 pass; `flutter test profile_page+user_avatar+me_model`: **37 pass** (新增开通会员弹层一例)
+- `npx tsc --noEmit` / `flutter analyze` (改动文件) / `pnpm db:compat` 全 0 error
+- **curl 全链路**: pay-info → 管理员设置收款码 → 提交申请 → 待审列表 → approve → `/api/me` 显示 `isMember=true, until=+30天, features=9`
+- 冒烟后已把 dev 账号复位为免费、清掉测试申请与测试收款码配置 (管理员的真实收款码由主人在 App 内上传)
+
+**待办 (S1 及以后)**: 自动续费 (需周期扣款资质) / 电子发票 / 在线支付 (微信·支付宝 APP 支付 + 回调对账) / AI 用量台账
+
 ### Added (会员付费 S0 落地: 会员骨架 + 9 项判权 + 推荐码 + 人工开通, 2026-09-19)
 
 **主人拍板后开工** (ask_user `0ecdc2ab`: D21 会员档 / D22 月30累计360 / D23 被推荐人成为加盟者后发奖 / D20 开工 S0)
