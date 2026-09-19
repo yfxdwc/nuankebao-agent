@@ -5,6 +5,7 @@
 // ============================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -610,6 +611,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                                   ),
                                   ..._buildHitareas(
                                       tree, tree, positions, layout.columns),
+                                  // 待确认虚位也能点 (主人 2026-09-19: 点进「待我确认」页)
+                                  ..._buildGhostHitareas(tree, positions,
+                                      layout.columns, layout.aLineIds,
+                                      layout.bLineIds, layout.columnPitch),
                                 ],
                               ),
                             ),
@@ -1150,6 +1155,62 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     );
     for (final child in node.children) {
       widgets.addAll(_buildHitareas(root, child, positions, columns));
+    }
+    return widgets;
+  }
+
+  /// 待确认虚位的点击区 (主人 2026-09-19 拍: 点虚位 → 「待我确认」页)
+  ///   位置公式与 painter 共用 FranchiseTreePainter.pendingGhostCenter
+  ///   放在节点点击区**之后** → 真节点优先, 虚位只占空位
+  List<Widget> _buildGhostHitareas(
+    FranchiseeTreeNode root,
+    Map<String, Offset> positions,
+    Map<String, int> columns,
+    Set<String> aLineIds,
+    Set<String> bLineIds,
+    double columnPitch,
+  ) {
+    final widgets = <Widget>[];
+    for (final p in root.pendingPlacements) {
+      final parentPos = positions[p.targetParentFid];
+      if (parentPos == null) continue;
+      final isA = aLineIds.contains(p.targetParentFid);
+      final isB = bLineIds.contains(p.targetParentFid);
+      final parentCol = columns[p.targetParentFid] ?? 0;
+      final center = FranchiseTreePainter.pendingGhostCenter(
+        parentPos: parentPos,
+        parentIsA: isA,
+        parentIsB: isB,
+        parentCol: parentCol,
+        columnPitch: columnPitch,
+        targetSide: p.targetSide,
+      );
+      final continuing = isA ? 'left' : 'right';
+      final radius = TreeLayout.radiusForColumn(
+          p.targetSide == continuing ? parentCol : parentCol + 1);
+      // 圆 + 下方「⏳ 名字」都算可点 (中老年手指粗)
+      final w = (radius * 2).clamp(88.0, 200.0);
+      final h = radius * 2 + 52;
+      widgets.add(
+        Positioned(
+          left: center.dx - w / 2,
+          top: center.dy - radius,
+          width: w,
+          height: h,
+          child: Semantics(
+            button: true,
+            label: '待确认虚位 ${p.label}, 点击查看待我确认',
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                context.push('/franchisees/placement-requests');
+              },
+              behavior: HitTestBehavior.opaque,
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      );
     }
     return widgets;
   }

@@ -548,6 +548,22 @@ class FranchiseTreePainter extends CustomPainter {
     _drawPendingGhosts(canvas, size);
   }
 
+  /// 待确认虚位中心点 (与点击区共用同一份公式 —— 主人 2026-09-19: 虚位可点)
+  static Offset pendingGhostCenter({
+    required Offset parentPos,
+    required bool parentIsA,
+    required bool parentIsB,
+    required int parentCol,
+    required double columnPitch,
+    required String targetSide,
+  }) {
+    final sign = parentIsA ? -1.0 : (parentIsB ? 1.0 : -1.0);
+    final continuing = parentIsA ? 'left' : 'right';
+    final sameSide = targetSide == continuing;
+    final x = sameSide ? parentPos.dx : parentPos.dx + sign * columnPitch;
+    return Offset(x, parentPos.dy + TreeLayout.levelHeight);
+  }
+
   /// 待确认虚位: 父节点正下方 (同侧续线) 或外侧一列 (异侧) 画虚线圆
   void _drawPendingGhosts(Canvas canvas, Size size) {
     if (pendingPlacements.isEmpty) return;
@@ -556,17 +572,19 @@ class FranchiseTreePainter extends CustomPainter {
       if (parentPos == null) continue;
       final isA = aLineIds.contains(p.targetParentFid);
       final isB = bLineIds.contains(p.targetParentFid);
-      final sign = isA ? -1.0 : (isB ? 1.0 : -1.0);
       final parentCol = columns[p.targetParentFid] ?? 0;
+      final center = pendingGhostCenter(
+        parentPos: parentPos,
+        parentIsA: isA,
+        parentIsB: isB,
+        parentCol: parentCol,
+        columnPitch: columnPitch,
+        targetSide: p.targetSide,
+      );
       // 该腿的「续线侧」: A线 = left / B线 = right; 同侧 → 正下方同列, 异侧 → 外侧一列
       final continuing = isA ? 'left' : 'right';
-      final sameSide = p.targetSide == continuing;
-      final col = sameSide ? parentCol : parentCol + 1;
-      final x = sameSide
-          ? parentPos.dx
-          : parentPos.dx + sign * columnPitch;
-      final center = Offset(x, parentPos.dy + TreeLayout.levelHeight);
-      final radius = TreeLayout.radiusForColumn(col);
+      final radius =
+          TreeLayout.radiusForColumn(p.targetSide == continuing ? parentCol : parentCol + 1);
       final ghostColor = AppTheme.accent.withOpacity(0.85);
       // 全景缩小视图里虚位也要看得见 → 线宽/字号/虚线间隔按 1/scale 补偿 (上限 4x)
       final boost = (1.0 / scale).clamp(1.0, 4.0);
