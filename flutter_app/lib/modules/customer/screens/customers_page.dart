@@ -1324,6 +1324,10 @@ class CustomerDetailPage extends ConsumerWidget {
         _buildHeader(context, ref, customer),
         const SizedBox(height: 12),
 
+        // 1.5) 客户类型切换 (主人 2026-09-18: 「没找到修改客户类型的入口」→ 详情页直接给开关)
+        _buildTypeCard(context, ref, customer),
+        const SizedBox(height: 12),
+
         // 2) 被动养生记录 (含汇总: 共 N 次 / 最近到店)
         _buildWellnessSection(context, asyncRecords),
         const SizedBox(height: 12),
@@ -1879,6 +1883,67 @@ class CustomerDetailPage extends ConsumerWidget {
               const SizedBox(height: 8),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 客户类型卡 (普通 ↔ 种子 一键切换; 加盟类型由关系决定不可切)
+  Widget _buildTypeCard(BuildContext context, WidgetRef ref, Customer c) {
+    final isFranchisee = c.customerType == 'franchisee';
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.badge_outlined,
+                    size: 20, color: AppTheme.primaryDark),
+                const SizedBox(width: 6),
+                const Text(
+                  '客户类型',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontMd,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                FranchiseChip(type: c.customerType),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (isFranchisee)
+              const Text(
+                '加盟客户：类型由加盟关系决定，不能在这里切换；\n要退出加盟请到加盟商详情页走「解除加盟」(需三方确认)',
+                style: TextStyle(
+                  fontSize: AppTheme.fontXs,
+                  color: AppTheme.textSecondary,
+                ),
+              )
+            else ...[
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'normal', label: Text('普通')),
+                  ButtonSegment(value: 'seed', label: Text('🌱 种子')),
+                ],
+                selected: {c.isSeed ? 'seed' : 'normal'},
+                showSelectedIcon: false,
+                onSelectionChanged: (v) =>
+                    _setCustomerSeed(context, ref, c, v.first == 'seed'),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '种子 = 还没体验过 / 刚加好友的潜在客户；选「种子」后可用列表顶部「🌱 种子」筛出来',
+                style: TextStyle(
+                  fontSize: AppTheme.fontXs,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -2975,6 +3040,36 @@ class _PlacementTargetSheetState extends State<_PlacementTargetSheet> {
 }
 
   /// 「发展客户为加盟商」: 选上级点位 → 发起三方确认的落位申请 (主人 2026-09-18 拍 Q1)
+/// 客户类型切换: 普通 ↔ 种子 (主人 2026-09-18: 详情页直接切, 不用进编辑表单)
+Future<void> _setCustomerSeed(
+  BuildContext context,
+  WidgetRef ref,
+  Customer c,
+  bool seed,
+) async {
+  if (c.isSeed == seed) return;
+  try {
+    await ref.read(customerServiceProvider).update(c.id, {'isSeed': seed});
+    ref.invalidate(customerDetailProvider(c.id));
+    ref.invalidate(customersProvider);
+    ref.invalidate(customerTypeCountsProvider);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          seed ? '已标记为 🌱 种子客户' : '已改为普通客户',
+          style: const TextStyle(fontSize: AppTheme.fontMd),
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('修改失败: $e')),
+    );
+  }
+}
+
 Future<void> _promoteCustomerToFranchisee(
 BuildContext context,
 WidgetRef ref,
