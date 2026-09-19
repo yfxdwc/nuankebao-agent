@@ -256,6 +256,12 @@ export const user = pgTable(
     name: text("name").notNull(),
     phoneEncrypted: text("phone_encrypted").notNull(),
     phoneHash: text("phone_hash").notNull(),
+    // 账号密码登录 (2026-09-19 P2; 邀请制 — 不开放自助注册)
+    //   username: 登录名 (如 admin); sales 默认用手机号登录 (phoneHash 查询)
+    //   passwordHash: scrypt$cost$salt$hash (src/lib/auth/password.ts)
+    // 两列可空 = 兼容 0011 之前的历史行 (CHARTER §3.5 向后兼容)
+    username: text("username"),
+    passwordHash: text("password_hash"),
     role: userRoleEnum("role").notNull().default("sales"),
     isActive: boolean("is_active").notNull().default(true),
     // F1: 1:1 绑 franchisee (nullable, 应用层强制非空)
@@ -278,6 +284,7 @@ export const user = pgTable(
   },
   (table) => ({
     phoneHashUnique: uniqueIndex("idx_user_phone_hash").on(table.phoneHash),
+    usernameUnique: uniqueIndex("idx_user_username").on(table.username),
     franchiseeIdx: index("idx_user_franchisee").on(table.franchiseeId),
     defaultStoreIdx: index("idx_user_default_store").on(table.defaultStoreId),
   })
