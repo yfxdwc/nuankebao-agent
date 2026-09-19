@@ -1,0 +1,19 @@
+[Unit]
+Description=暖客宝 生产备份 (prod PG + uploads, GPG 加密, 独立于 dev)
+Documentation=file:///__PROJECT_DIR__/docs/deploy/production-plan.md
+
+[Service]
+Type=oneshot
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=%h/.config/nuankebao/paths.conf
+Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
+Environment="NUANKEBAO_PROFILE=prod"
+# 2026-09-19: 用 run-with-log.sh 包装 (避免 StandardOutput=append 的目录启动依赖;
+# 见 deploy/run-with-log.sh 注释)
+ExecStart=__PROJECT_DIR__/deploy/run-with-log.sh __DATABACKUPS_DIR__/prod/logs/backup.log __PROJECT_DIR__/deploy/backup.sh
+SuccessExitStatus=0
+
+# 安全加固 (与 dev backup.service 一致)
+NoNewPrivileges=yes
+PrivateTmp=yes
+ReadWritePaths=__DATABACKUPS_DIR__ __PROJECT_DIR__/data /tmp

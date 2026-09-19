@@ -7,6 +7,36 @@
 > 目标: 把 暖客宝 部署到主人自有物理服务器 (Debian 12 / Ubuntu 22.04)
 > 适用: 主人 1-1 部署, 不假设有运维经验
 
+## tc 本机 Docker 隔离生产栈 (2026-09-19, 当前生产)
+
+> 完整方案: [`docs/deploy/production-plan.md`](deploy/production-plan.md)
+>
+> dev = `next dev` :3003 (保持不动)；prod = Docker 栈 :3004 (只绑 127.0.0.1，公网走 cloudflared)。
+> 两边容器/数据卷/端口/备份目录全部独立。
+
+**常用命令**:
+
+| 操作 | 命令 |
+|---|---|
+| 部署/更新 prod | `bash deploy/prod-deploy.sh` |
+| 看容器状态 | `docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file .env.prod ps` |
+| 看日志 | `docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file .env.prod logs -f web` |
+| 手动重启 prod web | `docker restart nuankebao-prod-web` |
+| 停/起 prod 栈 | `sudo systemctl stop/start nuankebao-stack.service` (开启机自启) |
+| 手动备份 (PG+媒体) | `systemctl --user start nuankebao-prod-backup.service` |
+| 备份日志 | `tail -f /home/tooyan/nuankebao-databackups/prod/logs/backup.log` |
+| 健康检查 | `systemctl --user status nuankebao-prod-healthcheck.service` (每 5 分钟) |
+| 建档/重置密码 | `docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file .env.prod run --rm --no-deps -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='...' migrate pnpm tsx scripts/create-admin.ts` |
+| 批量建号 (邀请制) | 同上把脚本换成 `pnpm tsx scripts/import-users.ts users.csv` |
+| 首次/重装 systemd units | `bash deploy/install-systemd.sh` |
+
+**红线**:
+
+- `.env.prod` 权限 600、不进 git；**严禁** 写 `DEV_SKIP_AUTH` / `DEV_LOGIN_ANY_USER`
+- prod 端口只绑 `127.0.0.1:3004`；不要改成 `0.0.0.0`
+- 改域名/证书前先看 production-plan §4 强绑定三件套 (hostname / AUTH_URL / APK base URL)
+- 备份/恢复: `NUANKEBAO_PROFILE=prod` 隔离目录 (`nuankebao-databackups/prod/`)，不要手动指定 dev 路径覆盖
+
 ## 0. 准备工作
 
 ### 0.1 硬件要求

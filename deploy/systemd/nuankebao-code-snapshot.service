@@ -10,9 +10,8 @@ Type=oneshot
 WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=%h/.config/nuankebao/paths.conf
 Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
-ExecStart=__PROJECT_DIR__/deploy/code_snapshot.sh
-StandardOutput=append:__DATABACKUPS_DIR__/logs/code-snapshot.log
-StandardError=append:__DATABACKUPS_DIR__/logs/code-snapshot.log
+# 2026-09-19: 同 backup.service, 改用 run-with-log.sh (避免 StandardOutput 目录依赖)
+ExecStart=__PROJECT_DIR__/deploy/run-with-log.sh __DATABACKUPS_DIR__/logs/code-snapshot.log __PROJECT_DIR__/deploy/code_snapshot.sh
 SuccessExitStatus=0
 
 # 安全加固 (TD-010 A4)

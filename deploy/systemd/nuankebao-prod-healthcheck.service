@@ -1,0 +1,13 @@
+[Unit]
+Description=暖客宝 生产健康检查 (127.0.0.1:3004 /api/health, 失败重启 web)
+
+[Service]
+Type=oneshot
+WorkingDirectory=__PROJECT_DIR__
+Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
+Environment="PROD_WEB_PORT=3004"
+# 2026-09-19: 用 run-with-log.sh 包装 (日志同时进 journal + 文件)
+ExecStart=__PROJECT_DIR__/deploy/run-with-log.sh __DATABACKUPS_DIR__/prod/logs/healthcheck.log __PROJECT_DIR__/deploy/prod-healthcheck.sh
+SuccessExitStatus=0
+NoNewPrivileges=yes
+PrivateTmp=yes

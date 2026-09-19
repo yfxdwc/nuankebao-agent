@@ -2,6 +2,44 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed + Added (P3: 生产备份/监控/开机自启 + dev 备份 P0 修复, 2026-09-19)
+
+**P0 修复 (dev 备份连挂 3 天)**
+
+- 根因: `/home/tooyan/nuankebao-databackups` 被删后, systemd `StandardOutput=append:<path>`
+  在 unit 启动时就 209/STDOUT 失败 (ExecStartPre 也救不了: systemd 先配 stdout 再跑 ExecStartPre);
+  9/17-9/19 每日备份全部启动即失败 (lk 异地盘还有此前的 8 份旧备份)
+- 修: 新建 `deploy/run-with-log.sh` 包装器 (`mkdir` 目录 + 命令输出 tee 到 journal+文件,
+  退出码保持命令的); 5 个 service (dev 3 + prod 2) 全部改用包装器
+- 验证: dev backup + prod backup 手动跑均 exit 0, 目录/GFS/健康 JSON/异地 rsync 全到位
+
+**生产备份 profile (C1/C2)**
+
+- `deploy/backup.sh`: `NUANKEBAO_PROFILE=prod` → 容器 `nuankebao-prod-postgres`, 目录
+  `.../prod/{pg-backups,media,logs,backup-health}`, 异地 `lk:.../nuankebao-prod`;
+  媒体从 named volume (`nuankebao-prod-uploads`) 用 `docker run --entrypoint tar` 流式打包
+- `deploy/systemd/nuankebao-prod-backup.{service,timer}` (每日 03:30, 避开 dev 03:00)
+- `deploy/install-systemd.sh` 同步扩展为 10 个 unit (dev 3 对 + prod 2 对)
+
+**健康检查 (C3)**
+
+- `deploy/prod-healthcheck.sh` + `nuankebao-prod-healthcheck.{service,timer}` (每 5 分钟);
+  失败自动 `docker restart nuankebao-prod-web` + 10s 复检; 正常时静默不刷日志
+
+**开机自启 (E3)**
+
+- `tools/nuankebao-stack.service` 修正版已安装到 `/etc/systemd/system/` + enable + active:
+  `-p nuankebao-prod -f docker-compose.prod.yml --env-file .env.prod`, `Restart=no`
+
+**恢复演练 (C4)**
+
+- 解密最新 prod 备份 → 临时库 `nuankebao_restore_check` → `pg_restore` → 行数比对:
+  表 24/24, user 1/1, audit_log 14/14, body_part 9/9 ✅ → 清理
+
+**运维文档 (E4)**
+
+- `docs/deploy.md` 新增「tc 本机 Docker 隔离生产栈」章节 (常用命令 + 红线)
+
 ### Added (P2: 账号密码登录 + 邀请制建档 + 自助改密, 2026-09-19)
 
 **背景**: 登录从「手机号 + 短信验证码」(W1 mock) 改为「账号 / 手机号 + 密码」(邀请制,

@@ -14,9 +14,11 @@ WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=%h/.config/nuankebao/paths.conf
 # PATH 从 paths.conf 里的 USER_LOCAL_BIN 拼 (systemd Environment= 允许 var 引用)
 Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
-ExecStart=__PROJECT_DIR__/deploy/backup.sh
-StandardOutput=append:__DATABACKUPS_DIR__/logs/backup.log
-StandardError=append:__DATABACKUPS_DIR__/logs/backup.log
+# 2026-09-19: 改用 run-with-log.sh 包装 —— systemd StandardOutput=append 在父目录
+# 不存在时 unit 直接 209/STDOUT 起不来 (dev 备份因此 9/17-9/19 连挂 3 天;
+# ExecStartPre 也救不了, 因为 systemd 先配 stdout 再跑 ExecStartPre)。
+# 包装脚本自己 mkdir + tee (journal + 文件), 退出码保持脚本的。
+ExecStart=__PROJECT_DIR__/deploy/run-with-log.sh __DATABACKUPS_DIR__/logs/backup.log __PROJECT_DIR__/deploy/backup.sh
 SuccessExitStatus=0
 
 # 安全加固 (TD-010 A4)

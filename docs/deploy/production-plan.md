@@ -131,6 +131,14 @@
 
 ### C. 生产备份与监控（与 dev 隔离）
 
+> ✅ **2026-09-19 已实施**: `deploy/backup.sh` 加 `NUANKEBAO_PROFILE=prod`（prod 容器 / 目录 / health 隔离，
+> 媒体从 named volume 流式打包）；prod backup/healthcheck systemd user 单元已装已启；
+> 恢复演练通过（24 表 / user / audit_log / body_part 行数全一致）。
+>
+> ⚠️ 顺带修复 dev 备份 P0: `StandardOutput=append` 目录被删导致 unit 209/STDOUT 连挂 3 天（9/17-9/19），
+> 所有 unit 改用 `deploy/run-with-log.sh` 包装（自己 mkdir + tee journal+文件）。
+> prod 端口设计上只绑 `127.0.0.1:3004`（不是 0.0.0.0），LAN 验收以 `127.0.0.1` 为准。
+
 | # | 工作 | 说明 |
 |---|---|---|
 | C1 | 备份 profile | `deploy/backup.sh` 目前硬编码 dev 容器。加 profile 参数（`paths.prod.conf`）：容器 `nuankebao-prod-postgres`、媒体 `data/prod/uploads`、目录 `nuankebao-databackups/prod/`、异地 `lk:.../nuankebao-prod/` |
@@ -195,7 +203,7 @@
 | **P0 准备**（✅ 已完成） | 停用 `nuankebao-stack.service`；端口 3004 确认；决策拍板 | unit inactive/disabled；dev 正常 | — |
 | **P1 生产栈修复** | §3.A 全部 + `prod-deploy.sh` + 本地容器跑通 | `docker build` 通过；本地起 prod 容器连临时库 `/api/health` 200 | 1–2 天 |
 | **P2 账号密码登录** | ✅ 已完成 (§3.B: 含 `admin` 建档) | 密码登录成功；两个账号 = 两个身份；错误密码被限流；首登改密可用 | ~1 天 |
-| **P3 tc 生产部署** | §3.C/E：空库 migrate + seed、prod 栈起在 :3004、备份/健康检查 | LAN `http://192.168.1.99:3004/api/health` 200；第一份加密备份；恢复演练 | ~1 天 |
+| **P3 tc 生产部署** | ✅ 已完成 (§3.C/E: 备份 profile + 健康检查 + systemd) | LAN `http://192.168.1.99:3004/api/health` 200；第一份加密备份；恢复演练 | ~1 天 |
 | **P4 APK 签名发布** | §3.D | 真机安装 release APK → 登录 → 录入养生记录 | 0.5 天 |
 | **P5 域名切换 + 内测** | §4；邀请 1–2 销售 | 销售日常可用；dev 预览不受影响 | 0.5 天 + 内测周期 |
 

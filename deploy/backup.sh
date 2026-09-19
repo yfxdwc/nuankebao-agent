@@ -15,6 +15,7 @@
 #   - 退出码: 0=成功 2=密钥缺失 3=pg_dump 失败 4=GPG 加密 PG 失败 5=tar 失败 6=GPG 加密 media 失败
 #
 # 调度: systemd timer nuankebao-backup.timer 每日 03:00 (Persistent=true, RandomizedDelaySec=5min).
+#      生产: nuankebao-prod-backup.timer 每日 03:30 + NUANKEBAO_PROFILE=prod (独立目录/日志/health)。
 #
 # 见 deploy/README.md §10.
 # ============================================================
@@ -50,6 +51,23 @@ unset _SCRIPT_DIR _PROJECT_ROOT _PATHS_CONF _cand
 # NUANKEBAO_* → BBT_* 映射 (向后兼容老 env 注入写法)
 BBT_DIR="${BBT_DIR:-${NUANKEBAO_PROJECT_DIR:-/home/tooyan/nuankebao-agent}}"
 DATABACKUPS="${DATABACKUPS:-${NUANKEBAO_DATABACKUPS_DIR:-/home/tooyan/nuankebao-databackups}}"
+
+# ============== 生产 profile (P3, 2026-09-19) ==============
+# NUANKEBAO_PROFILE=prod → PG 容器 / 目录 / 日志 / health 全部独立于 dev, 互不覆盖;
+# 媒体源是 Docker named volume (无法按 host 路径 tar, 走 docker run 流式打包, 见下)。
+# 显式 env 优先 (跟 dev 同一原则: 环境变量 > 默认值)。
+PROD_MODE=0
+if [ "${NUANKEBAO_PROFILE:-}" = "prod" ]; then
+    PROD_MODE=1
+    BACKUP_DIR="${BACKUP_DIR:-$DATABACKUPS/prod/pg-backups}"
+    MEDIA_BACKUP_DIR="${MEDIA_BACKUP_DIR:-$DATABACKUPS/prod/media}"
+    OFFSITE_DIR="${OFFSITE_DIR:-/media/mm7/tc_backup/nuankebao-prod}"
+    LOG_DIR="${LOG_DIR:-$DATABACKUPS/prod/logs}"
+    HEALTH_DIR="${HEALTH_DIR:-$DATABACKUPS/prod/backup-health}"
+    PG_CONTAINER="${PG_CONTAINER:-nuankebao-prod-postgres}"
+    MEDIA_VOLUME="${MEDIA_VOLUME:-nuankebao-prod-uploads}"
+fi
+
 BACKUP_DIR="${BACKUP_DIR:-$DATABACKUPS/pg-backups}"
 MEDIA_BACKUP_DIR="${MEDIA_BACKUP_DIR:-$DATABACKUPS/media}"
 OFFSITE_DIR="${OFFSITE_DIR:-/media/mm7/tc_backup/nuankebao}"
@@ -166,23 +184,48 @@ echo "$(LOG_TS) [2/5] OK pg encrypted backup: $PG_ENC ($PG_SIZE bytes)"
 MEDIA_ARCHIVE="$MEDIA_BACKUP_DIR/media-$TS.tar.zst"
 MEDIA_ENC="$MEDIA_ARCHIVE.enc"
 
-if [ ! -d "$MEDIA_ROOT" ]; then
-    echo "$(LOG_TS) [3/5] media 资产目录不存在, 跳过: $MEDIA_ROOT"
-else
-    echo "$(LOG_TS) [3/5] media 资产档案 -> $MEDIA_ARCHIVE"
-    # 排除 .gitkeep (空目录标记) + thumbs cache (如果有) + purged (逻辑删除)
-    # -C 切到 $BBT_DIR/public, 路径 = uploads/...
-    if ! tar --zstd -cf "$MEDIA_ARCHIVE" \
-            --exclude='.gitkeep' \
-            --exclude='cache' \
-            --exclude='purged' \
-            --exclude='*.tmp' \
-            -C "$BBT_DIR/public" uploads 2>&1 | tail -3; then
-        echo "$(LOG_TS) [FATAL] media tar 失败" | tee -a "$LOG" >&2
-        rm -f "$MEDIA_ARCHIVE"
-        _write_health "failed" "media_tar_failed" ""
-        exit 5
+MEDIA_ARCHIVED=0
+if [ "$PROD_MODE" = "1" ]; then
+    # 生产: 媒体在 Docker named volume (nuankebao-prod-uploads)
+    if docker volume inspect "$MEDIA_VOLUME" >/dev/null 2>&1; then
+        echo "$(LOG_TS) [3/5] media 资产档案 (volume: $MEDIA_VOLUME) -> $MEDIA_ARCHIVE"
+        # 用已在本地的 pgvector 镜像 (不额外拉取); tar -> stdout -> zstd
+        if ! docker run --rm -v "$MEDIA_VOLUME":/data:ro --entrypoint tar \
+                pgvector/pgvector:pg16 \
+                --exclude=.gitkeep --exclude=cache --exclude=purged --exclude='*.tmp' \
+                -C /data -cf - . | zstd -q -f -o "$MEDIA_ARCHIVE"; then
+            echo "$(LOG_TS) [FATAL] media tar 失败 (volume: $MEDIA_VOLUME)" | tee -a "$LOG" >&2
+            rm -f "$MEDIA_ARCHIVE"
+            _write_health "failed" "media_tar_failed" ""
+            exit 5
+        fi
+        MEDIA_ARCHIVED=1
+    else
+        echo "$(LOG_TS) [3/5] media volume 不存在, 跳过: $MEDIA_VOLUME"
     fi
+else
+    if [ ! -d "$MEDIA_ROOT" ]; then
+        echo "$(LOG_TS) [3/5] media 资产目录不存在, 跳过: $MEDIA_ROOT"
+    else
+        echo "$(LOG_TS) [3/5] media 资产档案 -> $MEDIA_ARCHIVE"
+        # 排除 .gitkeep (空目录标记) + thumbs cache (如果有) + purged (逻辑删除)
+        # -C 切到 $BBT_DIR/public, 路径 = uploads/...
+        if ! tar --zstd -cf "$MEDIA_ARCHIVE" \
+                --exclude='.gitkeep' \
+                --exclude='cache' \
+                --exclude='purged' \
+                --exclude='*.tmp' \
+                -C "$BBT_DIR/public" uploads 2>&1 | tail -3; then
+            echo "$(LOG_TS) [FATAL] media tar 失败" | tee -a "$LOG" >&2
+            rm -f "$MEDIA_ARCHIVE"
+            _write_health "failed" "media_tar_failed" ""
+            exit 5
+        fi
+        MEDIA_ARCHIVED=1
+    fi
+fi
+
+if [ "$MEDIA_ARCHIVED" = "1" ]; then
     chmod 600 "$MEDIA_ARCHIVE"
     MEDIA_SIZE=$(stat -c%s "$MEDIA_ARCHIVE" 2>/dev/null || echo 0)
     echo "$(LOG_TS) [3/5] media archive: $MEDIA_SIZE bytes"

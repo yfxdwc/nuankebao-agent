@@ -1,0 +1,10 @@
+[Unit]
+Description=暖客宝 生产健康检查 (每 5 分钟)
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=default.target

@@ -2,10 +2,14 @@
 # ============================================================
 # 暖客宝 备份 systemd user services 安装脚本 (免 sudo)
 #
-# 装什么 (6 个 unit, 3 对 service+timer):
-#   ~/.config/systemd/user/nuankebao-backup.service           + .timer (每日 03:00)
-#   ~/.config/systemd/user/nuankebao-code-snapshot.service    + .timer (每日 04:00)
-#   ~/.config/systemd/user/nuankebao-restore-verify.service   + .timer (每月第一周日 04:00)
+# 装什么 (10 个 unit, 5 对 service+timer):
+#   dev:
+#     ~/.config/systemd/user/nuankebao-backup.service           + .timer (每日 03:00)
+#     ~/.config/systemd/user/nuankebao-code-snapshot.service    + .timer (每日 04:00)
+#     ~/.config/systemd/user/nuankebao-restore-verify.service   + .timer (每月第一周日 04:00)
+#   prod (tc Docker 隔离栈, 2026-09-19 P3):
+#     ~/.config/systemd/user/nuankebao-prod-backup.service      + .timer (每日 03:30)
+#     ~/.config/systemd/user/nuankebao-prod-healthcheck.service + .timer (每 5 分钟)
 #
 # 路径变量化 (AGENTS §6.3 + deploy/paths.conf):
 #   - 读 deploy/paths.conf (项目内 source-of-truth, 主人当前机器真值)
@@ -88,7 +92,8 @@ fi
 
 mkdir -p "$USER_SVC_DIR"
 
-for svc in nuankebao-backup.service nuankebao-code-snapshot.service nuankebao-restore-verify.service; do
+for svc in nuankebao-backup.service nuankebao-code-snapshot.service nuankebao-restore-verify.service \
+           nuankebao-prod-backup.service nuankebao-prod-healthcheck.service; do
     # 用 awk 处理 OFFSITE_DIR 空时删整行 + 路径占位符替换
     awk -v project="$PROJECT_DIR" \
         -v databackups="$DATABACKUPS_DIR" \
@@ -109,8 +114,9 @@ for svc in nuankebao-backup.service nuankebao-code-snapshot.service nuankebao-re
     }' "$SRC_DIR/$svc" > "$USER_SVC_DIR/$svc"
 done
 
-echo "==> 复制 3 个 timer (timer 无路径占位符, 直接 cp)"
-for tmr in nuankebao-backup.timer nuankebao-code-snapshot.timer nuankebao-restore-verify.timer; do
+echo "==> 复制 timer (timer 无路径占位符, 直接 cp)"
+for tmr in nuankebao-backup.timer nuankebao-code-snapshot.timer nuankebao-restore-verify.timer \
+           nuankebao-prod-backup.timer nuankebao-prod-healthcheck.timer; do
     cp "$SRC_DIR/$tmr" "$USER_SVC_DIR/"
 done
 
@@ -124,6 +130,9 @@ systemctl --user enable --now nuankebao-backup.timer
 systemctl --user enable --now nuankebao-code-snapshot.timer
 # restore-verify timer 也 enable, 但不 --now (月度触发, 立刻跑没意义)
 systemctl --user enable nuankebao-restore-verify.timer
+# prod (P3): 备份 03:30 + 健康检查每 5 分钟
+systemctl --user enable --now nuankebao-prod-backup.timer
+systemctl --user enable --now nuankebao-prod-healthcheck.timer
 
 # ============== 5. 验证 ==============
 
