@@ -14,9 +14,11 @@
 
 | Widget | 文件 | 用途 |
 |---|---|---|
-| `BigFab` | `widgets/big_fab.dart` | 客户列表底部"+ 新增" 大按钮 (中年女性友好) |
 | `CustomerGraphView` | `widgets/customer_graph_view.dart` | 客户图谱视图 (关系 + 互动时间线) |
 | `CustomerRow` | `widgets/customer_row.dart` | 客户列表行 (头像 + 姓名 + 标签) |
+
+> `BigFab` 已上提到 `core/widgets/big_fab.dart` (2026-09-19: 沙龙列表 FAB 也要用,
+> 按 AGENTS §4.5「跨模块禁止直接 import」搬到底座; 客户页 import 已同步改)。
 
 ## 依赖 (走 core/ 底座)
 

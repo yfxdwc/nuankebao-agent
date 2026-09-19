@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/models/salon.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/big_fab.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../providers/salon_providers.dart';
 import '../widgets/salon_card.dart';
@@ -68,19 +69,12 @@ class _SalonListPageState extends ConsumerState<SalonListPage>
           _buildList('organizing'),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      // 纯图标 FAB (主人 2026-09-19 拍: 不要文字, 跟客户页一致)
+      // 用 core/widgets/big_fab.dart (BigFab 80pt 圆形, 中老年友好);
+      // tooltip 保留 = 长按/无障碍仍有说明
+      floatingActionButton: BigFab(
         onPressed: () => context.push('/salons/new'),
         tooltip: '创建沙龙',
-        backgroundColor: AppTheme.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add, size: 36),
-        label: const Text(
-          '创建沙龙',
-          style: TextStyle(
-            fontSize: AppTheme.fontMd,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
