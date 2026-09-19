@@ -41,6 +41,9 @@ HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
 
 COMPOSE=(docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file "$ENV_FILE")
 
+# APK 分发目录 (P4): compose web 服务以 :ro 挂到这里; 不存在时 docker 会以 root 创建
+mkdir -p "$PROJECT_DIR/data/prod/downloads"
+
 log "生产栈: project=nuankebao-prod web=127.0.0.1:${PORT} env=${ENV_FILE}"
 
 # ---- 1. 保存 rollback 镜像 ----

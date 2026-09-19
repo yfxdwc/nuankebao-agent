@@ -55,6 +55,8 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+# APK/应用版本显示 (P4): getAppVersion() 读 flutter_app/pubspec.yaml (如 0.2.3+4)
+COPY --from=builder --chown=nextjs:nodejs /app/flutter_app/pubspec.yaml ./flutter_app/pubspec.yaml
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 

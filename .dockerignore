@@ -48,7 +48,9 @@ docs
 deploy
 e2e
 tests
-flutter_app
+# flutter_app: 只保留 pubspec.yaml (getAppVersion 读版本号; 其余不进镜像; 见 Dockerfile runner COPY)
+flutter_app/*
+!flutter_app/pubspec.yaml
 tools/branding
 AGENTS.md
 CHANGELOG.md

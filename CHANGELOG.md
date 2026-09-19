@@ -2,6 +2,35 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (P4: APK release 签名 + 生产分发链路, 2026-09-19)
+
+**签名**
+
+- 生成 release keystore (RSA2048 / 10000 天 / alias `nuankebao`, 口令主人设定):
+  主 `~/nuankebao-keys/nuankebao-release.jks` + 本机副份 `nuankebao-databackups/keys/`
+  + 异地 `lk:/media/mm7/tc_backup/nuankebao-keys/` (3 处保管)
+- `flutter_app/android/app/build.gradle`: `signingConfigs.release` 读 `key.properties` (gitignored),
+  缺文件回退 debug 签名; `gradle.properties` 降为 `-Xmx3G/Metaspace 1G` + `workers.max=2`
+  (与另一会话/dev server 共享 15G 机器, 首次构建曾 `mergeReleaseShaders` native thread 失败)
+- pubspec `0.2.2+3` → `0.2.3+4`
+
+**分发**
+
+- prod compose web 新增挂载 `./data/prod/downloads:/app/public/downloads:ro`;
+  `deploy/prod-deploy.sh` 自建该目录 (APK 放进去即生效, 不用重建镜像)
+- 构建: `flutter build apk --release --dart-define=NUANKEBAO_API_BASE=https://nuankebao.tooyang.top/api`
+  → 26.1MB; `apksigner verify` 通过 (SHA-256 `0db0a1bc...`)
+- Dockerfile runner 补 `COPY flutter_app/pubspec.yaml` + `.dockerignore` 放行该文件
+  (修 app-version 在容器内读不到 pubspec 而回退 0.1.0 的缺口)
+
+**验证 (prod :3004)**
+
+- `/api/app-version` → `{version: 0.2.3, buildNumber: 4}` + APK size/mtime/md5
+- `/api/apk-download` → 200 / 26,127,503 bytes; `/admin/download` → 200 (显示 0.2.3)
+- 口令/keystore 位置/指纹已记入 muse wiki: `~/.muse/wiki/901/entities/nuankebao.md`
+
+**待办**: 真机安装 release APK → 登录 → 录入养生记录 (P4 验收最后一步, 机器上无 adb 设备)
+
 ### Fixed + Added (P3: 生产备份/监控/开机自启 + dev 备份 P0 修复, 2026-09-19)
 
 **P0 修复 (dev 备份连挂 3 天)**

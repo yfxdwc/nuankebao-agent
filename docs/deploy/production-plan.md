@@ -148,6 +148,11 @@
 
 ### D. APK 正式签名与分发
 
+> ✅ **2026-09-19 已实施**: release keystore (RSA2048/10000 天, alias `nuankebao`) 主 + 本机副份 + lk 异地；
+> `build.gradle` 读 `key.properties`；APK 构建 + apksigner 验签通过 (SHA-256 `0db0a1bc…`)；
+> prod compose 挂载 `data/prod/downloads`，`/api/app-version` = 0.2.3+4、`/api/apk-download` 200 (26.1MB)、`/admin/download` 200。
+> ⏳ 真机安装验证待主人 (机器上无 adb 设备)。
+
 | # | 工作 | 说明 |
 |---|---|---|
 | D1 | 生成 release keystore | `keytool -genkeypair -keyalg RSA -keysize 2048 -validity 10000`；口令主人设置 |
@@ -204,7 +209,7 @@
 | **P1 生产栈修复** | §3.A 全部 + `prod-deploy.sh` + 本地容器跑通 | `docker build` 通过；本地起 prod 容器连临时库 `/api/health` 200 | 1–2 天 |
 | **P2 账号密码登录** | ✅ 已完成 (§3.B: 含 `admin` 建档) | 密码登录成功；两个账号 = 两个身份；错误密码被限流；首登改密可用 | ~1 天 |
 | **P3 tc 生产部署** | ✅ 已完成 (§3.C/E: 备份 profile + 健康检查 + systemd) | LAN `http://192.168.1.99:3004/api/health` 200；第一份加密备份；恢复演练 | ~1 天 |
-| **P4 APK 签名发布** | §3.D | 真机安装 release APK → 登录 → 录入养生记录 | 0.5 天 |
+| **P4 APK 签名发布** | ✅ 已完成 (§3.D keystore/构建/分发; 真机安装待主人) | 真机安装 release APK → 登录 → 录入养生记录 | 0.5 天 |
 | **P5 域名切换 + 内测** | §4；邀请 1–2 销售 | 销售日常可用；dev 预览不受影响 | 0.5 天 + 内测周期 |
 
 **开工到可内测 ≈ 4–5 个工作日。**

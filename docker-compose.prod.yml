@@ -55,6 +55,9 @@ services:
       - "127.0.0.1:${PROD_WEB_PORT:-3004}:3000"
     volumes:
       - uploads:/app/public/uploads
+      # APK 分发 (P4): 放 data/prod/downloads/NUANKEBAO-release.apk → 容器 /app/public/downloads
+      # (下载页 /api/apk-download / /api/apk-qr 都读这里; 无需重 build 镜像)
+      - ./data/prod/downloads:/app/public/downloads:ro
     depends_on:
       postgres:
         condition: service_healthy
