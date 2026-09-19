@@ -665,6 +665,37 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Added (移动节点 UI + 图谱待确认虚位 + admin 强删, 2026-09-19 主人拍)
+
+**主人拍板三项**: ①移动节点 UI ②图谱渲染「待确认虚位」③「解除加盟」加 admin 强删口子
+
+- **① 移动节点 UI** (`franchisee_detail_page.dart`): 加盟商详情 app bar 新增「移动到其他点位」
+  (⇄ 图标) → 通用选点位弹层 (复用 `core/widgets/placement_target_sheet.dart`, 原来只在客户详情用)
+  → 提交 `kind=move` 三方确认 (设置者 + 该加盟商本人 + **新**位置上级; 原父节点不确认)
+  → 通过后整棵子树跟搬 + 推荐人不变
+- **② 图谱「待确认虚位」**
+  - 模型: `PendingPlacement` + `FranchiseeTreeNode.pendingPlacements` (只有根节点带; `copyWith` 必须透传,
+    否则懒加载 merge 会把虚位丢掉)
+  - painter: `_drawPendingGhosts()` — 在父节点正下方 (同侧续线) 或外侧一列 (异侧) 画
+    **橙色虚线圆** (PathMetrics 切段) + 浅底 + 「⏳ 名字 (待确认)」标签; 画在最上层
+  - 数据来源: `GET /franchisees/me/tree` 的 `pendingPlacements` (已在上一批返回)
+- **③ admin 强删** (`forceUnjoinFranchisee` + `POST /api/franchisees/:id/force-unjoin`)
+  - **仅 role=admin** (sales/manager → 403); 仍遵守「有下线不允许解除」(Q3, 执行时再查一次)
+  - 顺带把该节点上 pending 的申请单置 cancelled (避免点位预占卡住)
+  - 走 `withAuditContext` → audit_log 留痕; Flutter 详情页仅 admin 显示 🗑「管理强删」入口
+  - dev 备注: 已把 dev 账号 (user 1) 的 role 临时设为 `admin` 方便主人测; 要改回 `sales` 说一声
+
+**验证** (scripts/smoke-placement-confirm.ts 全绿)
+- 移动: 申请 pending 三方 → 本人同意 → 新上级同意 → executed; path 变成 `L.L.L.L.R.` ✓ / 方向=右 ✓ /
+  **推荐人不变** ✓ (Q5)
+- 解除: 有下线被拒 ✓; 叶子三方齐 → executed → 软删 ✓
+- 强删: 有下线被拒 ✓; 叶子强删成功 (软删) ✓
+- 接口: sales 调 force-unjoin → **403** ✓; 虚位: 建一条 pending 落位单 → 图谱出现橙色虚线虚位
+  (accent 像素命中 + 视觉确认) ✓; 清掉后 pending=0 ✓
+- `npx tsc --noEmit` 0 error / `flutter analyze lib` 0 error
+- 踩坑修正: move 的子树搬迁 SQL 里 `substring(path from $1)` 参数 PG 当 text 正则 → 结果 NULL →
+  报 not-null 约束; 改成 `$1::int` ✓
+
 ### Added (客户类型入口: 详情页一键切「普通 ↔ 种子」, 2026-09-18 主人反馈)
 
 **主人反馈**: 「我没找到修改客户类型的入口」

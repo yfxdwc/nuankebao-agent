@@ -421,6 +421,37 @@ async function main() {
   }
   assert(forceBlocked, "admin 强删也遵守「有下线不允许」(Q3)");
 
+  // 12) admin 强删成功路径: 直接插一个叶子临时节点 → 强删 → 软删 ✓
+  const leafRows = (await db.execute(sql`
+    SELECT f.id, f.placement_path FROM franchisee f
+    WHERE f.deleted_at IS NULL AND f.placement_depth > 0
+      AND NOT EXISTS (SELECT 1 FROM franchisee c WHERE c.deleted_at IS NULL AND c.placement_path = f.placement_path || 'L.')
+    ORDER BY f.placement_depth DESC, f.id LIMIT 1
+  `)) as unknown as { id: string; placement_path: string }[];
+  const tempParentPath = leafRows[0].placement_path;
+  const [tempNode] = await db
+    .insert(franchisee)
+    .values({
+      name: "冒烟-待强删",
+      phoneEncrypted: encryptField("13900003333"),
+      phoneHash: hashForLookup("13900003333"),
+      referrerId: BigInt(leafRows[0].id),
+      placementSide: "left",
+      placementPath: tempParentPath + "L.",
+      placementDepth: tempParentPath.split(".").filter(Boolean).length,
+      createdBy: BigInt(1),
+    })
+    .returning({ id: franchisee.id });
+  await forceUnjoinFranchisee(tempNode.id, ctx);
+  const [forcedRow] = await db
+    .select()
+    .from(franchisee)
+    .where(eq(franchisee.id, tempNode.id));
+  assert(forcedRow.deletedAt != null, "admin 强删成功 (软删)");
+  // 清掉临时节点 (硬删, 免得污染种子数据)
+  await db.delete(customer).where(eq(customer.phoneHash, hashForLookup("13900003333")));
+  await db.delete(franchisee).where(eq(franchisee.id, tempNode.id));
+
   console.log("\n✅ 冒烟通过 (测试数据保留: 冒烟-新加盟商, 需要清理跑 scripts/cleanup-smoke-placement.ts)");
 }
 
