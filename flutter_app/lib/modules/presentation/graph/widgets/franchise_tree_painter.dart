@@ -542,6 +542,8 @@ class FranchiseTreePainter extends CustomPainter {
       final center = Offset(x, parentPos.dy + TreeLayout.levelHeight);
       final radius = TreeLayout.radiusForColumn(col);
       final ghostColor = AppTheme.accent.withOpacity(0.85);
+      // 全景缩小视图里虚位也要看得见 → 线宽/字号/虚线间隔按 1/scale 补偿 (上限 4x)
+      final boost = (1.0 / scale).clamp(1.0, 4.0);
 
       // 浅底 + 虚线边
       canvas.drawCircle(
@@ -555,8 +557,10 @@ class FranchiseTreePainter extends CustomPainter {
         radius,
         Paint()
           ..color = ghostColor
-          ..strokeWidth = 2.4
+          ..strokeWidth = 2.4 * boost
           ..style = PaintingStyle.stroke,
+        dash: 7 * boost,
+        gap: 5 * boost,
       );
 
       // 「待确认」+ 名字 (小字, 圆下方)
@@ -564,7 +568,7 @@ class FranchiseTreePainter extends CustomPainter {
         text: TextSpan(
           text: '⏳ ${p.label}',
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 12 * boost,
             color: ghostColor,
             fontWeight: FontWeight.w600,
           ),
@@ -596,10 +600,10 @@ class FranchiseTreePainter extends CustomPainter {
     Canvas canvas,
     Offset center,
     double radius,
-    Paint paint,
-  ) {
-    const double dash = 7;
-    const double gap = 5;
+    Paint paint, {
+    double dash = 7,
+    double gap = 5,
+  }) {
     final path = Path()
       ..addOval(Rect.fromCircle(center: center, radius: radius));
     for (final metric in path.computeMetrics()) {
