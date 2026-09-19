@@ -1,7 +1,7 @@
 # 暖客宝 部署完整指南
 
-> **2026-09-19 起**: 生产部署（腾讯云 + 500 用户）请先看
-> [`docs/deploy/production-plan.md`](deploy/production-plan.md)（含硬件选型 / 备案 / 登录改造 / APK 签名）。
+> **2026-09-19 起**: 生产部署请先看
+> [`docs/deploy/production-plan.md`](deploy/production-plan.md)（v2：tc 本机 Docker 隔离 + 账号密码登录；含未来腾讯云迁移参考）。
 > 本文件仍是通用部署手册与命令参考。
 
 > 目标: 把 暖客宝 部署到主人自有物理服务器 (Debian 12 / Ubuntu 22.04)
