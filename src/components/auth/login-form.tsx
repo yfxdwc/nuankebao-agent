@@ -9,32 +9,20 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
 // ============================================
-// W1 登录表单 (开发期 mock 验证码 123456)
+// 登录表单 (2026-09-19 P2: 账号/手机号 + 密码)
 //
-// W2 完整接入:
-//   - 发送验证码走 /api/auth/send-code (阿里云 SMS 网关)
-//   - 60s 倒计时
-//   - 限流 (同手机号 5 次/小时, 同 IP 10 次/小时)
-//
-// W3 接入真实 Auth.js 验证 + Drizzle 查询
+// - identifier: 登录名 (如 admin) 或 手机号
+// - 邀请制: 账号由管理员开通 (scripts/create-admin.ts / import-users.ts)
+// - 后端校验: src/lib/auth/credentials.ts (scrypt + 5 次/分钟限流)
+// - 自助改密: Flutter「我的 → 修改密码」/ PATCH /api/me/password
 // ============================================
 
 export function LoginForm() {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [step, setStep] = useState<"phone" | "code">("phone");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function handleSendCode() {
-    setLoading(true);
-    setError(null);
-    // W1 占位: 模拟发送, 实际 W2 走阿里云 SMS
-    await new Promise((r) => setTimeout(r, 500));
-    setStep("code");
-    setLoading(false);
-  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -42,13 +30,13 @@ export function LoginForm() {
     setError(null);
 
     const result = await signIn("credentials", {
-      phone,
-      code,
+      identifier: identifier.trim(),
+      password,
       redirect: false,
     });
 
     if (result?.error) {
-      setError("验证码错误,请重试");
+      setError("账号或密码错误, 或尝试过于频繁");
       setLoading(false);
       return;
     }
@@ -57,82 +45,46 @@ export function LoginForm() {
     router.refresh();
   }
 
-  if (step === "phone") {
-    return (
-      <Card>
-        <CardContent className="pt-6 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="phone">手机号</Label>
-            <Input
-              id="phone"
-              type="tel"
-              placeholder="请输入手机号"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-              maxLength={11}
-              autoFocus
-            />
-          </div>
-          <Button
-            onClick={handleSendCode}
-            disabled={loading || phone.length !== 11}
-            className="w-full"
-          >
-            {loading ? "发送中..." : "发送验证码"}
-          </Button>
-          {error && (
-            <p className="text-sm text-destructive text-center">{error}</p>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card>
-      <CardContent className="pt-6 space-y-4">
+      <CardContent className="pt-6">
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="code">验证码</Label>
+            <Label htmlFor="identifier">账号 / 手机号</Label>
             <Input
-              id="code"
+              id="identifier"
               type="text"
-              placeholder="6 位验证码"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              maxLength={6}
+              placeholder="admin 或 13800138000"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              autoComplete="username"
               autoFocus
             />
-            <p className="text-xs text-muted-foreground">
-              已发送至 +86 {phone.slice(0, 3)}****{phone.slice(7)}
-              <br />
-              <span className="text-primary">开发期验证码: 123456</span>
-            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">密码</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="请输入密码"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
           </div>
           {error && (
             <p className="text-sm text-destructive text-center">{error}</p>
           )}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setStep("phone");
-                setCode("");
-                setError(null);
-              }}
-              className="flex-1"
-            >
-              返回
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading || code.length !== 6}
-              className="flex-1"
-            >
-              {loading ? "登录中..." : "登录"}
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            disabled={loading || !identifier.trim() || !password}
+            className="w-full"
+          >
+            {loading ? "登录中..." : "登录"}
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            账号由管理员开通; 忘记密码请联系管理员重置
+          </p>
         </form>
       </CardContent>
     </Card>

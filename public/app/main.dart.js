@@ -108683,7 +108683,7 @@ case 7:l=t.N
 s=9
 return A.m(k.HS("/auth/callback/credentials",A.aC(["csrfToken",i,"identifier",a,"password",b,"callbackUrl",A.b24()],l,l),A.atT("application/x-www-form-urlencoded",!1,null,new A.adA()),j),$async$kv)
 case 9:k=d.c
-if(!(k===200||k===302))throw A.d(A.e2("\u767b\u5f55\u5931\u8d25, \u8bf7\u68c0\u67e5\u9a8c\u8bc1\u7801"))
+if(!(k===200||k===302))throw A.d(A.e2("\u8d26\u53f7\u6216\u5bc6\u7801\u9519\u8bef, \u6216\u5c1d\u8bd5\u8fc7\u4e8e\u9891\u7e41"))
 s=10
 return A.m(A.nX(),$async$kv)
 case 10:case 1:return A.q(q,r)

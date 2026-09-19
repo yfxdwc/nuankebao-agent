@@ -69,7 +69,7 @@ class AuthService {
 
     final ok = loginRes.statusCode == 200 || loginRes.statusCode == 302;
     if (!ok) {
-      throw Exception('登录失败, 请检查验证码');
+      throw Exception('账号或密码错误, 或尝试过于频繁');
     }
     // R12 治本: 拿到 session cookie 后从浏览器 document.cookie 同步 (web 平台)
     // dio onResponse 拦截器已经 set 了 (native 平台), 这里多一道兑底以防 web XHR

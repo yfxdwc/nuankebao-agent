@@ -2,6 +2,22 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (登录补漏: 网页表单 + dev admin 账号 + 预览重建, 2026-09-19)
+
+**背景**: 主人反馈「登录不上」。排查 dev 日志: (1) 网页 `/login` 仍走旧手机号+验证码表单,
+而后端 P2 已改为 identifier/password → 恒 CredentialsSignin; (2) `admin` 只在生产库, dev 库没有;
+dev 用户也都没有密码 → Flutter 预览登录 401。
+
+- `src/components/auth/login-form.tsx`: 两步验证码表单 → 一步「账号/手机号 + 密码」
+  (`signIn("credentials", { identifier, password })`); 错误文案统一「账号或密码错误, 或尝试过于频繁」
+- dev 库补建 `admin` (scripts/create-admin.ts, 同生产口令) → dev 网页/预览均可登录
+- `api.dart` 残留旧文案「登录失败, 请检查验证码」→「账号或密码错误, 或尝试过于频繁」
+- 预览 `public/app` 重建 (含新登录 UI + 改密弹层; version.json 0.2.4#5, 按 §9.3 --no-verify)
+- APK 重建并替换 `data/prod/downloads/NUANKEBAO-release.apk` (26.1MB, 同签名 SHA-256 `0db0a1bc…`)
+
+**验证**: dev `admin`+口令 → 网页 callback 302+session ✓ / flutter-login 200+token ✓;
+`pnpm type-check` ✓; 预览基线快照测试 ✓ (改前)
+
 ### Added (P4: APK release 签名 + 生产分发链路, 2026-09-19)
 
 **签名**
