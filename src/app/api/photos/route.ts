@@ -13,8 +13,12 @@ const Schema = z.object({
   mimeType: z.string().regex(/^image\/(jpeg|png|webp)$/, "仅支持 jpeg/png/webp").optional(),
   // 用途: 决定要不要会员 (ADR-0012 §5)
   //   wellness/salon/other (默认) = 业务照片 → 会员功能
-  //   avatar = 个人账号头像 → 免费 (换个头像不该收费)
-  purpose: z.enum(["wellness", "salon", "avatar", "other"]).optional(),
+  //   avatar        = 个人账号头像 → 免费 (换个头像不该收费)
+  //   payment_proof = 付款截图 → 免费 (**付钱的人还没会员**, 拦了就没法核对到账)
+  //   payment_qr    = 收款码图片 (管理员上传) → 免费
+  purpose: z
+    .enum(["wellness", "salon", "avatar", "payment_proof", "payment_qr", "other"])
+    .optional(),
 });
 
 /**
@@ -32,8 +36,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const input = Schema.parse(body);
 
-    // ADR-0012: 业务照片是会员功能 (个人头像 avatar 免费)
-    if (input.purpose !== "avatar") {
+    // ADR-0012: 业务照片是会员功能 (头像 / 付款凭证 / 收款码 免费)
+    const freePurposes = ["avatar", "payment_proof", "payment_qr"];
+    if (!input.purpose || !freePurposes.includes(input.purpose)) {
       const gate = await featureGuard(guard.userId, FEATURES.MEDIA_UPLOAD);
       if (gate) return gate;
     }

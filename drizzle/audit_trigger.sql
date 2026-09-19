@@ -91,3 +91,14 @@ DROP TRIGGER IF EXISTS plan_audit ON plan;
 CREATE TRIGGER plan_audit
   AFTER INSERT OR UPDATE OR DELETE ON plan
   FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+-- 人工收款 (内测): 申请与核销都要留痕 (钱相关)
+DROP TRIGGER IF EXISTS manual_payment_request_audit ON manual_payment_request;
+CREATE TRIGGER manual_payment_request_audit
+  AFTER INSERT OR UPDATE OR DELETE ON manual_payment_request
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+DROP TRIGGER IF EXISTS billing_config_audit ON billing_config;
+CREATE TRIGGER billing_config_audit
+  AFTER INSERT OR UPDATE OR DELETE ON billing_config
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();

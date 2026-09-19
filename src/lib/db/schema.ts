@@ -1197,3 +1197,72 @@ export const referralReward = pgTable(
 
 export type ReferralReward = typeof referralReward.$inferSelect;
 export type NewReferralReward = typeof referralReward.$inferInsert;
+
+// ============================================
+// 人工收款 (内测通道: 个人微信收款码 + 管理员核销)
+// ============================================
+// 背景 (主人 2026-09-19): 内测阶段还没有企业/个体户商户号, 先用**个人微信收款码**收款,
+// 用户付完在 App 里提交"我已支付", 管理员在 App 里核销开通会员。
+//
+// 为什么单独两张表而不是直接复用 order/payment:
+//   order/payment 是给**在线支付渠道**用的 (有 out_trade_no / 渠道流水 / 回调对账);
+//   人工通道没有渠道流水, 只有"一张申请单 + 一个人盖章"。
+//   混在一起会让 S1 接真渠道时的对账逻辑到处 if (channel === 'manual')。
+//   两张表结构相近但语义不同, 分开更清楚 (S1 上线后人工通道保留作为兜底)。
+
+/// 计费配置 (key/value) —— 收款码 URL / 收款人 / 备注提示, 不用改代码就能换
+export const billingConfig = pgTable("billing_config", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+  updatedByUserId: bigint("updated_by_user_id", { mode: "bigint" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .default(sql`NOW()`),
+});
+
+export type BillingConfig = typeof billingConfig.$inferSelect;
+export type NewBillingConfig = typeof billingConfig.$inferInsert;
+
+/// 人工付款申请 (用户提交 → 管理员核销)
+export const manualPaymentRequest = pgTable(
+  "manual_payment_request",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    userId: bigint("user_id", { mode: "bigint" }).notNull(),
+
+    planCode: text("plan_code").notNull().default("monthly"),
+    amountCents: integer("amount_cents").notNull(), // 6900 = ¥69
+    days: integer("days").notNull().default(30), // 核销后给多少天
+
+    /// 用户填的付款备注 (微信昵称 / 手机号后 4 位), 管理员对账用
+    payerNote: text("payer_note"),
+    /// 付款截图 URL (可选; 走 POST /api/photos?purpose=payment_proof)
+    proofUrl: text("proof_url"),
+
+    status: text("status", {
+      enum: ["pending", "approved", "rejected"],
+    })
+      .notNull()
+      .default("pending"),
+
+    reviewedByUserId: bigint("reviewed_by_user_id", { mode: "bigint" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    rejectReason: text("reject_reason"),
+    /// 核销后实际给了多少天 (管理员可改, 例: 用户付了两个月就给 60 天)
+    grantedDays: integer("granted_days"),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    userIdx: index("idx_manual_pay_user").on(table.userId, table.createdAt.desc()),
+    statusIdx: index("idx_manual_pay_status").on(table.status, table.createdAt),
+  })
+);
+
+export type ManualPaymentRequest = typeof manualPaymentRequest.$inferSelect;
+export type NewManualPaymentRequest = typeof manualPaymentRequest.$inferInsert;

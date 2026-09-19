@@ -82,6 +82,11 @@ final appReleaseProvider = FutureProvider<AppRelease>(
   (ref) async => ref.watch(systemServiceProvider).appRelease(),
 );
 
+/// 人工收款信息 (内测通道: 收款码 + 我的申请状态)
+final manualPayInfoProvider = FutureProvider.autoDispose<ManualPayInfo>(
+  (ref) async => ref.watch(billingServiceProvider).manualPayInfo(),
+);
+
 /// 网络自检 (GET /api/health, 不需要登录): autoDispose —— 每次打开"网络自检"都要拿当前状态
 final healthCheckProvider = FutureProvider.autoDispose<HealthInfo>(
   (ref) async => ref.watch(systemServiceProvider).health(),

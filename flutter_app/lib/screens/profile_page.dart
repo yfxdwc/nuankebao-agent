@@ -968,54 +968,11 @@ class _MembershipCard extends ConsumerWidget {
     );
   }
 
-  /// S0 (还没接在线支付): 用大白话告诉用户怎么付钱
-  /// S1 接微信/支付宝后, 这里换成"去支付"拉起收银台
+  /// 开通/续费 → 人工收款弹层 (内测: 个人微信收款码 + 管理员核对)
+  /// S1 接微信/支付宝后, 这里换成"拉起收银台" (权益层零改动)
   void _showPurchaseSheet(BuildContext context, WidgetRef ref,
       {required bool isMember}) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isMember ? '续费会员' : '开通会员',
-              style: const TextStyle(
-                fontSize: AppTheme.fontLg,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              '¥69 / 月\n自动续费 ¥49 / 月 (连续包月更划算)',
-              style: TextStyle(fontSize: AppTheme.fontMd, height: 1.6),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              '现在开通请把费用转给管理员 (支持收款码), 管理员会立刻给你开通;\n'
-              '在线支付 (微信 / 支付宝) 马上上线, 上线后在这里一键续费。',
-              style: TextStyle(
-                fontSize: AppTheme.fontSm,
-                height: 1.6,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: AppTheme.buttonLgHeight,
-              child: FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('知道了', style: TextStyle(fontSize: AppTheme.fontMd)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    showMembershipPurchaseSheet(context, ref, isMember: isMember);
   }
 }
 

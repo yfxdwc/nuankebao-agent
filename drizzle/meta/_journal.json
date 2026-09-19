@@ -92,6 +92,13 @@
       "when": 1789826413072,
       "tag": "0012_membership_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789828425163,
+      "tag": "0013_manual_payment",
+      "breakpoints": true
     }
   ]
 }

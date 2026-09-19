@@ -20,6 +20,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/http/api_client.dart';
 import '../core/models/me.dart';
+import '../core/services/api.dart' show ManualPayProduct;
 import '../core/providers/service_providers.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/user_avatar.dart';
@@ -1092,4 +1093,325 @@ String _sniffImageMime(List<int> bytes) {
     return 'image/webp';
   }
   return 'image/jpeg';
+}
+
+// ============================================
+// 5. 开通会员 (内测人工通道: 个人微信收款码 + 管理员核销)
+// ============================================
+// 主人 2026-09-19: 「当前内测阶段，暂时用我个人的微信收款码实现」
+//
+// 流程 (App 内闭环, 不用碰服务器文件):
+//   1. 弹层显示收款码 (管理员上传的 /uploads/xxx.png, 或静态兜底 /payment/wechat-qr.png)
+//   2. 用户扫码付款 → 回来填备注 (手机号后 4 位) ± 传付款截图 → 点「我已支付」
+//   3. 提交后状态 = 待确认; 管理员在「管理员工具 → 待审付款」里通过 → 会员立刻生效
+//
+// 为什么付款截图用 purpose=payment_proof: 付钱的人**还不是会员**, 不能拿会员功能拦他
+
+Future<void> showMembershipPurchaseSheet(
+  BuildContext context,
+  WidgetRef ref, {
+  required bool isMember,
+}) async {
+  ref.invalidate(manualPayInfoProvider);
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => _PurchaseSheetBody(isMember: isMember),
+  );
+}
+
+class _PurchaseSheetBody extends ConsumerStatefulWidget {
+  final bool isMember;
+  const _PurchaseSheetBody({required this.isMember});
+
+  @override
+  ConsumerState<_PurchaseSheetBody> createState() => _PurchaseSheetBodyState();
+}
+
+class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
+  String? _planCode;
+  final _noteCtrl = TextEditingController();
+  String? _proofUrl;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickProof() async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        imageQuality: 80,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 3 * 1024 * 1024) {
+        if (mounted) _toast(context, '截图太大了 (超过 3MB), 换一张小的');
+        return;
+      }
+      setState(() => _busy = true);
+      final url = await ref.read(photoServiceProvider).upload(
+            base64Encode(bytes),
+            mimeType: _sniffImageMime(bytes),
+            purpose: 'payment_proof', // 付款凭证免费上传 (还没会员)
+          );
+      if (!mounted) return;
+      setState(() {
+        _proofUrl = url;
+        _busy = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        _toast(context, '截图上传失败, 也可以不传直接提交');
+      }
+    }
+  }
+
+  Future<void> _submit(ManualPayProduct product) async {
+    setState(() => _busy = true);
+    final r = await ref.read(billingServiceProvider).submitManualPayment(
+          planCode: product.planCode,
+          payerNote: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+          proofUrl: _proofUrl,
+        );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (r.ok) {
+      ref.invalidate(manualPayInfoProvider);
+      ref.invalidate(meProfileProvider);
+      Navigator.of(context).pop();
+      _toast(context, r.message);
+    } else {
+      _toast(context, r.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final infoAsync = ref.watch(manualPayInfoProvider);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+      child: infoAsync.when(
+        loading: () => const SizedBox(
+          height: 200,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 20),
+            const Text('没拿到收款信息, 请检查网络后重试',
+                style: TextStyle(fontSize: AppTheme.fontMd)),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: () => ref.invalidate(manualPayInfoProvider),
+              child: const Text('重试', style: TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+        data: (info) {
+          final products = info.products;
+          final selected = _planCode ?? (products.isNotEmpty ? products.first.planCode : null);
+          final latest = info.latestRequest;
+
+          return SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.isMember ? '续费会员' : '开通会员',
+                  style: const TextStyle(
+                    fontSize: AppTheme.fontLg,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '内测期间用管理员微信收款, 付款后点「我已支付」, 管理员核对到账立刻开通',
+                  style: const TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(height: 16),
+
+                // 待确认提示 (最近一条 pending)
+                if (latest != null && latest.status == 'pending') ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accent.withOpacity(0.16),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      '你已经提交过付款申请, 等管理员确认 (通常几分钟内)',
+                      style: TextStyle(fontSize: AppTheme.fontSm),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ] else if (latest != null && latest.status == 'rejected') ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.danger.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '上次申请未通过${latest.rejectReason == null ? '' : ': ${latest.rejectReason}'}\n可以核对后重新提交',
+                      style: const TextStyle(fontSize: AppTheme.fontSm),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // 金额选择
+                const Text('选一个', style: TextStyle(fontSize: AppTheme.fontMd, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  children: products
+                      .map((p) => ChoiceChip(
+                            label: Text('${p.label} ${p.amountLabel}',
+                                style: const TextStyle(fontSize: AppTheme.fontSm)),
+                            selected: selected == p.planCode,
+                            onSelected: (_) => setState(() => _planCode = p.planCode),
+                          ))
+                      .toList(),
+                ),
+                const SizedBox(height: 16),
+
+                // 收款码
+                Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 220,
+                        height: 220,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppTheme.primaryLight, width: 2),
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.white,
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: _QrImageLarge(url: info.qrUrl),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '收款人: ${info.payeeName}',
+                        style: const TextStyle(
+                          fontSize: AppTheme.fontMd,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (info.isFallbackQr)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 6),
+                          child: Text(
+                            '管理员还没设置收款码 (设置后这里会显示二维码)',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.danger),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 备注 + 截图
+                TextField(
+                  controller: _noteCtrl,
+                  style: const TextStyle(fontSize: AppTheme.fontMd),
+                  decoration: InputDecoration(
+                    labelText: '付款备注',
+                    hintText: info.noteHint.isEmpty ? '微信昵称 / 手机号后 4 位' : info.noteHint,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _pickProof,
+                      icon: const Icon(Icons.image_outlined, size: 22),
+                      label: Text(
+                        _proofUrl == null ? '传付款截图 (可不传)' : '已传截图 ✓',
+                        style: const TextStyle(fontSize: AppTheme.fontSm),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: AppTheme.buttonLgHeight,
+                  child: FilledButton.icon(
+                    onPressed: (_busy || products.isEmpty || (latest?.status == 'pending'))
+                        ? null
+                        : () {
+                            final p = products.firstWhere(
+                              (x) => x.planCode == selected,
+                              orElse: () => products.first,
+                            );
+                            _submit(p);
+                          },
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+                          )
+                        : const Icon(Icons.check_circle_outline, size: 26),
+                    label: Text(
+                      _busy ? '提交中...' : '我已支付',
+                      style: const TextStyle(fontSize: AppTheme.fontMd),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '说明: 内测阶段暂不支持自动续费; 需要 ¥49/月 的连续包月价, 等微信支付上线后可直接开通',
+                  style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 大图收款码 (本站上传 / 静态兜底; 404 也不崩, 给明确提示)
+class _QrImageLarge extends StatelessWidget {
+  final String url;
+  const _QrImageLarge({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final abs = url.startsWith('http') ? url : '${ApiClient.baseOrigin}$url';
+    return Image.network(
+      abs,
+      fit: BoxFit.contain,
+      loadingBuilder: (c, child, progress) => progress == null
+          ? child
+          : const Center(child: CircularProgressIndicator()),
+      errorBuilder: (c, _, __) => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Text(
+            '还没设置收款码\n请让管理员在「管理员工具」里上传',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -613,6 +613,127 @@ class ReferralSummary {
       );
 }
 
+/// 人工收款信息 (内测通道: 个人微信收款码 + 管理员核销)
+class ManualPayProduct {
+  final String planCode;
+  final String label;
+  final int amountCents;
+  final int days;
+  const ManualPayProduct({
+    required this.planCode,
+    required this.label,
+    required this.amountCents,
+    required this.days,
+  });
+
+  String get amountLabel => '¥${(amountCents / 100).toStringAsFixed(0)}';
+  static ManualPayProduct fromJson(Map<String, dynamic> j) => ManualPayProduct(
+        planCode: j['planCode']?.toString() ?? 'monthly',
+        label: j['label']?.toString() ?? '',
+        amountCents: (j['amountCents'] as num?)?.toInt() ?? 0,
+        days: (j['days'] as num?)?.toInt() ?? 30,
+      );
+}
+
+class ManualPayRequestView {
+  final String id;
+  final String status; // pending / approved / rejected
+  final int amountCents;
+  final int days;
+  final String? rejectReason;
+  const ManualPayRequestView({
+    required this.id,
+    required this.status,
+    this.amountCents = 0,
+    this.days = 0,
+    this.rejectReason,
+  });
+
+  String get statusLabel => switch (status) {
+        'pending' => '已提交, 等管理员确认',
+        'approved' => '已开通',
+        'rejected' => '未通过',
+        _ => status,
+      };
+
+  static ManualPayRequestView fromJson(Map<String, dynamic> j) =>
+      ManualPayRequestView(
+        id: j['id']?.toString() ?? '',
+        status: j['status']?.toString() ?? 'pending',
+        amountCents: (j['amountCents'] as num?)?.toInt() ?? 0,
+        days: (j['days'] as num?)?.toInt() ?? 0,
+        rejectReason: j['rejectReason']?.toString(),
+      );
+}
+
+class ManualPayInfo {
+  final bool enabled;
+  final String qrUrl;
+  final bool isFallbackQr;
+  final String payeeName;
+  final String noteHint;
+  final List<ManualPayProduct> products;
+  final List<ManualPayRequestView> myRequests;
+
+  const ManualPayInfo({
+    this.enabled = true,
+    this.qrUrl = '/payment/wechat-qr.png',
+    this.isFallbackQr = true,
+    this.payeeName = '管理员',
+    this.noteHint = '',
+    this.products = const [],
+    this.myRequests = const [],
+  });
+
+  ManualPayRequestView? get latestRequest =>
+      myRequests.isEmpty ? null : myRequests.first;
+
+  static ManualPayInfo fromJson(Map<String, dynamic> j) => ManualPayInfo(
+        enabled: j['enabled'] as bool? ?? true,
+        qrUrl: j['qrUrl']?.toString() ?? '/payment/wechat-qr.png',
+        isFallbackQr: j['isFallbackQr'] as bool? ?? true,
+        payeeName: j['payeeName']?.toString() ?? '管理员',
+        noteHint: j['noteHint']?.toString() ?? '',
+        products: (j['products'] as List?)
+                ?.whereType<Map<String, dynamic>>()
+                .map(ManualPayProduct.fromJson)
+                .toList() ??
+            const [],
+        myRequests: (j['myRequests'] as List?)
+                ?.whereType<Map<String, dynamic>>()
+                .map(ManualPayRequestView.fromJson)
+                .toList() ??
+            const [],
+      );
+}
+
+/// 管理员看到的待审申请
+class AdminPayRequest {
+  final String id;
+  final String userId;
+  final int amountCents;
+  final String? payerNote;
+  final String? proofUrl;
+  final String createdAt;
+  const AdminPayRequest({
+    required this.id,
+    required this.userId,
+    this.amountCents = 0,
+    this.payerNote,
+    this.proofUrl,
+    this.createdAt = '',
+  });
+
+  static AdminPayRequest fromJson(Map<String, dynamic> j) => AdminPayRequest(
+        id: j['id']?.toString() ?? '',
+        userId: j['userId']?.toString() ?? '',
+        amountCents: (j['amountCents'] as num?)?.toInt() ?? 0,
+        payerNote: j['payerNote']?.toString(),
+        proofUrl: j['proofUrl']?.toString(),
+        createdAt: j['createdAt']?.toString() ?? '',
+      );
+}
+
 class BillingService {
   final Dio _dio;
   BillingService(this._dio);
@@ -639,6 +760,94 @@ class BillingService {
   Future<ReferralSummary> referralSummary() async {
     final res = await _dio.get('/billing/referral/summary');
     return ReferralSummary.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  // ---------- 人工收款 (内测: 个人微信收款码) ----------
+
+  /// 收款方式 + 我的申请状态
+  Future<ManualPayInfo> manualPayInfo() async {
+    final res = await _dio.get('/billing/pay-info');
+    return ManualPayInfo.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 提交"我已支付"
+  Future<({bool ok, String message})> submitManualPayment({
+    required String planCode,
+    String? payerNote,
+    String? proofUrl,
+  }) async {
+    try {
+      final res = await _dio.post('/billing/manual-payments', data: {
+        'planCode': planCode,
+        if (payerNote != null) 'payerNote': payerNote,
+        if (proofUrl != null) 'proofUrl': proofUrl,
+      });
+      return (
+        ok: true,
+        message: (res.data as Map<String, dynamic>)['message']?.toString() ??
+            '已提交, 等管理员确认',
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final msg = data is Map ? data['error']?.toString() : null;
+      return (ok: false, message: msg ?? '提交失败, 请检查网络后重试');
+    }
+  }
+
+  // ---------- 管理员 (内测核销) ----------
+
+  Future<List<AdminPayRequest>> adminManualPayments({
+    String status = 'pending',
+  }) async {
+    final res = await _dio.get(
+      '/billing/admin/manual-payments',
+      queryParameters: {'status': status},
+    );
+    final list = (res.data as Map<String, dynamic>)['requests'] as List? ?? [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(AdminPayRequest.fromJson)
+        .toList();
+  }
+
+  Future<({bool ok, String message})> adminDecidePayment({
+    required String requestId,
+    required bool approve,
+    int? grantedDays,
+    String? rejectReason,
+  }) async {
+    try {
+      await _dio.post('/billing/admin/manual-payments/$requestId', data: {
+        'decision': approve ? 'approve' : 'reject',
+        if (grantedDays != null) 'grantedDays': grantedDays,
+        if (rejectReason != null) 'rejectReason': rejectReason,
+      });
+      return (ok: true, message: approve ? '已开通' : '已驳回');
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final msg = data is Map ? data['error']?.toString() : null;
+      return (ok: false, message: msg ?? '操作失败, 请重试');
+    }
+  }
+
+  /// 管理员设置收款码/收款人/备注提示
+  Future<bool> adminSetPayInfo({
+    String? qrUrl,
+    String? payeeName,
+    String? noteHint,
+    bool? enabled,
+  }) async {
+    try {
+      await _dio.post('/billing/admin/pay-info', data: {
+        if (qrUrl != null) 'qrUrl': qrUrl,
+        if (payeeName != null) 'payeeName': payeeName,
+        if (noteHint != null) 'noteHint': noteHint,
+        if (enabled != null) 'enabled': enabled,
+      });
+      return true;
+    } on DioException {
+      return false;
+    }
   }
 }
 
