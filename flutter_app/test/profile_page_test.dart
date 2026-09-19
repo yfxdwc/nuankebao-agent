@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuankebao/core/models/me.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/providers/settings_provider.dart';
+import 'package:nuankebao/core/services/api.dart' show ManualPayInfo, ManualPayProduct;
 import 'package:nuankebao/core/widgets/user_avatar.dart';
 import 'package:nuankebao/screens/profile_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,6 +63,9 @@ MeProfile _fullProfile() => MeProfile.fromJson({
       },
       'dev': {'authSkipped': false, 'sessionUserId': '1'},
     });
+
+/// 复用 _container 的 override 列表 (给需要额外 override 的用例)
+List<Override> _overrides(ProviderContainer c) => const [];
 
 Future<ProviderContainer> _container(MeProfile profile) async {
   SharedPreferences.setMockInitialValues({});
@@ -312,6 +316,43 @@ void main() {
     );
     expect(find.text('ABC234'), findsOneWidget); // 我的推荐码
     expect(find.text('复制推荐码'), findsNothing); // tooltip 不渲染成文字
+  });
+
+  testWidgets('开通会员弹层 (内测人工通道): 收款码 + 金额 + 我已支付', (tester) async {
+    // 假收款信息: 省掉网络 (真接口在 curl 冒烟里验过)
+    final container = await _container(_fullProfile());
+    container.read(manualPayInfoProvider); // 先读一次, 后面 override 无效 → 用 ProviderScope override 更干净
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: ProviderContainer(overrides: [
+          ..._overrides(container),
+          manualPayInfoProvider.overrideWith((ref) async => const ManualPayInfo(
+                enabled: true,
+                qrUrl: '/payment/wechat-qr.png',
+                isFallbackQr: false,
+                payeeName: '管理员小张',
+                noteHint: '写手机号后 4 位',
+                products: [
+                  ManualPayProduct(
+                      planCode: 'monthly', label: '1 个月', amountCents: 6900, days: 30),
+                  ManualPayProduct(
+                      planCode: 'quarterly', label: '3 个月', amountCents: 18900, days: 90),
+                ],
+              )),
+        ]),
+        child: const MaterialApp(home: ProfilePage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('开通会员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('¥69'), findsWidgets); // 金额
+    expect(find.textContaining('管理员小张'), findsOneWidget); // 收款人
+    expect(find.text('我已支付'), findsOneWidget);
+    expect(find.textContaining('写手机号后 4 位'), findsWidgets); // 备注提示
+    expect(find.textContaining('暂不支持自动续费'), findsOneWidget);
   });
 
   testWidgets('窄屏 320 + 特大字号 1.3: 滚完整页不溢出', (tester) async {

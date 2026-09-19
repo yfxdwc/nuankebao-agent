@@ -279,8 +279,18 @@ describe("人工收款 (内测: 个人微信收款码 + 管理员核销)", () =>
     ).rejects.toThrow();
   });
 
-  it("驳回不给天数 (被推荐人之外的人也不会白拿会员)", async () => {
-    const view = await getMembershipView(userB);
-    expect(view.isMember).toBe(false); // userB 只被驳回, 没有会员
+  it("驳回不给天数 (会员到期时间一点没变)", async () => {
+    // ⚠ userB 在推荐用例里已经拿到过 15 天 (被推荐人), 所以这里不能断言"不是会员",
+    //   要断言"驳回没有给他加时间"
+    const before = (await getMembershipView(userB)).memberUntil;
+    const req = await submitManualPayment({ userId: userB, planCode: "monthly" });
+    await decideManualPayment({
+      requestId: req.id,
+      actorUserId: userA,
+      decision: "reject",
+      rejectReason: "没查到这笔到账",
+    });
+    const after = (await getMembershipView(userB)).memberUntil;
+    expect(after).toBe(before);
   });
 });

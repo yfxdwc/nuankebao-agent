@@ -25,7 +25,11 @@ BEGIN
   )
   VALUES (
     TG_TABLE_NAME,
-    COALESCE(NEW.id, OLD.id)::BIGINT,
+    -- ⚠️ 不能用 NEW.id/OLD.id: 键值型表 (如 billing_config, PK 是 key) 没有 id 列,
+    --    plpgsql 运行时会直接报 `record "new" has no field "id"` → 该表所有写入失败。
+    --    用 jsonb 取值不挑列, 没有 id 的表退化成 0 (audit_log.record_id 是 not null)。
+    --    (2026-09-19 人工收款通道落地时发现)
+    COALESCE(NULLIF(to_jsonb(COALESCE(NEW, OLD)) ->> 'id', '')::BIGINT, 0),
     TG_OP,
     NULLIF(current_setting('app.current_user_id', true), '')::BIGINT,
     CASE TG_OP
