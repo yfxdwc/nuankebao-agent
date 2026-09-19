@@ -100,11 +100,22 @@ class AuthService {
     // R12 治本 (web): flutter_secure_storage 强制 AES 加密, raw token 不可注入.
     // 改存 ApiClient 内存变量. 跳 storage 路径 — 冷启动会丢, 但 dev 模式接受.
     ApiClient.setWebSession(cookieName: cookieName, token: sessionToken);
-    // 另存 storage 作兑底 (native 路径仍用, web 路径优先内存变量)
-    await ApiClient.storage.write(
-      key: ApiClient.sessionCookieNameKey, value: cookieName);
-    await ApiClient.storage.write(
-      key: ApiClient.sessionTokenKey, value: sessionToken);
+    // 另存 storage 作兜底 (native 路径仍用, web 路径优先内存变量)
+    // fix-dev-web-login (2026-09-18 预览多账号时发现): storage.write 在 web 平台
+    //   可能抛异常 (flutter_secure_storage 强制 AES, iframe/隐私模式常见)。
+    //   以前异常会冒泡到 login() 的 try/catch → 回退调 Auth.js callback →
+    //   callback 的浏览器 cookie 是 W1 mock (恒 user 1), 把 flutter-login 刚下发的
+    //   正确身份 cookie 覆盖掉 → 多账号预览/联调全变成 user 1。
+    //   这里把 storage 写入降级为「失败即忽略」(内存 token 已 set, cookie 已下发)。
+    try {
+      await ApiClient.storage.write(
+          key: ApiClient.sessionCookieNameKey, value: cookieName);
+      await ApiClient.storage.write(
+          key: ApiClient.sessionTokenKey, value: sessionToken);
+    } catch (e) {
+      // ignore: avoid_print
+      print('[dev-web login] storage 写入失败 (忽略, 用内存 token + cookie): $e');
+    }
   }
 
   Future<bool> isLoggedIn() async {

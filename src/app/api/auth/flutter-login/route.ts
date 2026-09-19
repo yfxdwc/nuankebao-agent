@@ -21,6 +21,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { encode as jwtEncode } from "next-auth/jwt";
+import { db } from "@/lib/db";
+import { user } from "@/lib/db/schema";
+import { hashForLookup } from "@/lib/crypto/field";
+import { and, eq } from "drizzle-orm";
 
 const SESSION_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days, 同 Auth.js 默认
 const DEV_PHONE = "13800138000";
@@ -40,12 +44,48 @@ export async function POST(request: NextRequest) {
   }
 
   const { phone, code } = body;
-  if (phone !== DEV_PHONE || code !== DEV_CODE) {
+
+  // 验证码固定 123456 (dev only)
+  if (code !== DEV_CODE) {
+    return NextResponse.json(
+      { error: "验证码错误", hint: "dev mode: code=123456" },
+      { status: 401 }
+    );
+  }
+
+  // 登录身份:
+  //   默认: 只允许写死的 DEV_PHONE (单账号 dev)
+  //   DEV_LOGIN_ANY_USER=1 (默认关闭): 允许 **已存在** 的任意用户 (多账号预览/联调用)
+  //     — 仍需 phone 在 user 表里能查到, 不能凭空造号
+  //   例: 预览沙龙时主理人 (13800138000) 与受邀者 (其他已导入手机号) 互切
+  const anyUser = process.env.DEV_LOGIN_ANY_USER === "1";
+  let devUser: { id: bigint; name: string } | null = null;
+  if (anyUser && phone) {
+    const phoneHash = hashForLookup(phone);
+    const [row] = await db
+      .select({ id: user.id, name: user.name })
+      .from(user)
+      .where(and(eq(user.phoneHash, phoneHash), eq(user.isActive, true)))
+      .limit(1);
+    devUser = row ?? null;
+  }
+
+  if (!anyUser && phone !== DEV_PHONE) {
     return NextResponse.json(
       { error: "验证码错误", hint: "dev mode: phone=13800138000, code=123456" },
       { status: 401 }
     );
   }
+  if (anyUser && !devUser) {
+    return NextResponse.json(
+      { error: "该手机号没有对应用户", hint: "DEV_LOGIN_ANY_USER=1 也要求用户已存在" },
+      { status: 401 }
+    );
+  }
+
+  // 用户 id: 默认写死 1 (= DEV_PHONE 对应的 seed 用户); ANY_USER 模式解析真实 id
+  const sub = anyUser && devUser ? devUser.id.toString() : "1";
+  const displayName = anyUser && devUser ? devUser.name : "开发测试";
 
   // 生成同 Auth.js 格式的 JWT (让 Next.js middleware auth() 能认)
   const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
@@ -56,7 +96,7 @@ export async function POST(request: NextRequest) {
     );
   }
   const token = await jwtEncode({
-    token: { sub: "1", phone: DEV_PHONE, name: "开发测试" },
+    token: { sub, phone, name: displayName },
     secret,
     salt: "authjs.session-token",
     maxAge: SESSION_TOKEN_TTL_SECONDS,

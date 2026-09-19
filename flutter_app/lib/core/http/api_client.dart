@@ -164,17 +164,27 @@ class ApiClient {
     // ignore: avoid_print
     print('[R12 debug] syncCookiesFromBrowser: cookies=${cookies.keys.toList()}');
     if (cookies.isEmpty) return;
-    // 同步 cookie name + value (两个 key 分别存)
-    if (cookies.containsKey('authjs.session-token')) {
-      await storage.write(key: sessionCookieNameKey, value: 'authjs.session-token');
-      await storage.write(key: sessionTokenKey, value: cookies['authjs.session-token']!);
+    // fix-dev-web-login (2026-09-18 预览多账号时发现): storage.write 在 web 平台可能抛
+    //   (flutter_secure_storage web 强制 AES, iframe/隐私模式常见)。以前异常会从
+    //   onResponse 拦截器冒泡 → 把 200 的 /auth/flutter-login 响应带成异常 →
+    //   login() 回退调 Auth.js callback (W1 mock 恒 user 1) → 多账号预览/联调全变 user 1。
+    //   改成「失败即忽略」: 内存 session (setWebSession) + 浏览器自身 cookie 仍然生效。
+    try {
+      // 同步 cookie name + value (两个 key 分别存)
+      if (cookies.containsKey('authjs.session-token')) {
+        await storage.write(key: sessionCookieNameKey, value: 'authjs.session-token');
+        await storage.write(key: sessionTokenKey, value: cookies['authjs.session-token']!);
+        // ignore: avoid_print
+        print('[R12 debug] wrote authjs.session-token, valueLen=${cookies['authjs.session-token']!.length}');
+      } else if (cookies.containsKey('__Secure-authjs.session-token')) {
+        await storage.write(key: sessionCookieNameKey, value: '__Secure-authjs.session-token');
+        await storage.write(key: sessionTokenKey, value: cookies['__Secure-authjs.session-token']!);
+        // ignore: avoid_print
+        print('[R12 debug] wrote __Secure-authjs.session-token');
+      }
+    } catch (e) {
       // ignore: avoid_print
-      print('[R12 debug] wrote authjs.session-token, valueLen=${cookies['authjs.session-token']!.length}');
-    } else if (cookies.containsKey('__Secure-authjs.session-token')) {
-      await storage.write(key: sessionCookieNameKey, value: '__Secure-authjs.session-token');
-      await storage.write(key: sessionTokenKey, value: cookies['__Secure-authjs.session-token']!);
-      // ignore: avoid_print
-      print('[R12 debug] wrote __Secure-authjs.session-token');
+      print('[R12 debug] storage 写入失败 (忽略, 用内存/浏览器 cookie): $e');
     }
   }
 

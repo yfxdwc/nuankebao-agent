@@ -2,6 +2,38 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (预览可用性三连修: 多账号身份 / 创建入口路由 / APK 依赖, 2026-09-18 主人要预览)
+
+主人要「所有修改我都要预览」(http://192.168.1.99:3003/app-preview), 实测发现问题并修复:
+
+**1) 多账号身份 (预览沙龙主理人 vs 受邀者互切时, 全部被认成 user 1)**
+
+- 根因链 (三层, 逐层修):
+  a. `flutter_web` 登录后 `syncCookiesFromBrowser()` 的 `storage.write` 在 web 平台抛异常
+     (flutter_secure_storage 强制 AES) → `onResponse` 拦截器冒泡 → 200 的
+     `/api/auth/flutter-login` 响应被当成失败 → `login()` 回退调 Auth.js
+     `callback/credentials` → 该路径 W1 mock **恒返回 user 1**, 把正确身份 cookie 覆盖。
+  b. `/api/auth/flutter-login` 写死 `DEV_PHONE=13800138000` / `sub:"1"` → 无法签发其他用户。
+  c. Auth.js `authorize()` 写死 `id:"1"` (W1 mock)。
+- 修法:
+  a. `api_client.dart` / `api.dart`: storage 写入降级为「失败即忽略」(web 身份靠内存 token +
+     浏览器 cookie; native 路径不变) — 不再触发 callback 回退。
+  b. `flutter-login/route.ts`: 新增 `DEV_LOGIN_ANY_USER=1` 开关 (默认关闭) →
+     手机号命中 user 表即可签发该用户 token; 未开启时行为与原来完全一致。
+  c. **未改** Auth.js authorize (它在 Edge middleware 链路, 引 DB 会让整个站 500 —
+     已实测并回滚; 记入本条目避免后人再踩)。
+- 验证: 主理人 13800138000 → 详情显示「管理/编辑」; 受邀者 13900000002 →
+  「我受邀的」列表出现沙龙 + 详情显示「我的回复/修改我的回复」。auth 请求序列只剩
+  csrf + flutter-login (callback 不再触发)。
+
+**2) 创建入口路由 (`/salons/new`, `/customers/new` 打不开)** — 见上一条 Fixed 条目。
+
+**3) APK 无法构建 (今日回归)** — `package_info_plus ^9.0.1` 需 AGP 8.12/Kotlin 2.2,
+   与本 app (Flutter 3.24.5 + AGP 8.1) 冲突 → 回退 `^8.0.0` (见 a44c623)。
+
+**预览数据 (dev 库, 可删)**: `预览演示沙龙 (可删)` (id=2, 主理人=1) + 受邀者账号
+`13900000002` (user 2, 姓名「预览受邀者」) + 会务 2 人 + 二级客人, 供主理人/受邀者两侧体验。
+
 ### Fixed (路由顺序: /salons/new 与 /customers/new 被 :id 抢先匹配 — 预览时主人可复现, 2026-09-18)
 
 **发现**: 主人要预览沙龙, 我用 Flutter Web 预览页 (#/salons/new) 实测发现「创建沙龙」进不去 —
