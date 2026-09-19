@@ -532,11 +532,14 @@ pnpm db:seed
 # dev 机器 (默认 13800138000)
 pnpm db:ensure-admin
 
-# 生产环境: 显式给手机号 (建议用主人自己的手机号, 或专门的运营号)
-ADMIN_PHONE=13800138000 ADMIN_NAME=管理员 pnpm db:ensure-admin
+# 生产环境: **生产管理员手机号 = 19957347866** (主人 2026-09-19 拍)
+ADMIN_PHONE=19957347866 ADMIN_NAME=管理员 pnpm db:ensure-admin
 # 或
-npx tsx scripts/ensure-admin.ts --phone=138xxxxxxxx --name=admin
+npx tsx scripts/ensure-admin.ts --phone=19957347866 --name=管理员
 ```
+
+> 📌 **生产管理员账号**: 手机号 `19957347866`, 姓名 `管理员`, `role='admin'`。
+> 该手机号同时写在 `.env.example` 的 `ADMIN_PHONE` 里, 部署时 `.env` 直接带上即可。
 
 行为:
 - 账号不存在 → 建一个 (`role='admin'`, 无加盟商绑定, `is_active=true`)
@@ -544,7 +547,7 @@ npx tsx scripts/ensure-admin.ts --phone=138xxxxxxxx --name=admin
 - 打印最终 `id / 手机号(掩码) / 姓名 / role`
 
 **部署清单里必须勾**:
-- [ ] 生产部署后跑一次 `pnpm db:ensure-admin`（或 `ADMIN_PHONE=... `）
+- [ ] 生产部署后跑一次 `ADMIN_PHONE=19957347866 ADMIN_NAME=管理员 pnpm db:ensure-admin`
 - [ ] 灾备恢复 (`restore_verify` / 换机器) 后再跑一次 —— 恢复的备份里如果缺管理员, 这里补上
 - [ ] 记录的 `ADMIN_PHONE` 写进密钥库 / 部署笔记（下一个维护者要能找到）
 

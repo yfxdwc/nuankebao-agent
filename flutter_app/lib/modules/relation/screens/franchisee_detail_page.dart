@@ -147,15 +147,6 @@ class FranchiseeDetailPage extends ConsumerWidget {
                 color: AppTheme.textSecondary,
               ),
             ),
-            // 长按是隐藏手势 —— 给中老年用户留一行小字提示 (不抢视觉)
-            const SizedBox(height: 4),
-            const Text(
-              '长按上方「加盟」标签可解除加盟',
-              style: TextStyle(
-                fontSize: AppTheme.fontXs,
-                color: AppTheme.textSecondary,
-              ),
-            ),
           ],
         ),
       ),
