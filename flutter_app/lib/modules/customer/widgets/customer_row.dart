@@ -2,9 +2,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/franchise_chip.dart';
 import '../../../core/utils/birthday.dart';
-import '../../../core/widgets/user_avatar.dart';
+import '../../../core/widgets/typed_user_avatar.dart';
 
 class CustomerRow extends StatelessWidget {
   final Customer customer;
@@ -66,11 +65,12 @@ class CustomerRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // 大头像 (56pt)
-            // 头像: 有自定义头像就显示 (照片/候选), 否则退回姓名首字
-            UserAvatar(
+            // 大头像 (56pt) —— 客户类型直接标在头像上 (主人 2026-09-19 拍:
+            //   列表不再显示「加盟/种子/普通」标签, 改由 头像环 + 角标 区分)
+            TypedUserAvatar(
               avatarUrl: customer.avatar,
               name: customer.name,
+              customerType: _type,
               size: AppTheme.avatarMd,
               showLoadingIndicator: false,
             ),
@@ -96,8 +96,6 @@ class CustomerRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      FranchiseChip(type: _type),
                       // 🎂 生日提醒 (落在她设的提醒窗口内才显示; 主人 2026-09-18 拍)
                       if (_birthdayDays != null) ...[
                         const SizedBox(width: 6),
