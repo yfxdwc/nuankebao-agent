@@ -732,9 +732,11 @@ Future<bool> showAvatarPickerSheet(
               return;
             }
             setSheetState(() => busy = true);
-            final url = await ref
-                .read(photoServiceProvider)
-                .upload(base64Encode(bytes), mimeType: _sniffImageMime(bytes));
+            final url = await ref.read(photoServiceProvider).upload(
+                  base64Encode(bytes),
+                  mimeType: _sniffImageMime(bytes),
+                  purpose: 'avatar', // 个人头像免费 (ADR-0012), 不受会员限制
+                );
             if (onApply != null) {
               await onApply(url);
             } else {

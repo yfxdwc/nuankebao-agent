@@ -78,7 +78,7 @@ Future<void> _pumpProfile(
   WidgetTester tester,
   ProviderContainer container, {
   double width = 393,
-  double height = 2400, // 高屏: 整页一次渲染 (内容测试用)
+  double height = 3400, // 高屏: 整页一次渲染 (内容测试用; 页面加区块要同步调大)
   double fontScale = 1.0,
 }) async {
   tester.view.physicalSize = Size(width * 3, height * 3);
@@ -275,6 +275,43 @@ void main() {
 
     // preset:tea → 用「喝茶」图标画, 不再画首字「张」
     expect(find.byIcon(Icons.emoji_food_beverage), findsWidgets);
+  });
+
+  testWidgets('会员卡 (免费档): 显示开通入口 + 9 项会员功能说明 + 填推荐码', (tester) async {
+    final container = await _container(_fullProfile()); // 没给 membership → 当免费档
+    await _pumpProfile(tester, container);
+
+    expect(find.text('会员'), findsOneWidget);
+    expect(find.text('免费版'), findsOneWidget);
+    expect(find.text('开通会员'), findsOneWidget);
+    expect(find.textContaining('AI 助手'), findsWidgets); // 9 项里点名了 AI 助手
+    expect(find.text('我有推荐码'), findsOneWidget);
+  });
+
+  testWidgets('会员卡 (会员中): 显示到期日 + 续费入口 + 我的推荐码', (tester) async {
+    final until = DateTime.now().add(const Duration(days: 15));
+    String two(int n) => n.toString().padLeft(2, '0');
+    final container = await _container(MeProfile.fromJson({
+      'user': {'id': '1', 'name': '张三', 'roleLabel': '销售员'},
+      'membership': {
+        'isMember': true,
+        'memberUntil': until.toIso8601String(),
+        'planCode': 'member',
+        'features': ['ai.assistant', 'crm.interaction'],
+        'referralCode': 'ABC234',
+      },
+    }));
+    await _pumpProfile(tester, container);
+
+    expect(find.text('会员中'), findsOneWidget);
+    expect(find.text('续费会员'), findsOneWidget);
+    expect(
+      find.textContaining(
+          '会员有效期至 ${until.year}-${two(until.month)}-${two(until.day)}'),
+      findsOneWidget,
+    );
+    expect(find.text('ABC234'), findsOneWidget); // 我的推荐码
+    expect(find.text('复制推荐码'), findsNothing); // tooltip 不渲染成文字
   });
 
   testWidgets('窄屏 320 + 特大字号 1.3: 滚完整页不溢出', (tester) async {

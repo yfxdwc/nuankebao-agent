@@ -22,6 +22,8 @@ import {
 } from "@/lib/db/schema";
 import { decryptField, encryptField, hashForLookup } from "@/lib/crypto/field";
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
+import { logger } from "@/lib/errors";
+import { rewardReferrerOnFranchisee } from "@/lib/billing/entitlements";
 import { franchiseeCustomerValues } from "./customer";
 
 /** Q3: 待确认超时 (小时) */
@@ -293,7 +295,10 @@ export async function createPlacementRequest(
 ): Promise<PlacementRequestView> {
   await expireStaleRequests();
 
-  return await withAuditContext(ctx, async (tx) => {
+  // 事务内收集"新建加盟商的手机号 hash", 提交后再发推荐奖励 (不能嵌事务)
+  let rewardPhoneHash: string | null = null;
+
+  const view = await withAuditContext(ctx, async (tx) => {
     const isAdmin = input.initiatorIsAdmin === true;
     const initiator =
       input.initiatorFid == null
@@ -501,7 +506,8 @@ export async function createPlacementRequest(
     // admin: 立即落位 (事务内) → 再把单子读回来
     let finalRow = request;
     if (isAdmin) {
-      await executeRequest(tx, request as unknown as RawRequest);
+      const outcome = await executeRequest(tx, request as unknown as RawRequest);
+      rewardPhoneHash = outcome.createdPhoneHash;
       const [fresh] = await tx
         .select()
         .from(franchisePlacementRequest)
@@ -539,6 +545,10 @@ export async function createPlacementRequest(
     );
     return views[0];
   });
+
+  // D23: 被推荐人成为加盟者 → 发推荐人 15 天 (幂等 + 失败不影响落位)
+  await safeRewardReferrer(rewardPhoneHash);
+  return view;
 }
 
 // ============================================
@@ -619,7 +629,9 @@ export async function decidePlacementRequest(
 ): Promise<PlacementRequestView> {
   await expireStaleRequests();
 
-  return await withAuditContext(ctx, async (tx) => {
+  let rewardPhoneHash: string | null = null;
+
+  const view = await withAuditContext(ctx, async (tx) => {
     const [row] = await tx
       .select()
       .from(franchisePlacementRequest)
@@ -685,7 +697,8 @@ export async function decidePlacementRequest(
       );
       const ok = need.every((r) => approved.has(r));
       if (ok) {
-        await executeRequest(tx, raw);
+        const outcome = await executeRequest(tx, raw);
+        rewardPhoneHash = outcome.createdPhoneHash;
       }
     }
 
@@ -697,6 +710,10 @@ export async function decidePlacementRequest(
     const views = await toViews(tx, [fresh as RawRequest], actor);
     return views[0];
   });
+
+  // D23: 三方确认齐了 → 落位成功 → 发推荐人奖励 (幂等 + 失败不影响落位)
+  await safeRewardReferrer(rewardPhoneHash);
+  return view;
 }
 
 /** 发起人撤回 (pending → cancelled, 点位释放) */
@@ -729,7 +746,35 @@ export async function cancelPlacementRequest(
 
 type Tx = typeof db;
 
-async function executeRequest(tx: Tx, raw: RawRequest): Promise<void> {
+/** 落位结果: 新建加盟商时带上手机号 hash —— 用于会员推荐奖励 (D23) */
+interface ExecuteOutcome {
+  /** 本次落位是否"新建"了一个加盟商 (unjoin/移动 时为空) */
+  createdPhoneHash: string | null;
+}
+
+/**
+ * 安全发推荐奖励 (D23: 被推荐人成为加盟者 → 给推荐人 15 天)
+ *
+ * 边界 (重要):
+ *   - **不抛异常**: 会员奖励失败绝不能把"落位"这种核心业务搞挂 (落位已提交, 奖励可补)
+ *   - 幂等: 内部靠 (referrer, referee) 唯一 + grant idempotencyKey
+ *   - 事务外调用: grantDays 自己开事务, 不能嵌在落位事务里
+ */
+async function safeRewardReferrer(phoneHash: string | null): Promise<void> {
+  if (!phoneHash || phoneHash.startsWith("pending:")) return;
+  try {
+    const { rewarded } = await rewardReferrerOnFranchisee({
+      newFranchiseePhoneHash: phoneHash,
+    });
+    if (rewarded > 0) {
+      logger.info("billing: referral reward granted", { rewarded });
+    }
+  } catch (e) {
+    logger.error("billing: referral reward failed (ignored)", {}, e);
+  }
+}
+
+async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> {
   // 再校验一次点位 (预占期间理论上没人抢, 兜底)
   const [parent] = await tx
     .select()
@@ -750,6 +795,7 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<void> {
   const newDepth = parent.placementDepth + 1;
 
   let resultFid: bigint;
+  let createdOutcome: ExecuteOutcome = { createdPhoneHash: null };
 
   if (raw.kind === "create") {
     // 客户档案要明文 (franchiseeCustomerValues 内部再加密); 申请单里存的是密文 → 这里解密
@@ -801,6 +847,8 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<void> {
         }
       }
     }
+
+    createdOutcome = { createdPhoneHash: raw.newPhoneHash ?? null };
 
     // 跟 createFranchisee 一致: 加盟商同步落一份客户档案
     await tx
@@ -856,6 +904,8 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<void> {
       updatedAt: sql`NOW()`,
     })
     .where(eq(franchisePlacementRequest.id, raw.id));
+
+  return createdOutcome;
 }
 
 // ============================================

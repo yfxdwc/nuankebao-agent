@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/http/api_client.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+
+/// 全局 SnackBar 通道 (402 会员提示用; 不依赖任何页面 context)
+final GlobalKey<ScaffoldMessengerState> _messengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 class NuankeBaoApp extends ConsumerWidget {
   const NuankeBaoApp({super.key});
@@ -13,8 +18,27 @@ class NuankeBaoApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
     final settings = ref.watch(settingsProvider);
 
+    // 会员功能被拒 (402) 时全局提示一次 (ADR-0012)
+    //   注册在 build 里是幂等的: 回调只覆盖, 不叠加; 用 messengerKey 保证不依赖某个页面 context
+    ApiClient.onMembershipRequired = (message) {
+      final messenger = _messengerKey.currentState;
+      if (messenger == null) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(message, style: const TextStyle(fontSize: AppTheme.fontMd)),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: '去开通',
+            onPressed: () => router.go('/profile'),
+          ),
+        ),
+      );
+    };
+
     return MaterialApp.router(
       title: '暖客宝',
+      scaffoldMessengerKey: _messengerKey,
       debugShowCheckedModeBanner: false,
       // 养生行业偏温暖, 不做 dark mode (AGENTS §1)
       theme: AppTheme.light(),

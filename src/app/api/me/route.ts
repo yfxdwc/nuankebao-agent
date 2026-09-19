@@ -38,6 +38,7 @@ import {
 import { getStatsOverview, type StatsOverview } from "@/lib/db/queries/dashboard";
 import { maskPhone } from "@/lib/utils";
 import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
+import { ensureReferralCode, getMembershipView } from "@/lib/billing/entitlements";
 import { withAuditContext, getAuditContextFromRequest } from "@/lib/audit/context";
 import type { PlacementSide } from "@/lib/db/schema";
 
@@ -164,7 +165,21 @@ export async function GET() {
     stats = await getStatsOverview(null);
   }
 
+  // ---- 会员状态 + 我的推荐码 (ADR-0012) ----
+  // 没有 user 行 (dev mock) → membership = null, 客户端按"免费档"渲染但不显示推荐码
+  let membershipBlock = null;
+  if (userId > BigInt(0) && userRow) {
+    try {
+      await ensureReferralCode(userId); // 幂等: 第一次访问时分配固定 6 位码
+      membershipBlock = await getMembershipView(userId);
+    } catch (e) {
+      // 会员信息读失败不能把「我的」页打挂 —— 页面还有账号/加盟/统计要看
+      console.error("[GET /api/me] membership block failed", e);
+    }
+  }
+
   return NextResponse.json({
+    membership: membershipBlock,
     user: {
       id: userId.toString(),
       name: accountName,

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { savePhotoFromBase64 } from "@/lib/storage/photos";
 import { z } from "zod";
 import { apiGuard } from "@/lib/api-guard";
+import { featureGuard } from "@/lib/billing/guard";
+import { FEATURES } from "@/lib/billing/features";
 import { logger } from "@/lib/errors";
 
 export const runtime = "nodejs";
@@ -9,6 +11,10 @@ export const runtime = "nodejs";
 const Schema = z.object({
   base64: z.string().min(1, "base64 数据缺失"),
   mimeType: z.string().regex(/^image\/(jpeg|png|webp)$/, "仅支持 jpeg/png/webp").optional(),
+  // 用途: 决定要不要会员 (ADR-0012 §5)
+  //   wellness/salon/other (默认) = 业务照片 → 会员功能
+  //   avatar = 个人账号头像 → 免费 (换个头像不该收费)
+  purpose: z.enum(["wellness", "salon", "avatar", "other"]).optional(),
 });
 
 /**
@@ -25,6 +31,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const input = Schema.parse(body);
+
+    // ADR-0012: 业务照片是会员功能 (个人头像 avatar 免费)
+    if (input.purpose !== "avatar") {
+      const gate = await featureGuard(guard.userId, FEATURES.MEDIA_UPLOAD);
+      if (gate) return gate;
+    }
 
     const result = await savePhotoFromBase64(input.base64, input.mimeType ?? undefined);
 

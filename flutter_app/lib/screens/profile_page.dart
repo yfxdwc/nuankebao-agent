@@ -119,6 +119,8 @@ class _ProfileBody extends ConsumerWidget {
         else
           const _NotFranchiseeCard(),
         profileSectionGap,
+        _MembershipCard(profile: profile),
+        profileSectionGap,
         _StatsCard(profile: profile),
         profileSectionGap,
         const _DisplaySettingsCard(),
@@ -877,6 +879,285 @@ class _LogoutButton extends ConsumerWidget {
       if (!context.mounted) return;
       context.go('/login');
     });
+  }
+}
+
+// ============================================
+// 会员卡 (ADR-0012 S0: 状态 + 开通入口 + 我的推荐码)
+// ============================================
+
+class _MembershipCard extends ConsumerWidget {
+  final MeProfile profile;
+  const _MembershipCard({required this.profile});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final m = profile.membership;
+    final isMember = m?.isMember ?? false;
+    final until = m?.untilLabel ?? '';
+    final daysLeft = m?.daysLeft;
+
+    return ProfileSection(
+      title: '会员',
+      icon: isMember ? Icons.workspace_premium : Icons.card_giftcard,
+      hint: isMember ? '会员中' : '免费版',
+      children: [
+        if (isMember) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.verified, size: 26, color: AppTheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    daysLeft != null && daysLeft >= 0
+                        ? '会员有效期至 $until (还有 $daysLeft 天)'
+                        : '会员有效期至 $until',
+                    style: const TextStyle(
+                      fontSize: AppTheme.fontMd,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Text(
+            'AI 助手 / 互动记录 / 生日提醒 / 图片上传 等会员功能都能用',
+            style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+          ),
+        ] else ...[
+          const Padding(
+            padding: EdgeInsets.only(top: 4, bottom: 8),
+            child: Text(
+              '免费版能用: 客户档案 / 养生记录 / 跟进任务 / 图谱 / 加盟网络\n'
+              '会员功能 (9 项): AI 助手 · 跟进建议 · 客户画像 · 效果分析 · 跟进推荐 · '
+              '互动记录 · 生日提醒 · 图片上传 · 沙龙发起',
+              style: TextStyle(
+                fontSize: AppTheme.fontSm,
+                height: 1.6,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+        ],
+        ProfileTile(
+          icon: Icons.shopping_cart_checkout,
+          title: isMember ? '续费会员' : '开通会员',
+          subtitle: '¥69 / 月 · 自动续费 ¥49 / 月',
+          color: AppTheme.accent,
+          onTap: () => _showPurchaseSheet(context, ref, isMember: isMember),
+        ),
+        if (m?.hasCode == true)
+          _ReferralCodeRow(
+            code: m!.referralCode!,
+            onRefresh: () => ref.invalidate(meProfileProvider),
+          ),
+        // 还没被推荐过 → 给"填别人的码"的入口 (主人要: 注册时可选填; S0 先放在这里,
+        // 等 W3 真实注册流程再把入口搬到注册页)
+        ProfileTile(
+          icon: Icons.redeem,
+          title: '我有推荐码',
+          subtitle: '填朋友的码, 你也能得 15 天会员',
+          color: AppTheme.primaryDark,
+          onTap: () => _showClaimCodeDialog(context, ref),
+        ),
+      ],
+    );
+  }
+
+  /// S0 (还没接在线支付): 用大白话告诉用户怎么付钱
+  /// S1 接微信/支付宝后, 这里换成"去支付"拉起收银台
+  void _showPurchaseSheet(BuildContext context, WidgetRef ref,
+      {required bool isMember}) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isMember ? '续费会员' : '开通会员',
+              style: const TextStyle(
+                fontSize: AppTheme.fontLg,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '¥69 / 月\n自动续费 ¥49 / 月 (连续包月更划算)',
+              style: TextStyle(fontSize: AppTheme.fontMd, height: 1.6),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '现在开通请把费用转给管理员 (支持收款码), 管理员会立刻给你开通;\n'
+              '在线支付 (微信 / 支付宝) 马上上线, 上线后在这里一键续费。',
+              style: TextStyle(
+                fontSize: AppTheme.fontSm,
+                height: 1.6,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: AppTheme.buttonLgHeight,
+              child: FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('知道了', style: TextStyle(fontSize: AppTheme.fontMd)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 填推荐码弹层 (S0: 放在「我的」→ 会员卡里)
+Future<void> _showClaimCodeDialog(BuildContext context, WidgetRef ref) async {
+  final ctrl = TextEditingController();
+  var busy = false;
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setDlgState) {
+        Future<void> submit() async {
+          final code = ctrl.text.trim();
+          if (code.isEmpty) return;
+          setDlgState(() => busy = true);
+          final r = await ref.read(billingServiceProvider).claimReferralCode(code);
+          if (!ctx.mounted) return;
+          setDlgState(() => busy = false);
+          Navigator.of(ctx).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(r.message, style: const TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+          );
+          if (r.ok) ref.invalidate(meProfileProvider);
+        }
+
+        return AlertDialog(
+          title: const Text('填推荐码'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '填朋友的 6 位推荐码, 你和朋友各得 15 天会员',
+                style: TextStyle(fontSize: AppTheme.fontSm, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.characters,
+                maxLength: 6,
+                style: const TextStyle(
+                  fontSize: AppTheme.fontXl,
+                  letterSpacing: 4,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: const InputDecoration(
+                  hintText: '6 位字母数字',
+                  counterText: '',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+            ElevatedButton(
+              onPressed: busy ? null : submit,
+              child: Text(busy ? '提交中...' : '确定',
+                  style: const TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+  ctrl.dispose();
+}
+
+/// 我的推荐码 + 复制 (双向各得 15 天)
+class _ReferralCodeRow extends StatelessWidget {
+  final String code;
+  final VoidCallback onRefresh;
+
+  const _ReferralCodeRow({required this.code, required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryLight.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.group_add, size: 24, color: AppTheme.primaryDark),
+              const SizedBox(width: 8),
+              // Expanded: 窄屏/特大字号下让标题列先缩, 保住推荐码本身完整可读
+              const Expanded(
+                child: Text(
+                  '我的推荐码',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTheme.fontMd,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                code,
+                style: const TextStyle(
+                  fontSize: AppTheme.fontLg,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 3,
+                  color: AppTheme.primaryDark,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.copy, size: 22),
+                tooltip: '复制推荐码',
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: code));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('推荐码已复制',
+                            style: TextStyle(fontSize: AppTheme.fontMd)),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+          const Text(
+            '朋友注册时填这个码, 双方各得 15 天会员',
+            style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+          ),
+        ],
+      ),
+    );
   }
 }
 

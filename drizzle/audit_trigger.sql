@@ -65,3 +65,29 @@ DROP TRIGGER IF EXISTS salon_quota_audit ON salon_quota;
 CREATE TRIGGER salon_quota_audit
   AFTER INSERT OR UPDATE OR DELETE ON salon_quota
   FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+-- 会员/推荐 (ADR-0012): 钱与权益相关的写必须留痕
+DROP TRIGGER IF EXISTS membership_audit ON membership;
+CREATE TRIGGER membership_audit
+  AFTER INSERT OR UPDATE OR DELETE ON membership
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+DROP TRIGGER IF EXISTS entitlement_grant_audit ON entitlement_grant;
+CREATE TRIGGER entitlement_grant_audit
+  AFTER INSERT OR UPDATE OR DELETE ON entitlement_grant
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+DROP TRIGGER IF EXISTS referral_code_audit ON referral_code;
+CREATE TRIGGER referral_code_audit
+  AFTER INSERT OR UPDATE OR DELETE ON referral_code
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+DROP TRIGGER IF EXISTS referral_reward_audit ON referral_reward;
+CREATE TRIGGER referral_reward_audit
+  AFTER INSERT OR UPDATE OR DELETE ON referral_reward
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+DROP TRIGGER IF EXISTS plan_audit ON plan;
+CREATE TRIGGER plan_audit
+  AFTER INSERT OR UPDATE OR DELETE ON plan
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();

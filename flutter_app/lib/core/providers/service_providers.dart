@@ -60,6 +60,9 @@ final meServiceProvider = Provider<MeService>(
 final systemServiceProvider = Provider<SystemService>(
   (ref) => SystemService(ref.watch(dioProvider)),
 );
+final billingServiceProvider = Provider<BillingService>(
+  (ref) => BillingService(ref.watch(dioProvider)),
+);
 final salonServiceProvider = Provider<SalonService>(
   (ref) => SalonService(ref.watch(dioProvider)),
 );

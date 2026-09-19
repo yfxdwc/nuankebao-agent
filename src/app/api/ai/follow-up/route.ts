@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { generateFollowUpSuggestion } from "@/lib/ai/follow-up";
 import { apiGuard } from "@/lib/api-guard";
+import { featureGuard } from "@/lib/billing/guard";
+import { FEATURES } from "@/lib/billing/features";
 import { logger } from "@/lib/errors";
 
 const Schema = z.object({
@@ -16,6 +18,10 @@ const Schema = z.object({
 export async function POST(request: NextRequest) {
   const guard = await apiGuard(request, { auth: true, rateLimit: "ai" });
   if (guard.response) return guard.response;
+
+  // ADR-0012: 会员功能判权 (免费用户 402)
+  const gate = await featureGuard(guard.userId, FEATURES.AI_FOLLOW_UP);
+  if (gate) return gate;
 
   try {
     const body = await request.json();

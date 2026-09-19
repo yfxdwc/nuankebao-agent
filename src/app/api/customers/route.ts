@@ -8,6 +8,9 @@ import {
   createCustomer,
 } from "@/lib/db/queries/customer";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
+import { hasFeatureAccess } from "@/lib/billing/guard";
+import { stripBirthdayReminderFromList } from "@/lib/billing/membership-filter";
+import { FEATURES } from "@/lib/billing/features";
 
 const CreateCustomerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -65,6 +68,13 @@ export async function GET(request: NextRequest) {
     type: parsedType.success ? parsedType.data : undefined,
     viewerFranchiseeId: await resolveViewerFranchiseeId(session?.user?.id),
   });
+
+  // ADR-0012: 生日提醒是会员功能 —— 非会员读出来 birthdayRemindDays = null (提醒自然不触发),
+  // 底层数据保留 (续费后设置自动回来)。放在 route 层而不是 query 层: 不动被 web admin 复用的查询
+  const reminderOn = await hasFeatureAccess(session?.user?.id, FEATURES.CRM_BIRTHDAY_REMINDER);
+  if (!reminderOn) {
+    return NextResponse.json(stripBirthdayReminderFromList(result));
+  }
   return NextResponse.json(result);
 }
 

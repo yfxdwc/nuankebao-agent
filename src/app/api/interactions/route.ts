@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
+import { featureGuard } from "@/lib/billing/guard";
+import { FEATURES } from "@/lib/billing/features";
 import { z } from "zod";
 import {
   createInteraction,
@@ -36,6 +38,10 @@ export async function POST(request: NextRequest) {
   if (!isAuthSkipped() && !session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // ADR-0012: 互动记录是会员功能 (GET 允许看历史, POST 需会员)
+  const gate = await featureGuard(session?.user?.id, FEATURES.CRM_INTERACTION);
+  if (gate) return gate;
 
   try {
     const body = await request.json();

@@ -275,6 +275,55 @@ class MeStats {
   }
 }
 
+/// 会员状态 (GET /api/me → membership; ADR-0012)
+/// null = 后端没给 (dev mock / 账号行不存在) → 当免费档渲染, 但不显示推荐码
+class MeMembership {
+  final bool isMember;
+  final DateTime? memberUntil;
+  final String planCode; // free | member
+  final List<String> features;
+
+  /// 我的固定 6 位推荐码
+  final String? referralCode;
+
+  const MeMembership({
+    this.isMember = false,
+    this.memberUntil,
+    this.planCode = 'free',
+    this.features = const [],
+    this.referralCode,
+  });
+
+  static MeMembership? fromJson(dynamic json) {
+    if (json is! Map) return null;
+    return MeMembership(
+      isMember: json['isMember'] as bool? ?? false,
+      memberUntil: _parseDate(json['memberUntil']),
+      planCode: json['planCode']?.toString() ?? 'free',
+      features: (json['features'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
+      referralCode: json['referralCode']?.toString(),
+    );
+  }
+
+  bool get hasCode => (referralCode ?? '').isNotEmpty;
+
+  /// 到期日 (中老年看得懂的写法)
+  String get untilLabel {
+    final d = memberUntil;
+    if (d == null) return '';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${d.year}-${two(d.month)}-${two(d.day)}';
+  }
+
+  /// 距到期还有几天 (负数 = 已过期)
+  int? get daysLeft {
+    final d = memberUntil;
+    if (d == null) return null;
+    return d.difference(DateTime.now()).inDays;
+  }
+}
+
 /// GET /api/me 的完整响应
 class MeProfile {
   final MeUser? user;
@@ -285,6 +334,9 @@ class MeProfile {
   final bool authSkipped;
   final String? sessionUserId;
 
+  /// 会员状态 (null = 后端没给, 见 MeMembership 注释)
+  final MeMembership? membership;
+
   const MeProfile({
     this.user,
     this.phone,
@@ -293,6 +345,7 @@ class MeProfile {
     this.stats,
     this.authSkipped = false,
     this.sessionUserId,
+    this.membership,
   });
 
   factory MeProfile.fromJson(Map<String, dynamic> json) {
@@ -305,6 +358,7 @@ class MeProfile {
       stats: MeStats.fromJson(json['stats']),
       authSkipped: dev is Map ? (dev['authSkipped'] as bool? ?? false) : false,
       sessionUserId: dev is Map ? dev['sessionUserId']?.toString() : null,
+      membership: MeMembership.fromJson(json['membership']),
     );
   }
 
@@ -325,6 +379,13 @@ class MeProfile {
   }
 
   bool get isFranchisee => franchisee != null;
+
+  /// 是不是会员 (后端没给 membership → 当免费档)
+  bool get isMember => membership?.isMember ?? false;
+
+  /// 某个会员功能能不能用 (客户端只用来隐藏入口; 真正的门在服务端)
+  bool canUse(String featureKey) =>
+      isMember || (membership?.features.contains(featureKey) ?? false);
 }
 
 /// ============================================

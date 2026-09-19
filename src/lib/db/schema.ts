@@ -1010,3 +1010,190 @@ export const salonAttachment = pgTable(
 
 export type SalonAttachment = typeof salonAttachment.$inferSelect;
 export type NewSalonAttachment = typeof salonAttachment.$inferInsert;
+
+// ============================================
+// 会员付费 (S0: 会员骨架 + 推荐码; 支付表 S1 再加)
+// ============================================
+// ADR-0012 + docs/membership-billing-draft.md v0.2
+//
+// 隔离红线 (与 ADR-0006 一致, 任何 PR 违反 = 驳回):
+//   1. billing_* / membership* / referral_* 表**不得**有外键指向 franchisee / customer
+//      (唯一允许的交叉: membership.user_id → user.id)
+//   2. 推荐奖励只能是**服务权益 (天数)**, 不可提现/转让/折现; 无二级推荐
+//   3. 付费状态不得影响加盟身份/上下级/图谱/客户数据所有权
+//
+// 金额约定 (S1 起): 一律 integer **分**, 禁用 float/double
+
+export const plan = pgTable(
+  "plan",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    code: text("code").notNull(), // free / monthly / monthly_auto / yearly
+    version: integer("version").notNull().default(1), // 价格表不可变 → 改价=新版本
+    name: text("name").notNull(),
+    priceCents: integer("price_cents").notNull().default(0), // 6900 / 4900
+    intervalDays: integer("interval_days").notNull().default(30),
+    autoRenew: boolean("auto_renew").notNull().default(false),
+
+    /// 该档包含的 feature key 列表 (见 src/lib/billing/features.ts)
+    features: jsonb("features").$type<string[]>().notNull().default([]),
+
+    effectiveFrom: timestamp("effective_from", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    retiredAt: timestamp("retired_at", { withTimezone: true }), // 下架≠删除 (老订阅继续跑)
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    codeVersionUnique: uniqueIndex("idx_plan_code_version").on(
+      table.code,
+      table.version
+    ),
+  })
+);
+
+export type Plan = typeof plan.$inferSelect;
+export type NewPlan = typeof plan.$inferInsert;
+
+/// 会员状态 (每用户一行)
+/// 设计: **不存冗余状态字段** —— 是不是会员由 member_until 派生 (`> now()`),
+///       避免"状态字段与到期时间打架"这类经典 bug
+export const membership = pgTable(
+  "membership",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    userId: bigint("user_id", { mode: "bigint" }).notNull(),
+
+    /// 当前生效套餐 (free 用户为 null; 到期降级 = 置 null + 保留 member_until 历史)
+    planId: bigint("plan_id", { mode: "bigint" }),
+
+    /// 权益截止时间 = **会员判定的唯一真相**
+    ///   叠加规则 (顺延): member_until = max(now, member_until) + N 天
+    memberUntil: timestamp("member_until", { withTimezone: true }),
+
+    /// 自动续费签约状态 (S2; S0/S1 恒 none)
+    autoRenewState: text("auto_renew_state", {
+      enum: ["none", "signed", "charging", "failed", "canceled"],
+    })
+      .notNull()
+      .default("none"),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    userUnique: uniqueIndex("idx_membership_user").on(table.userId),
+    untilIdx: index("idx_membership_until").on(table.memberUntil),
+  })
+);
+
+export type Membership = typeof membership.$inferSelect;
+export type NewMembership = typeof membership.$inferInsert;
+
+/// 权益发放流水 (送天数: 推荐 / 赠送 / 补偿 / 手工)
+/// ⚠️ 不写金额 —— 避免"权益 = 现金价值"的联想 (钱的账本 S1 才建 billing_ledger)
+export const entitlementGrant = pgTable(
+  "entitlement_grant",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    userId: bigint("user_id", { mode: "bigint" }).notNull(),
+    days: integer("days").notNull(),
+
+    reason: text("reason", {
+      enum: [
+        "referral_referee", // 被推荐人: 填码得 15 天
+        "referral_referrer", // 推荐人: 被推荐人成为加盟者后得 15 天
+        "gift",
+        "compensation",
+        "manual", // 管理员手工开通/延期
+      ],
+    }).notNull(),
+
+    /// 幂等键 (如 referral:12->34 / manual:admin1:20260919)
+    ///   重复触发同一次发放不会重复送天数 —— 奖励发放必须有幂等, 否则回调/重试就送两次
+    idempotencyKey: text("idempotency_key").notNull(),
+
+    grantedByUserId: bigint("granted_by_user_id", { mode: "bigint" }),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    idemUnique: uniqueIndex("idx_grant_idempotency").on(table.idempotencyKey),
+    userIdx: index("idx_grant_user").on(table.userId, table.createdAt.desc()),
+  })
+);
+
+export type EntitlementGrant = typeof entitlementGrant.$inferSelect;
+export type NewEntitlementGrant = typeof entitlementGrant.$inferInsert;
+
+/// 推荐码 (每人固定 6 位; 注册时可选填)
+/// 字符集去掉了 0/O/1/I/L 易混字符, 见 src/lib/billing/referral.ts
+export const referralCode = pgTable(
+  "referral_code",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    userId: bigint("user_id", { mode: "bigint" }).notNull(),
+    code: text("code").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    userUnique: uniqueIndex("idx_referral_code_user").on(table.userId),
+    codeUnique: uniqueIndex("idx_referral_code_code").on(table.code),
+  })
+);
+
+export type ReferralCode = typeof referralCode.$inferSelect;
+export type NewReferralCode = typeof referralCode.$inferInsert;
+
+/// 推荐关系 + 发奖状态
+///   反作弊: (referrer, referee) 唯一 → 一个被推荐人一生只能被推荐一次
+///   D23: 推荐人侧奖励在"被推荐人成为加盟者"后才 rewarded (之前是 pending)
+export const referralReward = pgTable(
+  "referral_reward",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    referrerUserId: bigint("referrer_user_id", { mode: "bigint" }).notNull(),
+    refereeUserId: bigint("referee_user_id", { mode: "bigint" }).notNull(),
+    code: text("code").notNull(),
+
+    status: text("status", {
+      enum: ["pending", "rewarded", "rejected"],
+    })
+      .notNull()
+      .default("pending"),
+    rejectReason: text("reject_reason"),
+
+    /// 被推荐人注册时的手机号 hash / 设备指纹 / IP —— 只用于事后反作弊审计, 不外发
+    refereePhoneHash: text("referee_phone_hash"),
+    refereeSignupIp: text("referee_signup_ip"),
+
+    rewardedAt: timestamp("rewarded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    pairUnique: uniqueIndex("idx_referral_pair").on(
+      table.referrerUserId,
+      table.refereeUserId
+    ),
+    referrerIdx: index("idx_referral_referrer").on(
+      table.referrerUserId,
+      table.createdAt.desc()
+    ),
+    statusIdx: index("idx_referral_status").on(table.status),
+  })
+);
+
+export type ReferralReward = typeof referralReward.$inferSelect;
+export type NewReferralReward = typeof referralReward.$inferInsert;

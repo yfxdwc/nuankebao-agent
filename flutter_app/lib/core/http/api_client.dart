@@ -225,6 +225,30 @@ class ApiClient {
     print('[R12 debug] injected dev token from URL: name=$cookieName tokenLen=${token.length}');
   }
 
+  /// 会员功能被拒 (HTTP 402 + code=MEMBERSHIP_REQUIRED) 时的全局回调
+  ///
+  /// 由 app.dart 注册 (弹一条"这是会员功能"提示 + 去开通入口)。
+  /// 为什么放在客户端拦截器里: 会员功能散落在多个页面 (AI 卡/互动/拍照/生日提醒),
+  /// 与其每个页面写一遍 402 处理 (还会漏), 不如在**唯一出口**统一兜底。
+  /// 真正的判权在服务端; 这里只是把失败翻译成人话。
+  static void Function(String message)? onMembershipRequired;
+
+  /// 防抖: 一屏里连点几个会员功能, 只提示一次 (2 秒内不重复弹)
+  static DateTime? _lastMembershipToastAt;
+  static void _notifyMembershipRequired(String message) {
+    final now = DateTime.now();
+    if (_lastMembershipToastAt != null &&
+        now.difference(_lastMembershipToastAt!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastMembershipToastAt = now;
+    try {
+      onMembershipRequired?.call(message);
+    } catch (_) {
+      // 提示失败不能影响业务错误继续抛
+    }
+  }
+
   static ApiClient create() {
     final dio = Dio(BaseOptions(
       baseUrl: baseUrl,
@@ -292,6 +316,18 @@ class ApiClient {
         return handler.next(response);
       },
       onError: (e, handler) {
+        // ADR-0012: 会员功能 402 → 全局提示 (客户端只做人话翻译, 不做判权)
+        final res = e.response;
+        if (res?.statusCode == 402) {
+          final data = res?.data;
+          final code = data is Map ? data['code']?.toString() : null;
+          final msg = data is Map
+              ? (data['error']?.toString() ?? '这是会员功能, 开通会员后可用')
+              : '这是会员功能, 开通会员后可用';
+          if (code == 'MEMBERSHIP_REQUIRED' || code == null) {
+            _notifyMembershipRequired(msg);
+          }
+        }
         return handler.next(e);
       },
     ));

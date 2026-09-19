@@ -9,6 +9,8 @@ import {
   softDeleteCustomer,
 } from "@/lib/db/queries/customer";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
+import { hasFeatureAccess } from "@/lib/billing/guard";
+import { FEATURES } from "@/lib/billing/features";
 
 const UpdateCustomerSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -49,7 +51,10 @@ export async function GET(
   if (!customer) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  return NextResponse.json(customer);
+
+  // ADR-0012: 非会员看不到生日提醒设置 (数据仍在, 续费即恢复)
+  const reminderOn = await hasFeatureAccess(session?.user?.id, FEATURES.CRM_BIRTHDAY_REMINDER);
+  return NextResponse.json(reminderOn ? customer : { ...customer, birthdayRemindDays: null });
 }
 
 export async function PATCH(

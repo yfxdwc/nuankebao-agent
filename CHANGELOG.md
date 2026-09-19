@@ -2,6 +2,47 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (会员付费 S0 落地: 会员骨架 + 9 项判权 + 推荐码 + 人工开通, 2026-09-19)
+
+**主人拍板后开工** (ask_user `0ecdc2ab`: D21 会员档 / D22 月30累计360 / D23 被推荐人成为加盟者后发奖 / D20 开工 S0)
+
+**后端 (新域 `billing` / `membership` / `referral`, 与加盟域零外键)**
+
+| 文件 | 作用 |
+|---|---|
+| `src/lib/billing/features.ts` | 9 项会员功能清单 (ai.assistant / ai.follow_up / ai.customer_profile / ai.effect_analysis / ai.repurchase / salon.create / crm.interaction / crm.birthday_reminder / media.upload) |
+| `src/lib/billing/referral.ts` | 推荐码字符集 (去 0/O/1/I/L) / 封顶 月30·累计360 / 反作弊判定 / 顺延叠加 / 幂等键 (纯函数, 可单测) |
+| `src/lib/billing/entitlements.ts` | `getMembershipView` / `requireFeature`(402) / `grantDays`(幂等+顺延) / `ensureReferralCode` / `claimReferralCode` / `rewardReferrerOnFranchisee` / `adminGrant` |
+| `src/lib/billing/guard.ts` | route 级 `featureGuard` (402 + code=MEMBERSHIP_REQUIRED) + `hasFeatureAccess` (读数据降级用) |
+| `src/lib/billing/membership-filter.ts` | 非会员 → `birthdayRemindDays` 读成 null (数据保留, 续费即恢复) |
+| `drizzle/0012_membership_billing.sql` | `plan` / `membership` / `entitlement_grant` / `referral_code` / `referral_reward` (加性, compat 0 error) + 5 张表挂审计触发器 |
+| `GET /api/me` | 新增 `membership { isMember, memberUntil, planCode, features[], referralCode }` |
+| `POST /api/billing/referral/claim` / `GET .../summary` / `POST /api/billing/admin/grant` | 填码 / 我的码与进度 / 管理员手工开通 (role=admin) |
+| 判权落地 | `ai/{follow-up,profile,effect-analysis,repurchase-prediction}` + `interactions POST` + `photos POST` (`purpose=avatar` 例外放行) + 客户列表/详情生日提醒字段 |
+
+**推荐奖励触发点**: 被推荐人**成为加盟者**时 (D23) — 挂在 `createPlacementRequest`(admin 立即落位) /
+`decidePlacementRequest`(三方确认齐) / `createFranchisee` 三条落位路径的事务**提交之后**
+(奖励失败不影响落位; 幂等靠 (referrer,referee) 唯一 + grant idempotencyKey)
+
+**Flutter (S0 UI)**
+
+- `core/models/me.dart`: `MeMembership` (isMember / memberUntil / features / referralCode) + `MeProfile.isMember` / `canUse(key)`
+- `core/services/api.dart`: `BillingService` (claimReferralCode / referralSummary) + `PhotoService.upload(purpose:)`
+- `core/http/api_client.dart` + `app.dart`: **402 全局兜底** —— 任何页面点到会员功能, 统一 SnackBar +「去开通」跳「我的」(避免每个页面各写一遍还漏)
+- `screens/profile_page.dart`: 「会员」卡 (免费版/会员中 + 到期日 + 开通/续费入口 + 我的推荐码 + 「我有推荐码」填码弹层)
+- 头像上传改传 `purpose=avatar` (个人头像免费, 不受会员限制)
+
+**验证**
+
+- `npx vitest run tests/billing-rules.test.ts`: **23 pass** (9 项清单 / 推荐码形状 / 封顶 / 反作弊 / 顺延 / 幂等键)
+- `tests/billing-integration.test.ts`: **7 pass** (真 test DB: 填码→被推荐人得 15 天 → 成为加盟者→推荐人得 15 天 → 幂等 → 手工开通)
+- `flutter test profile_page+me_model+user_avatar`: **36 pass** (含新增会员卡 免费档/会员中 两例; 视口随页面变高调到 3400)
+- `npx tsc --noEmit` 0 error; `flutter analyze` 改动文件 0 issue; `pnpm db:compat` 0 error
+- **curl 冒烟**: 免费用户 `GET /api/me` → `isMember=false + 推荐码 WRJZAN`; AI/互动/`photos(purpose=wellness)` 全 **402 + MEMBERSHIP_REQUIRED**; `photos(purpose=avatar)` **201 放行**; 推荐码格式错 **400**; `admin/grant` 用 admin 账号 **200** 并落审计 (测试后已把 dev 账号会员状态复位为免费, 撤销同样留审计)
+
+**未做 (下一腿)**: 免费用户界面隐藏会员入口 (AI 卡/互动区/拍照) —— 服务端已拦, 客户端目前靠 402 全局提示兜底;
+`沙龙` 的判权等 `modules/salon` 建完再接; 发票/自动续费属 S2
+
 ### Changed (会员付费草案 v0.2 — 依主人补充信息重写计费模型, 2026-09-19)
 
 **主人补充**: 免费用户可用除 9 项外的全部功能 (AI助手/跟进建议/沙龙发起/客户画像/跟进推荐/
@@ -898,6 +939,32 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 **验证** (Playwright + `/app/`): 图谱页可达; 信息条「共 31 位」(= 不折叠模式, 全树已展开);
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
+
+### Changed (类别图标重设计 + 纯 emoji 角标 (三类都显示), 2026-09-19 主人拍)
+
+主人原话: 「纯 emoji 角标。加盟、普通、种子都要显示角标。重新设计类别图标
+（当前的几个不贴合类别名，也不够高级、简洁）」
+
+**新类别图标语汇 (全 App 统一: 头像角标 + 胶囊 chip + 筛选胶囊 + 分段按钮)**:
+
+| 类型 | 新图标 | 语义 | 旧图标 |
+|---|---|---|---|
+| 加盟 | 🤝 | 正式加入合作网络 (握手) | 🟣 (只是一个颜色圆) |
+| 种子 | 🌱 | 还在萌芽的潜在客户 | 🌱 (保留: 语义本来就准) |
+| 普通 | 👤 | 一个普通的人 (中性剪影) | 🟢 (只是一个颜色圆) |
+
+- 旧版 🟣/🟢 的问题: 它们只是"一个颜色圆", 不表达任何类别含义 → 换成有语义的图形
+- `franchise_chip.dart` + `customers_page.dart` 的筛选胶囊/分段按钮/文案同步换
+
+**头像角标 (纯 emoji, 三类都显示)**:
+- 🤝 加盟: 紫色环 + 紫底 emoji 角标; 🌱 种子: 橙环 + 橙底角标; 👤 普通: **无环** + 浅灰底角标
+- 视觉重量刻意分层 (加盟/种子带环 = 更重; 普通只有浅灰角标 = 最轻但**仍可辨识**)
+- emoji 字号 = 角标直径 × 0.62 (emoji 自带留白, 比汉字要大一号才看得清)
+
+**验证** (dev server 列表截图 + 像素扫描):
+- 语义: 「SeedTest-杨翠萍, 加盟商」+ 角标 emoji 🤝 ✓
+- 像素: 紫(加盟环+角标) 16164 / 橙(种子) 2312 / 灰(普通角标) 1876 ✓
+- `flutter analyze lib` 0 error ✓
 
 ### Changed (客户列表: 类型标签 → 头像区分, 2026-09-19 主人拍)
 

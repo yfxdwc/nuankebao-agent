@@ -19,6 +19,7 @@ import {
   hashForLookup,
 } from "@/lib/crypto/field";
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
+import { logger } from "@/lib/errors";
 import { franchiseeCustomerValues } from "./customer";
 import { franchiseeRbacFilter, type RbacContext } from "@/lib/auth/rbac";
 import { placeNewFranchisee } from "./franchisee-tree";
@@ -112,7 +113,7 @@ export async function createFranchisee(
   ctx: AuditContext,
   createdBy: bigint
 ): Promise<FranchiseeView> {
-  return await withAuditContext(ctx, async (tx) => {
+  const view = await withAuditContext(ctx, async (tx) => {
     // 1. 找位置
     let placement: PlaceResult;
     if (input.referrerId) {
@@ -190,6 +191,17 @@ export async function createFranchisee(
 
     return toView(newFranchiseeRow);
   });
+
+  // 会员推荐奖励 (ADR-0012 D23): 被推荐人成为加盟者 → 给推荐人 15 天会员权益
+  //   为什么不放事务里: grantDays 自己开事务 (不可嵌套); 奖励失败也不能回滚落位
+  try {
+    const { exitRewardIfReferral } = await import("@/lib/billing/entitlements");
+    await exitRewardIfReferral({ newFranchiseePhoneHash: hashForLookup(input.phone) });
+  } catch (e) {
+    logger.error("billing: referral reward failed (ignored)", {}, e);
+  }
+
+  return view;
 }
 
 export async function getFranchiseeById(

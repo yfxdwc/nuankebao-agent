@@ -582,6 +582,67 @@ class MeService {
 }
 
 // ============================================
+// BillingService (会员 / 推荐码, ADR-0012)
+// ============================================
+
+class ReferralSummary {
+  final String code;
+  final int grantedDays;
+  final int invitedCount;
+  final int rewardedCount;
+  final int remainingThisMonth;
+  final int remainingTotal;
+
+  const ReferralSummary({
+    this.code = '',
+    this.grantedDays = 0,
+    this.invitedCount = 0,
+    this.rewardedCount = 0,
+    this.remainingThisMonth = 0,
+    this.remainingTotal = 0,
+  });
+
+  factory ReferralSummary.fromJson(Map<String, dynamic> json) =>
+      ReferralSummary(
+        code: json['code']?.toString() ?? '',
+        grantedDays: (json['grantedDays'] as num?)?.toInt() ?? 0,
+        invitedCount: (json['invitedCount'] as num?)?.toInt() ?? 0,
+        rewardedCount: (json['rewardedCount'] as num?)?.toInt() ?? 0,
+        remainingThisMonth: (json['remainingThisMonth'] as num?)?.toInt() ?? 0,
+        remainingTotal: (json['remainingTotal'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class BillingService {
+  final Dio _dio;
+  BillingService(this._dio);
+
+  /// 填推荐码 (注册/首次使用时可选; 服务端保证一人一生一次)
+  /// 返回给用户看的结果文案
+  Future<({bool ok, String message})> claimReferralCode(String code) async {
+    try {
+      final res = await _dio.post('/billing/referral/claim', data: {'code': code});
+      final data = res.data as Map<String, dynamic>;
+      final granted = data['refereeGranted'] == true;
+      return (
+        ok: true,
+        message: granted ? '推荐码已生效, 你获得 15 天会员' : '推荐码已记录',
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final msg = data is Map ? data['error']?.toString() : null;
+      return (ok: false, message: msg ?? '推荐码用不了, 请检查后重试');
+    }
+  }
+
+  /// 我的推荐码 / 已获天数 / 剩余名额
+  Future<ReferralSummary> referralSummary() async {
+    final res = await _dio.get('/billing/referral/summary');
+    return ReferralSummary.fromJson(res.data as Map<String, dynamic>);
+  }
+}
+
+// ============================================
 // SystemService (版本 / 更新 / 网络自检)
 // ============================================
 
@@ -824,10 +885,20 @@ class PhotoService {
   final Dio _dio;
   PhotoService(this._dio);
 
-  Future<String> upload(String base64Data, {String? mimeType}) async {
+  /// 上传图片 → 返回 URL
+  ///
+  /// [purpose] 决定要不要会员 (ADR-0012 §5):
+  ///   - 'wellness' (默认) / 'salon' / 'other' = 业务照片 → 会员功能 (免费用户 402)
+  ///   - 'avatar' = 个人账号头像 → 免费 (换头像不该收费)
+  Future<String> upload(
+    String base64Data, {
+    String? mimeType,
+    String purpose = 'wellness',
+  }) async {
     final res = await _dio.post('/photos', data: {
       'base64': base64Data,
       if (mimeType != null) 'mimeType': mimeType,
+      'purpose': purpose,
     });
     return (res.data as Map<String, dynamic>)['url'] as String;
   }
