@@ -2,6 +2,36 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (路由顺序: /salons/new 与 /customers/new 被 :id 抢先匹配 — 预览时主人可复现, 2026-09-18)
+
+**发现**: 主人要预览沙龙, 我用 Flutter Web 预览页 (#/salons/new) 实测发现「创建沙龙」进不去 —
+显示「沙龙详情 · 网络不太好」。排查后确认是 **go_router 声明顺序**问题 (不是沙龙新代码引入):
+
+- go_router 按声明顺序匹配; `ShellRoute` 在前时, 其子路由 `/customers/:id`、`/salons/:id`
+  会抢先吃掉 `/customers/new`、`/salons/new` (把 `new` 当成 id 去拉详情 → 404 → 错误态)
+- 同类: `/franchisees/new` 被前面声明的 `/franchisees/:id` 吃掉
+- **影响范围 = 全仓**: 「添加客户」FAB (`context.push('/customers/new')`)、新增加盟商入口
+  同样受影响 (pre-existing, 非本次引入)
+
+**修法**: 三个静态 `new` 路由上提到 `ShellRoute` / `:id` 之前声明 (`app_router.dart` 顶部注释
+`fix-router-order` 说明原因, 防后人再挪回去)。
+
+**验证** (预览页真实浏览器, 语义树 + 截图):
+- `#/salons/new` → 「创建沙龙」4 步向导渲染 ✅
+- `#/customers/new` → 「添加客户」表单渲染 ✅
+- 沙龙全流程回归: 列表 / 详情 / 管理 / 二级客人 4 页 0 console error ✅
+
+**新增/改动**: `flutter_app/lib/core/router/app_router.dart`。
+
+### Chore (public/app 预览重建: v0.1.5 沙龙 + 路由修复, 2026-09-18 主人要)
+
+主人要预览全部修改 → 按 AGENTS §9.3 SOP 重建 Flutter Web 预览:
+
+- `tools/build-flutter-web.sh --auto` (运行时从 Uri.base 推导 API base; 预览同源 iframe 用)
+- 同步 `public/app/` (冻结区, 按 §9.3 用 `--no-verify` 提交, 本 CHANGELOG 条目为留痕)
+- version.json bump → 0.2.3#4 (强制 service worker 检测新版本)
+- 基线快照测试 `tests/preview-framework-snapshot.test.ts` 19/19 通过 (改前跑)
+
 ### Added (沙龙模块: 一级页「沙龙」完整实施 — 列表/详情/创建/RSVP/带约/二级客人, 2026-09-18 主人拍)
 
 **主人要**: 「我们经常会邀约客户参加一些聚会、沙龙、会议。如果生成一个一级页面(与客户、我的平级)……沙龙页主体是沙龙列表。

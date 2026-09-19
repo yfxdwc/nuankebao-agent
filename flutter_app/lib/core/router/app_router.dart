@@ -83,6 +83,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
 
+      // ============================================
+      // 静态 "new" 路由 —— 必须声明在 ShellRoute (含 :id 动态子路由) 之前!
+      // fix-router-order (2026-09-18 主人预览时发现): go_router 按声明顺序匹配,
+      //   若 ShellRoute 在前, `/customers/new` / `/salons/new` 会被子路由 `:id` 吃掉
+      //   (当成 id='new' 去拉详情 → 404 → 详情页错误态)。同理 `/franchisees/new`
+      //   会被前面声明的 `/franchisees/:id` 吃掉。
+      //   验证: 预览页 hash 直达 #/salons/new 与 #/customers/new 均应出表单。
+      // ============================================
+      GoRoute(
+        path: '/salons/new',
+        name: 'salon-new',
+        builder: (context, state) => const SalonFormPage(),
+      ),
+      GoRoute(
+        path: '/customers/new',
+        name: 'customer-new',
+        builder: (context, state) => const CustomerFormPage(),
+      ),
+      GoRoute(
+        path: '/franchisees/new',
+        name: 'franchisee-new',
+        builder: (context, state) {
+          final parentId = state.uri.queryParameters['parentId'];
+          final sideHint = state.uri.queryParameters['sideHint'];
+          return AddFranchiseePage(
+            parentId: parentId,
+            sideHint: sideHint,
+          );
+        },
+      ),
+
       // 主导航 (Bottom Nav 2 tab)
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
@@ -135,12 +166,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // 沙龙独立路由 (全屏, 不在 bottom nav 内)
-      // 注: 静态 /salons/new 必须与 /salons/:id 同级声明 (跟 /customers/new 同模式)
-      GoRoute(
-        path: '/salons/new',
-        name: 'salon-new',
-        builder: (context, state) => const SalonFormPage(),
-      ),
+      // 注: /salons/new 已上提到 ShellRoute 之前 (见顶部 fix-router-order)
       GoRoute(
         path: '/salons/:id/edit',
         name: 'salon-edit',
@@ -164,11 +190,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // 独立路由 (不在 shell 内, 全屏)
-      GoRoute(
-        path: '/customers/new',
-        name: 'customer-new',
-        builder: (context, state) => const CustomerFormPage(),
-      ),
+      // 注: /customers/new 已上提到 ShellRoute 之前 (见顶部 fix-router-order)
       GoRoute(
         path: '/customers/:id/edit',
         name: 'customer-edit',
@@ -227,18 +249,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           franchiseeId: state.pathParameters['id']!,
         ),
       ),
-      GoRoute(
-        path: '/franchisees/new',
-        name: 'franchisee-new',
-        builder: (context, state) {
-          final parentId = state.uri.queryParameters['parentId'];
-          final sideHint = state.uri.queryParameters['sideHint'];
-          return AddFranchiseePage(
-            parentId: parentId,
-            sideHint: sideHint,
-          );
-        },
-      ),
+      // 注: /franchisees/new 已上提到最前 (见顶部 fix-router-order)
 
       // 我的加盟网络 (图谱视图, Plan F3 已实施)
       // v0.1.4: 重定向到 /customers?view=graph (客户页的"图谱"tab 画的是
