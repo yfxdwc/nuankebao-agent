@@ -303,7 +303,9 @@ void main() {
     expect(find.text('免费版'), findsOneWidget);
     expect(find.text('开通会员'), findsOneWidget);
     expect(find.textContaining('AI 助手'), findsWidgets); // 9 项里点名了 AI 助手
-    expect(find.text('我有推荐码'), findsOneWidget);
+    // 主人 2026-09-19: 推荐码只能在注册(建号)时填 —— 「我的」页不能再有填码入口
+    expect(find.text('我有推荐码'), findsNothing);
+    expect(find.textContaining('填朋友的码'), findsNothing);
   });
 
   testWidgets('会员卡 (会员中): 显示到期日 + 续费入口 + 我的推荐码', (tester) async {

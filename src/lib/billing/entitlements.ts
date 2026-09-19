@@ -27,7 +27,9 @@ import {
   isMemberUntil,
   isValidReferralCodeShape,
   normalizeReferralCode,
+  REFERRAL_CLAIM_WINDOW_HOURS,
   REFERRAL_GRANT_DAYS,
+  isWithinClaimWindow,
   type ReferralQuotaResult,
 } from "@/lib/billing/referral";
 import {
@@ -340,6 +342,23 @@ export async function claimReferralCode(opts: {
     return {
       accepted: false,
       reason: "推荐码格式不对 (6 位字母数字)",
+      refereeGranted: false,
+      referrerPending: false,
+    };
+  }
+
+  // ★ 只有"注册时"能填 (主人 2026-09-19): 账号太老就不收码
+  //   入口本来就只有建号路径 (import-users / 未来注册页), 这里是服务端兜底 ——
+  //   防止有人直接打 API 给老账号补码
+  const [referee] = await db
+    .select({ createdAt: userTable.createdAt })
+    .from(userTable)
+    .where(eq(userTable.id, opts.refereeUserId))
+    .limit(1);
+  if (!isWithinClaimWindow(referee?.createdAt, now)) {
+    return {
+      accepted: false,
+      reason: `推荐码只能在注册时填 (账号创建后 ${REFERRAL_CLAIM_WINDOW_HOURS} 小时内)`,
       refereeGranted: false,
       referrerPending: false,
     };

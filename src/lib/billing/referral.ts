@@ -33,6 +33,24 @@ export const REFERRAL_TOTAL_CAP = 360;
 /** 被推荐人侧发奖时机 (待主人确认口径; 先按"注册+验证"给新用户即时反馈) */
 export const REFEREE_GRANT_ON_VERIFY = true;
 
+/**
+ * **推荐码只能在"注册时"填** (主人 2026-09-19):
+ *   入口: 建号路径 (管理员用 scripts/import-users.ts 导入 / 未来的注册页)
+ *   约束: 账号创建超过这个小时数就不收码了 —— 否则老用户事后随便补一个码,
+ *         等于"人人可白拿 15 天", 也会让"只有注册时能填"这条规则形同虚设。
+ */
+export const REFERRAL_CLAIM_WINDOW_HOURS = 24;
+
+/** 账号创建时间是否还在"可填推荐码"的窗口内 */
+export function isWithinClaimWindow(
+  createdAt: Date | null | undefined,
+  now: Date = new Date()
+): boolean {
+  if (!createdAt) return false; // 拿不到创建时间 = 不敢放行 (宁严勿松)
+  const ageHours = (now.getTime() - createdAt.getTime()) / 36e5;
+  return ageHours >= 0 && ageHours <= REFERRAL_CLAIM_WINDOW_HOURS;
+}
+
 /** 归一化用户输入 (大小写不敏感, 去空格/连字符) */
 export function normalizeReferralCode(raw: string | null | undefined): string {
   if (!raw) return "";

@@ -10,7 +10,7 @@
 // ⚠ 本文件会往真 DB 写测试数据 (前缀 billing-test-), 结束时按 id 精确删除
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   billingConfig,
@@ -357,5 +357,56 @@ describe("系统管理员 = 永久会员 (角色即规则, 主人 2026-09-19)", 
     expect((await getMembershipView(u.id)).isMember).toBe(false);
 
     await db.delete(user).where(eq(user.id, u.id));
+  });
+});
+
+describe("推荐码只能在注册时填 (主人 2026-09-19)", () => {
+  it("建号 24h 内可以填; 超过窗口就拒 (防老账号事后补码)", async () => {
+    // 新号 (刚建) → 可以填
+    const [fresh] = await db
+      .insert(user)
+      .values({
+        name: `${TAG}-新号`,
+        phoneEncrypted: encryptField("13900002011"),
+        phoneHash: hashForLookup("13900002011"),
+        role: "sales",
+      })
+      .returning({ id: user.id });
+
+    const ok = await claimReferralCode({
+      refereeUserId: fresh.id,
+      rawCode: codeA,
+    });
+    expect(ok.accepted).toBe(true);
+    expect(ok.refereeGranted).toBe(true);
+
+    // 老号 (把 created_at 往前挪 3 天) → 拒
+    const [old] = await db
+      .insert(user)
+      .values({
+        name: `${TAG}-老号`,
+        phoneEncrypted: encryptField("13900002012"),
+        phoneHash: hashForLookup("13900002012"),
+        role: "sales",
+      })
+      .returning({ id: user.id });
+    await db.execute(
+      sql`UPDATE "user" SET created_at = NOW() - INTERVAL '3 days' WHERE id = ${old.id}`
+    );
+
+    const late = await claimReferralCode({
+      refereeUserId: old.id,
+      rawCode: codeA,
+    });
+    expect(late.accepted).toBe(false);
+    expect(late.reason).toContain("注册时");
+
+    // 清理
+    await db.delete(entitlementGrant).where(inArray(entitlementGrant.userId, [fresh.id, old.id]));
+    await db.delete(membership).where(inArray(membership.userId, [fresh.id, old.id]));
+    await db
+      .delete(referralReward)
+      .where(inArray(referralReward.refereeUserId, [fresh.id, old.id]));
+    await db.delete(user).where(inArray(user.id, [fresh.id, old.id]));
   });
 });

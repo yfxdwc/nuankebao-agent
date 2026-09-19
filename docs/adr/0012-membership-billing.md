@@ -119,7 +119,8 @@ order / payment / refund / webhook_event / billing_ledger   → S1 (支付) 才�
 |---|---|
 | 格式 | 6 位, 字符集 `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (无 0/O/1/I/L) |
 | 归属 | 每用户 1 个, 注册即分配, 不可改 |
-| 填写 | 注册时可选; **注册后不可补填** (防事后挂单) |
+| 填写入口 | **只有注册(建号)时能填**: 邀请制下 = 管理员用 `scripts/import-users.ts` 建号时填 CSV 的 `referral_code` 列 (主人 2026-09-19) |
+| 服务端窗口 | 账号创建后 **24h 内**才收码 (`REFERRAL_CLAIM_WINDOW_HOURS`) —— 老账号事后补码会被拒, 「我的」页也不再有任何填码入口 |
 | 奖励 | 被推荐人 15 天 + 推荐人 15 天 |
 | 触发 | 被推荐人: 注册+手机号验证后 (待确认口径); 推荐人: **被推荐人成为加盟者后** (D23) |
 | 叠加 | 顺延 —— `member_until = max(now, member_until) + 15d` (不吞掉已付时间) |

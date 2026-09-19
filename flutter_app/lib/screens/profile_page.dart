@@ -994,15 +994,6 @@ class _MembershipCard extends ConsumerWidget {
             code: m!.referralCode!,
             onRefresh: () => ref.invalidate(meProfileProvider),
           ),
-        // 还没被推荐过 → 给"填别人的码"的入口 (主人要: 注册时可选填; S0 先放在这里,
-        // 等 W3 真实注册流程再把入口搬到注册页)
-        ProfileTile(
-          icon: Icons.redeem,
-          title: '我有推荐码',
-          subtitle: '填朋友的码, 你也能得 15 天会员',
-          color: AppTheme.primaryDark,
-          onTap: () => _showClaimCodeDialog(context, ref),
-        ),
       ],
     );
   }
@@ -1013,77 +1004,6 @@ class _MembershipCard extends ConsumerWidget {
       {required bool isMember}) {
     showMembershipPurchaseSheet(context, ref, isMember: isMember);
   }
-}
-
-/// 填推荐码弹层 (S0: 放在「我的」→ 会员卡里)
-Future<void> _showClaimCodeDialog(BuildContext context, WidgetRef ref) async {
-  final ctrl = TextEditingController();
-  var busy = false;
-
-  await showDialog<void>(
-    context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setDlgState) {
-        Future<void> submit() async {
-          final code = ctrl.text.trim();
-          if (code.isEmpty) return;
-          setDlgState(() => busy = true);
-          final r = await ref.read(billingServiceProvider).claimReferralCode(code);
-          if (!ctx.mounted) return;
-          setDlgState(() => busy = false);
-          Navigator.of(ctx).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(r.message, style: const TextStyle(fontSize: AppTheme.fontMd)),
-            ),
-          );
-          if (r.ok) ref.invalidate(meProfileProvider);
-        }
-
-        return AlertDialog(
-          title: const Text('填推荐码'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '填朋友的 6 位推荐码, 你和朋友各得 15 天会员',
-                style: TextStyle(fontSize: AppTheme.fontSm, height: 1.5),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                textCapitalization: TextCapitalization.characters,
-                maxLength: 6,
-                style: const TextStyle(
-                  fontSize: AppTheme.fontXl,
-                  letterSpacing: 4,
-                  fontWeight: FontWeight.w600,
-                ),
-                decoration: const InputDecoration(
-                  hintText: '6 位字母数字',
-                  counterText: '',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
-            ),
-            ElevatedButton(
-              onPressed: busy ? null : submit,
-              child: Text(busy ? '提交中...' : '确定',
-                  style: const TextStyle(fontSize: AppTheme.fontMd)),
-            ),
-          ],
-        );
-      },
-    ),
-  );
-  ctrl.dispose();
 }
 
 /// 我的推荐码 + 复制 (双向各得 15 天)
@@ -1148,7 +1068,7 @@ class _ReferralCodeRow extends StatelessWidget {
             ],
           ),
           const Text(
-            '朋友注册时填这个码, 双方各得 15 天会员',
+            '把码告诉朋友, 由管理员给朋友建号时填入 (只在建号时有效); 双方各得 15 天会员',
             style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
           ),
         ],

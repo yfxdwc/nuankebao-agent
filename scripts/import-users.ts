@@ -3,13 +3,16 @@
 // 暖客宝 邀请制批量导入用户 (P2)
 //
 // CSV 格式 (UTF-8, 第一行可选表头):
-//   name,phone,role,initial_password,username
-//   张三,13900000001,sales,Abcd1234,
-//   李四,13900000002,manager,,          # 密码留空 = 随机生成并打印一次
+//   name,phone,role,initial_password,username,referral_code
+//   张三,13900000001,sales,Abcd1234,,ABC234
+//   李四,13900000002,manager,,,          # 密码留空 = 随机生成并打印一次
 //
 // - role: admin | manager | sales (默认 sales)
 // - initial_password: 留空则随机生成 (打印一次, 由主人分发)
 // - username: 留空默认用手机号 (手机号本身就是登录账号)
+// - referral_code: **选填** —— 推荐人的 6 位码 (主人 2026-09-19: 推荐码只能在注册时填,
+//   而"注册"= 建号这一刻; 所以入口在这里)。填了 → 新用户立刻得 15 天会员,
+//   推荐人等他成为加盟者后再得 15 天 (ADR-0012 §6)
 //
 // 用法:
 //   pnpm tsx scripts/import-users.ts users.csv
@@ -31,6 +34,8 @@ import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
 import { hashPassword, isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/auth/password";
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
+import { claimReferralCode } from "@/lib/billing/entitlements";
+import { isValidReferralCodeShape } from "@/lib/billing/referral";
 
 type Role = "admin" | "manager" | "sales";
 const ROLES: Role[] = ["admin", "manager", "sales"];
@@ -41,6 +46,8 @@ interface CsvRow {
   role: Role;
   password: string;
   username: string;
+  /** 推荐人 6 位码 (选填; 只在建号时有效) */
+  referralCode: string;
 }
 
 function parseCsv(raw: string): CsvRow[] {
@@ -55,7 +62,14 @@ function parseCsv(raw: string): CsvRow[] {
 
   for (let i = start; i < lines.length; i++) {
     const cols = lines[i].split(/[,，]/).map((c) => c.trim());
-    const [name, phone, roleRaw = "sales", password = "", username = ""] = cols;
+    const [
+      name,
+      phone,
+      roleRaw = "sales",
+      password = "",
+      username = "",
+      referralCode = "",
+    ] = cols;
     if (!name || !phone) {
       throw new Error(`第 ${i + 1} 行缺 name/phone: ${lines[i]}`);
     }
@@ -69,7 +83,12 @@ function parseCsv(raw: string): CsvRow[] {
     if (password && !isValidPassword(password)) {
       throw new Error(`第 ${i + 1} 行初始密码不合格: ${PASSWORD_POLICY_MESSAGE}`);
     }
-    rows.push({ name, phone, role, password, username });
+    if (referralCode && !isValidReferralCodeShape(referralCode)) {
+      throw new Error(
+        `第 ${i + 1} 行推荐码格式不对: ${referralCode} (6 位字母数字, 去掉易混字符)`
+      );
+    }
+    rows.push({ name, phone, role, password, username, referralCode });
   }
   return rows;
 }
@@ -100,6 +119,7 @@ async function main() {
   let created = 0;
   let skipped = 0;
   const issued: Array<{ name: string; phone: string; password: string }> = [];
+  const failedReferrals: string[] = [];
 
   for (const row of rows) {
     const phoneHash = hashForLookup(row.phone);
@@ -119,26 +139,51 @@ async function main() {
     const username = row.username || row.phone;
 
     if (dryRun) {
-      console.log(`- [dry-run] 将创建 ${row.name} ${row.phone} role=${row.role} username=${username}`);
+      console.log(
+        `- [dry-run] 将创建 ${row.name} ${row.phone} role=${row.role} username=${username}` +
+          (row.referralCode ? ` 推荐码=${row.referralCode} (+15 天)` : "")
+      );
       created++;
       continue;
     }
 
-    await db.insert(user).values({
-      name: row.name,
-      role: row.role,
-      isActive: true,
-      phoneEncrypted: encryptField(row.phone),
-      phoneHash,
-      username,
-      passwordHash: hashPassword(password),
-    });
-    console.log(`✓ 已创建 ${row.name} ${row.phone} role=${row.role}`);
+    const [newUser] = await db
+      .insert(user)
+      .values({
+        name: row.name,
+        role: row.role,
+        isActive: true,
+        phoneEncrypted: encryptField(row.phone),
+        phoneHash,
+        username,
+        passwordHash: hashPassword(password),
+      })
+      .returning({ id: user.id });
+
+    // ★ 推荐码只能在"注册"时填 (主人 2026-09-19) —— 建号这一刻就是注册
+    //   服务端 claimReferralCode 还会再校验一次"账号创建 24h 内"(兜底, 防直接打 API 补码)
+    let referralNote = "";
+    if (row.referralCode) {
+      const r = await claimReferralCode({
+        refereeUserId: newUser.id,
+        rawCode: row.referralCode,
+        refereePhoneHash: phoneHash,
+      });
+      referralNote = r.accepted
+        ? ` | 推荐码 ${row.referralCode} 已生效 (+15 天)`
+        : ` | ⚠ 推荐码未生效: ${r.reason}`;
+      if (!r.accepted) failedReferrals.push(`${row.name}(${row.phone}): ${r.reason}`);
+    }
+    console.log(`✓ 已创建 ${row.name} ${row.phone} role=${row.role}${referralNote}`);
     created++;
     if (!row.password) issued.push({ name: row.name, phone: row.phone, password });
   }
 
   console.log(`\n完成: 新建 ${created}, 跳过 ${skipped}`);
+  if (failedReferrals.length > 0) {
+    console.log("\n===== 推荐码未生效 (用户已建号, 可让推荐人核对后重发码) =====");
+    for (const f of failedReferrals) console.log(`  ${f}`);
+  }
   if (issued.length > 0) {
     console.log("\n===== 随机初始密码 (只显示这一次, 请立即分发/保存) =====");
     for (const u of issued) {
