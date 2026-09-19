@@ -1335,25 +1335,6 @@ class CustomerDetailPage extends ConsumerWidget {
         _buildWellnessSection(context, asyncRecords),
         const SizedBox(height: 12),
 
-        // 2.5) 发展客户为加盟商 (主人 2026-09-18 拍 Q1): 普通/种子 → 加盟
-        //      走三方确认的落位流程 (我 + 客户本人 + 目标上级), 通过后自动成为加盟商
-        if (customer.customerType != 'franchisee') ...[
-          OutlinedButton.icon(
-            onPressed: () =>
-                _promoteCustomerToFranchisee(context, ref, customer),
-            icon: const Icon(Icons.person_add_alt_1, size: 24),
-            label: const Text(
-              '发展为加盟商',
-              style: TextStyle(fontSize: AppTheme.fontMd),
-            ),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 56),
-              foregroundColor: AppTheme.primary,
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
         // 3) AI 智能区 (主人 2026-09-18 拍: 复购预测 / 客户画像 / 跟进建议 / 效果分析)
         //    顺序按「销售员每天最用得上」排: 复购预测 (自动算, 不烧额度) →
         //    跟进建议 (开口话术) → 客户画像 (这人是谁) → 效果分析 (疗程有没有用)
@@ -1943,6 +1924,29 @@ class CustomerDetailPage extends ConsumerWidget {
                 style: TextStyle(
                   fontSize: AppTheme.fontXs,
                   color: AppTheme.textSecondary,
+                ),
+              ),
+              const Divider(height: 20),
+              const Text(
+                '要变成加盟商？走加盟落位（需三方确认）',
+                style: TextStyle(
+                  fontSize: AppTheme.fontXs,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // 发展客户为加盟商 (主人 2026-09-19: 入口迁到「客户类型」区块里)
+              //   走三方确认的落位流程 (我 + 客户本人 + 目标上级), 通过后自动成为加盟商
+              FilledButton.icon(
+                onPressed: () =>
+                    _promoteCustomerToFranchisee(context, ref, c),
+                icon: const Icon(Icons.person_add_alt_1, size: 24),
+                label: const Text(
+                  '发展为加盟商',
+                  style: TextStyle(fontSize: AppTheme.fontMd),
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 56),
                 ),
               ),
             ],
