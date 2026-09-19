@@ -487,9 +487,35 @@ class FranchiseTreePainter extends CustomPainter {
   bool get _anyHighlight =>
       selectedNodeId != null || _searchActive || _filterActive;
 
+  /// 选中节点的**一层**子节点 id (主人 2026-09-19 拍: 单击后一层也突出显示)
+  /// 从树里实时算 → 懒加载展开出新节点时, 下一次 repaint 就自动纳入高亮
+  late final Set<String> selectedChildIds = _computeSelectedChildren();
+
+  Set<String> _computeSelectedChildren() {
+    final sel = selectedNodeId;
+    if (sel == null) return const <String>{};
+    FranchiseeTreeNode? found;
+    void walk(FranchiseeTreeNode n) {
+      if (found != null) return;
+      if (n.id == sel) {
+        found = n;
+        return;
+      }
+      for (final c in n.children) {
+        walk(c);
+      }
+    }
+
+    walk(root);
+    final node = found;
+    if (node == null) return const <String>{};
+    return node.children.map((c) => c.id).toSet();
+  }
+
   bool _isNodeHighlighted(String id) =>
       id == selectedNodeId ||
       pathIds.contains(id) ||
+      selectedChildIds.contains(id) ||
       _isSearchHit(id) ||
       _isFilterHit(id);
 
@@ -626,6 +652,10 @@ class FranchiseTreePainter extends CustomPainter {
 
       // 选中路径: 两端都在路径上 = 这条边属于「我 → 选中节点」的线
       final onPath = pathIds.contains(node.id) && pathIds.contains(child.id);
+      // 选中节点 → 它的一层子节点 (主人 2026-09-19: 一层也突出; 比路径线略细)
+      final childOfSelected = selectedNodeId != null &&
+          node.id == selectedNodeId &&
+          selectedChildIds.contains(child.id);
       // 搜索: 任一端命中即高亮
       final searchHit = _isSearchHit(node.id) || _isSearchHit(child.id);
       // 筛选: 任一端命中即保持可见
@@ -638,6 +668,9 @@ class FranchiseTreePainter extends CustomPainter {
       if (onPath) {
         color = AppTheme.accent;
         stroke = 4.5;
+      } else if (childOfSelected) {
+        color = AppTheme.accent;
+        stroke = 3.5;
       } else if (searchHit) {
         color = AppTheme.accent.withOpacity(0.9);
         stroke = 3.5;
@@ -679,7 +712,8 @@ class FranchiseTreePainter extends CustomPainter {
 
     final isCurrentUser = currentUserId != null && node.id == currentUserId;
     final isSelected = selectedNodeId != null && node.id == selectedNodeId;
-    final isOnPath = pathIds.contains(node.id);
+    final isOnPath =
+        pathIds.contains(node.id) || selectedChildIds.contains(node.id);
     final isHit = _isSearchHit(node.id);
     final highlighted = _isNodeHighlighted(node.id);
     final isFaded = _anyHighlight && !highlighted;
