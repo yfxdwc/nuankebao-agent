@@ -332,6 +332,27 @@ void main() {
     expect(find.text('复制推荐码'), findsNothing); // tooltip 不渲染成文字
   });
 
+  testWidgets('会员卡 (管理员): 显示永久会员, 不显示开通/续费入口', (tester) async {
+    final container = await _container(MeProfile.fromJson({
+      'user': {'id': '1', 'name': '管理员', 'role': 'admin', 'roleLabel': '管理员'},
+      'membership': {
+        'isMember': true,
+        'memberUntil': null,
+        'planCode': 'admin',
+        'permanent': true,
+        'membershipSource': 'admin',
+        'features': ['ai.assistant'],
+        'referralCode': 'ADMIN1',
+      },
+    }));
+    await _pumpProfile(tester, container);
+
+    expect(find.textContaining('永久会员'), findsWidgets);
+    expect(find.textContaining('不参与计费'), findsOneWidget);
+    expect(find.text('开通会员'), findsNothing);
+    expect(find.text('续费会员'), findsNothing);
+  });
+
   testWidgets('开通会员弹层 (内测人工通道): 金额 + 收款人 + 我已支付', (tester) async {
     final container = await _container(
       _fullProfile(),

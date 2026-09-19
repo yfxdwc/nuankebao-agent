@@ -27,6 +27,7 @@ import { encryptField, hashForLookup } from "@/lib/crypto/field";
 import {
   adminGrant,
   claimReferralCode,
+  requireFeature,
   ensureReferralCode,
   getMembershipView,
   rewardReferrerOnFranchisee,
@@ -292,5 +293,69 @@ describe("人工收款 (内测: 个人微信收款码 + 管理员核销)", () =>
     });
     const after = (await getMembershipView(userB)).memberUntil;
     expect(after).toBe(before);
+  });
+});
+
+describe("系统管理员 = 永久会员 (角色即规则, 主人 2026-09-19)", () => {
+  it("admin 角色: isMember=true + permanent=true + 9 项功能, 且不写任何权益行", async () => {
+    const [admin] = await db
+      .insert(user)
+      .values({
+        name: `${TAG}-管理员`,
+        phoneEncrypted: encryptField("13900002009"),
+        phoneHash: hashForLookup("13900002009"),
+        role: "admin",
+      })
+      .returning({ id: user.id });
+
+    const view = await getMembershipView(admin.id);
+    expect(view.isMember).toBe(true);
+    expect(view.permanent).toBe(true);
+    expect(view.membershipSource).toBe("admin");
+    expect(view.planCode).toBe("admin");
+    expect(view.features.length).toBe(9);
+    expect(view.memberUntil).toBe(null); // 没有到期日 = 永久
+
+    // 关键: 判定是规则, 不落库 → 没有 membership 行 / 没有 grant 行
+    const [m] = await db
+      .select()
+      .from(membership)
+      .where(eq(membership.userId, admin.id));
+    expect(m).toBeUndefined();
+    const grants = await db
+      .select()
+      .from(entitlementGrant)
+      .where(eq(entitlementGrant.userId, admin.id));
+    expect(grants.length).toBe(0);
+
+    // 会员功能直接放行 (不抛 402)
+    await expect(
+      requireFeature(admin.id, "ai.follow_up")
+    ).resolves.toBeUndefined();
+
+    // 清理
+    await db.delete(user).where(eq(user.id, admin.id));
+  });
+
+  it("升成 admin 后立刻是会员; 降回 sales 就按真实权益算 (不需要补数据)", async () => {
+    const [u] = await db
+      .insert(user)
+      .values({
+        name: `${TAG}-临时管理员`,
+        phoneEncrypted: encryptField("13900002010"),
+        phoneHash: hashForLookup("13900002010"),
+        role: "sales",
+      })
+      .returning({ id: user.id });
+
+    expect((await getMembershipView(u.id)).isMember).toBe(false);
+
+    await db.update(user).set({ role: "admin" }).where(eq(user.id, u.id));
+    expect((await getMembershipView(u.id)).isMember).toBe(true);
+
+    await db.update(user).set({ role: "sales" }).where(eq(user.id, u.id));
+    expect((await getMembershipView(u.id)).isMember).toBe(false);
+
+    await db.delete(user).where(eq(user.id, u.id));
   });
 });

@@ -2,6 +2,28 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (系统管理员 = 永久会员, 2026-09-19 主人要)
+
+**主人要**: 「把系统管理员(admin)设置成永久会员」
+
+**做法: 角色即规则 (不写权益行)**
+
+| 项 | 内容 |
+|---|---|
+| 判定 | `user.role = 'admin'` → `isMember=true` / `permanent=true` / `planCode='admin'` / `membershipSource='admin'` / `memberUntil=null` |
+| 实现 | `getMembership()` 一次查询 (leftJoin user+membership) 同时拿 role 与到期时间; admin 直接短路返回 → **零数据、零维护** |
+| 为什么不用"发 3650 天权益" | 到期要续、换人要补数据、`entitlement_grant` 里堆假流水污染审计; 而 role 本来就是"这是后台账号"的唯一真相 |
+| 自动跟随 | `requireFeature` / `hasFeatureAccess` / 生日提醒过滤 / `/api/me` 全部走 `getMembership` → 一处改全局生效 |
+| 客户端 | 「我的」页显示「管理员账号 · 永久会员 (无需付费, 不会到期)」, **不显示开通/续费入口**; 会员功能全部可用 |
+| 安全边界 | 只认数据库里的 `user.role` (不信客户端/session 可改字段); admin 照常参与审计 |
+
+**验证**
+- `tests/billing-integration.test.ts` **14 pass** (新增 2 例: admin 恒会员且不落库 / 升 admin 立刻会员、降回 sales 立刻按真实权益算)
+- `flutter test`: **38 pass** (新增「管理员会员卡: 永久会员 + 无开通入口」一例)
+- curl 实测 (dev admin 账号): `/api/me` → `isMember=true, permanent=true, features=9`; 之前 402 的
+  AI 跟进建议 → **200**、互动记录 POST → **201**; DB 里 `membership` 行数为 0 (规则判定, 无残留)
+- `npx tsc --noEmit` / `flutter analyze` 改动文件 0 error
+
 ### Added (S0.5 人工收款闭环: 个人微信收款码 + App 内核销, 2026-09-19 主人拍)
 
 **主人要**: 「当前内测阶段，暂时用我个人的微信收款码实现。继续完成全部剩余步骤」

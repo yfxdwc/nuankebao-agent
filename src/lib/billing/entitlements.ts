@@ -16,6 +16,7 @@ import {
   entitlementGrant,
   referralCode,
   referralReward,
+  user as userTable,
   type Membership,
 } from "@/lib/db/schema";
 import {
@@ -36,13 +37,20 @@ import {
   type FeatureKey,
 } from "@/lib/billing/features";
 
+/** 会员来源: 付费/权益 vs 后台账号 (角色即规则) */
+export type MembershipSource = "paid" | "admin" | "free";
+
 /** 会员判定结果 (供 API 直接序列化给客户端) */
 export interface MembershipView {
   isMember: boolean;
   memberUntil: string | null;
+  /** free / member / admin (admin = 后台账号永久会员) */
   planCode: string | null;
   features: FeatureKey[];
   referralCode: string | null;
+  /** 永久会员 (后台账号, 不参与计费, 不会到期) */
+  permanent: boolean;
+  membershipSource: MembershipSource;
 }
 
 export class BillingError extends Error {
@@ -59,33 +67,63 @@ export class BillingError extends Error {
 export async function getMembership(
   userId: bigint,
   now: Date = new Date()
-): Promise<{ row: Membership | null; isMember: boolean }> {
+): Promise<{ row: Membership | null; isMember: boolean; permanent: boolean }> {
+  // 一次查询拿 (user.role + membership): 判权会被高频调用, 不加第二次往返
   const [row] = await db
-    .select()
-    .from(membership)
-    .where(eq(membership.userId, userId))
+    .select({
+      userRole: userTable.role,
+      memberUntil: membership.memberUntil,
+      membershipId: membership.id,
+    })
+    .from(userTable)
+    .leftJoin(membership, eq(membership.userId, userTable.id))
+    .where(eq(userTable.id, userId))
     .limit(1);
 
-  return { row: row ?? null, isMember: isMemberUntil(row?.memberUntil, now) };
+  // ★ 角色即规则 (主人 2026-09-19): 系统管理员 = 永久会员
+  //   为什么不给 admin 写一行"永久"权益: 写了要维护 (新管理员要补、过期要续、审计里一堆假流水),
+  //   而 role 本来就是"这是后台账号"的唯一真相 → 直接按角色判定, 零数据、零维护。
+  //   边界: 只有在 user 表里 role='admin' 才算 (不是客户端传的, 也不是 session 里能改的)
+  if (row?.userRole === "admin") {
+    return { row: null, isMember: true, permanent: true };
+  }
+
+  const memberRow = row?.membershipId != null
+    ? ({ memberUntil: row.memberUntil } as Membership)
+    : null;
+
+  return {
+    row: memberRow,
+    isMember: isMemberUntil(row?.memberUntil, now),
+    permanent: false,
+  };
 }
 
 /** 给客户端看的会员视图 (含推荐码) */
 export async function getMembershipView(
   userId: bigint
 ): Promise<MembershipView> {
-  const { row, isMember } = await getMembership(userId);
+  const { row, isMember, permanent } = await getMembership(userId);
   const [code] = await db
     .select({ code: referralCode.code })
     .from(referralCode)
     .where(eq(referralCode.userId, userId))
     .limit(1);
 
+  const source: MembershipSource = permanent
+    ? "admin"
+    : isMember
+      ? "paid"
+      : "free";
+
   return {
     isMember,
     memberUntil: row?.memberUntil ? row.memberUntil.toISOString() : null,
-    planCode: isMember ? "member" : "free",
+    planCode: permanent ? "admin" : isMember ? "member" : "free",
     features: isMember ? ALL_FEATURES : FREE_FEATURES,
     referralCode: code?.code ?? null,
+    permanent,
+    membershipSource: source,
   };
 }
 

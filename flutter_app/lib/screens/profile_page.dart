@@ -908,12 +908,39 @@ class _MembershipCard extends ConsumerWidget {
     final until = m?.untilLabel ?? '';
     final daysLeft = m?.daysLeft;
 
+    // 后台账号 (role=admin): 永久会员, 不参与计费 —— 不显示开通/续费入口
+    final isAdminMember = m?.isAdminMember ?? false;
+
     return ProfileSection(
       title: '会员',
       icon: isMember ? Icons.workspace_premium : Icons.card_giftcard,
-      hint: isMember ? '会员中' : '免费版',
+      hint: isAdminMember ? '管理员 · 永久会员' : (isMember ? '会员中' : '免费版'),
       children: [
-        if (isMember) ...[
+        if (isAdminMember) ...[
+          const Padding(
+            padding: EdgeInsets.only(top: 4, bottom: 8),
+            child: Row(
+              children: [
+                Icon(Icons.verified_user, size: 26, color: AppTheme.primary),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '管理员账号 · 永久会员 (无需付费, 不会到期)',
+                    style: TextStyle(
+                      fontSize: AppTheme.fontMd,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Text(
+            '9 项会员功能全部可用; 员工/管理员账号不参与计费',
+            style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+          ),
+        ] else if (isMember) ...[
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 8),
             child: Row(
@@ -954,13 +981,14 @@ class _MembershipCard extends ConsumerWidget {
             ),
           ),
         ],
-        ProfileTile(
-          icon: Icons.shopping_cart_checkout,
-          title: isMember ? '续费会员' : '开通会员',
-          subtitle: '¥69 / 月 · 自动续费 ¥49 / 月',
-          color: AppTheme.accent,
-          onTap: () => _showPurchaseSheet(context, ref, isMember: isMember),
-        ),
+        if (!isAdminMember)
+          ProfileTile(
+            icon: Icons.shopping_cart_checkout,
+            title: isMember ? '续费会员' : '开通会员',
+            subtitle: '¥69 / 月 · 自动续费 ¥49 / 月',
+            color: AppTheme.accent,
+            onTap: () => _showPurchaseSheet(context, ref, isMember: isMember),
+          ),
         if (m?.hasCode == true)
           _ReferralCodeRow(
             code: m!.referralCode!,

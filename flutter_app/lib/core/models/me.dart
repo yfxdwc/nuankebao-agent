@@ -286,13 +286,23 @@ class MeMembership {
   /// 我的固定 6 位推荐码
   final String? referralCode;
 
+  /// 永久会员 (后台账号: role=admin, 不参与计费, 不会到期)
+  final bool permanent;
+
+  /// 会员来源: paid / admin / free
+  final String membershipSource;
+
   const MeMembership({
     this.isMember = false,
     this.memberUntil,
     this.planCode = 'free',
     this.features = const [],
     this.referralCode,
+    this.permanent = false,
+    this.membershipSource = 'free',
   });
+
+  bool get isAdminMember => permanent || membershipSource == 'admin';
 
   static MeMembership? fromJson(dynamic json) {
     if (json is! Map) return null;
@@ -303,6 +313,8 @@ class MeMembership {
       features: (json['features'] as List?)?.map((e) => e.toString()).toList() ??
           const [],
       referralCode: json['referralCode']?.toString(),
+      permanent: json['permanent'] as bool? ?? false,
+      membershipSource: json['membershipSource']?.toString() ?? 'free',
     );
   }
 

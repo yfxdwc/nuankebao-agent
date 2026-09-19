@@ -56,6 +56,28 @@ ADR-0006 里"系统不收任何费用"这句话**必须随本 ADR 修订**为:
 
 ---
 
+### 3.1 系统管理员 = 永久会员 (主人 2026-09-19)
+
+`role = 'admin'` 的账号**按规则**判定为永久会员 (`isMember=true`, `permanent=true`, `planCode='admin'`),
+**不写任何权益行**。理由:
+
+| 做法 | 问题 |
+|---|---|
+| ❌ 给每个 admin 发 3650 天权益 | 到期还得续; 换管理员要补数据; `entitlement_grant` 里一堆假流水污染审计 |
+| ✅ 按 `role` 判定 (本 ADR) | 零数据零维护; 新管理员立刻生效; 降回 sales 立刻按真实权益算 |
+
+**实现**: `getMembership()` 一次查询同时取 `user.role` + `membership` (leftJoin), `role='admin'` 直接返回
+`{ isMember: true, permanent: true }`; `membershipSource: 'admin'`。`requireFeature` / `hasFeatureAccess` /
+生日提醒过滤全部自动跟随 (它们都走 `getMembership`)。
+
+**边界**:
+- 只认 **数据库里的 `user.role`** —— 不信客户端、不信 session token 里能改的字段
+- admin 仍然正常参与审计 (他做的每件事都记录), 只是不需要付费
+- 员工/后台账号**不参与计费**: 不计入付费转化、不生成订单、推荐码照常可用 (不影响)
+- 客户端表现: 「我的」页显示「管理员账号 · 永久会员 (无需付费, 不会到期)」, **不显示开通/续费入口**
+
+---
+
 ## 4. 数据模型 (S0 落地)
 
 ```
