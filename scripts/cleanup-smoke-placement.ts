@@ -19,10 +19,30 @@ import {
   franchisePlacementRequest,
 } from "@/lib/db/schema";
 import { hashForLookup } from "@/lib/crypto/field";
+import { sql } from "drizzle-orm";
 
 const PHONES = ["13900009999", "13900007777", "13900008888"];
 
 async function main() {
+  // 先清「孤儿 pending 单」: move/unjoin 单指向已删/不存在的节点 (上次跑挂留下的)
+  const orphanRows = (await db.execute(sql`
+    SELECT r.id FROM franchise_placement_request r
+    WHERE r.status = 'pending' AND r.kind <> 'create'
+      AND NOT EXISTS (
+        SELECT 1 FROM franchisee f
+        WHERE f.id = r.move_fid AND f.deleted_at IS NULL
+      )
+  `)) as unknown as { id: string }[];
+  for (const r of orphanRows) {
+    await db
+      .delete(franchisePlacementConfirm)
+      .where(eq(franchisePlacementConfirm.requestId, BigInt(r.id)));
+    await db
+      .delete(franchisePlacementRequest)
+      .where(eq(franchisePlacementRequest.id, BigInt(r.id)));
+  }
+  if (orphanRows.length > 0) console.log(`✓ 孤儿 pending 单清理: ${orphanRows.length}`);
+
   for (const phone of PHONES) {
     const h = hashForLookup(phone);
     // 测试加盟商 id (unjoin 单挂在 move_fid 上, 不挂 phone hash)

@@ -461,6 +461,11 @@ class FranchiseeService {
   Future<void> cancelPlacementRequest(String id) async {
     await _dio.post('/franchisees/placement-requests/$id/cancel');
   }
+
+  /// admin 强删 (绕过三方确认; 仅 admin; 仍有下线会被拒)
+  Future<void> forceUnjoinFranchisee(String id) async {
+    await _dio.post('/franchisees/$id/force-unjoin');
+  }
 }
 
 // ============================================

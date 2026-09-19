@@ -808,7 +808,7 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<void> {
     // 整棵子树搬迁: path 前缀替换 + depth 平移 (含被移动节点自己)
     await tx.execute(sql`
       UPDATE franchisee
-      SET placement_path = ${newPath} || substring(placement_path from ${oldPrefix.length + 1}),
+      SET placement_path = ${newPath} || substring(placement_path from ${oldPrefix.length + 1}::int),
           placement_depth = placement_depth + ${delta},
           updated_at = NOW()
       WHERE placement_path LIKE ${oldPrefix + "%"} AND deleted_at IS NULL
@@ -882,4 +882,57 @@ export async function listPendingPlacementsUnder(
         : `节点 #${r.moveFid} (待移动)`,
     initiatorFid: r.initiatorFid.toString(),
   }));
+}
+
+// ============================================
+// admin 强删 (主人 2026-09-18 拍): 绕过三方确认, 直接解除加盟
+//   - 用途: 本人账号失效 / 无法完成三方确认的「死账」
+//   - 限制: 仍然**不允许有下线** (要先处理完下线), 根节点不能删
+//   - 审计: 走 withAuditContext (写 audit_log) + 这里不建申请单 (短路径)
+// ============================================
+export async function forceUnjoinFranchisee(
+  fid: bigint,
+  ctx: AuditContext
+): Promise<void> {
+  await withAuditContext(ctx, async (tx) => {
+    const [node] = await tx
+      .select()
+      .from(franchisee)
+      .where(and(eq(franchisee.id, fid), isNull(franchisee.deletedAt)))
+      .limit(1);
+    if (!node) throw new Error("加盟商不存在或已解除");
+    if (node.placementPath === "") throw new Error("根节点不能解除");
+
+    const [child] = await tx
+      .select({ id: franchisee.id })
+      .from(franchisee)
+      .where(
+        and(
+          sql`${franchisee.placementPath} LIKE ${node.placementPath + "%"}`,
+          sql`${franchisee.placementPath} <> ${node.placementPath}`,
+          isNull(franchisee.deletedAt)
+        )
+      )
+      .limit(1);
+    if (child) throw new Error("这位加盟商还有下线, 要先处理完下线才能解除");
+
+    // 同一节点若有 pending 单 → 一并关掉 (避免点位预占卡住)
+    await tx
+      .update(franchisePlacementRequest)
+      .set({ status: "cancelled", updatedAt: sql`NOW()` })
+      .where(
+        and(
+          eq(franchisePlacementRequest.status, "pending"),
+          or(
+            eq(franchisePlacementRequest.moveFid, fid),
+            eq(franchisePlacementRequest.targetParentFid, fid)
+          )!
+        )
+      );
+
+    await tx
+      .update(franchisee)
+      .set({ deletedAt: sql`NOW()`, updatedAt: sql`NOW()` })
+      .where(eq(franchisee.id, fid));
+  });
 }

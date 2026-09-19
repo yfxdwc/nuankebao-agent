@@ -15,6 +15,7 @@ import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../lib/franchisee_detail_provider.dart';
 import '../../../core/widgets/franchise_chip.dart';
+import '../../../core/widgets/placement_target_sheet.dart';
 
 class FranchiseeDetailPage extends ConsumerWidget {
   final String franchiseeId;
@@ -35,10 +36,22 @@ class FranchiseeDetailPage extends ConsumerWidget {
             onPressed: () => context.push('/franchisees/$franchiseeId/edit'),
           ),
           IconButton(
+            icon: const Icon(Icons.swap_horiz, size: 28),
+            tooltip: '移动到其他点位',
+            onPressed: () => _moveToOtherSlot(context, ref),
+          ),
+          IconButton(
             icon: const Icon(Icons.link_off, size: 28),
             tooltip: '解除加盟',
             onPressed: () => _confirmUnjoin(context, ref),
           ),
+          // admin 强删 (主人 2026-09-18 拍): 死账兜底, 绕过三方确认
+          if (ref.watch(meProfileProvider).valueOrNull?.user?.role == 'admin')
+            IconButton(
+              icon: const Icon(Icons.delete_forever, size: 28),
+              tooltip: '管理强删 (admin)',
+              onPressed: () => _confirmForceUnjoin(context, ref),
+            ),
         ],
       ),
       body: asyncFranchisee.when(
@@ -270,6 +283,110 @@ class FranchiseeDetailPage extends ConsumerWidget {
       return '${phone.substring(0, 3)}****${phone.substring(7)}';
     }
     return phone;
+  }
+
+  /// admin 强删 (主人 2026-09-18 拍): 绕过三方确认; 仅 admin; 仍有下线会被拒
+  Future<void> _confirmForceUnjoin(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('管理强删 (admin)'),
+        content: const Text(
+          '绕过三方确认，直接把这位加盟商的加盟关系解除（软删）。\n'
+          '· 会写审计日志\n'
+          '· 仍有下线时会被拒绝（先处理完下线）\n'
+          '· 仅用于本人账号失效 / 无法完成确认的死账',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            child: const Text('确认强删', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(franchiseeServiceProvider).forceUnjoinFranchisee(franchiseeId);
+      ref.invalidate(myFranchiseeTreeProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('已强删 (审计已记录)', style: TextStyle(fontSize: AppTheme.fontMd)),
+        ),
+      );
+      context.pop();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('强删失败: $e')),
+      );
+    }
+  }
+
+  /// 移动节点到图谱里另一个点位 (主人 2026-09-18 拍: 后端 kind=move + 三方确认)
+  ///   - 三方: 设置者(我/发起) + 该加盟商本人 + 新位置上级; 原父节点不需要确认
+  ///   - 通过后: 整棵子树跟着搬 (path 前缀替换), 推荐人不变
+  Future<void> _moveToOtherSlot(BuildContext context, WidgetRef ref) async {
+    FranchiseeTreeNode tree;
+    try {
+      tree = await ref
+          .read(franchiseeServiceProvider)
+          .getMyTree(depth: 12, mode: 'placement');
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('读取我的图谱失败: $e')),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    final name = _findName(tree, franchiseeId) ?? '这位加盟商';
+    final target = await showModalBottomSheet<PlacementTarget>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => PlacementTargetSheet(
+        tree: tree,
+        title: '把「$name」挪到新的点位',
+        hint: '选新的上级点位 → 需要三方确认才生效 (你的下线整棵子树会跟着搬)',
+      ),
+    );
+    if (target == null || !context.mounted) return;
+    try {
+      await ref.read(franchiseeServiceProvider).createPlacementRequest(
+            targetParentId: target.parentId,
+            side: target.side,
+            moveFid: franchiseeId,
+          );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('已提交移动申请, 等三方确认',
+              style: TextStyle(fontSize: AppTheme.fontMd)),
+        ),
+      );
+      context.pop();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('提交失败: $e')),
+      );
+    }
+  }
+
+  /// 在树里按 id 找名字 (移动弹层标题用)
+  String? _findName(FranchiseeTreeNode node, String id) {
+    if (node.id == id) return node.name;
+    for (final c in node.children) {
+      final hit = _findName(c, id);
+      if (hit != null) return hit;
+    }
+    return null;
   }
 
   /// 解除加盟 (主人 2026-09-18 拍 Q2/Q3):

@@ -453,12 +453,16 @@ class FranchiseTreePainter extends CustomPainter {
   /// 实际列间距 (列多时压缩): 外侧名字宽度跟着收, 允许相邻轻微重叠
   final double columnPitch;
 
+  /// 子树内「待确认」的落位点位 (三方确认工作流; 画成虚线虚位)
+  final List<PendingPlacement> pendingPlacements;
+
   FranchiseTreePainter({
     required this.root,
     required this.positions,
     this.columns = const {},
     this.scale = 1.0,
     this.columnPitch = TreeLayout.columnWidth,
+    this.pendingPlacements = const [],
     this.searchMatchedIds,
     this.currentUserId,
     this.selectedNodeId,
@@ -512,6 +516,99 @@ class FranchiseTreePainter extends CustomPainter {
     nodes.sort((a, b) => _columnOf(b.id).compareTo(_columnOf(a.id)));
     for (final n in nodes) {
       _drawNode(canvas, n);
+    }
+
+    // 待确认虚位 (主人 2026-09-18 拍): 虚线圆 + 「待确认」, 在最上层
+    _drawPendingGhosts(canvas, size);
+  }
+
+  /// 待确认虚位: 父节点正下方 (同侧续线) 或外侧一列 (异侧) 画虚线圆
+  void _drawPendingGhosts(Canvas canvas, Size size) {
+    if (pendingPlacements.isEmpty) return;
+    for (final p in pendingPlacements) {
+      final parentPos = positions[p.targetParentFid];
+      if (parentPos == null) continue;
+      final isA = aLineIds.contains(p.targetParentFid);
+      final isB = bLineIds.contains(p.targetParentFid);
+      final sign = isA ? -1.0 : (isB ? 1.0 : -1.0);
+      final parentCol = columns[p.targetParentFid] ?? 0;
+      // 该腿的「续线侧」: A线 = left / B线 = right; 同侧 → 正下方同列, 异侧 → 外侧一列
+      final continuing = isA ? 'left' : 'right';
+      final sameSide = p.targetSide == continuing;
+      final col = sameSide ? parentCol : parentCol + 1;
+      final x = sameSide
+          ? parentPos.dx
+          : parentPos.dx + sign * columnPitch;
+      final center = Offset(x, parentPos.dy + TreeLayout.levelHeight);
+      final radius = TreeLayout.radiusForColumn(col);
+      final ghostColor = AppTheme.accent.withOpacity(0.85);
+
+      // 浅底 + 虚线边
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()..color = AppTheme.accent.withOpacity(0.10),
+      );
+      _drawDashedCircle(
+        canvas,
+        center,
+        radius,
+        Paint()
+          ..color = ghostColor
+          ..strokeWidth = 2.4
+          ..style = PaintingStyle.stroke,
+      );
+
+      // 「待确认」+ 名字 (小字, 圆下方)
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '⏳ ${p.label}',
+          style: TextStyle(
+            fontSize: 12,
+            color: ghostColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        ellipsis: '…',
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: columnPitch + 40);
+      final labelTop = center.dy + radius + 4;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            center.dx - tp.width / 2 - 5,
+            labelTop - 2,
+            tp.width + 10,
+            tp.height + 4,
+          ),
+          const Radius.circular(6),
+        ),
+        Paint()..color = AppTheme.bgWarm.withOpacity(0.92),
+      );
+      tp.paint(canvas, Offset(center.dx - tp.width / 2, labelTop));
+    }
+  }
+
+  /// 画虚线圆 (用 PathMetrics 切段)
+  void _drawDashedCircle(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    Paint paint,
+  ) {
+    const double dash = 7;
+    const double gap = 5;
+    final path = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: radius));
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < metric.length) {
+        final next = math.min(d + dash, metric.length);
+        canvas.drawPath(metric.extractPath(d, next), paint);
+        d = next + gap;
+      }
     }
   }
 
@@ -921,6 +1018,17 @@ class FranchiseTreePainter extends CustomPainter {
     return false;
   }
 
+  bool _samePending(List<PendingPlacement> other) {
+    for (var i = 0; i < other.length; i++) {
+      if (other[i].requestId != pendingPlacements[i].requestId ||
+          other[i].targetParentFid != pendingPlacements[i].targetParentFid ||
+          other[i].targetSide != pendingPlacements[i].targetSide) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   bool _setChanged(Set<String>? a, Set<String>? b) {
     if (identical(a, b)) return false;
     if (a == null || b == null) return a != b;
@@ -942,6 +1050,8 @@ class FranchiseTreePainter extends CustomPainter {
         _setChanged(old.bLineIds, bLineIds) ||
         _mapChanged(old.relations, relations) ||
         _setChanged(old.filterIds, filterIds) ||
+        old.pendingPlacements.length != pendingPlacements.length ||
+        !_samePending(old.pendingPlacements) ||
         _setChanged(old.searchMatchedIds, searchMatchedIds);
   }
 }

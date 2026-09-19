@@ -23,6 +23,7 @@ import { encryptField, hashForLookup } from "@/lib/crypto/field";
 import {
   createPlacementRequest,
   decidePlacementRequest,
+  forceUnjoinFranchisee,
   getPlacementRequest,
   type PlacementActor,
 } from "@/lib/db/queries/franchisee-placement";
@@ -301,6 +302,66 @@ async function main() {
     "落位后新加盟商账号已绑定 franchisee_id"
   );
 
+  // 本人 actor (换绑后 fid = 新节点; 移动/解除都要用)
+  const actorSelf: PlacementActor = {
+    userId: boundUser.id,
+    fid: created.id,
+    phoneHash: hashForLookup(NEW_PHONE),
+  };
+
+  // 8.5) 移动节点 (kind=move): 三方确认 → 整棵子树跟着搬 + 推荐人不变
+  const parentBRows = (await db.execute(sql`
+    SELECT f.id, f.name, f.placement_path, f.placement_depth
+    FROM franchisee f
+    WHERE f.deleted_at IS NULL
+      AND f.id <> ${parent.id}
+      AND f.placement_path <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM franchisee c
+        WHERE c.deleted_at IS NULL AND c.placement_path = f.placement_path || 'R.'
+      )
+    ORDER BY f.placement_depth, f.id LIMIT 1
+  `)) as unknown as { id: string; name: string; placement_path: string }[];
+  assert(parentBRows.length > 0, "找到第二个空位 (移动目标)");
+  const parentBId = BigInt(parentBRows[0].id);
+  const parentBPath = parentBRows[0].placement_path;
+  const parentBUser = await ensureUser("13900000089", "冒烟-移动目标上级", parentBId);
+  const actorParentB: PlacementActor = {
+    userId: parentBUser.id,
+    fid: parentBId,
+    phoneHash: hashForLookup("13900000089"),
+  };
+  const mv = await createPlacementRequest(
+    {
+      kind: "move",
+      initiatorFid: root.id,
+      initiatorUserId: BigInt(1),
+      targetParentFid: parentBId,
+      targetSide: "right",
+      moveFid: created.id,
+    },
+    ctx
+  );
+  assert(mv.kind === "move" && mv.status === "pending", "移动申请 pending (三方)");
+  await decidePlacementRequest(BigInt(mv.id), actorSelf, "approve", ctx);
+  const mvDone = await decidePlacementRequest(
+    BigInt(mv.id),
+    actorParentB,
+    "approve",
+    ctx
+  );
+  assert(mvDone.status === "executed", "移动三方齐 → executed");
+  const [movedRow] = await db
+    .select()
+    .from(franchisee)
+    .where(eq(franchisee.id, created.id));
+  assert(
+    movedRow.placementPath === parentBPath + "R.",
+    `移动后 path = ${parentBPath}R.`
+  );
+  assert(movedRow.placementSide === "right", "移动后方向 = 右");
+  assert(movedRow.referrerId === root.id, "推荐人不变 (Q5)");
+
   // 9) 解除加盟 (Q2/Q3): 有下线的节点不允许
   let blockedUnjoin = false;
   try {
@@ -334,16 +395,12 @@ async function main() {
     ctx
   );
   assert(un.kind === "unjoin" && un.status === "pending", "解除申请 pending");
-  const actorSelf: PlacementActor = {
-    userId: boundUser.id,
-    fid: created.id,
-    phoneHash: hashForLookup(NEW_PHONE),
-  };
   const un2 = await decidePlacementRequest(BigInt(un.id), actorSelf, "approve", ctx);
   assert(un2.status === "pending", "本人同意后仍待上级确认");
+  // 注意: 节点前面被移动过 → 它现在的「点位上级」是 parentB 的账号
   const un3 = await decidePlacementRequest(
     BigInt(un.id),
-    actorParent,
+    actorParentB,
     "approve",
     ctx
   );
@@ -353,6 +410,16 @@ async function main() {
     .from(franchisee)
     .where(eq(franchisee.id, created.id));
   assert(gone.deletedAt != null, "加盟记录已软删 (点位释放)");
+
+  // 11) admin 强删 (query 层): 有下线仍拒; 叶子可删
+  let forceBlocked = false;
+  try {
+    await forceUnjoinFranchisee(parentWithChildren ?? BigInt(76), ctx);
+  } catch (e) {
+    forceBlocked = true;
+    console.log("  强删有下线 →", (e as Error).message);
+  }
+  assert(forceBlocked, "admin 强删也遵守「有下线不允许」(Q3)");
 
   console.log("\n✅ 冒烟通过 (测试数据保留: 冒烟-新加盟商, 需要清理跑 scripts/cleanup-smoke-placement.ts)");
 }

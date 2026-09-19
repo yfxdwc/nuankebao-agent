@@ -102,6 +102,34 @@ enum FranchiseeRelation {
   }
 }
 
+/// 待确认的落位点位 (三方确认工作流; 只挂在树的根节点上)
+///   - 图谱里画成「虚线虚位」, 点位 pending 期间预占 (别人抢不到)
+class PendingPlacement {
+  final String requestId;
+  final String targetParentFid;
+  final String targetSide; // left | right
+  final String label; // 「张三 (待确认)」/「节点 #12 (待移动)」
+  final String initiatorFid;
+
+  const PendingPlacement({
+    required this.requestId,
+    required this.targetParentFid,
+    required this.targetSide,
+    required this.label,
+    required this.initiatorFid,
+  });
+
+  factory PendingPlacement.fromJson(Map<String, dynamic> json) {
+    return PendingPlacement(
+      requestId: json['requestId']?.toString() ?? '',
+      targetParentFid: json['targetParentFid']?.toString() ?? '',
+      targetSide: (json['targetSide'] as String?) ?? 'left',
+      label: (json['label'] as String?) ?? '待确认',
+      initiatorFid: json['initiatorFid']?.toString() ?? '',
+    );
+  }
+}
+
 /// 树节点 (用于图谱视图, Plan F3 用)
 class FranchiseeTreeNode {
   final String id;
@@ -115,6 +143,9 @@ class FranchiseeTreeNode {
   /// 相对树根 (我) 的关系 (直推/下级引荐/上级引荐) — 由后端算好
   final FranchiseeRelation relation;
   final List<FranchiseeTreeNode> children;
+
+  /// 子树内「待确认」的落位点位 (只有根节点会带; 图谱画虚位用)
+  final List<PendingPlacement> pendingPlacements;
 
   /// 该节点是否有下级 (**全深度真值**, 不受本次请求 depth 限制) — ADR-0011 懒加载
   /// true + children.isEmpty = 还没展开, 前端给「展开下级」入口
@@ -133,6 +164,7 @@ class FranchiseeTreeNode {
     required this.children,
     this.hasChildren = false,
     this.totalDescendants,
+    this.pendingPlacements = const [],
   });
 
   factory FranchiseeTreeNode.fromJson(Map<String, dynamic> json) {
@@ -148,11 +180,17 @@ class FranchiseeTreeNode {
           .toList(),
       hasChildren: json['hasChildren'] as bool? ?? false,
       totalDescendants: (json['totalDescendants'] as num?)?.toInt(),
+      pendingPlacements: ((json['pendingPlacements'] as List?) ?? [])
+          .map((e) => PendingPlacement.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
   /// 拷贝 + 替换 children (懒加载合并用; 不 mutate 原对象, 保持 provider 树干净)
-  FranchiseeTreeNode copyWith({List<FranchiseeTreeNode>? children, bool? hasChildren}) {
+  FranchiseeTreeNode copyWith({
+    List<FranchiseeTreeNode>? children,
+    bool? hasChildren,
+  }) {
     return FranchiseeTreeNode(
       id: id,
       name: name,
