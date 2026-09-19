@@ -125,6 +125,8 @@ class FranchiseeDetailPage extends ConsumerWidget {
             //   不再放右上角图标; 点位不能直接移动 —— 必须先解除, 再重新加盟落位)
             Semantics(
               button: true,
+              // container: true → 标签独立成一个语义节点 (不只合并进整张卡), 无障碍/自动化都能定位
+              container: true,
               label: '加盟标签, 长按可解除加盟',
               child: GestureDetector(
                 onLongPress: () {

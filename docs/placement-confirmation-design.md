@@ -8,7 +8,11 @@
 > 冒烟: scripts/smoke-placement-confirm.ts (三方确认全流程) ✓; 历史回填: scripts/backfill-placement-confirms.ts (32 条已补) ✓
 > 追加 (ask_user 66ec03da): Q1 = 客户详情「发展为加盟商」快捷入口 / Q2 = 正式「解除加盟」(kind=unjoin, 三方确认)
 >   / Q3 = **有下线不允许解除** —— 均已实现 ✓ (冒烟: scripts/smoke-placement-confirm.ts)
-> 未做: 移动节点 UI (后端 kind=move 已通) + 图谱「待确认虚位」渲染 (API 已返回 pendingPlacements)
+> **⚠ 变更 (主人 2026-09-19 拍)**: 「移动到其他点位」功能**整体下线** ——
+> 点位不能直接移动, 必须「先解除加盟 → 再重新加盟落位」。
+> 本文档里关于 `kind=move` 的段落保留作**历史设计记录**, 但代码已删 (API 明确拒绝 `kind=move`)。
+>
+> 已做: 图谱「待确认虚位」渲染 + 虚位可点 (进「待我确认」页) + 三方确认全流程
 > 关联: ADR-0006 (加盟体系) / ADR-0011 (层级不限 + 懒加载) / `docs/data-model.md`
 > 触发: 主人 2026-09-18 需求 (原文见 §0)
 

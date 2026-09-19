@@ -797,6 +797,36 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Changed (「移动到其他点位」整体下线 + 解除加盟改为长按加盟标签, 2026-09-19 主人拍)
+
+主人原话: 「加盟商详情页中，删除移动到其他点位图标，及背后的功能代码，因为动点位必需先解除加盟，
+再重新加盟实现，不能直接移动点位。解除从右上角删除加盟图标，改为长按头像卡片中的加盟标签
+（电话上面）可进入解除加盟流程。」
+
+**① 「移动到其他点位」下线 (UI + 后端一起删)**
+- Flutter 加盟商详情页: 删掉右上角 `swap_horiz`「移动到其他点位」图标 + `_moveToOtherSlot()` + `_findName()`
+- API: `POST /api/franchisees/placement-requests` 收到 `kind='move'` → **400 + 明确提示**
+  「点位不能直接移动: 请先解除加盟, 再重新加盟落位」(不静默当 create)
+- Query 层: 删掉 move 创建分支 (改成显式 throw) + 删掉执行器的子树搬迁 SQL (`path` 前缀替换/`depth` 平移)
+- 类型: `PlacementRequestKind` = `'create' | 'unjoin'`; schema `kind` enum 去掉 `'move'`
+- 图谱虚位: 只对 `kind='create'` 画待确认虚位 (解除加盟单不画虚位 —— 那个点位本来就有人, 画了误导)
+- 字段重命名: 老 `moveFid/moveFid` → `unjoinFid/unjoinName` (JSON 里仍兼容读老 key; DB 列名 `move_fid` 保留)
+- 冒烟 `smoke-placement-confirm.ts`: 移动场景改成**负向用例** (kind=move 必须被拒) ✓
+
+**② 解除加盟入口: 右上角图标 → 长按「加盟」标签**
+- 删掉右上角 `link_off`「解除加盟」图标
+- 头像卡里的 `🟣 加盟` 标签 (电话上方) 现在**长按**可进解除加盟流程:
+  - `Semantics(button, container: true, label: '加盟标签, 长按可解除加盟')` + `Tooltip` 同文案
+  - 长按给 `HapticFeedback.mediumImpact()` 反馈
+  - 标签下方加一行极小的提示字「长按上方「加盟」标签可解除加盟」(长按是隐藏手势, 中老年用户需要提示)
+- 右上角保留: 「编辑」+ (admin)「管理强删」
+
+**验证** (dev server):
+- 加盟商详情(107) app bar = 「编辑 + 管理强删 (admin)」—— 移动/解除图标均消失 ✓
+- 长按标签 @(16+180, 292) → 弹出「解除加盟?」+「提交解除申请」✓
+- `POST kind=move` → 400 「点位不能直接移动: 请先解除加盟, 再重新加盟落位」✓
+- `npx tsc --noEmit` 0 error; `flutter analyze lib` 0 error; 两个冒烟脚本全过 ✓ (测试数据已清理 ✓)
+
 ### Added (「待确认虚位」可点击 + 系统管理员账号长期保留, 2026-09-19 主人拍)
 
 **① 待确认虚位可点击 → 点进「待我确认」页**
