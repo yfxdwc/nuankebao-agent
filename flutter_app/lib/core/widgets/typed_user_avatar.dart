@@ -3,15 +3,18 @@
 // ============================================
 // 主人原话: 「客户类型（加盟、普通、种子）在客户列表中不显示类型标签，类型在头像上区分」
 //
-// 方案 (颜色 + 汉字双编码, 不依赖单一颜色 → 色弱/老花也能分):
-//   加盟 franchisee → 紫色头像环 (2.5pt) + 右下角紫色圆徽章「盟」
-//   种子 seed       → 暖橙头像环 (2pt)   + 右下角暖橙圆徽章「种」
-//   普通 normal     → 无环无徽章 (最安静, 让加盟/种子跳出来)
+// 方案 (主人 2026-09-19 第二版: 纯 emoji 角标, 三类都显示):
+//   🤝 加盟 franchisee → 紫色头像环 (2.5pt) + 右下角紫色圆徽章 🤝
+//   🌱 种子 seed       → 暖橙头像环 (2pt)   + 右下角暖橙圆徽章 🌱
+//   👤 普通 normal     → 无环                  + 右下角浅灰圆徽章 👤
 //
-// 为什么用汉字不用 emoji:
-//   - 中老年用户读「盟 / 种」比读 🌱/🟣 稳, 且 20pt 内汉字笔画清楚
-//   - 颜色只是辅助 (色弱用户看字也能分)
-// 尺寸: 徽章只在 size >= 40 时画 (小头像如 32pt 只留环, 否则字糊成一团)
+// 类别图标语汇 (全 App 统一: 角标 + 胶囊 chip 用同一套):
+//   🤝 = 正式加入合作网络 (加盟)  |  🌱 = 还在萌芽的潜在客户 (种子)  |  👤 = 普通客户
+//   (旧版 🟣/🟢 只是"一个颜色圆", 不贴合类别名 → 主人 2026-09-19 拍: 重新设计)
+//
+// 视觉重量刻意分层: 加盟 (环+彩徽章) > 种子 (环+彩徽章) > 普通 (浅灰徽章, 无环)
+//   —— 普通占大多数, 让它安静, 加盟/种子才跳得出来
+// 尺寸: 徽章只在 size >= 40 时画 (更小的头像只留环, 否则 emoji 糊成一团)
 
 import 'package:flutter/material.dart';
 
@@ -38,23 +41,26 @@ class TypedUserAvatar extends StatelessWidget {
     this.showLoadingIndicator = false,
   });
 
-  /// 类型 → (环/徽章颜色, 徽章字, 无障碍文案)
+  /// 类型 → (环/徽章颜色, 角标 emoji, 无障碍文案)
+  ///   普通 的徽章色是「浅灰」: 有角标但视觉最轻
   static (Color?, String?, String) styleOf(String type) {
     switch (type) {
       case 'franchisee':
-        return (AppTheme.franchisee, '盟', '加盟商');
+        return (AppTheme.franchisee, '🤝', '加盟商');
       case 'seed':
-        return (AppTheme.accent, '种', '种子客户');
+        return (AppTheme.accent, '🌱', '种子客户');
       default:
-        return (null, null, '普通客户');
+        return (const Color(0xFF9AA5A0), '👤', '普通客户');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final (color, badge, typeLabel) = styleOf(customerType);
+    final (badgeColor, badge, typeLabel) = styleOf(customerType);
+    // 普通不加环 (只有彩徽章), 加盟/种子加环 → 视觉重量分层
+    final ringColor = customerType == 'normal' ? null : badgeColor;
     final ringWidth = size >= 48 ? 2.5 : 2.0;
-    final showBadge = badge != null && size >= 40;
+    final showBadge = size >= 40;
     final badgeSize = size * 0.42;
 
     return Semantics(
@@ -71,15 +77,15 @@ class TypedUserAvatar extends StatelessWidget {
               height: size,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: color == null
+                border: ringColor == null
                     ? null
-                    : Border.all(color: color, width: ringWidth),
+                    : Border.all(color: ringColor, width: ringWidth),
               ),
-              padding: EdgeInsets.all(color == null ? 0 : 1.5),
+              padding: EdgeInsets.all(ringColor == null ? 0 : 1.5),
               child: UserAvatar(
                 avatarUrl: avatarUrl,
                 name: name,
-                size: size - (color == null ? 0 : 3),
+                size: size - (ringColor == null ? 0 : 3),
                 showLoadingIndicator: showLoadingIndicator,
               ),
             ),
@@ -93,16 +99,15 @@ class TypedUserAvatar extends StatelessWidget {
                   height: badgeSize,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: color,
+                    color: badgeColor,
                     border: Border.all(color: Colors.white, width: 2),
                   ),
                   alignment: Alignment.center,
+                  // emoji 角标: 字号比汉字大一点才看得清 (emoji 自带留白)
                   child: Text(
                     badge!,
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: badgeSize * 0.56,
-                      fontWeight: FontWeight.w700,
+                      fontSize: badgeSize * 0.62,
                       height: 1.0,
                     ),
                   ),

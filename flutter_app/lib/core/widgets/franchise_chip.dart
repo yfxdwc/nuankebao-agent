@@ -18,9 +18,12 @@ class FranchiseChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (type) {
-      'franchisee' => ('🟣 加盟', AppTheme.franchisee),
+      // 类别图标统一语汇 (主人 2026-09-19 拍: 重新设计, 要贴合类别名 + 高级简洁):
+      //   🤝 加盟 = 正式加入合作网络 / 🌱 种子 = 还在萌芽的潜在客户 / 👤 普通 = 普通客户
+      //   (旧版 🟣/🟢 只是"一个颜色圆", 不贴合类别名)
+      'franchisee' => ('🤝 加盟', AppTheme.franchisee),
       'seed' => ('🌱 种子', AppTheme.accent),
-      _ => ('🟢 普通', AppTheme.primary),
+      _ => ('👤 普通', AppTheme.primary),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

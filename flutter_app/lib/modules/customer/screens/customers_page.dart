@@ -260,11 +260,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   ),
                   ButtonSegment(
                     value: _CustomerFilter.franchisee,
-                    label: _capsuleLabel('🟣 加盟', 'franchisee', typeCounts),
+                    label: _capsuleLabel('🤝 加盟', 'franchisee', typeCounts),
                   ),
                   ButtonSegment(
                     value: _CustomerFilter.normal,
-                    label: _capsuleLabel('🟢 普通', 'normal', typeCounts),
+                    label: _capsuleLabel('👤 普通', 'normal', typeCounts),
                   ),
                   ButtonSegment(
                     value: _CustomerFilter.seed,
