@@ -11,6 +11,7 @@
     "type-check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/lib/db/migrate.ts",
+    "db:ensure-admin": "tsx scripts/ensure-admin.ts",
     "db:migrate:check": "tsx src/lib/db/migrate.ts check",
     "db:migrate:down": "tsx src/lib/db/migrate.ts down",
     "db:compat": "bash tools/check-migration-compat.sh",

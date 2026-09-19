@@ -725,6 +725,33 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Added (「待确认虚位」可点击 + 系统管理员账号长期保留, 2026-09-19 主人拍)
+
+**① 待确认虚位可点击 → 点进「待我确认」页**
+- `customers_page.dart::_buildGhostHitareas`: 每个 pending 虚位一个点击区 (圆 + 下方「⏳ 名字」都可点)
+  - 位置公式与 painter 共用 `FranchiseTreePainter.pendingGhostCenter`（单一来源, 不会两边画不一致）
+  - 语义标签「待确认虚位 XXX (待确认), 点击查看待我确认」→ 无障碍 + 自动化可验证
+  - 点击 → `context.push('/franchisees/placement-requests')`（加盟落位确认页, 默认「待我确认」tab）
+  - 虚位点击区排在真节点之后 → 真节点优先, 虚位只吃空位
+- **顺手修掉一个隐藏 bug**: `FranchiseeTreeNode.copyWith` 漏带 `pendingPlacements` →
+  `_withLazyChildren` 拷贝根节点后「待确认虚位」整个消失（图谱不画 + 点不到）。
+  今天排查虚位点击时发现, 一并修掉。
+
+**② 系统管理员账号长期保留（dev + 生产）**
+- 主人原话: 「长期保留系统管理员账号 admin，生产环境也要保留」
+- 新增 `scripts/ensure-admin.ts` + `pnpm db:ensure-admin`（幂等）:
+  - 账号不存在 → 建 (`role='admin'`); 已存在 → 只抬 role, 不覆盖其他字段
+  - 参数: `ADMIN_PHONE` / `ADMIN_NAME` 或 `--phone= --name=`
+- `docs/deploy.md §7.5` 新增部署章节: 为什么必须保留 (加盟权限 + 免确认 + 兜底修复) +
+  幂等命令 + 部署/灾备恢复后必跑 + 登录方式 + 安全提醒 (生产别留 DEV_SKIP_AUTH)
+- **dev 账号 user 1 保持 admin 不动**（主人拍板）
+
+**验证**:
+- 虚位点击: dev server 语义元素 `待确认虚位 虚位点击-测试 (待确认)…` @(67,628) → 点击后页面 =
+  「加盟落位确认 / 待我确认 (0) / 我发起的 (0)」✓
+- `pnpm db:ensure-admin` 两条路径都验过: 已存在(admin) → 跳过 ✓; 已存在(sales) → 抬成 admin ✓
+- 测试数据 (pending 单 89 + 临时账号) 已清理 ✓
+
 ### Added (加盟设置权限三条红线, 2026-09-19 主人拍)
 
 主人原话: 「必需由其他已加盟用户或系统管理员才能设置加盟，系统管理员设置加盟用户不需要多方确认，
