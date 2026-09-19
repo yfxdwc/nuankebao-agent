@@ -26,9 +26,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const actor = await resolvePlacementActor(session?.user?.id);
-  if (!actor || actor.fid == null) {
+  // 主人 2026-09-19: 只有「已加盟用户」或「系统管理员」能设置加盟
+  if (!actor || (actor.fid == null && !actor.isAdmin)) {
     return NextResponse.json(
-      { error: "当前账号还没绑定加盟商, 不能发起落位" },
+      { error: "只有已加盟用户或系统管理员才能设置加盟" },
       { status: 403 }
     );
   }
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest) {
         kind,
         initiatorFid: actor.fid,
         initiatorUserId: actor.userId,
+        initiatorIsAdmin: actor.isAdmin,
+        initiatorPhoneHash: actor.phoneHash,
         targetParentFid: body.targetParentId
           ? BigInt(body.targetParentId)
           : BigInt(0), // unjoin: 服务端会用节点自己的位置覆盖

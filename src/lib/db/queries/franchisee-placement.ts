@@ -183,12 +183,16 @@ async function toViews(
 
   return rows.map((r) => {
     const mine = confirms.filter((c) => c.requestId === r.id);
-    const needed = requiredRoles(r.initiatorFid, r.targetParentFid);
+    // 系统管理员单 (verifiedBy='admin') = 免多方确认 → 不需要任何角色再点
+    const adminMade = mine.some((c) => c.verifiedBy === "admin");
+    const needed = adminMade
+      ? []
+      : requiredRoles(r.initiatorFid, r.targetParentFid);
     const mineMapped = mine.map((c) => ({
       role: c.confirmerRole as string,
       decision: c.decision as string,
     }));
-    const myRole = roleFor(r, actor, mineMapped);
+    const myRole = adminMade ? null : roleFor(r, actor, mineMapped);
     const myConfirm = myRole
       ? mine.find((c) => c.confirmerRole === myRole) ?? null
       : null;
@@ -242,8 +246,16 @@ export async function expireStaleRequests(): Promise<number> {
 
 export interface CreatePlacementRequestInput {
   kind: PlacementRequestKind;
-  initiatorFid: bigint;
+  /** 发起人加盟商 id; 系统管理员可能没有加盟商记录 → null (配合 initiatorIsAdmin) */
+  initiatorFid: bigint | null;
   initiatorUserId: bigint;
+  /**
+   * 发起人是否系统管理员 (route 从 session.role 解析) — 主人 2026-09-19 拍:
+   *   「系统管理员设置加盟用户不需要多方确认」+ 可全网任意点位
+   */
+  initiatorIsAdmin?: boolean;
+  /** 发起人自己的手机号 hash — 用于「用户不能给自己设置成加盟用户」校验 */
+  initiatorPhoneHash?: string | null;
   targetParentFid: bigint;
   targetSide: "left" | "right";
   /** kind=create */
@@ -278,14 +290,26 @@ export async function createPlacementRequest(
   await expireStaleRequests();
 
   return await withAuditContext(ctx, async (tx) => {
-    const [initiator] = await tx
-      .select()
-      .from(franchisee)
-      .where(
-        and(eq(franchisee.id, input.initiatorFid), isNull(franchisee.deletedAt))
-      )
-      .limit(1);
-    if (!initiator) throw new Error("发起人加盟商不存在");
+    const isAdmin = input.initiatorIsAdmin === true;
+    const initiator =
+      input.initiatorFid == null
+        ? undefined
+        : (
+            await tx
+              .select()
+              .from(franchisee)
+              .where(
+                and(
+                  eq(franchisee.id, input.initiatorFid),
+                  isNull(franchisee.deletedAt)
+                )
+              )
+              .limit(1)
+          )[0];
+    // 主人 2026-09-19: 只有「已加盟用户」或「系统管理员」能设置加盟
+    if (!initiator && !isAdmin) {
+      throw new Error("只有已加盟用户或系统管理员才能设置加盟");
+    }
 
     const [parent] = await tx
       .select()
@@ -299,10 +323,16 @@ export async function createPlacementRequest(
       .limit(1);
     if (!parent) throw new Error("目标点位(父节点)不存在");
 
-    // Q7: 只能操作自己 placement 子树内的点位
-    if (!parent.placementPath.startsWith(initiator.placementPath)) {
+    // Q7: 只能操作自己 placement 子树内的点位 (系统管理员例外: 可全网任意)
+    if (
+      !isAdmin &&
+      initiator != null &&
+      !parent.placementPath.startsWith(initiator.placementPath)
+    ) {
       throw new Error("目标点位不在我的图谱里 (只能在自己子树内落位)");
     }
+    // 发起人加盟商 id: admin 没加盟商记录时用目标父节点占位 (审计可读, 不影响落位)
+    const initiatorFid = initiator?.id ?? input.targetParentFid;
 
     // 点位空位校验 (预占 = 无子节点 + 无 pending 单)
     // ⚠ 解除加盟 (unjoin) 除外: 要解除的节点本来就占着那个点位
@@ -337,6 +367,14 @@ export async function createPlacementRequest(
       newPhoneEncrypted = encryptField(input.newPhone);
       newNotesEncrypted = input.newNotes ? encryptField(input.newNotes) : null;
 
+      // 主人 2026-09-19: 用户不能给自己设置成加盟用户 (哪怕他是管理员)
+      if (
+        input.initiatorPhoneHash != null &&
+        input.initiatorPhoneHash === newPhoneHash
+      ) {
+        throw new Error("不能给自己设置加盟 (必须由其他已加盟用户或系统管理员设置)");
+      }
+
       const [dup] = await tx
         .select({ id: franchisee.id })
         .from(franchisee)
@@ -360,7 +398,11 @@ export async function createPlacementRequest(
         .limit(1);
       if (!node) throw new Error("要解除的加盟商不存在");
       if (node.placementPath === "") throw new Error("根节点不能解除");
-      if (!node.placementPath.startsWith(initiator.placementPath)) {
+      if (
+        !isAdmin &&
+        initiator != null &&
+        !node.placementPath.startsWith(initiator.placementPath)
+      ) {
         throw new Error("该加盟商不在我的图谱里");
       }
       // Q3: 有下线 → 不允许 (先处理完下线)
@@ -421,7 +463,11 @@ export async function createPlacementRequest(
         .limit(1);
       if (!moved) throw new Error("被移动的加盟商不存在");
       if (moved.placementPath === "") throw new Error("根节点不能移动");
-      if (!moved.placementPath.startsWith(initiator.placementPath)) {
+      if (
+        !isAdmin &&
+        initiator != null &&
+        !moved.placementPath.startsWith(initiator.placementPath)
+      ) {
         throw new Error("被移动的加盟商不在我的图谱里");
       }
       // 防环: 不能挪到自己的子孙下面 (含自己)
@@ -432,12 +478,13 @@ export async function createPlacementRequest(
 
     const expiresAt = new Date(Date.now() + PLACEMENT_TIMEOUT_HOURS * 3600 * 1000);
 
+    // 主人 2026-09-19: 系统管理员设置加盟 → **不需要多方确认**, 直接生效
     const [request] = await tx
       .insert(franchisePlacementRequest)
       .values({
         kind: input.kind,
-        status: "pending",
-        initiatorFid: input.initiatorFid,
+        status: isAdmin ? "executed" : "pending",
+        initiatorFid,
         initiatorUserId: input.initiatorUserId,
         newName: input.newName ?? null,
         newPhoneEncrypted,
@@ -452,41 +499,53 @@ export async function createPlacementRequest(
       })
       .returning();
 
-    // 发起人自动算已确认 (他是"设置者本人")
+    // 发起人自动算已确认 (他是"设置者本人"); admin 单 → verified_by='admin'
     await tx.insert(franchisePlacementConfirm).values({
       requestId: request.id,
       confirmerRole: "initiator",
-      confirmerFid: input.initiatorFid,
+      confirmerFid: initiatorFid,
       confirmerUserId: input.initiatorUserId,
       decision: "approve",
-      verifiedBy: "in_app",
+      verifiedBy: isAdmin ? "admin" : "in_app",
       decidedAt: sql`NOW()`,
     });
+
+    // admin: 立即落位 (事务内) → 再把单子读回来
+    let finalRow = request;
+    if (isAdmin) {
+      await executeRequest(tx, request as unknown as RawRequest);
+      const [fresh] = await tx
+        .select()
+        .from(franchisePlacementRequest)
+        .where(eq(franchisePlacementRequest.id, request.id))
+        .limit(1);
+      finalRow = fresh ?? request;
+    }
 
     const views = await toViews(
       tx,
       [
         {
-          id: request.id,
-          kind: request.kind,
-          status: request.status,
-          initiatorFid: request.initiatorFid,
-          initiatorUserId: request.initiatorUserId,
-          newName: request.newName,
-          newPhoneEncrypted: request.newPhoneEncrypted,
-          newPhoneHash: request.newPhoneHash,
-          moveFid: request.moveFid,
-          targetParentFid: request.targetParentFid,
-          targetSide: request.targetSide,
-          resultFid: request.resultFid,
-          backfilled: request.backfilled,
-          expiresAt: request.expiresAt,
-          createdAt: request.createdAt,
+          id: finalRow.id,
+          kind: finalRow.kind,
+          status: finalRow.status,
+          initiatorFid: finalRow.initiatorFid,
+          initiatorUserId: finalRow.initiatorUserId,
+          newName: finalRow.newName,
+          newPhoneEncrypted: finalRow.newPhoneEncrypted,
+          newPhoneHash: finalRow.newPhoneHash,
+          moveFid: finalRow.moveFid,
+          targetParentFid: finalRow.targetParentFid,
+          targetSide: finalRow.targetSide,
+          resultFid: finalRow.resultFid,
+          backfilled: finalRow.backfilled,
+          expiresAt: finalRow.expiresAt,
+          createdAt: finalRow.createdAt,
         },
       ],
       {
         userId: input.initiatorUserId,
-        fid: input.initiatorFid,
+        fid: initiatorFid,
         phoneHash: null,
       }
     );

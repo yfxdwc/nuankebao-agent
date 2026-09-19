@@ -145,5 +145,8 @@ class PlacementRequest {
   /// 还在等我拍板 (有我的角色 + 我还没表态)
   bool get awaitingMe => isPending && myRole != null && myDecision == null;
 
-  String get progressText => '$approvedCount/$requiredCount 方已确认';
+  /// 管理员单 (免多方确认): 不显示 "1/0 方已确认" 这种怪话
+  String get progressText => requiredCount == 0
+      ? '管理员设置, 免多方确认'
+      : '$approvedCount/$requiredCount 方已确认';
 }

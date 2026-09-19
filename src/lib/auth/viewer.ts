@@ -38,10 +38,12 @@ export async function resolveViewerFranchiseeId(
 //   - userId     → 审计 / 确认记录
 //   - fid        → 我是哪个加盟商 (目标父节点 / 发起人 判定)
 //   - phoneHash  → 匹配「新加盟商本人」(create 单里对方还没加盟商记录, 只能认手机号)
+//   - isAdmin    → 系统管理员设置加盟免多方确认 (主人 2026-09-19 拍)
 export interface PlacementActorContext {
   userId: bigint;
   fid: bigint | null;
   phoneHash: string | null;
+  isAdmin: boolean;
 }
 
 export async function resolvePlacementActor(
@@ -51,11 +53,20 @@ export async function resolvePlacementActor(
   try {
     const uid = BigInt(sessionUserId);
     const [u] = await db
-      .select({ fid: user.franchiseeId, phoneHash: user.phoneHash })
+      .select({
+        fid: user.franchiseeId,
+        phoneHash: user.phoneHash,
+        role: user.role,
+      })
       .from(user)
       .where(eq(user.id, uid))
       .limit(1);
-    return { userId: uid, fid: u?.fid ?? null, phoneHash: u?.phoneHash ?? null };
+    return {
+      userId: uid,
+      fid: u?.fid ?? null,
+      phoneHash: u?.phoneHash ?? null,
+      isAdmin: u?.role === "admin",
+    };
   } catch {
     return null;
   }

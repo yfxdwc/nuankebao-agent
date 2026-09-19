@@ -665,6 +665,34 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Added (加盟设置权限三条红线, 2026-09-19 主人拍)
+
+主人原话: 「必需由其他已加盟用户或系统管理员才能设置加盟，系统管理员设置加盟用户不需要多方确认，
+用户自己不能给自己设置成加盟用户。」
+
+**① 只有「已加盟用户」或「系统管理员」能设置加盟**
+- `franchisee-placement.ts::createPlacementRequest`: 发起人必须有加盟商记录 (或 `initiatorIsAdmin`)
+  → 否则 `只有已加盟用户或系统管理员才能设置加盟`
+- `POST /api/franchisees/placement-requests`: 403 门闸同步改（原来只挡「没绑加盟商」，现在区分管理员）
+- `POST /api/franchisees`（老的"直接新增加盟商"= 无三方确认）：**收紧成管理员专用**，
+  普通用户 403 + 提示走「加盟落位（三方确认）」；**注意**: 以前这个口子任何登录用户都能调（无权限校验）
+
+**② 系统管理员设置加盟 = 免多方确认**
+- 管理员发起 → 单子直接 `status='executed'`（事务内立即落位），确认记录 `verified_by='admin'`
+- `PlacementRequestView.required` 对管理员单返回 `[]`（Flutter 显示「管理员设置, 免多方确认」，不再出现 1/0）
+- 管理员不受「只能在自己子树内操作」限制（可全网任意点位；原 Q7 只对普通加盟商生效）
+- App 端文案: 管理员操作 → 「已落位…管理员设置, 立即生效」/「已移动 (管理员操作, 立即生效)」/「已解除加盟 (管理员操作, 立即生效)」
+
+**③ 用户不能给自己设置成加盟用户**（管理员也不行）
+- 校验点: 新加盟商手机号 hash == 发起人自己手机号 hash → 拒绝
+- 两个入口都加: `createPlacementRequest` (三方确认流) + `POST /api/franchisees` (管理员直通流)
+
+**冒烟**: `scripts/smoke-placement-rules.ts`（6 项全过）
+- ③ 自己给自己 → 拒 ✓ / ① 非加盟非管理员 → 拒 ✓
+- ② 管理员 → executed + verifiedBy=admin + 落位 path 正确 ✓
+- HTTP 层复验: sales 用户 POST /api/franchisees → 403 ✓; POST placement-requests → 400 ✓;
+  管理员单 HTTP 返回 `status=executed`, 记录 path=`L.L.L.L.L.L.` ✓
+
 ### Added (单击节点: 一层子节点也一起突出显示, 2026-09-19 主人拍)
 
 - 主人: 「单击节点后，在确保已有触发不变的前提下（被点节点往上到根节点整条线突出显示），

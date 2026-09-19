@@ -2936,7 +2936,9 @@ Customer c,
   );
   if (target == null || !context.mounted) return;
   try {
-    await ref.read(franchiseeServiceProvider).createPlacementRequest(
+    final req = await ref
+        .read(franchiseeServiceProvider)
+        .createPlacementRequest(
           targetParentId: target.parentId,
           side: target.side,
           newName: c.name,
@@ -2944,10 +2946,14 @@ Customer c,
         );
     if (!context.mounted) return;
     ref.invalidate(placementToConfirmCountProvider);
+    // 主人 2026-09-19: 系统管理员设置加盟免多方确认 → 直接生效
+    final done = req.status == 'executed';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '已提交: 加到「${target.parentName}」的${PlacementRequest.sideLabel(target.side)} · 等三方确认后生效',
+          done
+              ? '已落位: 加到「${target.parentName}」的${PlacementRequest.sideLabel(target.side)} · 管理员设置, 立即生效'
+              : '已提交: 加到「${target.parentName}」的${PlacementRequest.sideLabel(target.side)} · 等三方确认后生效',
           style: const TextStyle(fontSize: AppTheme.fontSm),
         ),
       ),

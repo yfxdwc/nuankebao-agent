@@ -13,6 +13,8 @@ import {
 } from "@/lib/db/queries/franchisee";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 import { getRbacContext } from "@/lib/auth/rbac";
+import { resolvePlacementActor } from "@/lib/auth/viewer";
+import { hashForLookup } from "@/lib/crypto/field";
 
 const CreateFranchiseeSchema = z.object({
   name: z.string().min(1).max(100),
@@ -69,9 +71,36 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // 主人 2026-09-19 拍:
+  //   ① 只有「已加盟用户或系统管理员」能设置加盟;
+  //   ② 系统管理员设置加盟**不需要多方确认** → 本接口 (直接落位, 无三方确认) = 管理员专用;
+  //      普通加盟商请走 POST /api/franchisees/placement-requests (三方确认)
+  //   ③ 用户不能给自己设置成加盟用户
   try {
     const body = await request.json();
     const input = CreateFranchiseeSchema.parse(body);
+
+    // 注意: 有 session 就必查 (dev DEV_SKIP_AUTH=1 只是跳过"未登录"拦截, 不是放开权限)
+    if (session?.user?.id) {
+      const actor = await resolvePlacementActor(session.user.id);
+      if (!actor?.isAdmin) {
+        return NextResponse.json(
+          {
+            error:
+              "只有系统管理员可以直接新增加盟商；其他用户请走加盟落位（需三方确认）",
+          },
+          { status: 403 }
+        );
+      }
+      // 不能给自己设置加盟 (管理员也不行)
+      const selfPhoneHash = hashForLookup(input.phone);
+      if (actor.phoneHash != null && actor.phoneHash === selfPhoneHash) {
+        return NextResponse.json(
+          { error: "不能给自己设置加盟 (必须由其他已加盟用户或系统管理员设置)" },
+          { status: 400 }
+        );
+      }
+    }
 
     const ctx = getAuditContextFromRequest(request, session);
     const createdBy = session?.user?.id ? BigInt(session.user.id) : BigInt(0);

@@ -358,16 +358,21 @@ class FranchiseeDetailPage extends ConsumerWidget {
     );
     if (target == null || !context.mounted) return;
     try {
-      await ref.read(franchiseeServiceProvider).createPlacementRequest(
+      final req = await ref
+          .read(franchiseeServiceProvider)
+          .createPlacementRequest(
             targetParentId: target.parentId,
             side: target.side,
             moveFid: franchiseeId,
           );
       if (!context.mounted) return;
+      final done = req.status == 'executed';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('已提交移动申请, 等三方确认',
-              style: TextStyle(fontSize: AppTheme.fontMd)),
+        SnackBar(
+          content: Text(
+            done ? '已移动 (管理员操作, 立即生效)' : '已提交移动申请, 等三方确认',
+            style: const TextStyle(fontSize: AppTheme.fontMd),
+          ),
         ),
       );
       context.pop();
@@ -417,7 +422,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
     );
     if (ok != true) return;
     try {
-      await ref
+      final req = await ref
           .read(franchiseeServiceProvider)
           .createPlacementRequest(
             targetParentId: franchiseeId,
@@ -425,9 +430,13 @@ class FranchiseeDetailPage extends ConsumerWidget {
             unjoinFid: franchiseeId,
           );
       if (!context.mounted) return;
+      final done = req.status == 'executed';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('已提交解除申请, 等三方确认', style: TextStyle(fontSize: AppTheme.fontMd)),
+        SnackBar(
+          content: Text(
+            done ? '已解除加盟 (管理员操作, 立即生效)' : '已提交解除申请, 等三方确认',
+            style: const TextStyle(fontSize: AppTheme.fontMd),
+          ),
         ),
       );
       context.pop();

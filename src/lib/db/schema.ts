@@ -205,7 +205,8 @@ export const franchisePlacementConfirm = pgTable(
     /** 实际点确认的账号 (in_app 确认时必有) */
     confirmerUserId: bigint("confirmer_user_id", { mode: "bigint" }),
     decision: text("decision", { enum: ["approve", "reject"] }).notNull(),
-    verifiedBy: text("verified_by", { enum: ["in_app", "backfill"] })
+    /** in_app = 账号在 App 里点的; backfill = 上线前回填; admin = 管理员单免确认自动落位 */
+    verifiedBy: text("verified_by", { enum: ["in_app", "backfill", "admin"] })
       .notNull()
       .default("in_app"),
     decidedAt: timestamp("decided_at", { withTimezone: true })
