@@ -86,6 +86,76 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
     }
   }
 
+  /// 编辑收款人名字 + 备注提示 (用户端「开通会员」弹层上显示的字)
+  Future<void> _editPayInfoTexts() async {
+    final payeeCtrl = TextEditingController();
+    final hintCtrl = TextEditingController();
+    // 先拉一次当前值
+    try {
+      final info = await ref.read(manualPayInfoProvider.future);
+      payeeCtrl.text = info.payeeName;
+      hintCtrl.text = info.noteHint;
+    } catch (_) {
+      // 拉不到就留空, 用户自己填
+    }
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('收款信息'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: payeeCtrl,
+              style: const TextStyle(fontSize: AppTheme.fontMd),
+              decoration: const InputDecoration(
+                labelText: '收款人显示名',
+                hintText: '例: 张老师',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: hintCtrl,
+              style: const TextStyle(fontSize: AppTheme.fontMd),
+              decoration: const InputDecoration(
+                labelText: '付款备注提示',
+                hintText: '付款备注请填写你的手机号后 4 位',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final ok = await ref.read(billingServiceProvider).adminSetPayInfo(
+                    payeeName: payeeCtrl.text.trim(),
+                    noteHint: hintCtrl.text.trim(),
+                  );
+              if (!ctx.mounted) return;
+              Navigator.of(ctx).pop();
+              ref.invalidate(manualPayInfoProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(ok ? '已保存' : '保存失败',
+                      style: const TextStyle(fontSize: AppTheme.fontMd)),
+                ),
+              );
+            },
+            child: const Text('保存', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+        ],
+      ),
+    );
+    payeeCtrl.dispose();
+    hintCtrl.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(adminPaymentsProvider(_status));
@@ -106,6 +176,13 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
               icon: Icons.qr_code_2,
               hint: '内测人工通道',
               children: [
+                ProfileTile(
+                  icon: Icons.badge_outlined,
+                  title: '收款人名字 / 备注提示',
+                  subtitle: '用户付款页上显示的两行字',
+                  color: AppTheme.primaryDark,
+                  onTap: _busy ? null : _editPayInfoTexts,
+                ),
                 ProfileTile(
                   icon: Icons.upload,
                   title: _busy ? '处理中...' : '上传/更换微信收款码',
