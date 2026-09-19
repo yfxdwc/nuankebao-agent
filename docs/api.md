@@ -2,7 +2,7 @@
 
 > REST API 端点 (沙龙模块追加 14 个, 见 §14)
 > Base URL: `http://127.0.0.1:3003/api` (开发) / `https://nuankebao.tooyang.top/api` (生产)
-> 认证: Auth.js v5 session cookie (`authjs.session-token`)
+> 认证: Auth.js v5 session cookie (dev `authjs.session-token`; 生产加 `__Secure-` 前缀)
 
 ## 通用约定
 
@@ -56,17 +56,17 @@ API 返回明文 (decryptField)。DB 存密文。
 ```
 
 ### `POST /api/auth/callback/credentials`
-登录 (form-urlencoded)。
+登录 (form-urlencoded)。账号密码登录 (2026-09-19 P2):
 
 **Body**:
 ```
 csrfToken: string
-phone: string (11 位)
-code: string (6 位, 开发期 123456)
+identifier: string   # 登录名 (如 admin) 或 手机号
+password: string
 callbackUrl: string
 ```
 
-**响应**: `302` + Set-Cookie `authjs.session-token`
+**响应**: `302` + Set-Cookie `__Secure-authjs.session-token` (dev 无前缀)
 
 ### `POST /api/auth/signout`
 登出。
@@ -521,6 +521,25 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 - 未登录 → 401 (dev `DEV_SKIP_AUTH` 且无 cookie 时不猜"你是 1 号")
 
 **响应**: `{ "ok": true, "avatarUrl": "preset:leaf" }`
+
+### `PATCH /api/me/password`
+自助修改密码 (P2: 首登后改掉初始密码)。
+
+**Body**:
+```json
+{ "oldPassword": "初始密码", "newPassword": "新密码" }
+```
+
+**规则**:
+- 新密码至少 8 位, 且同时含字母和数字 (不能与旧密码相同)
+- 必须验证旧密码 (错 → 401); 每用户 5 次/分钟限流
+- 未设置密码的账号 (老数据) → 400「请联系管理员重置」
+- 写库走 `user` 表 → 审计触发器记录 (密码只存 scrypt 哈希)
+
+**响应**: `{ "ok": true }`
+
+> 兼容性: JWT session 策略下改密不会使旧 token 立即失效 (最长 30 天);
+> 后续可加 `password_changed_at` 校验 (Phase 2 安全加固)。
 
 ### `GET /api/app-version`
 服务器版本 + 可下载安装包元数据 (Flutter 「检查更新」)。

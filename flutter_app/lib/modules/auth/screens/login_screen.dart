@@ -6,6 +6,11 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/http/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 
+/// 登录页 (2026-09-19 P2: 手机号+验证码 → 账号/手机号 + 密码)
+///
+/// 设计来源: docs/deploy/production-plan.md §1.1
+///   - 邀请制: 账号由管理员创建, 不开放自助注册
+///   - identifier = 登录名 (如 admin) 或 手机号
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -14,41 +19,36 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _phoneController = TextEditingController();
-  final _codeController = TextEditingController();
-  String _step = 'phone'; // 'phone' | 'code'
-  bool loading = false; // W12: 修 _login 错误显示
+  final _identifierController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool loading = false;
+  bool _obscure = true;
 
   @override
   void dispose() {
-    _phoneController.dispose();
-    _codeController.dispose();
+    _identifierController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendCode() async {
-    final phone = _phoneController.text.trim();
-    if (phone.length != 11) {
-      _showError('请输入 11 位手机号');
-      return;
-    }
-    // W1: mock 验证码 (W2 替换为真实 SMS)
-    setState(() => _step = 'code');
-    _showSnack('验证码已发送 (开发期: 123456)');
-  }
-
   Future<void> _login() async {
-    final code = _codeController.text.trim();
-    if (code.length != 6) {
-      _showError('请输入 6 位验证码');
+    final identifier = _identifierController.text.trim();
+    final password = _passwordController.text;
+    if (identifier.isEmpty) {
+      _showError('请输入账号或手机号');
       return;
     }
+    if (password.isEmpty) {
+      _showError('请输入密码');
+      return;
+    }
+
     setState(() => loading = true);
     try {
       await ref.read(authProvider.notifier).login(
-        phone: _phoneController.text.trim(),
-        code: code,
-      );
+            identifier: identifier,
+            password: password,
+          );
       final state = ref.read(authProvider);
       if (state.error != null) {
         if (mounted) _showError(state.error!);
@@ -64,10 +64,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -99,8 +95,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 8),
                   const Text('大健康行业销售 CRM', style: TextStyle(color: Colors.black54)),
                   const SizedBox(height: 48),
-                  if (_step == 'phone') _buildPhoneStep(),
-                  if (_step == 'code') _buildCodeStep(authState.loading, error: authState.error),
+                  _buildForm(authState),
                   const SizedBox(height: 24),
                   // 诊断信息: 当前连的后端地址 (登录不上时对照确认装对 APK)
                   Text(
@@ -117,63 +112,63 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildPhoneStep() {
+  Widget _buildForm(AuthState authState) {
     return Column(
       children: [
         TextField(
-          controller: _phoneController,
-          keyboardType: TextInputType.phone,
-          maxLength: 11,
+          controller: _identifierController,
+          keyboardType: TextInputType.text,
+          textInputAction: TextInputAction.next,
           decoration: const InputDecoration(
-            labelText: '手机号',
-            hintText: '13800138000',
-            prefixIcon: Icon(Icons.phone),
+            labelText: '账号 / 手机号',
+            hintText: 'admin 或 13800138000',
+            prefixIcon: Icon(Icons.person_outline),
           ),
-          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: _phoneController.text.length == 11 ? _sendCode : null,
-          child: const Text('发送验证码'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCodeStep(bool loading, {String? error}) {
-    return Column(
-      children: [
         TextField(
-          controller: _codeController,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
+          controller: _passwordController,
+          obscureText: _obscure,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => loading ? null : _login(),
           decoration: InputDecoration(
-            labelText: '验证码',
-            hintText: '6 位',
-            prefixIcon: const Icon(Icons.sms),
-            helperText: '已发送至 +86 ${_phoneController.text}',
+            labelText: '密码',
+            prefixIcon: const Icon(Icons.lock_outline),
+            suffixIcon: IconButton(
+              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+              tooltip: _obscure ? '显示密码' : '隐藏密码',
+              onPressed: () => setState(() => _obscure = !_obscure),
+            ),
           ),
-          autofocus: true,
         ),
-        if (error != null) ...[
+        if (authState.error != null) ...[
           const SizedBox(height: 12),
           Text(
-            error,
+            authState.error!,
             style: const TextStyle(color: Colors.red, fontSize: 13),
             textAlign: TextAlign.center,
           ),
         ],
-        const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: loading ? null : _login,
-          child: loading
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Text('登录'),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: loading ? null : _login,
+            child: loading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('登录'),
+          ),
         ),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: () => setState(() => _step = 'phone'),
-          child: const Text('返回上一步'),
+        const SizedBox(height: 12),
+        const Text(
+          '账号由管理员开通; 忘记密码请联系管理员重置',
+          style: TextStyle(fontSize: 12, color: Colors.black45),
+          textAlign: TextAlign.center,
         ),
       ],
     );

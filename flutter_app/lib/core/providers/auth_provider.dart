@@ -46,10 +46,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoggedIn: logged);
   }
 
-  Future<void> login({required String phone, required String code}) async {
+  Future<void> login({
+    required String identifier,
+    required String password,
+  }) async {
     state = state.copyWith(loading: true, clearError: true);
     try {
-      await _auth.login(phone: phone, code: code);
+      await _auth.login(identifier: identifier, password: password);
       state = state.copyWith(isLoggedIn: true, loading: false);
     } catch (e) {
       state = state.copyWith(loading: false, error: e.toString());

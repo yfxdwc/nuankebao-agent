@@ -2,6 +2,40 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (P2: 账号密码登录 + 邀请制建档 + 自助改密, 2026-09-19)
+
+**背景**: 登录从「手机号 + 短信验证码」(W1 mock) 改为「账号 / 手机号 + 密码」(邀请制,
+不开放自助注册), 省掉短信资质/成本; 方案 `docs/deploy/production-plan.md` v2 §3.B。
+
+**后端**
+
+- migration `0011_user_credentials` (+down): `user.username` / `user.password_hash` (可空, 兼容老行)
+  + `idx_user_username` 唯一索引; `meta/0011_snapshot.json` 顺带修正 0010 无 snapshot 的历史漂移
+- `src/lib/auth/password.ts`: scrypt 哈希/校验 (Node 内置, 无新依赖) + 强度策略 (≥8 位含字母数字)
+- `src/lib/auth/credentials.ts`: username / phone_hash 查用户 + scrypt 校验 + 5 次/分钟限流
+- `src/lib/auth/config.ts`: Auth.js v5 **Edge 安全拆分** (middleware 用, 无 DB);
+  `src/lib/auth/index.ts` 现为 Node 侧真实 `authorize` (删 W1「任意手机号+123456 → 用户1」桩)
+  - 拆因: DB 进 Edge middleware bundle = 全站 500 (2026-09-18 实测回滚过)
+- `PATCH /api/me/password`: 自助改密 (验旧密码 + 强度 + 限流 + 审计触发器)
+- `DEV_SKIP_AUTH` 加 NODE_ENV 硬门闸 (生产误设也不生效) — middleware + skip-auth
+- dev-only `/api/auth/flutter-login`: 改为密码校验; 保留 `code=123456` 兼容旧预览 bundle;
+  多账号预览共享密码 `DEV_LOGIN_ANY_PASSWORD` (仅 dev, 生产 endpoint 404)
+
+**脚本 / Flutter**
+
+- `scripts/create-admin.ts` — 管理员建档/重置 (口令只走 env, 明文不落库)
+- `scripts/import-users.ts` — CSV 邀请制导入 (幂等; 随机初始密码只打印一次)
+- Flutter: 登录页两步验证码 → 一步「账号/手机号 + 密码」;
+  `AuthService.changePassword` + 「我的 → 修改密码」弹层 (`showChangePasswordSheet`)
+
+**验证 (2026-09-19, prod 栈 :3004 实测)**
+
+- admin 建档 (id=1) → 正确密码 302 + session; 错误密码不发 session
+- 同一 session 调 `/api/me` 200; `PATCH /api/me/password` 200;
+  新密码可登录 / 旧密码失效 (临时账号已清理)
+- `pnpm test:run` 118/118 (新增 `tests/password.test.ts` + `tests/credentials.test.ts`);
+  `pnpm db:compat` / `pnpm type-check` 通过; Flutter analyze 改动文件 0 告警
+
 ### Fixed (生产栈 P1: 首次生产构建/全新库部署打通 — 5 个生产路径缺陷, 2026-09-19)
 
 **背景**: 主人 2026-09-19 拍板「先用自有服务器, tc 本机 Docker 隔离」后, 首次真正尝试

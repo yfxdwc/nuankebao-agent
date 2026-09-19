@@ -679,12 +679,12 @@ class _DisplaySettingsCardState extends ConsumerState<_DisplaySettingsCard> {
 // 5. 账号与安全
 // ============================================
 
-class _AccountCard extends StatelessWidget {
+class _AccountCard extends ConsumerWidget {
   final MeProfile profile;
   const _AccountCard({required this.profile});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = profile;
     return ProfileSection(
       title: '账号与安全',
@@ -717,10 +717,16 @@ class _AccountCard extends StatelessWidget {
             label: '账号编号',
             value: '#${p.user!.id} · ${p.user!.roleLabel}',
           ),
+        ProfileTile(
+          icon: Icons.password_outlined,
+          title: '修改密码',
+          subtitle: '首次登录后建议改掉初始密码',
+          onTap: () => showChangePasswordSheet(context, ref),
+        ),
         const Padding(
           padding: EdgeInsets.only(top: 4, bottom: 8),
           child: Text(
-            '手机号就是登录账号, 要换号 / 停用账号请联系管理员',
+            '登录账号由管理员开通; 换号 / 停用账号请联系管理员',
             style: TextStyle(
                 fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
           ),

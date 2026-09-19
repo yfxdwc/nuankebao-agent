@@ -26,7 +26,9 @@ class AuthService {
   final Dio _dio;
   AuthService(this._dio);
 
-  Future<void> login({required String phone, required String code}) async {
+  /// 账号密码登录 (2026-09-19 P2)
+  /// [identifier] 登录名 (如 admin) 或 手机号; [password] 密码
+  Future<void> login({required String identifier, required String password}) async {
     final csrfRes = await _dio.get('/auth/csrf');
     final csrf = csrfRes.data['csrfToken'] as String?;
     if (csrf == null) {
@@ -36,7 +38,7 @@ class AuthService {
     // R12 治本方案 A: dev + web 走专用 endpoint 拿 body token (HttpOnly 绕不过)
     if (kIsWeb) {
       try {
-        await _loginDevWeb(phone: phone, code: code);
+        await _loginDevWeb(identifier: identifier, password: password);
         return; // dev web 登录成功, storage 有 token
       } catch (e) {
         // dev 专用 endpoint 不可用 (prod? 部署环境不同?) fallback 老 Auth.js callback
@@ -48,8 +50,8 @@ class AuthService {
       '/auth/callback/credentials',
       data: {
         'csrfToken': csrf,
-        'phone': phone,
-        'code': code,
+        'identifier': identifier,
+        'password': password,
         'callbackUrl': ApiClient.baseOrigin,
       },
       options: Options(
@@ -75,6 +77,18 @@ class AuthService {
     await ApiClient.syncCookiesFromBrowser();
   }
 
+  /// 修改密码 (P2: 首登后自助改密)
+  /// PATCH /api/me/password { oldPassword, newPassword }
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    await _dio.patch('/me/password', data: {
+      'oldPassword': oldPassword,
+      'newPassword': newPassword,
+    });
+  }
+
   /// R12 治本方案 A: dev + web 平台走专用 endpoint 拿 body 返回的 session token
   ///
   /// Auth.js 默认 httpOnly=true, JS 读不到。dio XHR 拿不到 Set-Cookie 头。
@@ -83,11 +97,14 @@ class AuthService {
   /// 调用后:
   ///   - storage.session_cookie_name + session_token 已写入
   ///   - 后续 dio 请求从 storage 读 token 拼 Cookie 头
-  Future<void> _loginDevWeb({required String phone, required String code}) async {
+  Future<void> _loginDevWeb({
+    required String identifier,
+    required String password,
+  }) async {
     // 用 dio 调 endpoint (dio web 平台 XHR 拿不到 Set-Cookie 头, 但能读 body)
     final resp = await _dio.post('/auth/flutter-login', data: {
-      'phone': phone,
-      'code': code,
+      'identifier': identifier,
+      'password': password,
     }, options: Options(contentType: Headers.jsonContentType));
     if (resp.statusCode != 200 || resp.data is! Map) {
       throw Exception('登录响应格式错误');

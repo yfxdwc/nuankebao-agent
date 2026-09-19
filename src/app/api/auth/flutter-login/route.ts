@@ -1,5 +1,5 @@
 // /api/auth/flutter-login
-// GET/dev 专用: 暖客宝 Flutter web R12 治本方案 (HttpOnly cookie JS 读不到, 改用 body 返回)
+// dev 专用: Flutter web R12 治本方案 (HttpOnly cookie JS 读不到, 改用 body 返回)
 //
 // 背景 (docs/login-failure-triage.md §2.B R12):
 //   Auth.js v5 session-token 默认 httpOnly=true (dev 也一样, 没法关),
@@ -8,27 +8,28 @@
 //   后续 API 401 → 跳回 /login → 主人看到循环.
 //
 // 治本方案 A (本 endpoint 实施):
-//   1. dev mode (NODE_ENV !== production): 接受 phone + code (验证码硬编码 123456),
-//      用 Auth.js signIn + encode 同样的 secret 生成 JWT,
-//      Set-Cookie + 额外在 body 里返回 { sessionToken, cookieName }
-//   2. Flutter web 用 fetch (不用 dio) 调这个 endpoint, 从 body 拿 token,
-//      写 ApiClient.storage.session_token, 后续 dio 请求走 onRequest
-//      拦截器从 storage 拼 Cookie 头 (路径已存在)
-//   3. prod 模式: 本 endpoint 直接 404 (避免 security risk: 把 JWT 通过 body 返回)
+//   1. dev mode (NODE_ENV !== production): 接受 账号/手机号 + 密码,
+//      用 Auth.js 同样的 secret 生成 JWT, Set-Cookie + body 返回 { sessionToken, cookieName }
+//   2. Flutter web 用 dio 调这个 endpoint, 从 body 拿 token,
+//      写 ApiClient.storage.session_token, 后续请求走 onRequest 拦截器拼 Cookie
+//   3. prod 模式: 本 endpoint 直接 404 (安全: 不允许 JWT 走 body 返回)
 //
-// 不替代 Auth.js OAuth callback — 真机 APK / Next.js web login 仍走老路径.
-// 只为 Flutter web dev mode 治 R12.
+// 2026-09-19 P2 变更 (账号密码登录):
+//   - 主路径: identifier (username/手机号) + password → verifyCredentials (真实 scrypt 校验)
+//   - 兼容路径 (仅 dev):
+//     a. `code=123456` + DEV_LOGIN_ANY_USER=1 → 旧预览 bundle 免密切号 (deprecated)
+//     b. DEV_LOGIN_ANY_PASSWORD (env) + DEV_LOGIN_ANY_USER=1 → 多账号预览免真实密码切号
+//   - 生产环境以上全部失效 (404 + NODE_ENV 门闸)
 
 import { NextRequest, NextResponse } from "next/server";
 import { encode as jwtEncode } from "next-auth/jwt";
-import { db } from "@/lib/db";
-import { user } from "@/lib/db/schema";
-import { hashForLookup } from "@/lib/crypto/field";
-import { and, eq } from "drizzle-orm";
+import {
+  findActiveUserByIdentifier,
+  verifyCredentials,
+} from "@/lib/auth/credentials";
 
 const SESSION_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days, 同 Auth.js 默认
-const DEV_PHONE = "13800138000";
-const DEV_CODE = "123456";
+const LEGACY_DEV_CODE = "123456";
 
 export async function POST(request: NextRequest) {
   // prod 模式禁用 — JWT 通过 body 返回是 dev 妥协方案, prod 必须 HttpOnly
@@ -36,76 +37,86 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 
-  let body: { phone?: string; code?: string };
+  let body: {
+    identifier?: string;
+    phone?: string;
+    password?: string;
+    code?: string;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { phone, code } = body;
+  const identifier = (body.identifier ?? body.phone ?? "").trim();
+  const password = typeof body.password === "string" ? body.password : "";
+  const legacyCode = typeof body.code === "string" ? body.code : "";
 
-  // 验证码固定 123456 (dev only)
-  if (code !== DEV_CODE) {
-    return NextResponse.json(
-      { error: "验证码错误", hint: "dev mode: code=123456" },
-      { status: 401 }
-    );
+  if (!identifier) {
+    return NextResponse.json({ error: "请输入账号或手机号" }, { status: 400 });
   }
 
-  // 登录身份:
-  //   默认: 只允许写死的 DEV_PHONE (单账号 dev)
-  //   DEV_LOGIN_ANY_USER=1 (默认关闭): 允许 **已存在** 的任意用户 (多账号预览/联调用)
-  //     — 仍需 phone 在 user 表里能查到, 不能凭空造号
-  //   例: 预览沙龙时主理人 (13800138000) 与受邀者 (其他已导入手机号) 互切
   const anyUser = process.env.DEV_LOGIN_ANY_USER === "1";
-  let devUser: { id: bigint; name: string } | null = null;
-  if (anyUser && phone) {
-    const phoneHash = hashForLookup(phone);
-    const [row] = await db
-      .select({ id: user.id, name: user.name })
-      .from(user)
-      .where(and(eq(user.phoneHash, phoneHash), eq(user.isActive, true)))
-      .limit(1);
-    devUser = row ?? null;
-  }
 
-  if (!anyUser && phone !== DEV_PHONE) {
-    return NextResponse.json(
-      { error: "验证码错误", hint: "dev mode: phone=13800138000, code=123456" },
-      { status: 401 }
-    );
-  }
-  if (anyUser && !devUser) {
-    return NextResponse.json(
-      { error: "该手机号没有对应用户", hint: "DEV_LOGIN_ANY_USER=1 也要求用户已存在" },
-      { status: 401 }
-    );
-  }
+  let sub: string | null = null;
+  let displayName = "";
 
-  // 用户 id: 默认写死 1 (= DEV_PHONE 对应的 seed 用户); ANY_USER 模式解析真实 id
-  const sub = anyUser && devUser ? devUser.id.toString() : "1";
-  const displayName = anyUser && devUser ? devUser.name : "开发测试";
+  if (anyUser && legacyCode) {
+    // 兼容旧预览 bundle (密码框上线前的前端): 码 123456 + 免密切号
+    if (legacyCode !== LEGACY_DEV_CODE) {
+      return NextResponse.json(
+        { error: "验证码错误", hint: "dev mode: code=123456" },
+        { status: 401 }
+      );
+    }
+    const row = await findActiveUserByIdentifier(identifier);
+    if (!row) {
+      return NextResponse.json(
+        { error: "该账号/手机号没有对应用户", hint: "DEV_LOGIN_ANY_USER=1 也要求用户已存在" },
+        { status: 401 }
+      );
+    }
+    sub = row.id.toString();
+    displayName = row.name;
+  } else if (anyUser && process.env.DEV_LOGIN_ANY_PASSWORD && password === process.env.DEV_LOGIN_ANY_PASSWORD) {
+    // 多账号预览: 共享 dev 密码切任意已存在用户 (仅 dev; 生产 404)
+    const row = await findActiveUserByIdentifier(identifier);
+    if (!row) {
+      return NextResponse.json(
+        { error: "该账号/手机号没有对应用户", hint: "DEV_LOGIN_ANY_USER=1 也要求用户已存在" },
+        { status: 401 }
+      );
+    }
+    sub = row.id.toString();
+    displayName = row.name;
+  } else {
+    // 主路径: 真实账号 + 密码校验 (含限流)
+    const u = await verifyCredentials(identifier, password);
+    if (!u) {
+      return NextResponse.json(
+        { error: "账号或密码错误, 或尝试过于频繁" },
+        { status: 401 }
+      );
+    }
+    sub = u.id;
+    displayName = u.name;
+  }
 
   // 生成同 Auth.js 格式的 JWT (让 Next.js middleware auth() 能认)
   const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
   if (!secret) {
-    return NextResponse.json(
-      { error: "AUTH_SECRET not set" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "AUTH_SECRET not set" }, { status: 500 });
   }
   const token = await jwtEncode({
-    token: { sub, phone, name: displayName },
+    token: { sub, name: displayName },
     secret,
     salt: "authjs.session-token",
     maxAge: SESSION_TOKEN_TTL_SECONDS,
   });
 
-  // 返回 body (R12 治本主路径: Flutter web 从 body 读 token → Authorization header)
-  // 不再设 HttpOnly cookie (因为 HttpOnly cookie JS 读不到, Flutter web dio
-  // 设 Cookie header 被浏览器拒, 必须走 Authorization 路径).
-  // 注: 备选设个 非 HttpOnly cookie 作兑底 (老 Auth.js callback 路径走原生 cookie).
+  // 返回 body (R12 治本主路径: Flutter web 从 body 读 token)
+  // 不再设 HttpOnly cookie (Flutter web dio 读不到; 走 Authorization/Cookie 手动路径).
   const response = NextResponse.json(
     {
       sessionToken: token,

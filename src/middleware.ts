@@ -1,4 +1,10 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth/config";
+
+// Edge 安全: middleware 只认 Edge 可跑的 auth 配置 (无 DB / scrypt)。
+// 带 DB 的 Credentials provider 在 @/lib/auth (Node 侧) —— 不能 import 进来,
+// 否则 postgres/drizzle 进 Edge bundle → 全站 500 (2026-09-18 实测)。
+const { auth } = NextAuth(authConfig);
 
 /**
  * W14 修: 中间件重定向 base 不用 nextUrl (dev server 下 origin 固定本机),
@@ -72,10 +78,10 @@ export default auth((req) => {
     return new Response("Not Found", { status: 404 });
   }
 
-  // 双门闸: dev 模式 + 显式 opt-in 才跳过 auth
-  // 生产环境也允许跳过 (同名字 var 本身就表达了 dev intent)
-  // 主人部署时如果不想跳过, 删掉 env var 即可
-  const devSkipAuth = process.env.DEV_SKIP_AUTH === "1";
+  // 双门闸: dev 模式 (NODE_ENV !== production) + 显式 opt-in 才跳过 auth
+  // 2026-09-19 P2: 加 NODE_ENV 硬门闸 (之前只认变量值, 生产误设就裸奔)
+  const devSkipAuth =
+    process.env.NODE_ENV !== "production" && process.env.DEV_SKIP_AUTH === "1";
 
   const isOnAdmin = nextUrl.pathname.startsWith("/admin");
   const isOnLogin = nextUrl.pathname === "/login";

@@ -112,6 +112,10 @@
 
 ### B. 账号密码登录
 
+> ✅ **2026-09-19 已实施**: migration `0011_user_credentials` + `src/lib/auth/{password,credentials,config}.ts`
+> + Auth.js Edge/Node 拆分 + Flutter 登录页/改密 + `scripts/create-admin.ts` / `scripts/import-users.ts`;
+> `admin` 建档 + 登录/改密端到端验证通过 (prod 栈 :3004)。
+
 | # | 工作 | 说明 |
 |---|---|---|
 | B1 | migration `0010_user_credentials` | `user` 表加 `username text` + `password_hash text`（可空 = 向后兼容）；`username` 唯一索引；配 `down.sql`，跑 `pnpm db:compat` |
@@ -190,7 +194,7 @@
 |---|---|---|---|
 | **P0 准备**（✅ 已完成） | 停用 `nuankebao-stack.service`；端口 3004 确认；决策拍板 | unit inactive/disabled；dev 正常 | — |
 | **P1 生产栈修复** | §3.A 全部 + `prod-deploy.sh` + 本地容器跑通 | `docker build` 通过；本地起 prod 容器连临时库 `/api/health` 200 | 1–2 天 |
-| **P2 账号密码登录** | §3.B 全部（含 `admin` 建档） | 密码登录成功；两个账号 = 两个身份；错误密码被限流；首登改密可用 | ~1 天 |
+| **P2 账号密码登录** | ✅ 已完成 (§3.B: 含 `admin` 建档) | 密码登录成功；两个账号 = 两个身份；错误密码被限流；首登改密可用 | ~1 天 |
 | **P3 tc 生产部署** | §3.C/E：空库 migrate + seed、prod 栈起在 :3004、备份/健康检查 | LAN `http://192.168.1.99:3004/api/health` 200；第一份加密备份；恢复演练 | ~1 天 |
 | **P4 APK 签名发布** | §3.D | 真机安装 release APK → 登录 → 录入养生记录 | 0.5 天 |
 | **P5 域名切换 + 内测** | §4；邀请 1–2 销售 | 销售日常可用；dev 预览不受影响 | 0.5 天 + 内测周期 |

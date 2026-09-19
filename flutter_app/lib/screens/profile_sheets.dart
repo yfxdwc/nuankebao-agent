@@ -928,6 +928,147 @@ Future<bool> showAvatarPickerSheet(
   return changed;
 }
 
+// ============================================
+// 修改密码 (P2 账号密码登录, 2026-09-19)
+// ============================================
+
+Future<void> showChangePasswordSheet(
+    BuildContext context, WidgetRef ref) async {
+  final oldCtrl = TextEditingController();
+  final newCtrl = TextEditingController();
+  final confirmCtrl = TextEditingController();
+  var submitting = false;
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setSheetState) {
+        Future<void> submit() async {
+          final oldPwd = oldCtrl.text;
+          final newPwd = newCtrl.text;
+          final confirm = confirmCtrl.text;
+
+          if (oldPwd.isEmpty) {
+            _toast(ctx, '请输入当前密码');
+            return;
+          }
+          if (newPwd.length < 8 ||
+              !RegExp(r'[A-Za-z]').hasMatch(newPwd) ||
+              !RegExp(r'\d').hasMatch(newPwd)) {
+            _toast(ctx, '新密码至少 8 位, 需同时包含字母和数字');
+            return;
+          }
+          if (newPwd != confirm) {
+            _toast(ctx, '两次输入的新密码不一致');
+            return;
+          }
+
+          setSheetState(() => submitting = true);
+          try {
+            await ref.read(authServiceProvider).changePassword(
+                  oldPassword: oldPwd,
+                  newPassword: newPwd,
+                );
+            if (ctx.mounted) Navigator.pop(ctx);
+            _toast(context, '密码已修改, 下次登录用新密码');
+          } catch (e) {
+            var msg = '修改失败, 请稍后再试';
+            if (e is DioException) {
+              final data = e.response?.data;
+              if (data is Map && data['error'] is String) {
+                msg = data['error'] as String;
+              } else if (e.response?.statusCode == 401) {
+                msg = '当前密码不正确';
+              }
+            }
+            if (ctx.mounted) _toast(ctx, msg);
+          } finally {
+            if (ctx.mounted) setSheetState(() => submitting = false);
+          }
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            16 + MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '修改密码',
+                style: TextStyle(
+                  fontSize: AppTheme.fontLg,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '至少 8 位, 需同时包含字母和数字',
+                style: TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: oldCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '当前密码',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '新密码',
+                  prefixIcon: Icon(Icons.password_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '确认新密码',
+                  prefixIcon: Icon(Icons.check_circle_outline),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: submitting ? null : submit,
+                  child: submitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('确认修改'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+
+  oldCtrl.dispose();
+  newCtrl.dispose();
+  confirmCtrl.dispose();
+}
+
 /// 从字节头判图片类型 (image_picker 在 web 上不改后缀, 只信后缀会传错 mime)
 String _sniffImageMime(List<int> bytes) {
   if (bytes.length >= 8 &&
