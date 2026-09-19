@@ -13,6 +13,7 @@ import {
   getFranchiseeTree,
   getPlacementTree,
 } from "@/lib/db/queries/franchisee";
+import { listPendingPlacementsUnder } from "@/lib/db/queries/franchisee-placement";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -56,9 +57,18 @@ export async function GET(request: NextRequest) {
   const tree =
     mode === "placement"
       ? await getPlacementTree(fid, depth)
-      : await getFranchiseeTree(fid, depth);  if (!tree) {
+      : await getFranchiseeTree(fid, depth);
+  // 三方确认工作流: 我子树内「待确认」的点位 (前端画虚位)
+  const pendingPlacements =
+    tree && mode === "placement"
+      ? await listPendingPlacementsUnder(fid)
+      : [];  if (!tree) {
     // franchiseeId 存在但记录被删/查不到 → 真正的 404 (前后端不一致)
     return NextResponse.json({ error: "Tree root not found" }, { status: 404 });
   }
-  return NextResponse.json(tree);
+  return NextResponse.json(
+    pendingPlacements.length > 0
+      ? { ...tree, pendingPlacements }
+      : tree
+  );
 }

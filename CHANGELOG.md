@@ -665,6 +665,48 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Added (加盟落位「三方确认」工作流 + 任意点位落位, 2026-09-18 主人拍)
+
+**主人需求**: 「x 可以把 y 放在自己图谱中**任何一个点位**的下级点位；设置加盟节点必须**三方确认**
+(设置者本人 + 新加盟商本人 + 新位置上一个节点加盟商; 上级 == 设置者则双方); 改位置同理」
+**拍板** (ask_user 7ef4548b): 确认载体 = App 内 (Q1/Q2) / 72h 超时 (Q3) / pending 预占 (Q4) /
+移动不含原父节点且推荐人不变 (Q5) / 历史节点补录 (Q6) / 只能操作自己子树 (Q7)
+方案: `docs/placement-confirmation-design.md`
+
+**后端**
+- `drizzle/0010_placement_confirm.sql` (+ down): 2 张表 + 5 索引 (含 **pending 预占部分唯一索引**) + 2 审计触发器
+  - `franchise_placement_request` (kind/status/发起人/新加盟商资料|move_fid/目标父节点+左右/预占/72h)
+  - `franchise_placement_confirm` (三方各一条 approve|reject + verified_by in_app|backfill)
+- `src/lib/db/queries/franchisee-placement.ts`: 状态机
+  - `createPlacementRequest` (越权校验: 只能自己子树内 + 点位空 + 预占; 发起人自动 1 票)
+  - `decidePlacementRequest` (角色判定: 目标父节点按 franchisee id / 新加盟商本人按手机号 hash / 发起人; 全齐 → 事务内落位)
+  - `executeRequest` (create → 落 franchisee + 客户档案; **move → 整棵子树 path 前缀替换 + depth 平移**, 防成环)
+  - `listPlacementRequests` (mine / to_confirm) / `cancelPlacementRequest` / `expireStaleRequests` (72h) / `listPendingPlacementsUnder` (虚位)
+  - 坑: dev 的 postgres 池 `max=1` → **事务里不能用全局 db 查询** (会死锁), toViews 已改成走 `tx`
+- API: `POST/GET /api/franchisees/placement-requests` + `[id]/decide` + `[id]/cancel` + `[id]`;
+  `GET /franchisees/me/tree` 响应加 `pendingPlacements` (待确认点位, 给虚位渲染)
+- 脚本: `scripts/smoke-placement-confirm.ts` (三方全流程冒烟 ✓ 通过) /
+  `scripts/backfill-placement-confirms.ts` (Q6 历史 32 节点补录 ✓ 幂等) / `scripts/cleanup-smoke-placement.ts`
+
+**Flutter**
+- `core/models/placement_request.dart` (申请单 + 确认记录 + summary/progress)
+- `FranchiseeService`: createPlacementRequest / listPlacementRequests / decidePlacementRequest / cancelPlacementRequest
+- 新页面 `modules/relation/screens/placement_requests_page.dart`: 「待我确认 (N) / 我发起的 (N)」两 tab +
+  同意 / 拒绝 / 撤回 (大按钮 56pt, 中老年友好) + 剩余小时提示
+- 客户页: AppBar 加「待我确认」入口 (**Badge 红点**显示待我拍板数) + 图谱选中节点信息条加「加下线到此点位」
+  (弹层选 A线/B线 + 姓名/手机 → 提交后提示「等三方确认后生效」)
+- 路由 `/franchisees/placement-requests`
+
+**验证**
+- 冒烟 (scripts/smoke-placement-confirm.ts): 发起 pending 3 方 → 预占拦下二次发起 → 本人确认 2/3 →
+  上级确认 → **executed**; 校验 path=`父path+L.` / depth=父+1 / referrer=设置者 / 方向=左 / 客户档案已落;
+  拒绝分支 → rejected 且未落位; 详情角色判定 target_parent ✓ 全绿
+- 回填: 历史 32 节点各 1 条 executed + 1 条 backfill 确认 ✓ (重复跑幂等跳过)
+- `npx tsc --noEmit` 0 error; `flutter analyze lib` 0 error; migration compat 检查 0 error 0 warning
+
+**未做 (下一批)**: 移动节点 UI (后端已通) + 图谱「待确认虚位」渲染 (API 已给 pendingPlacements) +
+`public/app` 重建 (机器被其他会话占用, 待安静后补)
+
 ### Added (图谱折叠策略: <50 不折叠 / ≥50 折叠 + 单击自动展开正面 3 层, 2026-09-18 主人拍)
 
 **主人拍**: 「加盟客户图谱中, 节点数低于 50 个时不要折叠。节点数大于 50 时折叠, 单击节点时,

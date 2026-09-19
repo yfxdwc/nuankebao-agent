@@ -125,6 +125,117 @@ export const franchiseeMaxDepthCheck = sql`
   CHECK (placement_depth <= 4)
 `;
 
+// ============================================
+// 加盟落位「三方确认」工作流 (主人 2026-09-18 拍, 见 docs/placement-confirmation-design.md)
+// ============================================
+// 规则:
+//   - 新设节点 / 移动节点位置 → 必须三方确认: 设置者本人 + 新加盟商本人 + 新位置父节点加盟商
+//     (父节点 == 设置者 → 只需双方)
+//   - 确认载体 = App 内「待我确认」(Q1/Q2 拍板: 都走 in_app; 没账号的人先注册登录再确认)
+//   - 超时 72h 自动失效 (Q3); 待确认期间点位**预占** (Q4, 部分唯一索引兜底)
+//   - 移动: 原位置父节点**不需要**确认, 推荐人(referrer_id)不变 (Q5)
+//   - 权限: 只能在**自己 placement 子树内**的点位发起 (Q7)
+//   - 历史节点回填「已确认」记录 (Q6, backfilled=true)
+export const franchisePlacementRequest = pgTable(
+  "franchise_placement_request",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    kind: text("kind", { enum: ["create", "move"] }).notNull(),
+    status: text("status", {
+      enum: ["pending", "executed", "rejected", "expired", "cancelled"],
+    })
+      .notNull()
+      .default("pending"),
+
+    // 发起人 (设置者)
+    initiatorFid: bigint("initiator_fid", { mode: "bigint" }).notNull(),
+    initiatorUserId: bigint("initiator_user_id", { mode: "bigint" }).notNull(),
+
+    // kind=create: 新加盟商资料 (三方确认通过后才真正 insert franchisee)
+    newName: text("new_name"),
+    newPhoneEncrypted: text("new_phone_encrypted"),
+    newPhoneHash: text("new_phone_hash"),
+    newNotesEncrypted: text("new_notes_encrypted"),
+
+    // kind=move: 被移动的节点
+    moveFid: bigint("move_fid", { mode: "bigint" }),
+
+    // 目标点位 = 父节点 + 左/右
+    targetParentFid: bigint("target_parent_fid", { mode: "bigint" }).notNull(),
+    targetSide: text("target_side", { enum: ["left", "right"] }).notNull(),
+
+    // 执行结果: create → 新 franchisee.id; move → moveFid
+    resultFid: bigint("result_fid", { mode: "bigint" }),
+
+    // Q6 回填的历史数据 (豁免真实三方, 只留痕)
+    backfilled: boolean("backfilled").notNull().default(false),
+
+    // Q3: 72h 超时
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    // Q4 预占: 同一个 (父节点, 左/右) 只能有一个 pending —— DB 层兜底防并发抢位
+    pendingSlotUnique: uniqueIndex("idx_placement_pending_slot")
+      .on(table.targetParentFid, table.targetSide)
+      .where(sql`status = 'pending'`),
+    initiatorIdx: index("idx_placement_initiator").on(table.initiatorFid),
+    statusIdx: index("idx_placement_status").on(table.status, table.expiresAt),
+    moveFidIdx: index("idx_placement_move_fid").on(table.moveFid),
+  })
+);
+
+export const franchisePlacementConfirm = pgTable(
+  "franchise_placement_confirm",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    requestId: bigint("request_id", { mode: "bigint" }).notNull(),
+    confirmerRole: text("confirmer_role", {
+      enum: ["initiator", "new_franchisee", "target_parent"],
+    }).notNull(),
+    /** 对应 franchisee.id (回填/无账号时可能为 null) */
+    confirmerFid: bigint("confirmer_fid", { mode: "bigint" }),
+    /** 实际点确认的账号 (in_app 确认时必有) */
+    confirmerUserId: bigint("confirmer_user_id", { mode: "bigint" }),
+    decision: text("decision", { enum: ["approve", "reject"] }).notNull(),
+    verifiedBy: text("verified_by", { enum: ["in_app", "backfill"] })
+      .notNull()
+      .default("in_app"),
+    decidedAt: timestamp("decided_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    requestRoleUnique: uniqueIndex("idx_placement_confirm_request_role").on(
+      table.requestId,
+      table.confirmerRole
+    ),
+  })
+);
+
+export type FranchisePlacementRequest =
+  typeof franchisePlacementRequest.$inferSelect;
+export type NewFranchisePlacementRequest =
+  typeof franchisePlacementRequest.$inferInsert;
+export type FranchisePlacementConfirm =
+  typeof franchisePlacementConfirm.$inferSelect;
+export type PlacementRequestStatusType =
+  | "pending"
+  | "executed"
+  | "rejected"
+  | "expired"
+  | "cancelled";
+export type PlacementConfirmerRoleType =
+  | "initiator"
+  | "new_franchisee"
+  | "target_parent";
+
 export type Franchisee = typeof franchisee.$inferSelect;
 export type NewFranchisee = typeof franchisee.$inferInsert;
 export type PlacementSide = "left" | "right";

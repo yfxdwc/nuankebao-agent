@@ -166,6 +166,26 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         title: const Text('客户'),
         toolbarHeight: 64,
         actions: [
+          // 落位「三方确认」待办入口 (主人 2026-09-18 拍) — 有待确认时红点
+          Consumer(
+            builder: (context, ref, _) {
+              final count =
+                  ref.watch(placementToConfirmCountProvider).valueOrNull ?? 0;
+              return IconButton(
+                tooltip: '待我确认的加盟落位',
+                onPressed: () async {
+                  await context.push('/franchisees/placement-requests');
+                  ref.invalidate(placementToConfirmCountProvider);
+                  ref.invalidate(myFranchiseeTreeProvider);
+                },
+                icon: Badge(
+                  isLabelVisible: count > 0,
+                  label: Text('$count'),
+                  child: const Icon(Icons.fact_check_outlined, size: 26),
+                ),
+              );
+            },
+          ),
           // 列表/图谱 切换 (Material 3 SegmentedButton)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -647,6 +667,13 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             ),
           ),
         ),
+        // 落位「三方确认」(主人 2026-09-18 拍): 在这个点位的下级加新加盟商
+        IconButton(
+          icon: const Icon(Icons.person_add_alt_1, size: 22),
+          tooltip: '加下线到此点位',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _showAddDownlineDialog(node),
+        ),
         // 懒加载 (ADR-0011): 有下级 + 未展开 → 「展开」; 展开了 → 「收起」
         if (loading)
           const Padding(
@@ -679,6 +706,106 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         ),
       ],
     );
+  }
+
+  /// 落位「三方确认」: 在 node 的下级空位加新加盟商 (主人 2026-09-18 拍)
+  ///
+  /// 提交后**不立即生效**: 需要 设置者(我) + 新加盟商本人 + 新位置上级 三方确认
+  /// (若上级 == 我 → 双方); 72h 未确认自动失效; 期间点位预占
+  Future<void> _showAddDownlineDialog(FranchiseeTreeNode parent) async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    var side = 'left';
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: Text('加到「${parent.name}」的下级',
+              style: const TextStyle(fontSize: AppTheme.fontLg)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '需要三方确认才生效: 我 (设置者) + 新加盟商本人 + 新位置的上级。'
+                  '本人和上级要各自在自己 App 的「加盟落位确认」里点同意。',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontXs,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'left', label: Text('A线')),
+                    ButtonSegment(value: 'right', label: Text('B线')),
+                  ],
+                  selected: {side},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (v) => setDlg(() => side = v.first),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  style: const TextStyle(fontSize: AppTheme.fontMd),
+                  decoration: const InputDecoration(labelText: '姓名 *'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: phoneCtrl,
+                  style: const TextStyle(fontSize: AppTheme.fontMd),
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: '手机号 *'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('提交确认', style: TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+          ],
+        ),
+      ),
+    );
+    final name = nameCtrl.text.trim();
+    final phone = phoneCtrl.text.trim();
+    nameCtrl.dispose();
+    phoneCtrl.dispose();
+    if (submitted != true) return;
+    if (name.isEmpty || !RegExp(r'^1[3-9]\d{9}$').hasMatch(phone)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('姓名 / 手机号 填对再提交')),
+      );
+      return;
+    }
+    try {
+      await ref.read(franchiseeServiceProvider).createPlacementRequest(
+            targetParentId: parent.id,
+            side: side,
+            newName: name,
+            newPhone: phone,
+          );
+      if (!mounted) return;
+      ref.invalidate(placementToConfirmCountProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('已提交, 等三方确认后生效', style: TextStyle(fontSize: AppTheme.fontMd)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('提交失败: $e')),
+      );
+    }
   }
 
   /// 懒加载: 拉某个节点的直接子级并缓入 (ADR-0011)

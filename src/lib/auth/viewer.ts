@@ -14,6 +14,9 @@
 //   - null 语义 = "没有下级" → 客户列表「加盟」恒 0, 种子/普通照常
 // ============================================
 
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { user } from "@/lib/db/schema";
 import { getFranchiseeIdByUserId } from "@/lib/db/queries/franchisee";
 
 export async function resolveViewerFranchiseeId(
@@ -24,6 +27,36 @@ export async function resolveViewerFranchiseeId(
     return await getFranchiseeIdByUserId(BigInt(sessionUserId));
   } catch {
     // session.user.id 不是数字 (理论上不会; 防脏数据把整个列表打挂)
+    return null;
+  }
+}
+
+// ============================================
+// 落位「三方确认」用身份 (主人 2026-09-18 拍)
+// ============================================
+// 需要三样东西:
+//   - userId     → 审计 / 确认记录
+//   - fid        → 我是哪个加盟商 (目标父节点 / 发起人 判定)
+//   - phoneHash  → 匹配「新加盟商本人」(create 单里对方还没加盟商记录, 只能认手机号)
+export interface PlacementActorContext {
+  userId: bigint;
+  fid: bigint | null;
+  phoneHash: string | null;
+}
+
+export async function resolvePlacementActor(
+  sessionUserId: string | undefined
+): Promise<PlacementActorContext | null> {
+  if (!sessionUserId) return null;
+  try {
+    const uid = BigInt(sessionUserId);
+    const [u] = await db
+      .select({ fid: user.franchiseeId, phoneHash: user.phoneHash })
+      .from(user)
+      .where(eq(user.id, uid))
+      .limit(1);
+    return { userId: uid, fid: u?.fid ?? null, phoneHash: u?.phoneHash ?? null };
+  } catch {
     return null;
   }
 }

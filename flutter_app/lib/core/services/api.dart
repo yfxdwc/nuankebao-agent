@@ -13,6 +13,7 @@ import '../models/dictionaries.dart';
 import '../models/follow_up.dart';
 import '../models/dashboard.dart';
 import '../models/franchisee.dart';
+import '../models/placement_request.dart';
 import '../models/me.dart';
 import '../models/salon.dart';
 import '../http/api_client.dart';
@@ -399,6 +400,61 @@ class FranchiseeService {
     return items
         .map((e) => FranchiseeTreeNode.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ==========================================
+  // 落位「三方确认」工作流 (主人 2026-09-18 拍)
+  // ==========================================
+
+  /// 发起落位/移动申请 (需要三方确认才真正生效)
+  Future<PlacementRequest> createPlacementRequest({
+    required String targetParentId,
+    required String side,
+    String? newName,
+    String? newPhone,
+    String? newNotes,
+    String? moveFid,
+  }) async {
+    final res = await _dio.post('/franchisees/placement-requests', data: {
+      'kind': moveFid == null ? 'create' : 'move',
+      'targetParentId': targetParentId,
+      'side': side,
+      if (newName != null) 'newName': newName,
+      if (newPhone != null) 'newPhone': newPhone,
+      if (newNotes != null) 'newNotes': newNotes,
+      if (moveFid != null) 'moveFid': moveFid,
+    });
+    return PlacementRequest.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 列表: scope=mine (我发起的) / to_confirm (等我拍板的)
+  Future<List<PlacementRequest>> listPlacementRequests({
+    String scope = 'mine',
+    String status = 'pending',
+  }) async {
+    final res = await _dio.get('/franchisees/placement-requests',
+        queryParameters: {'scope': scope, 'status': status});
+    final items = (res.data['items'] as List?) ?? [];
+    return items
+        .map((e) => PlacementRequest.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// 三方之一拍板
+  Future<PlacementRequest> decidePlacementRequest(
+    String id, {
+    required bool approve,
+  }) async {
+    final res = await _dio.post(
+      '/franchisees/placement-requests/$id/decide',
+      data: {'decision': approve ? 'approve' : 'reject'},
+    );
+    return PlacementRequest.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 发起人撤回
+  Future<void> cancelPlacementRequest(String id) async {
+    await _dio.post('/franchisees/placement-requests/$id/cancel');
   }
 }
 

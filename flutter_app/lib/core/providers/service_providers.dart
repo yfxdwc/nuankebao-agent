@@ -188,3 +188,9 @@ final myFranchiseeTreeProvider = FutureProvider.family<dynamic, int>(
         .getMyTree(depth: depth, mode: 'placement');
   },
 );
+/// 落位「三方确认」: 待我拍板的数量 (客户页红点用)
+final placementToConfirmCountProvider = FutureProvider<int>((ref) async {
+  final svc = ref.watch(franchiseeServiceProvider);
+  final items = await svc.listPlacementRequests(scope: 'to_confirm');
+  return items.length;
+});

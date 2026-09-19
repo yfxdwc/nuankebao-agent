@@ -17,6 +17,7 @@ import '../../modules/customer/screens/customers_page.dart';
 import '../../modules/relation/screens/franchisee_detail_page.dart';
 import '../../modules/relation/screens/add_franchisee_page.dart';
 import '../../modules/relation/screens/edit_franchisee_page.dart';
+import '../../modules/relation/screens/placement_requests_page.dart';
 import '../../screens/about_page.dart';
 import '../../screens/profile_page.dart';
 import '../../modules/wellness/screens/wellness_record_form_page.dart';
@@ -100,6 +101,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/customers/new',
         name: 'customer-new',
         builder: (context, state) => const CustomerFormPage(),
+      ),
+      // 落位「三方确认」待办 (主人 2026-09-18 拍)
+      GoRoute(
+        path: '/franchisees/placement-requests',
+        name: 'franchisee-placement-requests',
+        builder: (context, state) => const PlacementRequestsPage(),
       ),
       GoRoute(
         path: '/franchisees/new',

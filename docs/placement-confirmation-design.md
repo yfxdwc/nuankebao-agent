@@ -1,6 +1,12 @@
 # 加盟落位「三方确认」+ 任意点位落位 + 节点移动 — 方案 (草案 v0.1)
 
-> 状态: **待主人拍板** (2026-09-18)
+> 状态: **已拍板 + P0/P1 已实施** (2026-09-18)
+> 拍板 (ask_user 7ef4548b): Q1/Q2 = App 内确认 (本人/上级都要账号, 各自在自己「加盟落位确认」里点同意)
+>   / Q3 = 72h 超时 / Q4 = 预占 (画虚位) / Q5 = 三方不含原父节点 + 推荐人不变 / Q6 = 历史节点补录 / Q7 = 只能操作自己子树内点位
+> 实施: drizzle/0010_placement_confirm.sql + src/lib/db/queries/franchisee-placement.ts +
+>   /api/franchisees/placement-requests(/[id]/decide|cancel) + Flutter「加盟落位确认」页 + 图谱「加下线到此点位」
+> 冒烟: scripts/smoke-placement-confirm.ts (三方确认全流程) ✓; 历史回填: scripts/backfill-placement-confirms.ts (32 条已补) ✓
+> 未做: 移动节点 UI (后端 kind=move 已通) + 图谱「待确认虚位」渲染 (API 已返回 pendingPlacements)
 > 关联: ADR-0006 (加盟体系) / ADR-0011 (层级不限 + 懒加载) / `docs/data-model.md`
 > 触发: 主人 2026-09-18 需求 (原文见 §0)
 
