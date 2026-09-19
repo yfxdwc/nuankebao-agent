@@ -57,9 +57,20 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
     return out;
   }
 
+  /// A线一层 + B线一层都有人 → 不能再挂新下线 (主人 2026-09-19 拍:
+  ///   例: 高建军 左=彭桂英 右=邓国华 → 他就不能出现在「选上级点位」列表里)
+  bool _slotsFull(FranchiseeTreeNode n) {
+    final hasLeft = n.children.any((c) => c.placementSide == 'left');
+    final hasRight = n.children.any((c) => c.placementSide == 'right');
+    return hasLeft && hasRight;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final all = _flatten(widget.tree);
+    final flat = _flatten(widget.tree);
+    // 两层已满的节点不进列表 (列表只给「还有空位」的上级)
+    final all = flat.where((e) => !_slotsFull(e.node)).toList();
+    final hiddenCount = flat.length - all.length;
     final q = _search.trim().toLowerCase();
     final list = q.isEmpty
         ? all
@@ -90,6 +101,16 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
                     color: AppTheme.textSecondary,
                   ),
                 ),
+                if (hiddenCount > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '已隐藏 $hiddenCount 个「两层已满」的节点（要挂到更深的位置，请先在该节点下级腾位置）',
+                    style: const TextStyle(
+                      fontSize: AppTheme.fontXs,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
