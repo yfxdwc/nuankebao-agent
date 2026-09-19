@@ -201,6 +201,9 @@ class FranchiseeTreeNode {
       children: children ?? this.children,
       hasChildren: hasChildren ?? this.hasChildren,
       totalDescendants: totalDescendants,
+      // ★ 修 (主人 2026-09-19 虚位可点排查发现): copyWith 漏带 pendingPlacements →
+      //   _withLazyChildren 拷贝根节点后「待确认虚位」整个消失 (图谱不画 + 点不到)
+      pendingPlacements: pendingPlacements,
     );
   }
 }
