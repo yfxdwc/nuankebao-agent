@@ -32,6 +32,7 @@ import {
   isValidPassword,
   PASSWORD_POLICY_MESSAGE,
 } from "@/lib/auth/password";
+import { ensureAccountProfile } from "@/lib/auth/registration";
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
 
 const PLACEHOLDER_PHONE = "13800138000";
@@ -66,7 +67,11 @@ async function main() {
         updatedAt: new Date(),
       })
       .where(eq(user.id, existing.id));
-    console.log(`✓ 已更新管理员 "${username}" (id=${existing.id}, role=admin)`);
+    const prof = await ensureAccountProfile(existing.id, BigInt(0));
+    console.log(
+      `✓ 已更新管理员 "${username}" (id=${existing.id}, role=admin)` +
+        ` | 客户档案 ${prof.customerCreated ? "新建" : "已在"} | 推荐码 ${prof.referralCode}`
+    );
   } else {
     const [phoneOwner] = await db
       .select({ id: user.id, username: user.username })
@@ -91,7 +96,11 @@ async function main() {
         passwordHash: hashPassword(password),
       })
       .returning({ id: user.id });
-    console.log(`✓ 已创建管理员 "${username}" (id=${created.id}, role=admin)`);
+    const prof = await ensureAccountProfile(created.id, BigInt(0));
+    console.log(
+      `✓ 已创建管理员 "${username}" (id=${created.id}, role=admin)` +
+        ` | 客户档案 ${prof.customerCreated ? "新建" : "复用既有"} | 推荐码 ${prof.referralCode}`
+    );
   }
 
   if (phone === PLACEHOLDER_PHONE) {
