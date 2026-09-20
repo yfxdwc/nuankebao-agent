@@ -4,6 +4,7 @@ import '../../../core/models/customer.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/birthday.dart';
 import '../../../core/widgets/typed_user_avatar.dart';
+import '../../../core/models/follow_up_info.dart';
 
 class CustomerRow extends StatelessWidget {
   final Customer customer;
@@ -15,6 +16,9 @@ class CustomerRow extends StatelessWidget {
   final String? referrerName;
   final String? lastVisitDate;
   final int pendingCount;
+  /// 跟进信息块 (后端算好; 老后端/详情页不传 → null)
+  /// 主人 2026-09-20 拍: 左色条(仅会员) + 名字右侧推荐标签 + 第二行「21 天没联系 · 上次电话」
+  final FollowUpInfo? followUp;
   final VoidCallback onTap;
 
   const CustomerRow({
@@ -26,6 +30,7 @@ class CustomerRow extends StatelessWidget {
     this.referrerName,
     this.lastVisitDate,
     this.pendingCount = 0,
+    this.followUp,
   });
 
   /// 距离生日还有几天 (只在「她设的提醒窗口内」返回, 否则 null → 不显示徽章)
@@ -49,12 +54,48 @@ class CustomerRow extends StatelessWidget {
     return isFranchisee ? 'franchisee' : 'normal';
   }
 
+  static const Color _levelP2 = Color(0xFFD9B23D);
+  static const Color _levelP4 = Color(0xFF9AA5A0);
+
+  /// 分档颜色 (与方案 §3.2 一致; 色 + 文字双编码, 色弱也能分)
+  static Color levelColor(String? level) {
+    switch (level) {
+      case 'p0':
+        return AppTheme.danger;
+      case 'p1':
+        return AppTheme.accent;
+      case 'p2':
+        return _levelP2;
+      case 'p3':
+        return AppTheme.primary;
+      default:
+        return _levelP4;
+    }
+  }
+
+  static Color tagColor(String key) {
+    switch (key) {
+      case 'danger':
+        return AppTheme.danger;
+      case 'accent':
+        return AppTheme.accent;
+      case 'franchisee':
+        return AppTheme.franchisee;
+      default:
+        return AppTheme.primary;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isFranchisee = _type == 'franchisee';
+    final f = followUp;
+    final barColor = f?.levelKey == null ? null : levelColor(f!.levelKey);
     return InkWell(
       onTap: onTap,
-      child: Container(
+      child: Stack(
+        children: [
+      Container(
         constraints: const BoxConstraints(minHeight: AppTheme.listRowHeight),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: const BoxDecoration(
@@ -96,6 +137,12 @@ class CustomerRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      // 推荐标签 (主人 2026-09-20 拍: 名字右侧, 最多 2 个, 动作文案)
+                      if (f != null)
+                        for (final t in f.tags) ...[
+                          const SizedBox(width: 6),
+                          _FollowUpTagChip(tag: t),
+                        ],
                       // 🎂 生日提醒 (落在她设的提醒窗口内才显示; 主人 2026-09-18 拍)
                       if (_birthdayDays != null) ...[
                         const SizedBox(width: 6),
@@ -119,8 +166,19 @@ class CustomerRow extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  // 第二行: 上级 (加盟) 或 上次到店 (普通/种子)
-                  if (isFranchisee && referrerName != null)
+                  // 第二行: 跟进信息优先 (主人 2026-09-20 拍 Q3: 动作在标签, 数据在这一行)
+                  if (f?.contactLine != null)
+                    Text(
+                      f!.contactLine!,
+                      style: TextStyle(
+                        fontSize: AppTheme.fontXs,
+                        color: barColor ?? AppTheme.textSecondary,
+                        fontWeight: (f.levelKey == 'p0' || f.levelKey == 'p1')
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                    )
+                  else if (isFranchisee && referrerName != null)
                     Text(
                       '上级: $referrerName',
                       style: const TextStyle(
@@ -167,6 +225,47 @@ class CustomerRow extends StatelessWidget {
               size: 28,
             ),
           ],
+        ),
+      ),
+          // 左侧紧急度色条 (主人 2026-09-20 拍 Q1: 色条属于紧急度体系 → **仅会员**)
+          //   4pt 竖条 + 第二行文字也是同色 (色 + 文字双编码)
+          if (barColor != null)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 4,
+              child: Container(color: barColor),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 推荐标签胶囊 (动作文案; 主人 2026-09-20 拍 Q3)
+class _FollowUpTagChip extends StatelessWidget {
+  final FollowUpTagInfo tag;
+  const _FollowUpTagChip({required this.tag});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = CustomerRow.tagColor(tag.color);
+    return Tooltip(
+      message: tag.hint.isEmpty ? tag.label : tag.hint,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          '${tag.emoji}${tag.label}',
+          style: TextStyle(
+            fontSize: AppTheme.fontXs,
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );

@@ -7,6 +7,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/customer.dart';
+import '../models/follow_up_info.dart';
 import '../models/ai_insight.dart';
 import '../models/wellness_record.dart';
 import '../models/dictionaries.dart';
@@ -173,22 +174,25 @@ class CustomerService {
   final Dio _dio;
   CustomerService(this._dio);
 
-  /// 客户列表
-  /// [type] 类型筛选 (胶囊按键): null / 'all' = 不筛, 其余 = franchisee / seed / normal
-  Future<List<Customer>> list({
+  /// 客户列表 (含跟进信息块; 主人 2026-09-20)
+  /// [type] 类型筛选: null / 'all' = 不筛, 其余 = franchisee / seed / normal
+  /// [sort] 排序: urgency (紧急度, **仅会员**) / recent (最近联系) / new (最近添加) / name
+  ///        非会员请求 urgency → 后端降级为 new 且 result.urgencyLocked = true
+  Future<CustomerListResult> list({
     String? search,
     String? type,
+    String? sort,
     int limit = 50,
     int offset = 0,
   }) async {
     final res = await _dio.get('/customers', queryParameters: {
       if (search != null && search.isNotEmpty) 'search': search,
       if (type != null && type.isNotEmpty && type != 'all') 'type': type,
+      if (sort != null && sort.isNotEmpty) 'sort': sort,
       'limit': limit,
       'offset': offset,
     });
-    final items = (res.data['items'] as List).cast<Map<String, dynamic>>();
-    return items.map(Customer.fromJson).toList();
+    return CustomerListResult.fromJson(res.data as Map<String, dynamic>);
   }
 
   /// 客户类型计数 (胶囊上的数量, 主人 2026-09-18 拍)

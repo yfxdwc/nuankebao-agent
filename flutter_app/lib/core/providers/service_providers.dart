@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../http/api_client.dart';
 import '../services/api.dart';
 import '../models/customer.dart';
+import '../models/follow_up_info.dart';
 import '../models/dashboard.dart';
 import '../models/follow_up.dart';
 import '../models/me.dart';
@@ -116,22 +117,30 @@ class CustomerListQuery {
   final String? search;
   /// null / 'all' = 不筛; 其余 = 'franchisee' | 'seed' | 'normal'
   final String? type;
-  const CustomerListQuery({this.search, this.type});
+  /// 排序 (主人 2026-09-20 拍): urgency 紧急度 (**仅会员**) / recent 最近联系 / new 最近添加 / name 姓名
+  final String? sort;
+  const CustomerListQuery({this.search, this.type, this.sort});
 
   @override
   bool operator ==(Object other) =>
-      other is CustomerListQuery && other.search == search && other.type == type;
+      other is CustomerListQuery &&
+      other.search == search &&
+      other.type == type &&
+      other.sort == sort;
 
   @override
-  int get hashCode => Object.hash(search, type);
+  int get hashCode => Object.hash(search, type, sort);
 }
 
-/// 客户列表 (含搜索 + 类型筛选) - W5 RBAC 后置
-final customersProvider = FutureProvider.family<List<dynamic>, CustomerListQuery>(
+/// 客户列表 (含搜索 + 类型筛选 + 跟进信息块) - W5 RBAC 后置
+/// 主人 2026-09-20: 排序以跟进紧急度为第一规则 (**紧急度仅会员**, 非会员后端降级并在 result 里标 locked)
+final customersProvider =
+    FutureProvider.family<CustomerListResult, CustomerListQuery>(
   (ref, query) async {
     return ref.watch(customerServiceProvider).list(
       search: query.search,
       type: query.type,
+      sort: query.sort,
       limit: 50,
       offset: 0,
     );

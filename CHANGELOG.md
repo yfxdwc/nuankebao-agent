@@ -1336,6 +1336,30 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Added (客户列表跟进 P0 前端: 色条 + 推荐标签 + 排序胶囊, 2026-09-20 主人拍)
+
+主人: 「做：是否继续做 P0 前端（客户行：左色条 + 名字右侧标签 + 「21 天没联系」第二行；
+排序胶囊「紧急🔒/最近/姓名」）—— 我建议直接做，用手写模型绕开代码生成」
+
+**手写模型 (绕开坏掉的 build_runner)**:
+- 新 `core/models/follow_up_info.dart` — **纯手写 fromJson, 不用 freezed/json_serializable**:
+  `FollowUpInfo` / `FollowUpTagInfo` / `CustomerWithFollowUp` / `CustomerListResult`
+  (+ `contactLine` 生成「21 天没联系 · 上次电话」、「还没联系过」、「今天联系过」等第二行文案)
+- `core/services/api.dart::list()` 返回 `CustomerListResult` (含 items/total/sort/urgencyLocked) + 支持 `sort` 参数
+- `customersProvider` 的 `CustomerListQuery` 增加 `sort` (参与 == / hashCode, 换排序会重新拉数据)
+
+**客户行 (`CustomerRow`)**:
+- **左色条 4pt** (P0 红 / P1 橙 / P2 暖黄 / P3 绿 / P4 灰) —— **仅会员** (Q1: 色条属紧急度体系)
+- **名字右侧推荐标签**: 胶囊 (底色 14% 透明 + 同色文字 + tooltip 说明), 最多 2 个 (动作 + 日历)
+- **第二行**: 跟进信息优先 (`21 天没联系 · 上次电话`, P0/P1 加粗) → 退回 上级 / 上次到店
+- 类型头像 (🤝/🌱/👤) 与 🎂 生日徽章保持不变 (生日标签与徽章不重复: 会员走标签, 非会员走旧徽章)
+
+**排序胶囊** (`客户`列表视图): `🔥紧急 / 最近联系 / 最近添加 / 姓名`
+- 非会员: 紧急项显示 **🔒**, 点击弹说明「「紧急度排序」是会员功能：开通后自动按「今天该先联系谁」排好」,
+  且不切换排序 (后端也会降级并回 `urgencyLocked`, 前端以后端决议为准 — 不用前端判权)
+
+**验证**: `flutter analyze lib` 0 error (3 条既有 info) ✓; P0 后端接口已实测 (会员/非会员两条路径) ✓
+
 ### Added (待办 Backlog 文档 + build_runner 诊断, 2026-09-20 主人点名)
 
 - 新文档 [`docs/backlog.md`](docs/backlog.md): 主人点名「记住这个任务」的条目集中落点
