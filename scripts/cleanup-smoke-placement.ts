@@ -14,6 +14,7 @@ import { eq, inArray, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   customer,
+  user,
   franchisee,
   franchisePlacementConfirm,
   franchisePlacementRequest,
@@ -71,12 +72,26 @@ async function main() {
         .delete(franchisePlacementRequest)
         .where(eq(franchisePlacementRequest.id, r.id));
     }
-    const c = await db.delete(customer).where(eq(customer.phoneHash, h)).returning({ id: customer.id });
+    // ⚠ 主人 2026-09-19 拍「建号即强制建档」: 该手机号如果**还有账号**, 客户档案不能删
+    //   (否则账号与客户档案的绑定被清掉 → 不变量破; 冒烟账号复用同一批手机号时踩过)
+    const [ownerAccount] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.phoneHash, h))
+      .limit(1);
+    const c = ownerAccount
+      ? []
+      : await db
+          .delete(customer)
+          .where(eq(customer.phoneHash, h))
+          .returning({ id: customer.id });
     const f = await db
       .delete(franchisee)
       .where(eq(franchisee.phoneHash, h))
       .returning({ id: franchisee.id });
-    console.log(`✓ ${phone}: 申请单 ${reqs.length} / 客户 ${c.length} / 加盟商 ${f.length}`);
+    console.log(
+      `✓ ${phone}: 申请单 ${reqs.length} / 客户 ${c.length}${ownerAccount ? " (账号还在, 档案保留)" : ""} / 加盟商 ${f.length}`
+    );
   }
 }
 
