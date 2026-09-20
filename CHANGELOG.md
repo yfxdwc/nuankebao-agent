@@ -2,6 +2,42 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Security (keystore 口令轮换为随机强口令 + 弱口令副本清理, 2026-09-21 主人拍板)
+
+**背景**: 核查发现签名口令是**复用弱口令** (`372159368`, 同一串值还出现在主人的 Obsidian 凭证库里当 QQ/ID/WG 口令,
+且那两个 vault 都配了 GitHub 远端) → 等于"签名钥匙的保护 = 一串通用密码"; 另有多份未加密副本散落。
+
+**主人拍板三项, 全部执行完毕**
+
+| # | 决策 | 执行结果 |
+|---|---|---|
+| ① | 换 keystore 口令 | ✅ 24 位随机 (`9NkWvc@zYW3c8ddrtTzFhFeB`); 旧口令 `372159368` **已失效**; **签名指纹不变** (`0DB0A1BC…`) → 用户零影响、无需重装 |
+| ② | vault 里改指针 | ✅ 两个 Obsidian vault 各加一条**指针** (无明文); 核查确认 vault 里**没有**暖客宝上下文 (只是复用了同一串值) → 轮换后那串值从此打不开 keystore |
+| ③ | 删异地未加密裸 keystore | ✅ `lk:.../nuankebao-keys/` 已删; 异地只留**加密归档** (含 keystore + 口令) |
+
+**技术细节 (踩到的坑, 记下来)**
+
+- keystore 扩展名是 `.jks` 但**实际格式是 PKCS12** → `keytool -keypasswd` 报
+  `-keypasswd commands not supported if -storetype is PKCS12`; PKCS12 **只有一个口令**,
+  store/key 必须同值 (改 `-storepasswd` 即可, 同时改了私钥的保护口令)
+- 弱口令副本清理: 本机副份 (`~/nuankebao-databackups/keys/`) 已刷新为新口令版;
+  临时文件 (`/tmp/pre-rotate-keystore.jks` 等) 已 `shred`;
+  加密归档已用新口令重做并异地核对 (sha256 本机=异地 `1d5db0746f1aa010…`)
+
+**验证**
+
+- `keytool -list` 新口令可用 / 旧口令**打不开** ✓
+- 用新口令 `apksigner sign` 真签一次 → `SHA-256 digest: 0db0a1bcff6da703…` **与线上一致** ✓
+- `bash deploy/verify_signing_key.sh` 全流程通过 (解密归档 → 口令一致 → 用备份 keystore 重签 → 指纹一致) ✓
+- `bash tools/build-apk.sh --no-build` 显示同一指纹 ✓
+- vault 校验: 新口令**不在**任何 vault / git 跟踪文件里 ✓
+
+**文档同步**: `~/nuankebao-databackups/keys/RECOVERY-CARD.txt` (新口令 + 轮换说明) ·
+muse wiki `901/entities/nuankebao.md` (轮换记录, commit `bc046d98`) ·
+两个 vault 指针 (各自本地 commit `4964b06` / `4d954a1`, **未 push**)
+
+⚠️ **仍需主人做**: 把新口令抄进**密码管理器** (或打印)。目前它在本机两处 (wiki 页 / 恢复卡) + 加密归档 (本机 + 异地)。
+
 ### Added (keystore 治本方案: 3-2-1 备份 + 月度真签演练, 2026-09-21)
 
 **主人问**: 「这个可能性大吗，有什么治本的消除此风险的方案吗 (keystore 丢 = 全体用户卸载重装)」
