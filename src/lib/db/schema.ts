@@ -1166,8 +1166,13 @@ export const referralReward = pgTable(
     refereeUserId: bigint("referee_user_id", { mode: "bigint" }).notNull(),
     code: text("code").notNull(),
 
+    /// 状态机 (B1 自助注册, 主人 2026-09-20):
+    ///   pending    = 新用户填码注册了, **等推荐人点"这是我朋友"**
+    ///   confirmed  = 推荐人已确认 → 新用户拿到 15 天; 推荐人的奖励等他成为加盟者 (D23)
+    ///   rewarded   = 推荐人的 15 天已发 (被推荐人成为加盟者之后)
+    ///   rejected   = 推荐人否认 / 风控拒 (不给任何权益)
     status: text("status", {
-      enum: ["pending", "rewarded", "rejected"],
+      enum: ["pending", "confirmed", "rewarded", "rejected"],
     })
       .notNull()
       .default("pending"),
@@ -1176,6 +1181,10 @@ export const referralReward = pgTable(
     /// 被推荐人注册时的手机号 hash / 设备指纹 / IP —— 只用于事后反作弊审计, 不外发
     refereePhoneHash: text("referee_phone_hash"),
     refereeSignupIp: text("referee_signup_ip"),
+
+    /// 推荐人确认 (只有他确认了, 新用户才拿到 15 天 —— 防"码泄露被陌生人白嫖")
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
 
     rewardedAt: timestamp("rewarded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

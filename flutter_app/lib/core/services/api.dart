@@ -712,6 +712,39 @@ class ManualPayInfo {
       );
 }
 
+/// 我推荐的人 (推荐人视角)
+class MyReferral {
+  final String id;
+  final String name;
+  final String phoneMasked;
+  final String status; // pending / confirmed / rewarded / rejected
+  final String createdAt;
+
+  const MyReferral({
+    required this.id,
+    required this.name,
+    this.phoneMasked = '',
+    this.status = 'pending',
+    this.createdAt = '',
+  });
+
+  String get statusLabel => switch (status) {
+        'pending' => '等你确认',
+        'confirmed' => '已确认 (对方得 15 天)',
+        'rewarded' => '已完成 (你也拿到 15 天)',
+        'rejected' => '已驳回',
+        _ => status,
+      };
+
+  static MyReferral fromJson(Map<String, dynamic> j) => MyReferral(
+        id: j['id']?.toString() ?? '',
+        name: j['name']?.toString() ?? '',
+        phoneMasked: j['phoneMasked']?.toString() ?? '',
+        status: j['status']?.toString() ?? 'pending',
+        createdAt: j['createdAt']?.toString() ?? '',
+      );
+}
+
 /// 管理员看到的待审申请
 class AdminPayRequest {
   final String id;
@@ -796,6 +829,67 @@ class BillingService {
       final data = e.response?.data;
       final msg = data is Map ? data['error']?.toString() : null;
       return (ok: false, message: msg ?? '提交失败, 请检查网络后重试');
+    }
+  }
+
+  // ---------- 自助注册 (B1) + 推荐人确认 ----------
+
+  /// 凭推荐码注册 (成功后客户端用 手机号+密码 正常登录)
+  Future<({bool ok, String message, String? username})> registerWithCode({
+    required String code,
+    required String name,
+    required String phone,
+    required String password,
+  }) async {
+    try {
+      final res = await _dio.post('/auth/register', data: {
+        'code': code,
+        'name': name,
+        'phone': phone,
+        'password': password,
+      });
+      final data = res.data as Map<String, dynamic>;
+      return (
+        ok: true,
+        message: data['message']?.toString() ?? '注册成功',
+        username: data['username']?.toString(),
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final msg = data is Map ? data['error']?.toString() : null;
+      return (ok: false, message: msg ?? '注册失败, 请检查网络后重试', username: null);
+    }
+  }
+
+  /// 我推荐的人 (待确认 / 已确认 / 已驳回)
+  Future<List<MyReferral>> myReferrals() async {
+    final res = await _dio.get('/billing/referral/pending');
+    final list = (res.data as Map<String, dynamic>)['referrals'] as List? ?? [];
+    return list.whereType<Map<String, dynamic>>().map(MyReferral.fromJson).toList();
+  }
+
+  /// 推荐人确认「这是我朋友」/ 否认
+  Future<({bool ok, String message})> decideReferral({
+    required String rewardId,
+    required bool confirm,
+    String? reason,
+  }) async {
+    try {
+      final res = await _dio.post('/billing/referral/pending/$rewardId', data: {
+        'decision': confirm ? 'confirm' : 'reject',
+        if (reason != null) 'reason': reason,
+      });
+      final data = res.data as Map<String, dynamic>;
+      return (
+        ok: true,
+        message: confirm
+            ? (data['reason']?.toString() ?? '已确认')
+            : '已驳回',
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final msg = data is Map ? data['error']?.toString() : null;
+      return (ok: false, message: msg ?? '操作失败, 请重试');
     }
   }
 
