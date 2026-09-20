@@ -123,3 +123,10 @@ tools/branding/legacy/
 # 另: baseline init 时排除 cmdline-tools.zip (2.3KB HTML 文本, 非真 zip)
 .git/snapshots/
 cmdline-tools.zip
+
+# 收款码 (内测人工通道): 个人微信收款码是主人的私人收款凭证, 不入库
+#   需要在生产机上放这个文件, 或用管理员工具在 App 内上传 (存 /uploads/)
+public/payment/*.png
+public/payment/*.jpg
+public/payment/*.jpeg
+public/payment/*.webp

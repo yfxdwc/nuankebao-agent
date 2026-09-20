@@ -1403,11 +1403,12 @@ class _QrImageLarge extends StatelessWidget {
       loadingBuilder: (c, child, progress) => progress == null
           ? child
           : const Center(child: CircularProgressIndicator()),
+      // ⚠ 两种失败要分开说: "没配置" 由外面那段红字提示; 这里是"图片拉不到"(断网/文件被删)
       errorBuilder: (c, _, __) => const Center(
         child: Padding(
           padding: EdgeInsets.all(12),
           child: Text(
-            '还没设置收款码\n请让管理员在「管理员工具」里上传',
+            '收款码加载不出来\n请检查网络, 或让管理员重新上传',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
           ),

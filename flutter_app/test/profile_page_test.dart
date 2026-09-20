@@ -84,6 +84,7 @@ const _fakePayInfo = ManualPayInfo(
   enabled: true,
   qrUrl: '/payment/wechat-qr.png',
   isFallbackQr: false,
+  qrAvailable: true, // 收款码已就位 (真接口在 curl 冒烟里验过)
   payeeName: '管理员小张',
   noteHint: '写手机号后 4 位',
   products: [
@@ -373,6 +374,10 @@ void main() {
     expect(find.text('我已支付'), findsOneWidget); // 提交按钮
     expect(find.textContaining('写手机号后 4 位'), findsWidgets); // 备注提示
     expect(find.textContaining('暂不支持自动续费'), findsOneWidget);
+    // 收款码已就位 (qrAvailable=true) → 不能误报"没有收款码"那句引导文案
+    // (widget 测试里拿不到真实图片, 会走 errorBuilder 的"加载不出来", 那是另一件事)
+    expect(find.textContaining('还没设置收款码'), findsNothing);
+    expect(find.textContaining('管理员工具'), findsNothing);
   });
 
   testWidgets('窄屏 320 + 特大字号 1.3: 滚完整页不溢出', (tester) async {

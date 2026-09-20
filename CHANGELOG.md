@@ -2,6 +2,39 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (内测收款码接入 App: 微信个人收款码已就位, 2026-09-20)
+
+**主人要**: 「把内测模式的收款码接入应用」
+
+**过程 (我看不了图, 所以用"程序化取图 + 模型复核"两条腿)**
+
+1. **从会话记录里取出原图**: 附件以 base64 存在会话 JSONL 里 → 解出 1118×1524 PNG
+2. **客观识别 (不靠肉眼)**: 装 `opencv-python-headless` 到临时 venv →
+   `QRCodeDetector` 定位 + 解码 → payload = `wxp://f2f07c2u…`
+   → **确认是微信个人收款码** (wxp:// 是微信收款协议), 且二维码在原图里只占
+   x 322-796 / y 394-870 (截图四周是手机界面)
+3. **自动裁切**: 按检测框 + 10% 静默区裁切 → 白底方形放大到 900×900 →
+   16 色量化 (515KB → **48KB**) → 处理后再扫一次, **payload 完全一致** = 裁完仍可扫
+4. **模型复核**: 派视觉子 agent (MiniMax-M3) 看裁切后的图, 确认"是微信收款码 / 居中完整 /
+   没有裁掉定位角 / 无其他可读个人信息" (结论见下)
+
+**代码改动**
+
+| 项 | 说明 |
+|---|---|
+| `public/payment/wechat-qr.png` | 裁切+优化的收款码 (900×900, ~48KB), 用静态兜底路径 |
+| `GET /api/billing/pay-info` | 新增 `qrAvailable` 字段: **真的检查文件存在** (原来只看"有没有在后台配置", 静态文件在位也会误报"还没设置收款码") |
+| 客户端 | 「开通会员」弹层改为 `!qrAvailable` 才提示未设置; 有码时正常显示大图二维码 |
+| `.gitignore` | `public/payment/*.{png,jpg,jpeg,webp}` 不入库 (个人收款码是私人凭证, 进历史难撤下) |
+| `public/payment/README.md` | 记录来源/处理过程 + 两种换码方式 (App 内上传优先, 或换静态文件) |
+
+**验证**
+- `curl /payment/wechat-qr.png` → **HTTP 200, image/png, 48169 bytes**
+- `curl /api/billing/pay-info` → `qrUrl=/payment/wechat-qr.png, qrAvailable=true,
+  isFallbackQr=true, payeeName=管理员, products=[1个月 ¥69, 3个月 ¥189]`
+- OpenCV 复扫裁切前后 payload 一致 (`wxp://…`)
+- 视觉子 agent 复核结论: 见任务记录 (确认是微信收款码、裁切完整居中)
+
 ### Changed (推荐码只在注册(建号)时填 —— 「我的」页去掉填码入口, 2026-09-19 主人要)
 
 **主人要**: 「朋友的推荐码仅在用户注册时可填入。"我的"页面中不应该再有填入他人邀请码的入口」
