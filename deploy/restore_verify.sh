@@ -238,6 +238,22 @@ shred -u "$DUMP_FILE" 2>/dev/null || rm -f "$DUMP_FILE"
 
 ELAPSED=$(( $(date +%s) - START_TS ))
 
+# ============== 签名密钥演练 (同一个月度 timer: keystore 丢了 = 全体用户卸载重装) ==============
+#
+# 为什么放在这里: 月度演练的职责 = "确认备份真的能用"。keystore 备份同理 ——
+# 没验过的备份等于没有 (ADR-0013 相关; 主人 2026-09-21 问「keystore 丢了怎么办」)。
+# 失败不覆盖 PG 演练结论, 只记一笔 + 日志大字报 (PG 与密钥是两件事)。
+SIGN_VERIFY_LOG="${LOG_DIR:-$(dirname "$LOG")}/signing-key-verify.log"
+if [ -x "$_SCRIPT_DIR/verify_signing_key.sh" ]; then
+    log "[signing-key] 跑签名密钥演练 (deploy/verify_signing_key.sh)"
+    if bash "$_SCRIPT_DIR/verify_signing_key.sh" >>"$SIGN_VERIFY_LOG" 2>&1; then
+        log "[signing-key] ✓ 通过 (备份 keystore + 口令可发版)"
+    else
+        log "[signing-key] ✗ 失败! 详见 $SIGN_VERIFY_LOG (keystore 丢失风险 = 全体用户必须卸载重装)"
+        SIGN_KEY_OK=0
+    fi
+fi
+
 # ============== health state + 退出码 ==============
 
 if [ "$ALL_OK" = "1" ]; then
@@ -248,7 +264,8 @@ if [ "$ALL_OK" = "1" ]; then
         --argjson matched "$MATCH_TOTAL" \
         --argjson total "$TABLE_TOTAL" \
         --argjson elapsed_sec "$ELAPSED" \
-        '{status: "success", ts: $ts, host: $host, backup_file: $backup, tables_matched: $matched, tables_total: $total, elapsed_sec: $elapsed_sec, reason: ""}' \
+        --argjson sign_key_ok "${SIGN_KEY_OK:-1}" \
+        '{status: "success", ts: $ts, host: $host, backup_file: $backup, tables_matched: $matched, tables_total: $total, signing_key_ok: ($sign_key_ok == 1), elapsed_sec: $elapsed_sec, reason: ""}' \
         > "$HEALTH_TMP" && mv -f "$HEALTH_TMP" "$HEALTH_FILE"
     chmod 600 "$HEALTH_FILE" 2>/dev/null || true
     log "DONE 演练成功 ($MATCH_TOTAL/$TABLE_TOTAL 表 100% 一致, elapsed=${ELAPSED}s), 退出 0"

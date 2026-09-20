@@ -2,6 +2,42 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (keystore 治本方案: 3-2-1 备份 + 月度真签演练, 2026-09-21)
+
+**主人问**: 「这个可能性大吗，有什么治本的消除此风险的方案吗 (keystore 丢 = 全体用户卸载重装)」
+
+**先查清暴露面 (实测)**
+
+| 项 | 结果 |
+|---|---|
+| keystore 副本 | 2 份 (`~/nuankebao-keys/` + `~/nuankebao-databackups/keys/`), sha256 一致 **但都在同一块盘 `/`** |
+| 口令 (`key.properties`) | **只有 1 份**, 也在同一块盘; 全盘 grep 无其他副本 |
+| 异地备份 | rsync 只同步 `pg-backups` + `media` → **keys 没在异地** ✗ |
+| App 是否有"只存本地"的业务数据 | `sqflite` 声明了但**未被使用** → 无 → **重装只丢登录态, 业务数据在服务器** ✓ |
+
+**治本三层**
+
+1. **密钥不丢 (L1, 已实施)**: `deploy/backup.sh` 新增「签名密钥加密备份」——把 keystore **+ key.properties 口令**
+   一起打包 GPG 加密 → 本地备份目录 (月度留档 12 份) → **rsync 到异地 `lk:`** (与 PG/media 同一条流水线)
+2. **备份必须"验过" (L1.5, 已实施)**: 新 `deploy/verify_signing_key.sh` —— 解密备份 → 用**备份里的 keystore
+   真签一次 APK** → `apksigner verify` 指纹必须等于线上 (`0DB0A1BC…`) 才算通过;
+   已接入 `deploy/restore_verify.sh` (月度 timer 自动跑, 日志 `data/logs/signing-key-verify.log`)
+3. **万一丢了影响最小 (L2, 已核实)**: App **没有只存本地的业务数据** → 重装 = 重新登录一次;
+   文档写明补救流程 (通知 → 卸载重装 → 手机号+密码登录)
+
+**同时说明为什么不走"结构性方案"**: Google Play App Signing 需要 Play (大陆不可用, 当前是直发 APK);
+Android v3 密钥轮换**必须用旧私钥签 lineage** → 只适合"有计划换钥匙", 救不了"已丢失"。所以唯一治本 = L1+L1.5。
+
+**验证**
+- `bash deploy/verify_signing_key.sh` 全流程通过: 工作副本可打开 → 加密备份解密后 sha256 一致 → 口令一致 →
+  **用备份 keystore 重签 APK → 指纹 `0DB0A1BCFF6DA703…` 与线上一致** ✓
+- 备份段单独实跑: 产出 `signing-keys.tar.zst.enc` (3791 bytes) + 月度留档 `signing-keys-202609.tar.zst.enc` ✓
+- `bash -n` 语法检查通过 (backup.sh / restore_verify.sh / verify_signing_key.sh)
+- 文档 `docs/deploy.md §APK 签名` 补齐: 风险矩阵前后对比 + 自动化调度 + 灾难恢复命令 + 补救流程
+
+**还需主人做的一件小事 (我做不到)**: 把 keystore 口令抄一份到**密码管理器或纸质**记录里 ——
+口令跟 keystore 存在同一台机器上, 是这套方案里最后一个"同点故障"。
+
 ### Added (APK 升级与登录态: 签名硬拦截 + 指纹自检 + 一键打包脚本, 2026-09-21)
 
 **主人问**: 「升级 app 后能保持登录状态吗」→ 答案的关键是**签名密钥一致** (Android 只允许同签名覆盖安装,

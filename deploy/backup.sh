@@ -73,6 +73,12 @@ MEDIA_BACKUP_DIR="${MEDIA_BACKUP_DIR:-$DATABACKUPS/media}"
 OFFSITE_DIR="${OFFSITE_DIR:-/media/mm7/tc_backup/nuankebao}"
 KEY_FILE="${KEY_FILE:-/etc/backup-keys/nuankebao.key.gpg}"
 
+# APK 签名密钥备份目录 (主人 2026-09-21: keystore 丢了 = 全体用户必须卸载重装;
+#   而且 Android 密钥轮换需要旧私钥 → 丢了无法轮换 → 唯一治本 = 保证它一直在)
+KEYS_BACKUP_DIR="${KEYS_BACKUP_DIR:-$DATABACKUPS/keys}"
+SIGNING_JKS="${SIGNING_JKS:-/home/tooyan/nuankebao-keys/nuankebao-release.jks}"
+SIGNING_KEY_PROPS="${SIGNING_KEY_PROPS:-$BBT_DIR/flutter_app/android/key.properties}"
+
 LOG_DIR="${LOG_DIR:-$DATABACKUPS/logs}"
 LOG="${LOG_DIR}/backup.log"
 
@@ -244,12 +250,68 @@ if [ "$MEDIA_ARCHIVED" = "1" ]; then
     echo "$(LOG_TS) [3/5] OK media encrypted backup: $MEDIA_ENC ($MEDIA_ENC_SIZE bytes)"
 fi
 
+# === APK 签名密钥 (keystore + key.properties) 加密备份 ===
+# 为什么单独一段 (主人 2026-09-21 问「keystore 丢了怎么办」):
+#   keystore = 发行身份, 丢了以后所有 APK 签名都变 → **全体用户必须卸载重装**;
+#   Android v3 密钥轮换要用旧私钥签 lineage → 丢了没法轮换。唯一治本 = 一直在多个地方有副本。
+#   key.properties 里有口令, 必须跟 keystore **一起**备份 (只有 jks 没口令等于没有)。
+# 失败不影响 PG/media 备份 (非致命, 但日志会大声报)
+if [ -f "$SIGNING_JKS" ]; then
+    echo "$(LOG_TS) [keys] 备份 APK 签名密钥 -> $KEYS_BACKUP_DIR" | tee -a "$LOG"
+    mkdir -p "$KEYS_BACKUP_DIR" && chmod 700 "$KEYS_BACKUP_DIR"
+    KEYS_STAGE="$(mktemp -d /tmp/nuankebao-keys-XXXXXX)"
+    install -m 600 "$SIGNING_JKS" "$KEYS_STAGE/nuankebao-release.jks"
+    if [ -f "$SIGNING_KEY_PROPS" ]; then
+        install -m 600 "$SIGNING_KEY_PROPS" "$KEYS_STAGE/key.properties"
+    else
+        echo "$(LOG_TS) [keys][WARN] 没找到 $SIGNING_KEY_PROPS (口令没进备份 → 恢复时打不开 jks)" | tee -a "$LOG" >&2
+    fi
+    cat > "$KEYS_STAGE/README.txt" <<'KEYS_README'
+暖客宝 APK 签名密钥 (自动备份)
+
+内容:
+  nuankebao-release.jks  —— release 签名 keystore (包名 cn.nuankebao.app)
+  key.properties         —— storePassword / keyPassword / keyAlias / storeFile
+
+怎么恢复 (换机器 / 灾难恢复):
+  1. 解包: gpg --decrypt signing-keys.tar.zst.enc | tar --zstd -xf - -C /tmp/keys
+  2. 放回位置: mkdir -p /home/tooyan/nuankebao-keys && cp /tmp/keys/nuankebao-release.jks /home/tooyan/nuankebao-keys/ && chmod 600 ...
+  3. 放回配置: cp /tmp/keys/key.properties flutter_app/android/   (并把 storeFile 改成新路径)
+  4. 演练验证: bash deploy/verify_signing_key.sh   ← 必须通过, 否则别发版
+
+指纹 (必须与历史版本一致, 否则用户要先卸载):
+  SHA-256: 0DB0A1BCFF6DA703B9FE3A3C05033CCF2D67E4F0B04D69164319C16B621900B6
+  SHA-1  : 1E369EE9956CCF5E393F55D4B63C882B91AC043E
+  证书   : CN=NuankeBao, OU=Mobile, O=NuankeBao, L=Beijing, ST=Beijing, C=CN
+
+⚠️ 本包含私钥 + 口令: 只放加密归档里, 别解开留在磁盘/聊天工具里。
+KEYS_README
+    KEYS_TAR="$KEYS_STAGE/../signing-keys.tar.zst"
+    ( cd "$KEYS_STAGE" && tar --zstd -cf "$KEYS_TAR" . )
+    KEYS_ENC="$KEYS_BACKUP_DIR/signing-keys.tar.zst.enc"
+    if gpg --batch --yes --pinentry-mode loopback --passphrase-file "$KEY_FILE" \
+            --symmetric --cipher-algo AES256 --output "$KEYS_ENC" "$KEYS_TAR"; then
+        chmod 600 "$KEYS_ENC"
+        # 月度留档: 每月一份 (keystore 极少变; 保留 12 份防"改坏了又想回退")
+        cp -f "$KEYS_ENC" "$KEYS_BACKUP_DIR/signing-keys-$(date +%Y%m).tar.zst.enc"
+        ls -1t "$KEYS_BACKUP_DIR"/signing-keys-*.tar.zst.enc 2>/dev/null | tail -n +13 | xargs -r rm -f
+        echo "$(LOG_TS) [keys] OK $(stat -c%s "$KEYS_ENC") bytes -> $KEYS_ENC" | tee -a "$LOG"
+    else
+        echo "$(LOG_TS) [keys][ERROR] GPG 加密签名密钥失败" | tee -a "$LOG" >&2
+    fi
+    shred -u "$KEYS_STAGE"/* 2>/dev/null || rm -f "$KEYS_STAGE"/*
+    rmdir "$KEYS_STAGE" 2>/dev/null || true
+    rm -f "$KEYS_TAR"
+else
+    echo "$(LOG_TS) [keys][WARN] 没找到 $SIGNING_JKS → 跳过签名密钥备份" | tee -a "$LOG" >&2
+fi
+
 # === ssh push (主理人 2026-09-14 拍: 异地到 lk:/media/mm7/tc_backup/nuankebao) ===
 if ! ssh -o BatchMode=yes -o ConnectTimeout=10 lk true 2>/dev/null; then
     echo "$(LOG_TS) [FATAL] ssh lk unreachable" | tee -a "$LOG" >&2
     exit 10
 fi
-ssh -o BatchMode=yes lk "mkdir -p ${OFFSITE_DIR}/pg-backups ${OFFSITE_DIR}/media && chmod 700 ${OFFSITE_DIR} ${OFFSITE_DIR}/pg-backups ${OFFSITE_DIR}/media"
+ssh -o BatchMode=yes lk "mkdir -p ${OFFSITE_DIR}/pg-backups ${OFFSITE_DIR}/media ${OFFSITE_DIR}/keys && chmod 700 ${OFFSITE_DIR} ${OFFSITE_DIR}/pg-backups ${OFFSITE_DIR}/media ${OFFSITE_DIR}/keys"
 AVAIL_KB=$(ssh -o BatchMode=yes lk "df -k ${OFFSITE_DIR}" | tail -1 | awk '{print $4}')
 AVAIL_GB=$((AVAIL_KB / 1024 / 1024))
 echo "$(LOG_TS) [pre-check] ssh ok, ${OFFSITE_DIR} free=${AVAIL_GB}G" | tee -a "$LOG"
@@ -281,7 +343,14 @@ ssh -o BatchMode=yes lk "mkdir -p ${OFFSITE_DIR}/.backup-key && chmod 700 ${OFFS
 ssh -o BatchMode=yes lk "install -m 600 /dev/stdin ${OFFSITE_DIR}/.backup-key/backup-key.gpg" < "$KEY_FILE"
 PG_COUNT=$(ssh -o BatchMode=yes lk "ls -1 ${OFFSITE_DIR}/pg-backups/*.gpg 2>/dev/null | wc -l")
 MEDIA_COUNT=$(ssh -o BatchMode=yes lk "ls -1 ${OFFSITE_DIR}/media/*.enc 2>/dev/null | wc -l")
-echo "$(LOG_TS) [3/5] OK offsite PG=$PG_COUNT MEDIA=$MEDIA_COUNT key-copied" | tee -a "$LOG"
+# 签名密钥异地 (丢了 = 全体用户卸载重装, 所以它比 PG 备份还"经不起丢")
+shopt -s nullglob
+for f in "$KEYS_BACKUP_DIR"/signing-keys*.enc; do
+    rsync -a "$f" "lk:${OFFSITE_DIR}/keys/" || echo "$(LOG_TS) [keys][ERROR] rsync 签名密钥失败: $f" | tee -a "$LOG" >&2
+done
+shopt -u nullglob
+KEYS_COUNT=$(ssh -o BatchMode=yes lk "ls -1 ${OFFSITE_DIR}/keys/*.enc 2>/dev/null | wc -l")
+echo "$(LOG_TS) [3/5] OK offsite PG=$PG_COUNT MEDIA=$MEDIA_COUNT KEYS=$KEYS_COUNT key-copied" | tee -a "$LOG"
 
 # ============== 4) GFS 清理: mtime+14 AND count<=7 双保险 (SOP §2.4) ==============
 

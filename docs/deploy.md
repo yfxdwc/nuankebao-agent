@@ -623,5 +623,46 @@ bash tools/build-apk.sh http://192.168.1.200:3004  # 内测 (局域网)
 #   必须与新 APK 的 SHA-256 前 16 位一致 (0DB0A1BCFF6DA703)
 ```
 
-> ⚠️ keystore 丢了 = 以后所有版本的签名都变了 = **全体用户必须卸载重装**。请把
-> `/home/tooyan/nuankebao-keys/` 备份到与代码异地的地方 (建议纳入 `deploy/backup.sh` 的加密备份清单)。
+### 密钥保全 (3-2-1) —— 现状与做法
+
+> ⚠️ **keystore 丢了会怎样**: 以后所有版本的签名都变 → **全体用户必须卸载重装**。
+> 重装只丢「登录态 + 本地缓存」(**业务数据全在服务器, 不会丢**, 因为 App 没有任何只存本地的业务数据),
+> 所以后果是「每个用户重新登录一次」这种级别的麻烦, 而不是数据灾难 —— 但仍应彻底避免。
+
+**可能性评估 (2026-09-21 实测的暴露面)**
+
+| 风险 | 改造前 | 现在 |
+|---|---|---|
+| 磁盘故障 / 系统重装 | keystore 2 份副本 **都在同一块盘** (`/`), key.properties 口令**只有 1 份**也在同一块盘 → 一坏全没 | ✅ 加密归档进 `~/nuankebao-databackups/keys/` + **rsync 到异地 `lk:`** |
+| 误删 / `rm -rf` | 备份目录在项目外 (`~/nuankebao-databackups/`) 仍然只有本机 | ✅ 异地一份 (3-2-1: 工作盘 / 备份盘 / 异地) |
+| 口令丢失 (jks 拿到了也打不开) | 口令只在 `android/key.properties`, 没有任何副本 | ✅ 口令随 keystore **一起**进加密归档; 另外请把口令抄到密码管理器或纸质记录 (与磁盘分离) |
+| 备份"存在但不可用" | 从没验证过 | ✅ **月度演练**: 解密备份 → 用**备份里的 keystore 真签一次 APK** → 指纹必须与线上一致 |
+| 有计划地换钥匙 | —— | Android v3 支持轮换, 但**必须用旧私钥签轮换 lineage** → 只适合"有计划", 救不了"已丢失" |
+
+**自动化 (已接入现有备份体系)**
+
+```
+每天 03:00  deploy/backup.sh        → PG + media + **签名密钥 (keystore + key.properties)** 加密备份
+                                     → rsync 三份到异地 lk:/media/mm7/tc_backup/nuankebao/{pg-backups,media,keys}
+每月第1周日 04:00 deploy/restore_verify.sh → PG 恢复演练 + **签名密钥演练** (verify_signing_key.sh)
+                                     → 用备份 keystore 真签一次 + 指纹比对, 日志 data/logs/signing-key-verify.log
+```
+
+**手动验证 / 灾难恢复**
+
+```bash
+# 演练 (随时可跑; --quick 只验文件不真签)
+bash deploy/verify_signing_key.sh
+
+# 灾难恢复: 从异地那份加密归档恢复
+gpg --decrypt signing-keys.tar.zst.enc | tar --zstd -xf - -C /tmp/keys
+mkdir -p /home/tooyan/nuankebao-keys && install -m 600 /tmp/keys/nuankebao-release.jks /home/tooyan/nuankebao-keys/
+install -m 600 /tmp/keys/key.properties flutter_app/android/   # 若路径变了改 storeFile
+bash deploy/verify_signing_key.sh                               # 必须通过再发版
+```
+
+**"万一真丢了"的补救 (影响面已最小化)**
+
+1. 全体用户收到通知 → 卸载旧版 → 装新版 (只丢登录态; 服务器数据与客户资料完好)
+2. 用户用 **手机号 + 密码** 重新登录 (忘记密码找管理员重置)
+3. 新 keystore 立刻按本文档走一遍 3-2-1 + 演练
