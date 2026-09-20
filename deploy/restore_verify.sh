@@ -55,12 +55,15 @@ unset _SCRIPT_DIR _PROJECT_ROOT _PATHS_CONF _cand
 # ============== 配置 ==============
 # NUANKEBAO_* → BBT_*/DATABACKUPS 映射
 BBT_DIR="${BBT_DIR:-${NUANKEBAO_PROJECT_DIR:-/home/tooyan/nuankebao-agent}}"
-DATABACKUPS="${DATABACKUPS:-${NUANKEBAO_DATABACKUPS_DIR:-/home/tooyan/nuankebao-databackups}}"
-BACKUP_DIR="${BACKUP_DIR:-$DATABACKUPS/pg-backups}"
-KEY_FILE="${KEY_FILE:-$DATABACKUPS/backup-key.gpg}"
-LOG_DIR="${LOG_DIR:-$DATABACKUPS/logs}"
+# BODR 模式 (2026-09-20): 本地 DATABACKUPS=/tmp staging, rsync 后即被 trap 清
+#              验证只能走异地 OFFSITE_DIR (LK /media/mm7/tc_backup/nuankebao[/-prod])
+#              systemd service env 显式设 DATABACKUPS=/tmp/<service>-staging + OFFSITE_DIR (从 backup 给出)
+DATABACKUPS="${DATABACKUPS:-${NUANKEBAO_DATABACKUPS_DIR:-/tmp/nuankebao-backup-staging}}"
+BACKUP_DIR="${BACKUP_DIR:-${OFFSITE_DIR:-/media/mm7/tc_backup/nuankebao}/pg-backups}"
+KEY_FILE="${KEY_FILE:-/etc/backup-keys/nuankebao.key.gpg}"
+LOG_DIR="${LOG_DIR:-/tmp/nuankebao-backup-staging/logs}"
 LOG="${LOG_DIR}/restore-verify.log"
-HEALTH_DIR="${HEALTH_DIR:-$DATABACKUPS/backup-health}"
+HEALTH_DIR="${HEALTH_DIR:-/home/tooyan/.muse/muse-station/data/backup-health/nuankebao}"
 HEALTH_FILE="${HEALTH_DIR}/restore-verify.json"
 HEALTH_TMP="${HEALTH_DIR}/.restore-verify.json.tmp"
 

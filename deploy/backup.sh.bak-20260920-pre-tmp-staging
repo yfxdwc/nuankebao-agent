@@ -6,13 +6,7 @@
 #   1. PG 逻辑全备 (pg_dump -Fc 自定义压缩) + GPG 加密 -> 本地
 #   2. media 资产档案 (photos + uploads) + GPG 加密 -> 本地
 #   3. rsync 三份本地加密备份 -> 外置盘异地 (/media/tooyan/<盘符>/<盘符>/nuankebao-databackups/)
-#   4. GFS 清理: 异地 PG/Media 各保留 7 份 (mtime +14 AND count<=7 双保险)
-#
-# 2026-09-20 主理人拍板 (治本, 跟 muse/sales-ai/rakazo 统一):
-#   - 本地不再保留备份副本 (tc 硬盘快满 + 不做本地备份)
-#   - DATABACKUPS 改 /tmp/nuankebao-backup-staging (BODR 模式, 跟 systemd service env 联动)
-#   - HEALTH_DIR systemd env 显式设到 ~/.muse/muse-station/data/backup-health/nuankebao[/-prod]
-#   - GFS 移到异地, 本地零残留 (rm 走 trap)
+#   4. GFS 清理: 本地 PG/Media 各保留 7 份 (mtime +14 AND count<=7 双保险)
 #
 # 设计 (dev-domain-backup SOP §3.1):
 #   - 全部用密钥文件自动解密, 无人工介入. 失败非 0 退出 (systemd 标记).
@@ -112,10 +106,6 @@ START_TS=$(date +%s)
 
 mkdir -p "$BACKUP_DIR" "$MEDIA_BACKUP_DIR" "$HEALTH_DIR" "$LOG_DIR"
 chmod 700 "$BACKUP_DIR" "$MEDIA_BACKUP_DIR" "$HEALTH_DIR" "$LOG_DIR"
-
-# BODR 模式 (2026-09-20): 兜底 cleanup, 任何路径退出都清 staging
-# trap 末尾 +true 防 set -e 传播; LOCK_FILE 在 staging 下, 一起清
-trap 'rm -rf "${NUANKEBAO_BACKUP_STAGING:-/tmp/nuankebao-backup-staging}" "${NUANKEBAO_PROD_BACKUP_STAGING:-/tmp/nuankebao-prod-backup-staging}" 2>/dev/null || true' EXIT
 
 # ============== flock 防并发 ==============
 
@@ -362,32 +352,39 @@ shopt -u nullglob
 KEYS_COUNT=$(ssh -o BatchMode=yes lk "ls -1 ${OFFSITE_DIR}/keys/*.enc 2>/dev/null | wc -l")
 echo "$(LOG_TS) [3/5] OK offsite PG=$PG_COUNT MEDIA=$MEDIA_COUNT KEYS=$KEYS_COUNT key-copied" | tee -a "$LOG"
 
-# ============== 4) GFS 清理: 异地, mtime+14 AND count<=7 双保险 (SOP §2.4) ==============
+# ============== 4) GFS 清理: mtime+14 AND count<=7 双保险 (SOP §2.4) ==============
 
 gfs_cleanup() {
     set +e  # GFS 内部 find|while 空 stdin rc=1, 跳过 set -e
     local label="$1"
     local dir="$2"
     local pattern="$3"
-    echo "$(LOG_TS) [5/5] GFS 清理 (异地): $label (mtime+${RETENTION_DAYS} AND count<=${RETENTION_COUNT})"
-    # BODR 模式 (2026-09-20): 本地零残留 (rm 走 trap), GFS 全部在异地做
-    ssh -o BatchMode=yes lk "
-        set +u
-        cd '$dir'
-        find . -maxdepth 1 -name '$pattern' -mtime +${RETENTION_DAYS} -delete 2>/dev/null || true
-        count=\$(ls -1 $pattern 2>/dev/null | wc -l)
-        if [ \"\$count\" -gt \"${RETENTION_COUNT}\" ]; then
-            excess=\$((count - ${RETENTION_COUNT}))
-            ls -1tr $pattern 2>/dev/null | head -n \"\$excess\" | xargs -r rm -f
-        fi
-    " || true
+    echo "$(LOG_TS) [5/5] GFS 清理: $label (mtime+${RETENTION_DAYS} AND count<=${RETENTION_COUNT})"
+    # 1) mtime +14 delete
+    local deleted_mtime=0
+    while read -r f; do
+        echo "$(LOG_TS) [5/5]   delete (mtime+${RETENTION_DAYS}d): $f"
+        deleted_mtime=$((deleted_mtime + 1))
+    done < <(find "$dir" -maxdepth 1 -name "$pattern" -mtime +${RETENTION_DAYS} -print -delete 2>/dev/null || true)
+    # 2) count<=7: 若份数仍 >7, 按 mtime 升序删最旧的 excess 个
+    local count
+    count=$(ls -1 "$dir"/$pattern 2>/dev/null | wc -l)
+    local deleted_count=0
+    if [ "$count" -gt "$RETENTION_COUNT" ]; then
+        local excess=$((count - RETENTION_COUNT))
+        while read -r f; do
+            rm -f "$f"
+            echo "$(LOG_TS) [5/5]   delete (count<=${RETENTION_COUNT}): $f"
+            deleted_count=$((deleted_count + 1))
+        done < <(ls -1tr "$dir"/$pattern 2>/dev/null | head -n "$excess")
+    fi
     local after
-    after=$(ssh -o BatchMode=yes lk "ls -1 '$dir'/$pattern 2>/dev/null | wc -l")
-    echo "$(LOG_TS) [5/5] OK $label 保留 $after 份"
+    after=$(ls -1 "$dir"/$pattern 2>/dev/null | wc -l)
+    echo "$(LOG_TS) [5/5] OK $label 保留 $after 份 (mtime 删 $deleted_mtime / count 删 $deleted_count)"
 }
 
-gfs_cleanup "异地 PG 日备"     "${OFFSITE_DIR}/pg-backups"  "pg-*.dump.gpg"
-gfs_cleanup "异地 media 档案"  "${OFFSITE_DIR}/media"       "media-*.tar.zst.enc"
+gfs_cleanup "本地 PG 日备"     "$BACKUP_DIR"       "pg-*.dump.gpg"
+gfs_cleanup "本地 media 档案"  "$MEDIA_BACKUP_DIR" "media-*.tar.zst.enc"
 
 # ============== 5) 成功 health state ==============
 
