@@ -16,7 +16,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuankebao/core/models/me.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/providers/settings_provider.dart';
-import 'package:nuankebao/core/services/api.dart' show ManualPayInfo, ManualPayProduct;
+import 'package:nuankebao/core/services/api.dart'
+    show ManualPayInfo, ManualPayProduct, MyReferral;
 import 'package:nuankebao/core/widgets/user_avatar.dart';
 import 'package:nuankebao/screens/profile_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -73,6 +74,8 @@ Future<ProviderContainer> _container(
   final container = ProviderContainer(overrides: [
     sharedPreferencesProvider.overrideWithValue(prefs),
     meProfileProvider.overrideWith((ref) async => profile),
+    // 默认空列表: 「我的」页现在会读"我推荐的人", 不 override 会去打网络
+    myReferralsProvider.overrideWith((ref) async => const <MyReferral>[]),
     ...extraOverrides,
   ]);
   addTearDown(container.dispose);
@@ -294,6 +297,31 @@ void main() {
 
     // preset:tea → 用「喝茶」图标画, 不再画首字「张」
     expect(find.byIcon(Icons.emoji_food_beverage), findsWidgets);
+  });
+
+  testWidgets('推荐人: 有人用我的码注册 → 「好友待确认」入口带人数', (tester) async {
+    final container = await _container(
+      // ⚠ 必须带 membership.referralCode: 「好友待确认」入口只在"我有码"时渲染
+      MeProfile.fromJson({
+        'user': {'id': '1', 'name': '张三', 'roleLabel': '销售员'},
+        'membership': {
+          'isMember': false,
+          'planCode': 'free',
+          'features': [],
+          'referralCode': 'ABC234',
+        },
+      }),
+      extraOverrides: [
+        myReferralsProvider.overrideWith((ref) async => const [
+              MyReferral(id: '1', name: '李秀兰', phoneMasked: '139****3013', status: 'pending'),
+              MyReferral(id: '2', name: '赵小兰', phoneMasked: '139****3014', status: 'confirmed'),
+            ]),
+      ],
+    );
+    await _pumpProfile(tester, container);
+
+    expect(find.text('好友待确认 (1 人)'), findsOneWidget);
+    expect(find.textContaining('有人用你的推荐码注册了'), findsOneWidget);
   });
 
   testWidgets('会员卡 (免费档): 显示开通入口 + 9 项会员功能说明 + 填推荐码', (tester) async {

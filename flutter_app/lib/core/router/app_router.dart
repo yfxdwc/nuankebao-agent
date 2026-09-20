@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 
 import '../providers/auth_provider.dart';
 import '../../modules/auth/screens/login_screen.dart';
+import '../../modules/auth/screens/register_screen.dart';
 import '../../modules/customer/screens/customers_page.dart';
 import '../../modules/relation/screens/franchisee_detail_page.dart';
 import '../../modules/relation/screens/add_franchisee_page.dart';
@@ -20,6 +21,7 @@ import '../../modules/relation/screens/edit_franchisee_page.dart';
 import '../../modules/relation/screens/placement_requests_page.dart';
 import '../../screens/about_page.dart';
 import '../../screens/admin_tools_page.dart';
+import '../../screens/my_referrals_page.dart';
 import '../../screens/profile_page.dart';
 import '../../modules/wellness/screens/wellness_record_form_page.dart';
 import '../../modules/wellness/screens/wellness_record_detail_page.dart';
@@ -83,6 +85,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/login',
         name: 'login',
         builder: (context, state) => const LoginScreen(),
+      ),
+
+      // 注册 (B1: 凭推荐码自助注册; 推荐人确认后才发 15 天会员)
+      GoRoute(
+        path: '/register',
+        name: 'register',
+        builder: (context, state) => RegisterScreen(
+          initialCode: state.uri.queryParameters['code'],
+        ),
       ),
 
       // ============================================
@@ -173,6 +184,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'admin',
                 name: 'profile-admin',
                 builder: (context, state) => const AdminToolsPage(),
+              ),
+              // 我推荐的人 (B1: 推荐人确认好友; 防"码被转发后陌生人白嫖")
+              GoRoute(
+                path: 'referrals',
+                name: 'profile-referrals',
+                builder: (context, state) => const MyReferralsPage(),
               ),
             ],
           ),

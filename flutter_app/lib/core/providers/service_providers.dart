@@ -87,6 +87,11 @@ final manualPayInfoProvider = FutureProvider.autoDispose<ManualPayInfo>(
   (ref) async => ref.watch(billingServiceProvider).manualPayInfo(),
 );
 
+/// 我推荐的人 (B1: 推荐人确认「这是我朋友」; 列表里含 pending/confirmed/rewarded/rejected)
+final myReferralsProvider = FutureProvider.autoDispose<List<MyReferral>>(
+  (ref) async => ref.watch(billingServiceProvider).myReferrals(),
+);
+
 /// 管理员: 付款申请列表 (按状态; 内测人工核销用)
 final adminPaymentsProvider =
     FutureProvider.family.autoDispose<List<AdminPayRequest>, String>(

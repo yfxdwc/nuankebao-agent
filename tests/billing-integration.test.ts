@@ -26,6 +26,7 @@ import {
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
 import {
   adminGrant,
+  BillingError,
   claimReferralCode,
   requireFeature,
   ensureReferralCode,
@@ -33,6 +34,11 @@ import {
   rewardReferrerOnFranchisee,
 } from "@/lib/billing/entitlements";
 import { createFranchisee } from "@/lib/db/queries/franchisee";
+import {
+  confirmReferral,
+  registerWithReferral,
+  rejectReferral,
+} from "@/lib/billing/signup";
 import {
   decideManualPayment,
   getManualPayInfo,
@@ -65,6 +71,22 @@ async function mkUser(name: string, phone: string): Promise<bigint> {
 }
 
 beforeAll(async () => {
+  // 上次跑失败可能留了测试号 (自助注册用的 3xxx 号段) → 先清干净
+  const strayHashes = ["13900003010", "13900003011", "13900003012", "13900003013", "13900003014"].map(
+    (p) => hashForLookup(p)
+  );
+  const stray = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(inArray(user.phoneHash, strayHashes));
+  if (stray.length > 0) {
+    const ids = stray.map((r) => r.id);
+    await db.delete(entitlementGrant).where(inArray(entitlementGrant.userId, ids));
+    await db.delete(membership).where(inArray(membership.userId, ids));
+    await db.delete(referralReward).where(inArray(referralReward.refereeUserId, ids));
+    await db.delete(user).where(inArray(user.id, ids));
+  }
+
   userA = await mkUser(`${TAG}-推荐人`, phoneA);
   userB = await mkUser(`${TAG}-被推荐人`, phoneB);
   userC = await mkUser(`${TAG}-手工开通`, phoneC);
@@ -408,5 +430,148 @@ describe("推荐码只能在注册时填 (主人 2026-09-19)", () => {
       .delete(referralReward)
       .where(inArray(referralReward.refereeUserId, [fresh.id, old.id]));
     await db.delete(user).where(inArray(user.id, [fresh.id, old.id]));
+  });
+});
+
+describe("B1 自助注册 (凭推荐码) + 推荐人确认 (主人 2026-09-20)", () => {
+  let signupUserId: bigint | null = null;
+
+  afterAll(async () => {
+    if (signupUserId) {
+      await db.delete(entitlementGrant).where(eq(entitlementGrant.userId, signupUserId));
+      await db.delete(membership).where(eq(membership.userId, signupUserId));
+      await db
+        .delete(referralReward)
+        .where(eq(referralReward.refereeUserId, signupUserId));
+      await db.delete(user).where(eq(user.id, signupUserId));
+    }
+  });
+
+  it("姓名/手机号强校验: 纯数字名、假号、短名 都被拒 (主人要求填真实姓名手机号)", async () => {
+    const badName = await registerWithReferral({
+      rawCode: codeA,
+      rawName: "12345678",
+      rawPhone: "13900003010",
+      password: "Abcd1234",
+    }).catch((e) => e);
+    expect(badName).toBeInstanceOf(BillingError);
+    expect((badName as BillingError).code).toBe("BAD_NAME");
+
+    const badPhone = await registerWithReferral({
+      rawCode: codeA,
+      rawName: "王秀英",
+      rawPhone: "12345",
+      password: "Abcd1234",
+    }).catch((e) => e);
+    expect((badPhone as BillingError).code).toBe("BAD_PHONE");
+
+    const badPwd = await registerWithReferral({
+      rawCode: codeA,
+      rawName: "王秀英",
+      rawPhone: "13900003011",
+      password: "123",
+    }).catch((e) => e);
+    expect((badPwd as BillingError).code).toBe("BAD_PASSWORD");
+
+    const badCode = await registerWithReferral({
+      rawCode: "ZZZ",
+      rawName: "王秀英",
+      rawPhone: "13900003012",
+      password: "Abcd1234",
+    }).catch((e) => e);
+    expect((badCode as BillingError).code).toBe("BAD_CODE");
+  });
+
+  it("注册成功: 建号 + 推荐关系 pending, **但还不发权益** (等推荐人确认)", async () => {
+    const r = await registerWithReferral({
+      rawCode: codeA,
+      rawName: "李秀兰",
+      rawPhone: "13900003013",
+      password: "Abcd1234",
+    });
+    signupUserId = r.userId;
+    expect(r.needsReferrerConfirmation).toBe(true);
+    expect(r.username).toBe("13900003013"); // 登录账号 = 手机号
+
+    // 新用户还没有会员 (等确认)
+    const view = await getMembershipView(r.userId);
+    expect(view.isMember).toBe(false);
+
+    // 推荐关系在, 状态 pending
+    const [row] = await db
+      .select()
+      .from(referralReward)
+      .where(eq(referralReward.refereeUserId, r.userId));
+    expect(row.status).toBe("pending");
+    expect(row.confirmedAt).toBe(null);
+  });
+
+  it("同一手机号不能注册第二次", async () => {
+    const dup = await registerWithReferral({
+      rawCode: codeA,
+      rawName: "李秀兰",
+      rawPhone: "13900003013",
+      password: "Abcd1234",
+    }).catch((e) => e);
+    expect((dup as BillingError).code).toBe("PHONE_TAKEN");
+  });
+
+  it("推荐人确认 → 新用户拿到 15 天; 重复确认不再重复发", async () => {
+    const [row] = await db
+      .select()
+      .from(referralReward)
+      .where(eq(referralReward.refereeUserId, signupUserId!));
+
+    const r1 = await confirmReferral({ referrerUserId: userA, rewardId: row.id });
+    expect(r1.ok).toBe(true);
+    expect(r1.grantedDays).toBe(15);
+
+    const view = await getMembershipView(signupUserId!);
+    expect(view.isMember).toBe(true);
+    expect(view.features.length).toBe(9);
+
+    const r2 = await confirmReferral({ referrerUserId: userA, rewardId: row.id });
+    expect(r2.grantedDays).toBe(0); // 幂等
+    const [after] = await db
+      .select()
+      .from(referralReward)
+      .where(eq(referralReward.id, row.id));
+    expect(after.status).toBe("confirmed");
+    expect(after.confirmedAt).not.toBe(null);
+  });
+
+  it("别人不能确认我的推荐 (越权被拒)", async () => {
+    // 造一条新推荐: 新用户用 userA 的码注册, 但让 userB 去确认
+    const r = await registerWithReferral({
+      rawCode: codeA,
+      rawName: "赵小兰",
+      rawPhone: "13900003014",
+      password: "Abcd1234",
+    });
+    const [row] = await db
+      .select()
+      .from(referralReward)
+      .where(eq(referralReward.refereeUserId, r.userId));
+
+    const denied = await confirmReferral({
+      referrerUserId: userB, // 不是这条推荐的推荐人
+      rewardId: row.id,
+    }).catch((e) => e);
+    expect((denied as BillingError).code).toBe("NOT_MINE");
+
+    // 驳回: 不发权益
+    await rejectReferral({
+      referrerUserId: userA,
+      rewardId: row.id,
+      reason: "测试: 不认识",
+    });
+    const view = await getMembershipView(r.userId);
+    expect(view.isMember).toBe(false);
+
+    // 清理这条
+    await db.delete(entitlementGrant).where(eq(entitlementGrant.userId, r.userId));
+    await db.delete(membership).where(eq(membership.userId, r.userId));
+    await db.delete(referralReward).where(eq(referralReward.refereeUserId, r.userId));
+    await db.delete(user).where(eq(user.id, r.userId));
   });
 });

@@ -2,6 +2,42 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (B1 自助注册: 凭推荐码注册 + 推荐人确认, 2026-09-20 主人拍)
+
+**主人问**: 「当前 app 的登录界面里没有注册账户的入口，新用户怎么注册？是邀请人代注册吗」
+**主人拍**: 选 **B1** + 「账号/用户名提醒用户填真实姓名，真实手机号」
+
+**背景事实 (核查结果)**: 登录页无注册入口; App/Web 都没有用户管理页; 建号只能靠服务器脚本
+(`create-admin.ts` / `import-users.ts`) → 新人进来必须经主人在服务器上手工操作, 推荐码也被迫经主人转手。
+
+**闭环**
+
+```
+新人  登录页「有新推荐码? 去注册」→ 推荐码 + 真实姓名 + 真实手机号 + 自设密码
+      → 注册成功 (免费档, 还没有权益; 页面写明"等推荐人确认")
+推荐人 我的 → 好友待确认 (N) → 看 姓名+打码手机号 → 「这是我朋友」/「不认识」
+      → 确认: 新人立刻得 15 天 (推荐人的 15 天仍等新人成为加盟者, D23 不变)
+      → 驳回: 没有任何权益 (防"码被转发后陌生人白嫖")
+```
+
+| 层 | 内容 |
+|---|---|
+| 表 | `referral_reward` 状态机扩展为 `pending(待推荐人确认) → confirmed → rewarded`, 新增 `confirmed_at` / `rejected_at` (migration `0014_referral_confirm`, 加性) |
+| 注册 API | `POST /api/auth/register` (公开 + IP 限流 5 次/10 分钟): 强校验 码/姓名/手机号/密码/手机号唯一 → 建号 + 待确认推荐关系, **不发权益** |
+| 确认 API | `GET /api/billing/referral/pending` (我的推荐列表)、`POST .../pending/[id]` (confirm/reject, 仅本人可操作) |
+| 校验规则 | 姓名 2-20 字且含中文或字母 (纯数字/符号拒); 手机号 `1[3-9]` 11 位且唯一; 密码走全仓 scrypt 策略 |
+| Flutter | 新 `modules/auth/screens/register_screen.dart` (注册页, 带"真实姓名/真实手机号"提示) + 登录页入口 + 新 `screens/my_referrals_page.dart` (好友确认页) + 「我的」页「好友待确认 (N)」入口 + 路由 `/register` `/profile/referrals` |
+| 防刷 | 封顶把 **pending 也算**; 注册 IP 限流; 一人一号 (phone_hash 唯一); 确认/驳回只能由该条推荐的推荐人操作 |
+
+**验证**
+- `tests/billing-integration.test.ts` **20 pass** (新增 5 例: 姓名/手机号/密码/码 校验全拒 /
+  注册成功但**不发权益** / 手机号重复被拒 / 推荐人确认后新用户得 15 天 + 重复确认幂等 /
+  越权确认被拒 + 驳回不发权益)
+- `flutter test` **42 pass** (新增: 注册页四个必填项 + **真实姓名/手机号提示文案** + 邀请制说明 +
+  预填推荐码 + 未填全给中文提示; 「我的」页「好友待确认 (1 人)」入口)
+- `npx tsc --noEmit` (我的文件) 0 error; `flutter analyze` (我的文件) 0 issue; `pnpm db:compat` 0 error
+- 注: `scripts/create-admin.ts` 当前有一条**另一 session 在途改动**的 TS 报错 (`ensureAccountProfile`), 与本轮无关
+
 ### Changed (生产同步 + APK 重建 0.2.4+5, 2026-09-20)
 
 - 生产 web 重新部署: 包含 2026-09-19 11:21 之后全部提交 (网页登录表单修复、

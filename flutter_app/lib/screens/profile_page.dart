@@ -989,6 +989,8 @@ class _MembershipCard extends ConsumerWidget {
             color: AppTheme.accent,
             onTap: () => _showPurchaseSheet(context, ref, isMember: isMember),
           ),
+        // 有人用我的推荐码注册了 → 待我确认 (B1)
+        if (m?.hasCode == true) const _PendingReferralsTile(),
         if (m?.hasCode == true)
           _ReferralCodeRow(
             code: m!.referralCode!,
@@ -1003,6 +1005,30 @@ class _MembershipCard extends ConsumerWidget {
   void _showPurchaseSheet(BuildContext context, WidgetRef ref,
       {required bool isMember}) {
     showMembershipPurchaseSheet(context, ref, isMember: isMember);
+  }
+}
+
+/// 待我确认的好友 (有人用我的推荐码注册了) —— 没有就不占地方
+class _PendingReferralsTile extends ConsumerWidget {
+  const _PendingReferralsTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(myReferralsProvider);
+    final pending = async.maybeWhen(
+      data: (rows) => rows.where((r) => r.status == 'pending').length,
+      orElse: () => 0,
+    );
+
+    return ProfileTile(
+      icon: Icons.how_to_reg,
+      title: pending > 0 ? '好友待确认 ($pending 人)' : '我推荐的人',
+      subtitle: pending > 0
+          ? '有人用你的推荐码注册了, 点进去确认'
+          : '看谁用了你的推荐码',
+      color: pending > 0 ? AppTheme.accent : AppTheme.primaryDark,
+      onTap: () => context.push('/profile/referrals'),
+    );
   }
 }
 

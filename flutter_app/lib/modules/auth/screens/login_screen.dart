@@ -165,8 +165,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
         const SizedBox(height: 12),
+
+        // ★ 新用户入口 (B1, 主人 2026-09-20): 填朋友的推荐码自助注册
+        //   为什么放在登录页而不是单独藏起来: 新用户第一次打开 App 就落在这里,
+        //   找不到入口 = 以为要托人代建。注册完由推荐人确认 (页面上有说明)。
+        OutlinedButton.icon(
+          onPressed: loading ? null : () => context.push('/register'),
+          icon: const Icon(Icons.person_add_alt_1, size: 22),
+          label: const Text('有新推荐码? 去注册',
+              style: TextStyle(fontSize: AppTheme.fontMd)),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, AppTheme.buttonMinHeight),
+            foregroundColor: AppTheme.primaryDark,
+            side: const BorderSide(color: AppTheme.primaryLight, width: 2),
+          ),
+        ),
+        const SizedBox(height: 12),
         const Text(
-          '账号由管理员开通; 忘记密码请联系管理员重置',
+          '老账号忘记密码请联系管理员重置; 新用户需要朋友的推荐码才能注册',
           style: TextStyle(fontSize: 12, color: Colors.black45),
           textAlign: TextAlign.center,
         ),
