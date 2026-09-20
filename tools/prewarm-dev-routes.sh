@@ -2,28 +2,45 @@
 # ============================================================
 # 暖客宝 Next.js Dev Mode 路由预编译脚本
 #
-# 用途: 把 src/app/api/** 下所有 list 路由 (无动态参数) curl 一次,
+# 用途: 把 src/app/api/** 下常用 API 路由 curl 一次,
 #   强制 Next.js dev mode 提前编译, 避免主人打开预览时撞冷编译
-#   (实测最坏 43s, dio 10s timeout 直接抛「网络不太好」).
+#   (实测最坏 188s/auth-flutter-login, dio 60s timeout 仍会 timeout).
 #
-# 为什么不全编译: 动态路由 (/api/customers/[id]) 需要真实 ID + auth,
-#   冷编译本身还是会触发 (401 也算编译完), 但 list 路由已覆盖
-#   主人打开 /app-preview 后会立即 hit 的核心 API.
+# 为什么不全编译: 33 个 list 路由 × 30-60s/路由 = 15-30 分钟,
+#   并发跑反而拖死 dev server (实测 1.4GB mem + 全部串行 queue).
+#   实际预览用到的路由 < 10 个, 默认只预热这 10 个就够 80%+ 场景.
+#
+# 默认预热路由 (按主人真实使用频率排, 见 src/app/api/**/route.ts):
+#   /api/auth/session           (每页加载都查 session)
+#   /api/auth/csrf              (登录)
+#   /api/auth/flutter-login     (登录提交)
+#   /api/me                     (当前用户)
+#   /api/health                 (网络自检)
+#   /api/customers              (客户列表)
+#   /api/customers/stats        (客户统计)
+#   /api/wellness-records       (养生记录列表)
+#   /api/salons                 (沙龙列表)
+#   /api/franchisees/me/tree    (加盟关系树)
 #
 # 用法:
-#   ./tools/prewarm-dev-routes.sh                     # 预编译 (默认 localhost:3003)
-#   ./tools/prewarm-dev-routes.sh 192.168.1.99:3003   # 指定 host
+#   ./tools/prewarm-dev-routes.sh                          # 默认 10 个最热路由 (串行, ~3-5 min)
+#   ./tools/prewarm-dev-routes.sh --all                   # 全 33 路由 (慢, ~15-30 min)
+#   ./tools/prewarm-dev-routes.sh --parallel 4            # 4 路并发 (会拖慢 dev server, 不推荐)
+#   ./tools/prewarm-dev-routes.sh 192.168.1.99:3003       # 指定 host
 #   APP_URL=http://192.168.1.99:3003 ./tools/prewarm-dev-routes.sh
-#   ./tools/prewarm-dev-routes.sh --quiet             # 只输出汇总
+#   ./tools/prewarm-dev-routes.sh --quiet                  # 只输出汇总
+#   ./tools/prewarm-dev-routes.sh --top 5                  # 只预热前 5 个
 #
 # 触发时机:
 #   - 主人重启 nuankebao-nextjs.service 后手跑一次
 #   - 改 / 加新 API 路由后跑一次 (新路由要触发首次编译)
-#   - 可选: 加到 systemd ExecStartPost= (在 install-systemd.sh)
+#   - **不建议加 systemd ExecStartPost** (systemd 启动期 dev server 还没就绪,
+#     会跑空 + 把 dev server 一启动就拖入 33 路由 compile queue = 卡死)
 #
 # 关联:
 #   - flutter_app/lib/core/http/api_client.dart  dio connectTimeout
-#     web 模式 60s (兜住冷编译最坏情况)
+#     web 模式 60s (兜住冷编译最坏情况, 跟本脚本互补: 本脚本主动 warm 主流,
+#     60s 兜底防漏网 / 新路由 / 偶发 60s+ 编译)
 #   - src/app/api/**/route.ts                  路由源 (本脚本自动发现)
 #
 # ADR: docs/login-failure-triage.md (待补, 跟 R12 一类的「治本沉淀」)
@@ -37,7 +54,24 @@ LOG_FILE="/tmp/nuankebao-prewarm-dev-routes.log"
 
 # ---------- 参数 ----------
 QUIET=false
+ALL_MODE=false
+TOP_N=10
+PARALLEL=1
 APP_URL="${APP_URL:-http://127.0.0.1:3003}"
+
+# 默认 10 个最热路由 (按真实 hit 频率排序)
+DEFAULT_ROUTES=(
+  "/api/auth/session"
+  "/api/auth/csrf"
+  "/api/auth/flutter-login"
+  "/api/me"
+  "/api/health"
+  "/api/customers"
+  "/api/customers/stats"
+  "/api/wellness-records"
+  "/api/salons"
+  "/api/franchisees/me/tree"
+)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,12 +79,23 @@ while [[ $# -gt 0 ]]; do
       QUIET=true
       shift
       ;;
+    --all)
+      ALL_MODE=true
+      shift
+      ;;
+    --top)
+      TOP_N="$2"
+      shift 2
+      ;;
+    --parallel|-p)
+      PARALLEL="$2"
+      shift 2
+      ;;
     --help|-h)
-      sed -n '3,30p' "$0"
+      sed -n '3,40p' "$0"
       exit 0
       ;;
     *)
-      # 兼容旧用法: ./tools/prewarm-dev-routes.sh <host:port>
       if [[ "$1" =~ ^[a-zA-Z0-9._-]+:[0-9]+$ ]]; then
         APP_URL="http://$1"
       else
@@ -79,93 +124,133 @@ title(){ $QUIET || echo -e "\n${CYAN}==>${NC} $*"; }
 # ---------- 0. 前置检查 ----------
 title "前置检查"
 log "APP_URL: $APP_URL"
-log "API_DIR: $API_DIR"
-
-if [[ ! -d "$API_DIR" ]]; then
-  err "API 目录不存在: $API_DIR"
-  exit 1
-fi
+log "ALL_MODE: $ALL_MODE  TOP_N: $TOP_N  PARALLEL: $PARALLEL"
 
 if ! command -v curl >/dev/null 2>&1; then
   err "curl 不在 PATH"
   exit 1
 fi
 
-# 检查 dev server 是否活着 (避免冷启动预编译撞 wall)
-if ! curl -sS -o /dev/null -m 5 "$APP_URL/api/health" 2>/dev/null; then
-  err "dev server 不在 $APP_URL (5s 内连不上)"
+# 用 30s 长超时 (dev server 启动期可能还在初始化)
+if ! curl -sS -o /dev/null -m 30 "$APP_URL/api/health" 2>/dev/null; then
+  err "dev server 不在 $APP_URL (30s 内连不上 /api/health)"
   err "请先 ./tools/start-dev.sh 或 systemctl --user start nuankebao-nextjs.service"
   exit 1
 fi
 ok "dev server 活 ✓"
 
-# ---------- 1. 自动发现 list 路由 ----------
-title "1. 自动发现 list 路由 (无 [id] 动态参数)"
-
-# 模式: src/app/api/<path>/route.ts, 排除含 [ 的 (动态路由)
-mapfile -t ROUTES < <(
-  # find 返回绝对路径 (因 $API_DIR 是绝对), sed 只 strip 路径中 src/app/api 之前部分,
-  # 保留 /api/... 前缀 (URL 要带)
-  find "$API_DIR" -name "route.ts" -type f \
-    | grep -v '/\[' \
-    | sed -e "s|^.*/src/app/api|/api|" \
-          -e 's|/route\.ts$||' \
-    | sort
-)
+# ---------- 1. 选路由 ----------
+if $ALL_MODE; then
+  title "1. 全 33 路由 (auto-discover, --all 模式, 慢 ~15-30 min)"
+  mapfile -t ROUTES < <(
+    find "$API_DIR" -name "route.ts" -type f \
+      | grep -v '/\[' \
+      | sed -e "s|^.*/src/app/api|/api|" \
+            -e 's|/route\.ts$||' \
+      | sort
+  )
+  if [[ ${#ROUTES[@]} -eq 0 ]]; then
+    err "没找到 list 路由 (route.ts)"
+    exit 1
+  fi
+  if [[ $PARALLEL -eq 1 ]]; then
+    warn "⚠ --all 模式串行很慢, 推荐加 --parallel 2 (并发 2, 总时间减半, 但 dev server 会更慢)"
+  fi
+else
+  title "1. 默认 ${#DEFAULT_ROUTES[@]} 个最热路由 (top hit frequency)"
+  ROUTES=("${DEFAULT_ROUTES[@]}")
+  # --top N: 只取前 N
+  if [[ $TOP_N -lt ${#ROUTES[@]} ]]; then
+    ROUTES=("${ROUTES[@]:0:$TOP_N}")
+  fi
+fi
 
 ROUTE_COUNT=${#ROUTES[@]}
-log "发现 $ROUTE_COUNT 个 list 路由"
-
-if [[ $ROUTE_COUNT -eq 0 ]]; then
-  err "没找到任何 list 路由 (route.ts), 检查 $API_DIR"
-  exit 1
-fi
-
-# 打印路由列表 (quiet 模式不打印)
+log "预热路由数: $ROUTE_COUNT"
 if ! $QUIET; then
-  printf '   %s\n' "${ROUTES[@]}" | sed 's|^/api/|     /api/|'
+  printf '   %s\n' "${ROUTES[@]}" | sed 's|^|     |'
 fi
 
-# ---------- 2. 逐个 curl 预编译 ----------
-title "2. 逐个 curl 预编译 (触发 Next.js dev lazy compile)"
+# ---------- 2. curl 预编译 ----------
+title "2. 逐个 curl 预编译 (触发 Next.js dev lazy compile, 每路由最多 90s)"
 
 START_TS=$(date +%s)
 SUCCESS=0
 FAIL=0
 TOTAL_MS=0
 
-for route in "${ROUTES[@]}"; do
-  # 把 filesystem 路径转成 URL path
-  url_path=$(echo "$route" | tr -d ' ')
-  url="$APP_URL$url_path"
+warm_one() {
+  local url_path="$1"
+  local url="$APP_URL$url_path"
 
-  # curl: -s 静默, -o /dev/null 丢 body, -w 写时, --max-time 60 (兜住最坏冷编译)
+  local t0 t1 elapsed http_code
   t0=$(date +%s%3N)
-  http_code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 60 "$url" 2>/dev/null || echo "000")
+  http_code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 90 "$url" 2>/dev/null || echo "000")
   t1=$(date +%s%3N)
   elapsed=$((t1 - t0))
-  TOTAL_MS=$((TOTAL_MS + elapsed))
 
   # 状态分类:
-  #   200 = 成功 (公开路由)
-  #   401/403 = 成功 (认证路由编译完了, 只是没 auth)
-  #   405 = 成功 (路由存在, GET 不支持但编译完了)
-  #   其他 = 失败
+  #   2xx = 公开路由成功
+  #   401/403 = 需 auth (编译完了, 业务正确)
+  #   405 = 路由存在但不支持 GET (编译完了)
   case "$http_code" in
     2*|401|403|405)
-      SUCCESS=$((SUCCESS + 1))
-      status_mark="✓"
+      echo "OK $http_code $elapsed $url_path"
       ;;
     *)
-      FAIL=$((FAIL + 1))
-      status_mark="✗"
+      echo "FAIL $http_code $elapsed $url_path"
       ;;
   esac
+}
+export -f warm_one
+export APP_URL QUIET
 
-  if ! $QUIET; then
-    printf "   %s %3d  %5dms  %s\n" "$status_mark" "$http_code" "$elapsed" "$url_path"
-  fi
-done
+if [[ $PARALLEL -le 1 ]]; then
+  # 串行 (默认, 稳)
+  for route in "${ROUTES[@]}"; do
+    result=$(warm_one "$route")
+    code=$(echo "$result" | awk '{print $1}')
+    http=$(echo "$result" | awk '{print $2}')
+    elapsed=$(echo "$result" | awk '{print $3}')
+    TOTAL_MS=$((TOTAL_MS + elapsed))
+    case "$code" in
+      OK)   SUCCESS=$((SUCCESS + 1)); mark="✓" ;;
+      FAIL) FAIL=$((FAIL + 1)); mark="✗" ;;
+    esac
+    if ! $QUIET; then
+      printf "   %s %3s  %5sms  %s\n" "$mark" "$http" "$elapsed" "$route"
+    fi
+  done
+else
+  # 并发 (--parallel > 1, 慎用, 会拖慢 dev server)
+  warn "⚠ 并发模式: $PARALLEL 路同时 curl, dev server 会更慢"
+  TMPF=$(mktemp)
+  printf '%s\n' "${ROUTES[@]}" > "$TMPF"
+  while IFS= read -r line; do
+    # warm_one echo 到 stdout, 加 PREFIX 给并发区分
+    warm_one "$line" | awk -v p="$$" '{print p" "$0}'
+  done < "$TMPF" > "$TMPF.out" &
+  # 简化: 这里用 xargs 更稳
+  rm -f "$TMPF"
+  # 重新用 xargs (GNU parallel 太重)
+  printf '%s\n' "${ROUTES[@]}" | xargs -I{} -P "$PARALLEL" bash -c 'warm_one "$@"' _ {} > "$TMPF.out" 2>&1 || true
+  while IFS= read -r line; do
+    parts=($line)
+    code="${parts[0]}"
+    http="${parts[1]}"
+    elapsed="${parts[2]}"
+    route="${parts[3]}"
+    TOTAL_MS=$((TOTAL_MS + elapsed))
+    case "$code" in
+      OK)   SUCCESS=$((SUCCESS + 1)); mark="✓" ;;
+      FAIL) FAIL=$((FAIL + 1)); mark="✗" ;;
+    esac
+    if ! $QUIET; then
+      printf "   %s %3s  %5sms  %s\n" "$mark" "$http" "$elapsed" "$route"
+    fi
+  done < "$TMPF.out"
+  rm -f "$TMPF.out"
+fi
 
 END_TS=$(date +%s)
 TOTAL_S=$((END_TS - START_TS))
@@ -174,23 +259,27 @@ TOTAL_S=$((END_TS - START_TS))
 title "3. 汇总"
 
 ok "预编译完成: $SUCCESS/$ROUTE_COUNT 成功, $FAIL 失败"
-log "总耗时: ${TOTAL_S}s (sum ${TOTAL_MS}ms, 平均 $((TOTAL_MS / (ROUTE_COUNT == 0 ? 1 : ROUTE_COUNT)))ms/route)"
+log "总耗时: ${TOTAL_S}s (sum ${TOTAL_MS}ms)"
 
 if [[ $FAIL -gt 0 ]]; then
-  warn "⚠ $FAIL 个路由失败 (可能: dev server 异常 / 路由 bug / 网络中断)"
+  warn "⚠ $FAIL 个路由失败 (可能: dev server 异常 / 路由 bug / 编译超过 90s)"
   warn "  详情: $LOG_FILE"
 fi
 
 # ---------- 4. 写日志 ----------
 {
-  echo "[$(date -Iseconds)] prewarm: $SUCCESS/$ROUTE_COUNT ok, ${TOTAL_S}s"
+  echo "[$(date -Iseconds)] prewarm: $SUCCESS/$ROUTE_COUNT ok, ${TOTAL_S}s (TOP_N=$TOP_N ALL=$ALL_MODE PARALLEL=$PARALLEL)"
   for route in "${ROUTES[@]}"; do
     echo "  $route"
   done
 } >> "$LOG_FILE" 2>/dev/null || true
 
 echo ""
-ok "✅ dev 路由预编译完成 — 现在打开 /app-preview, API 响应会快 (<500ms)"
-ok "   下次冷启动 (重启 nextjs / 改新路由) 后再跑一次本脚本"
+if $ALL_MODE; then
+  ok "✅ 全路由预编译完成 — 现在打开 /app-preview, 所有 list 路由都热"
+else
+  ok "✅ Top $ROUTE_COUNT 路由预编译完成 — 现在打开 /app-preview, 主流功能响应快 (<500ms)"
+  ok "   新加路由 或 不在 top 列表的路由 首次 hit 仍可能撞冷编译 (dio 60s 兜底)"
+fi
 
 exit 0
