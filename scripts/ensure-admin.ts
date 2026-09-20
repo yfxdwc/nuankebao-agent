@@ -13,6 +13,8 @@
 // 行为 (幂等):
 //   - 账号不存在 → 建一个 (role='admin', 无加盟商绑定, is_active=true)
 //   - 账号已存在 → 只把 role 抬成 'admin' (不覆盖姓名/加盟商绑定/密码等)
+//   - 两条路径都补齐**账号档案** (主人 2026-09-19 拍「建号即强制建档」):
+//       customer 档案 (同手机号; 有则复用) + 自己的推荐码
 //   - 打印最终结果 (id / 手机号 / 姓名 / role)
 // ============================================
 
@@ -24,6 +26,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
+import { ensureAccountProfile } from "@/lib/auth/registration";
 
 function arg(name: string): string | undefined {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -47,9 +50,12 @@ async function main() {
     .limit(1);
 
   if (existing) {
+    const prof = await ensureAccountProfile(existing.id, BigInt(0));
     if (existing.role === "admin") {
       console.log(
-        `✅ 管理员账号已存在 (无需改): id=${existing.id} ${existing.name} role=admin`
+        `✅ 管理员账号已存在 (无需改): id=${existing.id} ${existing.name} role=admin` +
+          ` | 客户档案 ${prof.customerCreated ? "新建" : "已在"}` +
+          ` | 推荐码 ${prof.referralCode}`
       );
       return;
     }
@@ -58,7 +64,9 @@ async function main() {
       .set({ role: "admin", isActive: true, updatedAt: new Date() })
       .where(eq(user.id, existing.id));
     console.log(
-      `✅ 已把现有账号抬成管理员: id=${existing.id} ${existing.name} (原 role=${existing.role})`
+      `✅ 已把现有账号抬成管理员: id=${existing.id} ${existing.name} (原 role=${existing.role})` +
+        ` | 客户档案 ${prof.customerCreated ? "新建" : "已在"}` +
+        ` | 推荐码 ${prof.referralCode}`
     );
     return;
   }
@@ -74,8 +82,11 @@ async function main() {
       avatarUrl,
     })
     .returning({ id: user.id, name: user.name, role: user.role });
+  const prof = await ensureAccountProfile(created.id, BigInt(0));
   console.log(
-    `✅ 已新建管理员账号: id=${created.id} ${created.name} role=${created.role} (手机号 ${phone.slice(0, 3)}****${phone.slice(7)})`
+    `✅ 已新建管理员账号: id=${created.id} ${created.name} role=${created.role} (手机号 ${phone.slice(0, 3)}****${phone.slice(7)})` +
+      ` | 客户档案 ${prof.customerCreated ? "新建" : "复用既有"}` +
+      ` | 推荐码 ${prof.referralCode}`
   );
   console.log(
     `   登录: dev 环境用 flutter-login (code=123456); 生产环境用短信验证码登录`

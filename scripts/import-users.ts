@@ -10,9 +10,11 @@
 // - role: admin | manager | sales (默认 sales)
 // - initial_password: 留空则随机生成 (打印一次, 由主人分发)
 // - username: 留空默认用手机号 (手机号本身就是登录账号)
-// - referral_code: **选填** —— 推荐人的 6 位码 (主人 2026-09-19: 推荐码只能在注册时填,
-//   而"注册"= 建号这一刻; 所以入口在这里)。填了 → 新用户立刻得 15 天会员,
-//   推荐人等他成为加盟者后再得 15 天 (ADR-0012 §6)
+// - referral_code: **必填** (主人 2026-09-19 拍: 「推荐码作为用户账户最强身份识别码」)
+//   —— 推荐人的 6 位码; **只有 role=admin 的行可以留空**
+//   填了 → 新用户立刻得 15 天会员, 推荐人等他成为加盟者后再得 15 天 (ADR-0012 §6)
+// - 建号同时**强制建客户档案** (主人 2026-09-19 拍「建号即强制建档」); 同手机号已有档案则复用
+// - 逃生舱: --allow-missing-referral (只在建"根账号/首批种子账号"时用, 会打印警告)
 //
 // 用法:
 //   pnpm tsx scripts/import-users.ts users.csv
@@ -32,9 +34,9 @@ import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
-import { hashPassword, isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/auth/password";
-import { encryptField, hashForLookup } from "@/lib/crypto/field";
-import { claimReferralCode } from "@/lib/billing/entitlements";
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/auth/password";
+import { hashForLookup } from "@/lib/crypto/field";
+import { createAccountWithProfile } from "@/lib/auth/registration";
 import { isValidReferralCodeShape } from "@/lib/billing/referral";
 
 type Role = "admin" | "manager" | "sales";
@@ -106,8 +108,11 @@ async function main() {
   const csvPath = process.argv[2];
   const dryRun = process.argv.includes("--dry-run");
   if (!csvPath) {
-    throw new Error("用法: pnpm tsx scripts/import-users.ts <users.csv> [--dry-run]");
+    throw new Error(
+      "用法: pnpm tsx scripts/import-users.ts <users.csv> [--dry-run] [--allow-missing-referral]"
+    );
   }
+  const allowMissingReferral = process.argv.includes("--allow-missing-referral");
 
   const rows = parseCsv(readFileSync(csvPath, "utf-8"));
   if (rows.length === 0) {
@@ -147,34 +152,48 @@ async function main() {
       continue;
     }
 
-    const [newUser] = await db
-      .insert(user)
-      .values({
+    // ★ 唯一建号入口 (主人 2026-09-19 拍): 账号 + 客户档案(强制) + 推荐码(必填)
+    //   - 非 admin 行没填码 → 直接报错 (除非 --allow-missing-referral)
+    //   - 同手机号已有客户档案 → 复用 (不重复建)
+    let res;
+    try {
+      res = await createAccountWithProfile({
         name: row.name,
+        phone: row.phone,
         role: row.role,
-        isActive: true,
-        phoneEncrypted: encryptField(row.phone),
-        phoneHash,
+        password,
         username,
-        passwordHash: hashPassword(password),
-      })
-      .returning({ id: user.id });
+        referralCode: row.referralCode,
+        allowNoReferral: allowMissingReferral || row.role === "admin",
+        actorUserId: BigInt(1),
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`✗ 跳过 ${row.name} ${row.phone}: ${msg}`);
+      failedReferrals.push(`${row.name}(${row.phone}): ${msg}`);
+      continue;
+    }
 
-    // ★ 推荐码只能在"注册"时填 (主人 2026-09-19) —— 建号这一刻就是注册
-    //   服务端 claimReferralCode 还会再校验一次"账号创建 24h 内"(兜底, 防直接打 API 补码)
+    // ★ 推荐码只能在"注册"时填 —— claimReferralCode 内部再校验"账号创建 24h 内"(兜底)
     let referralNote = "";
     if (row.referralCode) {
-      const r = await claimReferralCode({
-        refereeUserId: newUser.id,
-        rawCode: row.referralCode,
-        refereePhoneHash: phoneHash,
-      });
-      referralNote = r.accepted
+      referralNote = res.referralAccepted
         ? ` | 推荐码 ${row.referralCode} 已生效 (+15 天)`
-        : ` | ⚠ 推荐码未生效: ${r.reason}`;
-      if (!r.accepted) failedReferrals.push(`${row.name}(${row.phone}): ${r.reason}`);
+        : ` | ⚠ 推荐码未生效: ${res.referralRejectedReason}`;
+      if (!res.referralAccepted) {
+        failedReferrals.push(`${row.name}(${row.phone}): ${res.referralRejectedReason}`);
+      }
     }
-    console.log(`✓ 已创建 ${row.name} ${row.phone} role=${row.role}${referralNote}`);
+    if (allowMissingReferral && !row.referralCode && row.role !== "admin") {
+      console.log(
+        `  ⚠️ ${row.name} 没有推荐码 (--allow-missing-referral): 该账号不在任何人的推荐链上`
+      );
+    }
+    console.log(
+      `✓ 已创建 ${row.name} ${row.phone} role=${row.role}` +
+        ` | 客户档案 ${res.customerCreated ? "新建" : "复用既有"}` +
+        ` | 我的推荐码 ${res.ownReferralCode}${referralNote}`
+    );
     created++;
     if (!row.password) issued.push({ name: row.name, phone: row.phone, password });
   }
