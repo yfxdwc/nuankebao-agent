@@ -2,6 +2,21 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (生产同步 + APK 重建 0.2.4+5, 2026-09-20)
+
+- 生产 web 重新部署: 包含 2026-09-19 11:21 之后全部提交 (网页登录表单修复、
+  会员/收款体系 S0/S0.5、预览网络修复等); 迁移 12 → 14 条
+  (`0012_membership_billing` / `0013_manual_payment`), 新增表
+  `membership` / `entitlement_grant` / `billing_config` / `manual_payment_request`
+- APK 重建: `0.2.3+4` → `0.2.4+5` (含收款码接入 App、推荐码注册口径、客户列表头像标签等),
+  release 签名不变 (SHA-256 `0db0a1bc…`), 已替换生产下载文件 (26,219,828 bytes)
+- 验証: 生产网页表单已是账号/密码; `admin` 登录 302 + session、`/api/me` 200;
+  `/api/app-version` = 0.2.4+5; `/api/apk-download` 200; dev 3003 不受影响
+- 注意: `/api/app-version` 版本号来自 web 镜像内 `flutter_app/pubspec.yaml`
+  → 每次 bump 版本需重建 web 镜像 (本次已重建)
+- 部署前备份: `prod/pg-backups/pg-20260920-031644.dump.gpg`;
+  旧镜像 tag `nuankebao-prod-web:rollback`
+
 ### Changed (P5: 公网域名切换 — 生产正式上线, 2026-09-20)
 
 - `nuankebao.tooyang.top` → 生产 Docker 栈 `127.0.0.1:3004`（原指 dev :3003）
