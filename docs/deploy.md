@@ -31,6 +31,19 @@
 | 更新 APK | 拷到 `data/prod/downloads/NUANKEBAO-release.apk` (compose `:ro` 挂载, 无需重建镜像) |
 | 首次/重装 systemd units | `bash deploy/install-systemd.sh` |
 
+**预览 (dev)**:
+
+| 项 | 值 |
+|---|---|
+| LAN 预览 | `http://192.168.1.99:3003/app-preview` |
+| 公网预览 | `https://nuankebao-dev.tooyang.top/app-preview` |
+| 自动重建 | `nuankebao-flutter-web-watch.service`（`flutter_app/lib/**` 变化 → ~1.5 分钟自动重建 `public/app`） |
+| 看日志 | `tail -f /home/tooyan/nuankebao-databackups/logs/flutter-web-watch.log` |
+| 手动重建 | `bash tools/build-flutter-web.sh --auto`（§9.3 预览重建流程） |
+
+> `?dev=1`（DDC 调试模式）已不推荐：加载几百个模块很慢，且 dev server 的 API base
+> 写死 `127.0.0.1`（浏览器侧不可达）。要实时看最新用上面的静态预览 + 自动重建即可。
+
 **红线**:
 
 - `.env.prod` 权限 600、不进 git；**严禁** 写 `DEV_SKIP_AUTH` / `DEV_LOGIN_ANY_USER`

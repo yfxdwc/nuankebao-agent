@@ -2,7 +2,7 @@
 # ============================================================
 # 暖客宝 备份 systemd user services 安装脚本 (免 sudo)
 #
-# 装什么 (10 个 unit, 5 对 service+timer):
+# 装什么 (11 个 unit):
 #   dev:
 #     ~/.config/systemd/user/nuankebao-backup.service           + .timer (每日 03:00)
 #     ~/.config/systemd/user/nuankebao-code-snapshot.service    + .timer (每日 04:00)
@@ -10,6 +10,8 @@
 #   prod (tc Docker 隔离栈, 2026-09-19 P3):
 #     ~/.config/systemd/user/nuankebao-prod-backup.service      + .timer (每日 03:30)
 #     ~/.config/systemd/user/nuankebao-prod-healthcheck.service + .timer (每 5 分钟)
+#   预览 (2026-09-20):
+#     ~/.config/systemd/user/nuankebao-flutter-web-watch.service (常驻; lib/** 变化 → 自动重建预览包)
 #
 # 路径变量化 (AGENTS §6.3 + deploy/paths.conf):
 #   - 读 deploy/paths.conf (项目内 source-of-truth, 主人当前机器真值)
@@ -93,7 +95,8 @@ fi
 mkdir -p "$USER_SVC_DIR"
 
 for svc in nuankebao-backup.service nuankebao-code-snapshot.service nuankebao-restore-verify.service \
-           nuankebao-prod-backup.service nuankebao-prod-healthcheck.service; do
+           nuankebao-prod-backup.service nuankebao-prod-healthcheck.service \
+           nuankebao-flutter-web-watch.service; do
     # 用 awk 处理 OFFSITE_DIR 空时删整行 + 路径占位符替换
     awk -v project="$PROJECT_DIR" \
         -v databackups="$DATABACKUPS_DIR" \
@@ -133,6 +136,8 @@ systemctl --user enable nuankebao-restore-verify.timer
 # prod (P3): 备份 03:30 + 健康检查每 5 分钟
 systemctl --user enable --now nuankebao-prod-backup.timer
 systemctl --user enable --now nuankebao-prod-healthcheck.timer
+# 预览自动重建守护 (常驻; 2026-09-20)
+systemctl --user enable --now nuankebao-flutter-web-watch.service
 
 # ============== 5. 验证 ==============
 

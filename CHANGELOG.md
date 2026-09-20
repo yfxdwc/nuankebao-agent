@@ -2,6 +2,19 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (Flutter Web 预览自动重建守护, 2026-09-20)
+
+- 背景: 主人要「真正的实时最新预览地址」。`/app-preview` 吃静态 `public/app`, 不自动跟随源码;
+  `?dev=1` 的 DDC 调试模式慢 (几百个模块过 Cloudflare) 且 dev server 停在 14:26、
+  API base 写死 `127.0.0.1:3003` → 浏览器侧空白
+- 新增 `tools/watch-flutter-web.sh`: 每 15s 轮询 `flutter_app/lib/**` + `pubspec.yaml` 指纹,
+  变化后 20s 去抖 → `tools/build-flutter-web.sh --auto` 重建 + 同步 `public/app`
+- systemd user 单元 `nuankebao-flutter-web-watch.service` (常驻, Restart=always);
+  `deploy/install-systemd.sh` 扩展为 11 个 unit
+- 验证: touch 源码 → 15s 检测 + 20s 去抖 + 50s 构建 → `public/app` 自动更新 (总 ~1.5 分钟)
+- 预览地址不变: LAN `http://192.168.1.99:3003/app-preview` /
+  公网 `https://nuankebao-dev.tooyang.top/app-preview`（首次打开需强刷清 SW 缓存）
+
 ### Chore (预览静态包重建 0.2.6#7 — 补上注册入口等新功能, 2026-09-20)
 
 - 背景: 主人发现 LAN `/app-preview` 界面旧 (没有注册入口); 静态包停在 02:25 (`0.2.4#5`),

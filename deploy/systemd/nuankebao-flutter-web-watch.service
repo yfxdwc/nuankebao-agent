@@ -1,0 +1,20 @@
+[Unit]
+Description=暖客宝 Flutter Web 预览自动重建 (lib/** 变化 → build + sync public/app)
+Documentation=file:///__PROJECT_DIR__/docs/deploy.md
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_DIR__
+Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
+Environment="HOME=%h"
+ExecStart=__PROJECT_DIR__/deploy/run-with-log.sh __DATABACKUPS_DIR__/logs/flutter-web-watch.log __PROJECT_DIR__/tools/watch-flutter-web.sh
+Restart=always
+RestartSec=10
+# 防抖 + 构建长耗时: 不做超时限制 (oneshot 语义不适用, 这里是常驻守护)
+TimeoutStartSec=infinity
+# 安全加固 (与其它 unit 一致)
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target
