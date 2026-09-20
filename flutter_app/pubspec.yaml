@@ -1,7 +1,7 @@
 name: nuankebao
 description: 暖客宝 大健康销售 CRM (移动端)
 publish_to: 'none'
-version: 0.2.4+5
+version: 0.2.5+6
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
