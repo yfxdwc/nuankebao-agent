@@ -9,6 +9,7 @@
 
 | # | 标题 | 状态 | 拍板日期 | 关键决策 |
 |---|---|---|---|---|
+| 0013 | [账号 = 客户 (建号即强制建档) + 推荐码必填](./0013-account-customer-binding.md) | ✅ Accepted | 2026-09-19 | 唯一建号入口 `createAccountWithProfile`; 非 admin 必须有推荐码; 推荐码**不写** `customer.referrer_id` (no_link); 存量补齐 7/7 + 0 无推荐人 |
 | 0011 | [加盟树层级**不限** (取消深度上限 + 图谱懒加载)](./0011-unlimited-franchise-depth.md) | ✅ Accepted | 2026-09-18 | 层级不限 (合规依据 ADR-0006); env `FRANCHISEE_MAX_DEPTH` 手闸; `GET /:id/children` 懒加载; Supersedes ADR-0010 |
 | 0009 | [预览框架冻结 (4 层防御)](./0009-preview-framework-freeze.md) | ✅ Accepted | 2026-09-16 | tag baseline + pre-commit guard (block) + ADR + Vitest/Playwright 测试; 9 个路径冻结 |
 | 0010 | [加盟树深度 ≤3 → ≤4 放宽 (主人 override, dev/test seed data)](./0010-franchise-tree-depth-4-dev-override.md) | ⚠️ Superseded | 2026-09-16 | 主人 ask_user d234bdd4 拍板; 单 tree 1+2+4+8+16=31 节点; 3 文件各改 1-3 行; ADR-0006 amendment (非废弃) |

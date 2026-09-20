@@ -1113,6 +1113,25 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Added (账号 = 客户: 建号即强制建档 + 推荐码必填 + 存量补齐, 2026-09-19 主人拍)
+
+主人问: 「用户网络和加盟网络是打通的吗。每个用户首先都肯定是另一个用户的客户」
+→ 查真实数据发现: 加盟→客户 32/32 打通 ✅, 但**账号→客户档案 0/7** ❌ (只靠手机号 hash 约定),
+推荐码只有 2/7 账号有, 无推荐人客户 38/47 → 「每个用户都是别人的客户」**当时不成立**。
+主人拍板三条 (详见 [ADR-0013](docs/adr/0013-account-customer-binding.md)):
+
+- **① 建号即强制建档** — 新 `src/lib/auth/registration.ts::createAccountWithProfile()` 为唯一建号入口:
+  事务内建 user + 建/复用 customer 档案; 补 `ensureAccountProfile()` (给已存在账号补档案, 幂等)
+- **② 推荐码必填** (admin/根可空) — 主人: 「推荐码作为用户账户最强身份识别码」
+  `scripts/import-users.ts` 的 CSV `referral_code` 从"选填"→**必填** (admin 行可空) + `--allow-missing-referral` 逃生舱;
+  `scripts/ensure-admin.ts` 顺带补齐档案 + 推荐码
+- **③ no_link** — 推荐码**不写** `customer.referrer_id` (账号推荐关系 ≠ 客户图谱老带新, 两条线独立)
+- **④ 存量补齐** — 新 `scripts/backfill-account-customer-link.ts` (幂等 + `--dry-run`):
+  账号补档案 (+推荐码) + 无推荐人客户挂到「门店/根」
+- 冒烟 `scripts/smoke-registration.ts`: 无码被拒 / 建档成功 / 码归属 / no_link / 重复号 409 / admin 豁免 (8/8 过)
+
+**实测结果**: 账号 **7/7** 有客户档案、**7/7** 有推荐码; 无推荐人客户 **0** (44 个挂到根 #47) ✅
+
 ### Changed (类别图标重设计 + 纯 emoji 角标 (三类都显示), 2026-09-19 主人拍)
 
 主人原话: 「纯 emoji 角标。加盟、普通、种子都要显示角标。重新设计类别图标

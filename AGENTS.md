@@ -344,6 +344,20 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 
 > 当前 dev 机器已 100% nuankebao 化. 生产 deploy 时按本表执行.
 
+## §6.6 建号不变量 (账号 = 客户, 主人 2026-09-19 拍)
+
+> **主人原话**: 「每个用户首先都肯定是另一个用户的客户」
+> **拍板**: 「建号即强制建档 + 推荐码必填，推荐码作为用户账户最强身份识别码（admin/根可空）」
+> **ADR**: [0013 账号 = 客户](./docs/adr/0013-account-customer-binding.md)
+
+- ✅ **唯一建号入口** = `src/lib/auth/registration.ts::createAccountWithProfile()`
+  —— 任何建号路径 (批量导入 / 未来注册页) **必须**走它; 直接 `db.insert(user)` = 违规
+- ✅ 三条不变量: ① 每个账号有同手机号 customer 档案 ② 非 admin/根必须有推荐码 ③ 建号即分配自己的推荐码
+- ✅ 推荐码**不写** `customer.referrer_id` (主人拍板 no_link: 账号推荐关系 ≠ 客户图谱老带新)
+- ✅ 存量补齐: `scripts/backfill-account-customer-link.ts` (幂等, 支持 `--dry-run`)
+- ✅ 冒烟: `scripts/smoke-registration.ts` (无码被拒 / 建档 / 码归属 / no_link / 409 / admin 豁免)
+- ⚠️ 用户 ↔ 客户仍是**手机号 hash 约定, 无 FK 列** (后续可加 `user.customer_id`, additive)
+
 ## §6.5 系统管理员账号 (长期保留, 主人 2026-09-19 拍)
 
 > **主人原话**: 「长期保留系统管理员账号 admin，生产环境也要保留」
