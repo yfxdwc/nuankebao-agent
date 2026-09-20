@@ -379,6 +379,13 @@ export const customer = pgTable(
 
     isSeed: boolean("is_seed").notNull().default(false),
 
+    // 跟进紧急度用 (主人 2026-09-20 拍: 客户列表按跟进紧急度排序 / 推荐标签):
+    //   冗余列 —— 排序与分页必须在 SQL 层做, 不能拉全表到内存算 MAX(interaction.created_at)
+    //   写路径统一维护 (POST /api/interactions / POST /api/wellness-records),
+    //   存量由 scripts/backfill-last-contact.ts 回填 (幂等)
+    lastInteractionAt: timestamp("last_interaction_at", { withTimezone: true }),
+    lastVisitAt: timestamp("last_visit_at", { withTimezone: true }),
+
     createdBy: bigint("created_by", { mode: "bigint" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -395,6 +402,11 @@ export const customer = pgTable(
     deletedAtIdx: index("idx_customer_deleted_at").on(table.deletedAt),
     // W5 RBAC: store_id 索引 (供 middleware 行级过滤用)
     storeIdx: index("idx_customer_store").on(table.storeId),
+    // 跟进紧急度排序 (2026-09-20): 按「多久没联系」排序用
+    lastInteractionIdx: index("idx_customer_last_interaction").on(
+      table.lastInteractionAt
+    ),
+    lastVisitIdx: index("idx_customer_last_visit").on(table.lastVisitAt),
     // 客户图谱: 推荐人索引 (查"我推荐了谁"用)
     referrerIdx: index("idx_customer_referrer").on(table.referrerId),
   })

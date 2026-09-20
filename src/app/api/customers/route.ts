@@ -11,6 +11,7 @@ import { getAuditContextFromRequest } from "@/lib/audit/context";
 import { hasFeatureAccess } from "@/lib/billing/guard";
 import { stripBirthdayReminderFromList } from "@/lib/billing/membership-filter";
 import { FEATURES } from "@/lib/billing/features";
+import { attachFollowUp, sortByUrgency } from "@/lib/follow-up/attach";
 
 const CreateCustomerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -40,6 +41,12 @@ const CreateCustomerSchema = z.object({
 // 列表类型筛选 (胶囊按键: 全部/加盟/普通/种子)
 const CustomerTypeSchema = z.enum(["all", "franchisee", "seed", "normal"]);
 
+// 排序 (主人 2026-09-20 拍: 跟进紧急度是第一排序规则; **紧急度排序只给会员**)
+//   urgency = 跟进紧急度 (默认; 非会员自动降级为 new 并在响应里标 urgencyLocked)
+//   recent  = 最近联系 / new = 最近添加 / name = 姓名
+const SortSchema = z.enum(["urgency", "recent", "new", "name"]);
+const SORT_SAFETY_LIMIT = 2000;
+
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
@@ -48,8 +55,18 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") ?? undefined;
-  const limit = parseInt(searchParams.get("limit") ?? "20");
+  const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 100);
   const offset = parseInt(searchParams.get("offset") ?? "0");
+
+  // 排序参数: 非法 → 400 (不静默降级, 免得前端传错还以为排了)
+  const rawSort = searchParams.get("sort") ?? undefined;
+  const parsedSort = SortSchema.safeParse(rawSort);
+  if (rawSort !== undefined && !parsedSort.success) {
+    return NextResponse.json(
+      { error: "Invalid sort", expected: ["urgency", "recent", "new", "name"] },
+      { status: 400 }
+    );
+  }
 
   // 类型筛选: 非法值 → 400 (不静默降级为 all, 免得前端传错还以为筛了)
   const rawType = searchParams.get("type") ?? undefined;
@@ -61,21 +78,67 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const result = await listCustomers({
+  // 会员判权: 紧急度排序 = 会员功能 (主人 Q1); 生日提醒沿用既有 key
+  const [urgencySortOn, birthdayReminderOn] = await Promise.all([
+    hasFeatureAccess(session?.user?.id, FEATURES.AI_REPURCHASE),
+    hasFeatureAccess(session?.user?.id, FEATURES.CRM_BIRTHDAY_REMINDER),
+  ]);
+
+  // 实际生效的排序: 非会员请求 urgency → 降级为 new (响应里说明)
+  const requestedSort = parsedSort.success ? parsedSort.data : undefined;
+  const wantsUrgency = requestedSort === undefined || requestedSort === "urgency";
+  const urgencyLocked = wantsUrgency && !urgencySortOn;
+  const effectiveSort = wantsUrgency
+    ? urgencySortOn
+      ? "urgency"
+      : "new"
+    : requestedSort!;
+
+  const viewerFranchiseeId = await resolveViewerFranchiseeId(session?.user?.id);
+  const listOptions = {
     search,
-    limit,
-    offset,
     type: parsedType.success ? parsedType.data : undefined,
-    viewerFranchiseeId: await resolveViewerFranchiseeId(session?.user?.id),
+    viewerFranchiseeId,
+  };
+
+  // 1) 取数据: 紧急度排序要在"命中全集"上排序再切片 (见 attach.ts 规模说明)
+  const needAll = effectiveSort === "urgency";
+  const result = await listCustomers({
+    ...listOptions,
+    sort: effectiveSort,
+    limit: needAll ? SORT_SAFETY_LIMIT : limit,
+    offset: needAll ? 0 : offset,
   });
+
+  // 2) 挂 followUp 块 (标签/天数; 分数仅会员)
+  let items = await attachFollowUp(result.items, { isMember: urgencySortOn });
+
+  // 3) 会员: 按紧急度排序 + 内存分页; 非会员: 已由 SQL 排好
+  let total = result.total;
+  if (effectiveSort === "urgency") {
+    const sorted = sortByUrgency(items);
+    total = sorted.length;
+    items = sorted.slice(offset, offset + limit);
+  }
+
+  const payload = {
+    items,
+    total,
+    sort: effectiveSort,
+    sortRequested: requestedSort ?? "urgency",
+    urgencyLocked,
+  };
+
+  // ADR-0012: 生日提醒是会员功能 —— 非会员读出来 birthdayRemindDays = null (提醒自然不触发),
+  // 底层数据保留 (续费后设置自动回来)。放在 route 层而不是 query 层: 不动被 web admin 复用的查询
+  if (!birthdayReminderOn) {
+    return NextResponse.json(stripBirthdayReminderFromList(payload));
+  }
+  return NextResponse.json(payload);
 
   // ADR-0012: 生日提醒是会员功能 —— 非会员读出来 birthdayRemindDays = null (提醒自然不触发),
   // 底层数据保留 (续费后设置自动回来)。放在 route 层而不是 query 层: 不动被 web admin 复用的查询
   const reminderOn = await hasFeatureAccess(session?.user?.id, FEATURES.CRM_BIRTHDAY_REMINDER);
-  if (!reminderOn) {
-    return NextResponse.json(stripBirthdayReminderFromList(result));
-  }
-  return NextResponse.json(result);
 }
 
 export async function POST(request: NextRequest) {

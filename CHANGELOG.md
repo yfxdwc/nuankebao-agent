@@ -1336,6 +1336,29 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Added (客户列表跟进引擎 P0 后端: 紧急度 + 推荐标签 + 排序, 2026-09-20 主人拍板)
+
+主人拍板 7 条 (方案 `docs/follow-up-list-plan.md`): 紧急度排序只给会员 (Q1) / 标签最多 2 个 (Q2) /
+动作文案 (Q3) / 自动建任务 + 7 天去重 (Q4) / 要本地通知 (Q6) / 加盟商轻微加权 (Q7) / 不做跟进 Tab (Q8)
+
+**P0 后端 (本次)**:
+- **迁移 `0016_follow_up_timestamps.sql`** (additive): `customer.last_interaction_at` /
+  `last_visit_at` + 2 索引 (+ `down/` 回滚 + `pnpm db:compat` 通过)
+- **`src/lib/follow-up/urgency.ts`** (纯函数, 单一真相): 9 信号 (任务逾期/今天到期/距上次联系分档/
+  新客未联系/超期未到店/生日窗口/复购窗口/类型加权) → 0-100 分 → P0-P4 + 理由 + 标签 (≤2, 动作文案)
+- **`src/lib/follow-up/birthday.ts`**: 阳历生日窗口 (农历服务端暂不支持 → null, 由客户端展示)
+- **`scripts/backfill-last-contact.ts`**: 存量回填冗余列 (幂等 + `--dry-run`) —— 已跑: 上次联系 1 行 / 上次到店 10 行
+- **写路径维护**: 记互动 (`createInteraction`) / 记养生记录 (`createWellnessRecord`) 同事务刷新冗余列 (GREATEST, 只前推)
+- **`GET /api/customers`**: 新增 `sort` (urgency|recent|new|name) + 每行 `followUp` 块
+  (天数/标签/待办数; **分数·级别·理由仅会员** → 非会员 `urgencyLocked: true` 且降级为 new) +
+  `CustomerView` 补 `lastInteractionAt/lastVisitAt`
+- **`src/lib/follow-up/attach.ts`**: 批量挂 followUp + 紧急度排序 (内存排序, 上限 2000, 见方案 §13 规模说明)
+- **单测 `tests/follow-up-urgency.test.ts`**: 33 例全过 (分档/封顶/叠加/加权/标签优先级/文案长度/生日窗口边界)
+
+**实测** (dev):
+- 会员 `sort=urgency`: 王女士 紧急=60 p1 🔥该回访了 · 理由「跟进任务逾期 50 天」; 新客 🌟新客首访 ✓
+- 非会员 `sort=urgency`: `sort=new` + `urgencyLocked=true` + 分数=null, 但**免费标签照给** (15 个客户有标签) ✓
+
 ### Added (客户列表跟进引擎 — 完整方案文档, 2026-09-20 主人要「先给方案」)
 
 - 新文档 [`docs/follow-up-list-plan.md`](docs/follow-up-list-plan.md)（15 节）:

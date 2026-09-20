@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { interaction, type Interaction, type NewInteraction } from "@/lib/db/schema";
+import { customer,
+  interaction, type Interaction, type NewInteraction } from "@/lib/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { encryptField, decryptField } from "@/lib/crypto/field";
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
@@ -47,7 +48,17 @@ export async function createInteraction(
   };
 
   const [row] = await withAuditContext(ctx, async (tx) => {
-    return await tx.insert(interaction).values(data).returning();
+    const inserted = await tx.insert(interaction).values(data).returning();
+    // 跟进紧急度冗余列 (主人 2026-09-20): 记一次互动 = 刷新「上次联系」
+    //   同一事务内更新 → 排序口径不会漂移 (只往前推, 不后退, 兼容补录历史)
+    await tx
+      .update(customer)
+      .set({
+        lastInteractionAt: sql`GREATEST(COALESCE(${customer.lastInteractionAt}, to_timestamp(0)), ${inserted[0].createdAt.toISOString()}::timestamptz)`,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(customer.id, data.customerId));
+    return inserted;
   });
   return toView(row);
 }

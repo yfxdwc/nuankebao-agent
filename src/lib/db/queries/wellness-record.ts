@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import {
+  customer,
   wellnessRecord,
   wellnessRecordBodyPart,
   wellnessRecordProduct,
@@ -145,6 +146,15 @@ export async function createWellnessRecord(
       .insert(wellnessRecord)
       .values(encryptedData)
       .returning();
+
+    // 跟进紧急度冗余列 (主人 2026-09-20): 记一次养生记录 = 刷新「上次到店」
+    await tx
+      .update(customer)
+      .set({
+        lastVisitAt: sql`GREATEST(COALESCE(${customer.lastVisitAt}, to_timestamp(0)), ${row.createdAt.toISOString()}::timestamptz)`,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(customer.id, BigInt(input.customerId)));
 
     // 插入身体部位中间表
     if (input.bodyPartIds.length > 0) {

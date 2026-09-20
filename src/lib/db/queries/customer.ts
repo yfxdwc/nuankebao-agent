@@ -55,6 +55,10 @@ export interface CustomerView {
   isSeed: boolean;
   /** 客户类型 (混合判定, 派生): 加盟 > 种子 > 普通 (「加盟」= 我的下级加盟商) */
   customerType: CustomerType;
+  /** 上次联系 (互动记录; 跟进紧急度用, 主人 2026-09-20) */
+  lastInteractionAt: Date | null;
+  /** 上次到店 (养生记录; 跟进紧急度用) */
+  lastVisitAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -184,6 +188,8 @@ function toView(
     avatar: readAvatarValue(row.avatar),
     isSeed: row.isSeed,
     customerType: resolveCustomerType(row, isMyDownline),
+    lastInteractionAt: row.lastInteractionAt ?? null,
+    lastVisitAt: row.lastVisitAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -250,6 +256,12 @@ export interface ListCustomersOptions {
    * null / 缺省 = 未加盟或未知 → 加盟恒 0, 种子/普通照常
    */
   viewerFranchiseeId?: bigint | null;
+  /**
+   * 排序 (主人 2026-09-20 拍):
+   *   urgency = 跟进紧急度 (调用方负责内存排序; 这里按「最久没联系」近似取全集)
+   *   recent  = 最近联系 / new = 最近添加 (默认, 老行为) / name = 姓名
+   */
+  sort?: "urgency" | "recent" | "new" | "name";
   // W5 RBAC: 行级过滤上下文
   rbacCtx?: RbacContext;
 }
@@ -415,7 +427,7 @@ function buildCustomerConditions(options: ListCustomersOptions): SQL[] {
 export async function listCustomers(
   options: ListCustomersOptions = {}
 ): Promise<{ items: CustomerView[]; total: number }> {
-  const { limit = 20, offset = 0, viewerFranchiseeId } = options;
+  const { limit = 20, offset = 0, viewerFranchiseeId, sort = "new" } = options;
   const conditions = buildCustomerConditions(options);
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -426,7 +438,16 @@ export async function listCustomers(
       .select({ row: customer, isDownline: sql<boolean>`${downline}` })
       .from(customer)
       .where(whereClause)
-      .orderBy(desc(customer.createdAt))
+      .orderBy(
+        // urgency: 调用方随后内存排序, 这里按「越久没联系越前」取候选集 (NULLS FIRST = 从没联系)
+        sort === "urgency"
+          ? sql`${customer.lastInteractionAt} ASC NULLS FIRST`
+          : sort === "recent"
+            ? sql`${customer.lastInteractionAt} DESC NULLS LAST`
+            : sort === "name"
+              ? customer.name
+              : desc(customer.createdAt)
+      )
       .limit(limit)
       .offset(offset),
     db.select({ count: sql<number>`count(*)::int` }).from(customer).where(whereClause),
