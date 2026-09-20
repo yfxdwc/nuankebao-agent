@@ -113,7 +113,7 @@
 ### B. 账号密码登录
 
 > ✅ **2026-09-19 已实施**: migration `0011_user_credentials` + `src/lib/auth/{password,credentials,config}.ts`
-> + Auth.js Edge/Node 拆分 + Flutter 登录页/改密 + `scripts/create-admin.ts` / `scripts/import-users.ts`;
+> + Auth.js Edge/Node 拆分 + Flutter 登录页/改密 + `scripts/ensure-admin.ts` / `scripts/import-users.ts`;
 > `admin` 建档 + 登录/改密端到端验证通过 (prod 栈 :3004)。
 
 | # | 工作 | 说明 |
@@ -124,7 +124,7 @@
 | B4 | ⚠️ Auth.js Edge/Node 拆分 | `middleware.ts` 目前直接 import 带 DB 的 auth（有 Edge 500 前科）。按 Auth.js v5 标准拆 `auth.config.ts`（edge 安全）+ `auth.ts`（Node） |
 | B5 | 登录限流 | 复用 `src/lib/rate-limit.ts`：每账号/IP 失败限速；统一错误文案 |
 | B6 | Flutter 登录页 | 验证码输入改为密码输入（去掉"发送验证码"）；`AuthService.login(username/phone, password)`；web dev 预览的 `flutter-login`（dev-only）同步改为密码校验 |
-| B7 | 管理员建档 | `scripts/create-admin.ts`：读 `ADMIN_USERNAME`/`ADMIN_PASSWORD` 环境变量，scrypt 哈希后 upsert —— 用于创建 `admin`；**口令不落 git** |
+| B7 | 管理员建档 | `scripts/ensure-admin.ts`（原 `create-admin.ts` 已合并进来）：读 `ADMIN_USERNAME`/`ADMIN_PASSWORD`/`ADMIN_PHONE` 环境变量，scrypt 哈希后 upsert —— 建档 / 提权 / 重置密码 / 补客户档案+推荐码 一个入口搞定；**口令不落 git** |
 | B8 | 邀请制导入 | `scripts/import-users.ts`：CSV（姓名/手机号/角色/初始密码）幂等导入；不生成初始密码时随机生成并只打印一次，由主人分发 |
 | B9 | 自助改密（推荐） | `PATCH /api/me/password` + Flutter「我的 → 修改密码」；否则改密只能找管理员 |
 | B10 | 生产 env 安全 | 实测 `DEV_SKIP_AUTH` 目前**不受 NODE_ENV 保护**（`skip-auth.ts` 只认变量值）。生产 `.env.prod` 严禁出现该变量，并顺手加 NODE_ENV 硬门闸 |

@@ -1,21 +1,36 @@
+#!/usr/bin/env -S npx tsx
 // ============================================
-// 系统管理员账号「长期保留」保证脚本 (主人 2026-09-19 拍)
+// 系统管理员账号: 创建 / 提升 / 重置密码 / 补档案 (唯一入口)
+// ============================================
+// 主人 2026-09-19 拍: 「长期保留系统管理员账号 admin，生产环境也要保留」
+//   → 管理员账号是**永久设施** (dev + 生产都要有 role='admin' 的账号)
+// 主人 2026-09-19 拍: 「建号即强制建档」→ 管理员账号同样补客户档案 + 推荐码
 //
-// 主人原话: 「长期保留系统管理员账号 admin，生产环境也要保留」
-//   → 管理员账号是**永久设施**: dev 机器 + 生产环境都必须存在一个 role='admin' 的账号
-//   → 生产部署 / 灾备恢复后, 跑一次本脚本即可保证管理员账号在
+// 用法 (口令只经环境变量, 不落 git / 不进 shell history 由主人自理):
+//   # 最简单 (dev / 生产都行): 按手机号
+//   ADMIN_PHONE=19957347866 ADMIN_NAME=管理员 pnpm db:ensure-admin
 //
-// 用法:
-//   pnpm db:ensure-admin                          # 用 .env.local / 环境变量里的 ADMIN_PHONE
-//   ADMIN_PHONE=13800138000 pnpm db:ensure-admin  # 显式给手机号
-//   npx tsx scripts/ensure-admin.ts --phone=138... --name=管理员
+//   # 带登录名 + 密码 (推荐生产用: 可以用户名密码登录)
+//   ADMIN_USERNAME=admin ADMIN_PASSWORD='强密码' ADMIN_PHONE=19957347866 ADMIN_NAME=管理员 pnpm db:ensure-admin
+//
+//   # CLI 参数 (等价)
+//   npx tsx scripts/ensure-admin.ts --phone=19957347866 --name=管理员
+//
+// 环境变量:
+//   ADMIN_PHONE     手机号 (默认 13800138000; 手机号也是登录账号)
+//   ADMIN_NAME      显示名 (默认「管理员」; 只在**显式给了**时才覆盖已有姓名)
+//   ADMIN_USERNAME  登录用户名 (可选; 给了就按用户名找人, 不存在则建号时用它)
+//   ADMIN_PASSWORD  登录密码 (可选; 给了就设置/重置 —— scrypt 哈希入库, 明文不落库)
 //
 // 行为 (幂等):
-//   - 账号不存在 → 建一个 (role='admin', 无加盟商绑定, is_active=true)
-//   - 账号已存在 → 只把 role 抬成 'admin' (不覆盖姓名/加盟商绑定/密码等)
-//   - 两条路径都补齐**账号档案** (主人 2026-09-19 拍「建号即强制建档」):
-//       customer 档案 (同手机号; 有则复用) + 自己的推荐码
-//   - 打印最终结果 (id / 手机号 / 姓名 / role)
+//   - 命中已有账号 → role 抬成 admin + isActive=true (+ 给了密码就重置密码)
+//   - 没命中 → 新建账号 (role='admin')
+//   - 两条路径都补齐**账号档案**: customer 档案 (同手机号; 有则复用) + 自己的推荐码
+//
+// ⚠ 生产服务器 (migrate 镜像内):
+//   docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file .env.prod \
+//     run --rm --no-deps -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='...' \
+//     -e ADMIN_PHONE=19957347866 -e ADMIN_NAME=管理员 migrate pnpm db:ensure-admin
 // ============================================
 
 import { config as loadEnv } from "dotenv";
@@ -27,6 +42,11 @@ import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
 import { ensureAccountProfile } from "@/lib/auth/registration";
+import {
+  hashPassword,
+  isValidPassword,
+  PASSWORD_POLICY_MESSAGE,
+} from "@/lib/auth/password";
 
 function arg(name: string): string | undefined {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -34,62 +54,89 @@ function arg(name: string): string | undefined {
 }
 
 const phone = arg("phone") ?? process.env.ADMIN_PHONE ?? "13800138000";
-const name = arg("name") ?? process.env.ADMIN_NAME ?? "管理员";
-const avatarUrl = process.env.ADMIN_AVATAR_URL ?? null;
+const nameArg = arg("name") ?? process.env.ADMIN_NAME ?? null;
+const username = (arg("username") ?? process.env.ADMIN_USERNAME ?? "").trim();
+const password = arg("password") ?? process.env.ADMIN_PASSWORD ?? "";
 
 async function main() {
   if (!/^1[3-9]\d{9}$/.test(phone)) {
     console.error(`❌ ADMIN_PHONE 格式不对: ${phone} (要 11 位手机号)`);
     process.exit(1);
   }
-  const phoneHash = hashForLookup(phone);
-  const [existing] = await db
-    .select({ id: user.id, name: user.name, role: user.role })
-    .from(user)
-    .where(eq(user.phoneHash, phoneHash))
-    .limit(1);
-
-  if (existing) {
-    const prof = await ensureAccountProfile(existing.id, BigInt(0));
-    if (existing.role === "admin") {
-      console.log(
-        `✅ 管理员账号已存在 (无需改): id=${existing.id} ${existing.name} role=admin` +
-          ` | 客户档案 ${prof.customerCreated ? "新建" : "已在"}` +
-          ` | 推荐码 ${prof.referralCode}`
-      );
-      return;
-    }
-    await db
-      .update(user)
-      .set({ role: "admin", isActive: true, updatedAt: new Date() })
-      .where(eq(user.id, existing.id));
-    console.log(
-      `✅ 已把现有账号抬成管理员: id=${existing.id} ${existing.name} (原 role=${existing.role})` +
-        ` | 客户档案 ${prof.customerCreated ? "新建" : "已在"}` +
-        ` | 推荐码 ${prof.referralCode}`
-    );
-    return;
+  if (password && !isValidPassword(password)) {
+    console.error(`❌ ADMIN_PASSWORD 不合格: ${PASSWORD_POLICY_MESSAGE}`);
+    process.exit(1);
   }
 
-  const [created] = await db
-    .insert(user)
-    .values({
-      name,
-      phoneEncrypted: encryptField(phone),
-      phoneHash,
-      role: "admin",
-      isActive: true,
-      avatarUrl,
-    })
-    .returning({ id: user.id, name: user.name, role: user.role });
-  const prof = await ensureAccountProfile(created.id, BigInt(0));
+  const phoneHash = hashForLookup(phone);
+
+  // 找目标账号: 给了用户名优先按用户名找, 否则按手机号
+  const target = username
+    ? (
+        await db
+          .select({ id: user.id, name: user.name, role: user.role, username: user.username })
+          .from(user)
+          .where(eq(user.username, username))
+          .limit(1)
+      )[0]
+    : (
+        await db
+          .select({ id: user.id, name: user.name, role: user.role, username: user.username })
+          .from(user)
+          .where(eq(user.phoneHash, phoneHash))
+          .limit(1)
+      )[0];
+
+  let userId: bigint;
+  if (target) {
+    await db
+      .update(user)
+      .set({
+        role: "admin",
+        isActive: true,
+        // 显式给了姓名才覆盖 (避免把现有管理员改名)
+        ...(nameArg ? { name: nameArg } : {}),
+        // 给了用户名就绑上 (便于用户名登录)
+        ...(username ? { username } : {}),
+        // 给了密码就重置
+        ...(password ? { passwordHash: hashPassword(password) } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(user.id, target.id));
+    userId = target.id;
+    console.log(
+      `✅ 已有账号抬成/保持管理员: id=${target.id} ${nameArg ?? target.name} (原 role=${target.role})` +
+        (password ? " | 密码已重置" : "")
+    );
+  } else {
+    const [created] = await db
+      .insert(user)
+      .values({
+        name: nameArg ?? "管理员",
+        role: "admin",
+        isActive: true,
+        phoneEncrypted: encryptField(phone),
+        phoneHash,
+        username: username || phone,
+        passwordHash: password ? hashPassword(password) : null,
+      })
+      .returning({ id: user.id, name: user.name, username: user.username });
+    userId = created.id;
+    console.log(
+      `✅ 新建管理员账号: id=${created.id} ${created.name} (username=${created.username})` +
+        (password ? " | 已设密码" : " | 未设密码 (只能验证码登录; 想设密码给 ADMIN_PASSWORD)")
+    );
+  }
+
+  // 「建号即强制建档」: 管理员也要有客户档案 + 自己的推荐码
+  const prof = await ensureAccountProfile(userId, BigInt(0));
   console.log(
-    `✅ 已新建管理员账号: id=${created.id} ${created.name} role=${created.role} (手机号 ${phone.slice(0, 3)}****${phone.slice(7)})` +
-      ` | 客户档案 ${prof.customerCreated ? "新建" : "复用既有"}` +
+    `   账号档案: 客户档案 ${prof.customerCreated ? "新建" : "已在"} #${prof.customerId}` +
       ` | 推荐码 ${prof.referralCode}`
   );
   console.log(
-    `   登录: dev 环境用 flutter-login (code=123456); 生产环境用短信验证码登录`
+    `   登录: ${username ? `用户名 ${username} / ` : ""}手机号 ${phone.slice(0, 3)}****${phone.slice(7)}` +
+      (password ? " + 密码" : " + 短信验证码")
   );
 }
 

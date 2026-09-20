@@ -1177,6 +1177,31 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Added (自助注册补建档 + 管理员脚本合并, 2026-09-20 主人拍)
+
+主人: 「另一个 session 改它建号时没建客户档案，它已完成自助注册页面，你补上建号时建客户档案，
+提供推荐码的用户其客户列表中自动多出一个普通客户（新注册的用户）。合并管理员脚本现在的两个」
+
+**① 自助注册 (B1) 补「建号即建档」**
+- `src/lib/billing/signup.ts::registerWithReferral`: 建 user + **建客户档案** 收进**同一事务** (`withAuditContext`)
+  - `is_seed=false` → 列表口径就是**普通客户**
+  - `customer.referrer_id` = **推荐人的客户档案**（有则挂; 推荐人还没档案就先空着, 不阻塞注册）
+  - `created_by` = 推荐人 (谁带进来的)
+  - 同手机号已有客户档案 → 复用不重复建
+- 顺带把该文件的 `user` 表引用统一成 `userTable` (与 `user` 变量名不再混淆)
+
+**② 管理员脚本二合一** (`scripts/ensure-admin.ts`, 删除 `scripts/create-admin.ts`)
+- 一个入口管: 建档 / 提权 / **重置密码** / 补档案 (客户档案 + 推荐码)
+- 环境变量: `ADMIN_PHONE` / `ADMIN_NAME` / `ADMIN_USERNAME` / `ADMIN_PASSWORD` (+ CLI `--phone=` `--name=` `--username=` `--password=`)
+- 幂等: 命中已有账号 → 抬 role + (给了密码就重置); 没命中 → 新建
+- 文档同步: `docs/deploy.md`(§2 表格 + §7.5) / `docs/deploy/production-plan.md` B7
+
+**验证**:
+- 新冒烟 `scripts/smoke-signup.ts` (6/6 过): 建号建档 / 挂在推荐人名下 / 列表口径=普通 / 重复号被拒
+- HTTP 层 (走 `/api/auth/register`): 201 → 客户列表 `search=HTTP注册测试` 返回 **类型 normal + 推荐人 145** ✓
+- 管理员脚本三条路径验过: 已存在(admin) 跳过 ✓ / 新建(带用户名密码) ✓ / 再跑幂等+重置密码 ✓
+- `npx tsc --noEmit` 0 error; 测试账号已清理 ✓
+
 ### Added (账号 = 客户: 建号即强制建档 + 推荐码必填 + 存量补齐, 2026-09-19 主人拍)
 
 主人问: 「用户网络和加盟网络是打通的吗。每个用户首先都肯定是另一个用户的客户」

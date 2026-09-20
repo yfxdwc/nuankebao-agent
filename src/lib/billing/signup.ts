@@ -16,9 +16,15 @@
 //   → 手机号 = 登录账号 = 唯一 (phone_hash 唯一索引兜底)
 //   理由: 后台要靠真实姓名+手机号核对"这个人是谁", 假名会让人工审核形同虚设
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { user, referralReward, referralCode } from "@/lib/db/schema";
+import {
+  user as userTable,
+  customer,
+  referralReward,
+  referralCode,
+} from "@/lib/db/schema";
+import { withAuditContext } from "@/lib/audit/context";
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
 import { hashPassword, isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/auth/password";
 import { BillingError, grantDays } from "@/lib/billing/entitlements";
@@ -72,8 +78,13 @@ export interface SignupResult {
 /**
  * 凭推荐码自助注册
  *
- * 流程: 校验(码/姓名/手机号/密码/唯一) → 建 user → 建 referral_reward(pending)
+ * 流程: 校验(码/姓名/手机号/密码/唯一) → 建 user + **建客户档案** → 建 referral_reward(pending)
  *       → **不发权益** (等推荐人确认) → 客户端拿手机号+密码走正常登录
+ *
+ * 客户档案 (主人 2026-09-19/20 拍):
+ *   - 「建号即强制建档」: 新用户的客户档案同事务建好 (is_seed=false → 列表里就是**普通客户**)
+ *   - 「提供推荐码的用户, 其客户列表自动多出一个普通客户」:
+ *     customer.referrer_id = **推荐人的客户档案** (有则挂; 推荐人还没档案就先空着, 不阻塞注册)
  *
  * 返回给客户端的话术要明确"等推荐人确认", 否则新人会以为没生效。
  */
@@ -104,9 +115,9 @@ export async function registerWithReferral(opts: {
 
   // 手机号唯一 (一人一号; 也是登录账号)
   const [dup] = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.phoneHash, phoneHash))
+    .select({ id: userTable.id })
+    .from(userTable)
+    .where(eq(userTable.phoneHash, phoneHash))
     .limit(1);
   if (dup) {
     throw new BillingError(409, "PHONE_TAKEN", "这个手机号已经注册过了, 直接用手机号登录即可");
@@ -129,18 +140,50 @@ export async function registerWithReferral(opts: {
     throw new BillingError(429, "QUOTA_EXCEEDED", quota.reason);
   }
 
-  const [created] = await db
-    .insert(user)
-    .values({
-      name: nameCheck.name,
-      role: "sales",
-      isActive: true,
-      phoneEncrypted: encryptField(phone),
-      phoneHash,
-      username: phone, // 登录账号 = 手机号 (跟 import-users 一致)
-      passwordHash: hashPassword(opts.password),
-    })
-    .returning({ id: user.id, username: user.username });
+  // 推荐人的**客户档案** (新客户的 referrer_id 挂这里; 没有就先空)
+  const [referrerProfile] = await db
+    .select({ id: customer.id })
+    .from(customer)
+    .innerJoin(userTable, eq(userTable.phoneHash, customer.phoneHash))
+    .where(and(eq(userTable.id, owner.userId), isNull(customer.deletedAt)))
+    .limit(1);
+
+  // 账号 + 客户档案 同一事务 (主人 2026-09-19 拍「建号即强制建档」)
+  const created = await withAuditContext(
+    { userId: owner.userId, ipAddress: opts.ip ?? null },
+    async (tx) => {
+      const [u] = await tx
+        .insert(userTable)
+        .values({
+          name: nameCheck.name,
+          role: "sales",
+          isActive: true,
+          phoneEncrypted: encryptField(phone),
+          phoneHash,
+          username: phone, // 登录账号 = 手机号 (跟 import-users 一致)
+          passwordHash: hashPassword(opts.password),
+        })
+        .returning({ id: userTable.id, username: userTable.username });
+
+      // 客户档案: 同手机号已有 (例如他早就是客户) → 复用不重复建
+      const [existingCustomer] = await tx
+        .select({ id: customer.id })
+        .from(customer)
+        .where(and(eq(customer.phoneHash, phoneHash), isNull(customer.deletedAt)))
+        .limit(1);
+      if (!existingCustomer) {
+        await tx.insert(customer).values({
+          name: nameCheck.name,
+          phoneEncrypted: encryptField(phone),
+          phoneHash,
+          isSeed: false, // 普通客户 (主人: 「客户列表中自动多出一个普通客户」)
+          createdBy: owner.userId, // 建档人 = 推荐人
+          referrerId: referrerProfile?.id ?? null, // 挂在推荐人名下
+        });
+      }
+      return u;
+    }
+  );
 
   await db.insert(referralReward).values({
     referrerUserId: owner.userId,
@@ -183,11 +226,11 @@ export async function listMyReferrals(
       status: referralReward.status,
       source: referralReward.source,
       createdAt: referralReward.createdAt,
-      name: user.name,
-      phoneEncrypted: user.phoneEncrypted,
+      name: userTable.name,
+      phoneEncrypted: userTable.phoneEncrypted,
     })
     .from(referralReward)
-    .innerJoin(user, eq(user.id, referralReward.refereeUserId))
+    .innerJoin(userTable, eq(userTable.id, referralReward.refereeUserId))
     .where(eq(referralReward.referrerUserId, referrerUserId))
     .orderBy(referralReward.createdAt);
 

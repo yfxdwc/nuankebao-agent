@@ -26,7 +26,7 @@
 | 手动备份 (PG+媒体) | `systemctl --user start nuankebao-prod-backup.service` |
 | 备份日志 | `tail -f /home/tooyan/nuankebao-databackups/prod/logs/backup.log` |
 | 健康检查 | `systemctl --user status nuankebao-prod-healthcheck.service` (每 5 分钟) |
-| 建档/重置密码 | `docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file .env.prod run --rm --no-deps -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='...' migrate pnpm tsx scripts/create-admin.ts` |
+| 建档/重置密码 | `docker compose -p nuankebao-prod -f docker-compose.prod.yml --env-file .env.prod run --rm --no-deps -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='...' -e ADMIN_PHONE=19957347866 migrate pnpm db:ensure-admin`（脚本已合并: 一个入口管建档/提权/重置密码/补档案, 见 §7.5） |
 | 批量建号 (邀请制) | 同上把脚本换成 `pnpm tsx scripts/import-users.ts users.csv` |
 | 更新 APK | 拷到 `data/prod/downloads/NUANKEBAO-release.apk` (compose `:ro` 挂载, 无需重建镜像) |
 | 首次/重装 systemd units | `bash deploy/install-systemd.sh` |
