@@ -250,10 +250,31 @@ class ApiClient {
   }
 
   static ApiClient create() {
+    // dio 超时 — web 预览模式 vs native APK 分开设置
+    // (2026-09-20 加, w21 预览频繁「网络不太好」治本)
+    //
+    // 背景: Next.js dev mode 是懒编译 (lazy compilation), 每个 API 路由
+    // 首次 hit 触发 webpack 编译, 实测最坏 43s (placement-requests 路由).
+    // Flutter web 预览模式 (生产 build, URI.base.origin 推导) 直接消费
+    // dev mode 后端, 所以首次进每个页面都可能撞上冷编译.
+    //
+    // 拆开:
+    //   - web 预览: 60s connectTimeout (容下 dev 冷编译最坏情况 + 余量)
+    //   - native APK: 10s connectTimeout (真用户蜂窝网络, 失败应快显)
+    //
+    // 修法说明: 本来想加 prewarm-dev-routes.sh 自动 curl 预编译,
+    // 但路由集合会随代码变; 超时分平台是更稳的兜底.
+    final connectTimeout = kIsWeb
+        ? const Duration(seconds: 60)
+        : const Duration(seconds: 10);
+    final receiveTimeout = kIsWeb
+        ? const Duration(seconds: 60)
+        : const Duration(seconds: 30);
+
     final dio = Dio(BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 30),
+      connectTimeout: connectTimeout,
+      receiveTimeout: receiveTimeout,
       // 不在 base options 设 Content-Type: dio 默认会在 POST/PATCH/PUT 有 Map<String, dynamic>
       // data 时自动选 application/json (要 JSON), GET 不设 (简单请求不触发 preflight).
       // 之前在 base options 硬写 application/json 导致 GET 也带 Content-Type,
