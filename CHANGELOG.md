@@ -1336,6 +1336,17 @@ App 渲染正常 (截图 `/tmp/asym-1-default.png` / `/tmp/asym-2-fit.png`); 视
 胶囊 4 段 `全部 / A线 16 / B线 15 / 直推 2` —— **A/B 已不再对称** (新增的「SeedTest-五层验证」挂在 A 线),
 布局按数据自由生长 ✓
 
+### Added (待办 Backlog 文档 + build_runner 诊断, 2026-09-20 主人点名)
+
+- 新文档 [`docs/backlog.md`](docs/backlog.md): 主人点名「记住这个任务」的条目集中落点
+  - **① 原始加盟节点启动 (Bootstrap Root)** ⏳ 待做 (排在跟进引擎之后):
+    背景 (全新树无根 → 现有规则死锁) / 现状核查 (老 `POST /api/franchisees` 能力在但 App 无入口) /
+    4 个方案 (推荐 A: 管理员建根, 免多方确认、后续节点照旧三方确认) / 4 个待拍板问题 / 实现清单
+  - **② build_runner 不可用** 🔧 排查中: 现象 / 根因线索 / 临时绕行 (生成物随 git 提交, 从 git 恢复) / 候选修法
+- build_runner 诊断记录: `build_resolvers` 需先生成 `.dart_tool/build_resolvers/sdk.sum` + `.deps`;
+  本机生成极慢/无输出, 多实例并发会互相锁; 已清理僵尸进程, 未强推修复 (避免动 lockfile 影响他人)
+- 环境修复: Flutter dev server 被我清理进程时误杀 → 已重启 (8080 → 200)
+
 ### Added (客户列表跟进引擎 P0 后端: 紧急度 + 推荐标签 + 排序, 2026-09-20 主人拍板)
 
 主人拍板 7 条 (方案 `docs/follow-up-list-plan.md`): 紧急度排序只给会员 (Q1) / 标签最多 2 个 (Q2) /
