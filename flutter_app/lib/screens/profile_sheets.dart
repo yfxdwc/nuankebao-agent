@@ -19,6 +19,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/http/api_client.dart';
+import '../core/http/session_token.dart';
 import '../core/models/me.dart';
 import '../core/services/api.dart' show ManualPayProduct;
 import '../core/providers/service_providers.dart';
@@ -444,6 +445,18 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           _Line(label: '服务地址', value: ApiClient.baseUrl),
+          // 登录态 (主人 2026-09-20: 想看"会不会又要重新登录")
+          FutureBuilder<String?>(
+            future: ApiClient.sessionToken(),
+            builder: (context, snap) => _Line(
+              label: '登录状态',
+              value: snap.connectionState != ConnectionState.done
+                  ? '检查中...'
+                  : (snap.data == null || snap.data!.isEmpty
+                      ? '本地没有登录凭证 (需要重新登录)'
+                      : sessionExpiryLabel(snap.data)),
+            ),
+          ),
           profileAsync.when(
             loading: () => const _Line(label: '登录账号', value: '读取中...'),
             error: (_, __) => const _Line(label: '登录账号', value: '读取失败'),

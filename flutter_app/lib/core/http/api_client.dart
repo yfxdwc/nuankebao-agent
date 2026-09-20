@@ -134,9 +134,46 @@ class ApiClient {
 
   ApiClient._(this._dio);
 
-  static Future<String?> sessionCookieName() =>
-      storage.read(key: sessionCookieNameKey);
-  static Future<String?> sessionToken() => storage.read(key: sessionTokenKey);
+  /// 读 session token
+  ///
+  /// ⚠ Android 上 flutter_secure_storage 会在这些情况**抛异常**(不是返回 null):
+  ///   系统升级/恢复出厂备份/换锁屏密码后 keystore 失效 → BadPaddingException 等。
+  ///   以前异常会一路冒到 AuthNotifier._checkLogin → 用户"莫名被登出"还看不到原因。
+  ///   现在: 吞掉异常 + 返回 null (当作没登录), 但**不删**数据 (下次可能就好了),
+  ///   并在「网络自检」里能看到"本地没有登录凭证"。
+  static Future<String?> sessionCookieName() async {
+    try {
+      return await storage.read(key: sessionCookieNameKey);
+    } catch (e) {
+      // ignore: avoid_print
+      print('[session] read cookie name failed: $e');
+      return null;
+    }
+  }
+
+  static Future<String?> sessionToken() async {
+    try {
+      return await storage.read(key: sessionTokenKey);
+    } catch (e) {
+      // ignore: avoid_print
+      print('[session] read token failed: $e');
+      return null;
+    }
+  }
+
+  /// 写 session (失败不抛: 安卓 keystore 偶发抽风不该让登录整体失败)
+  static Future<void> saveSession({
+    required String cookieName,
+    required String token,
+  }) async {
+    try {
+      await storage.write(key: sessionCookieNameKey, value: cookieName);
+      await storage.write(key: sessionTokenKey, value: token);
+    } catch (e) {
+      // ignore: avoid_print
+      print('[session] write failed: $e');
+    }
+  }
 
   /// 清空登录态 (logout / 换 session 前)
   static Future<void> clearSession() async {
@@ -172,13 +209,17 @@ class ApiClient {
     try {
       // 同步 cookie name + value (两个 key 分别存)
       if (cookies.containsKey('authjs.session-token')) {
-        await storage.write(key: sessionCookieNameKey, value: 'authjs.session-token');
-        await storage.write(key: sessionTokenKey, value: cookies['authjs.session-token']!);
+        await saveSession(
+          cookieName: 'authjs.session-token',
+          token: cookies['authjs.session-token']!,
+        );
         // ignore: avoid_print
         print('[R12 debug] wrote authjs.session-token, valueLen=${cookies['authjs.session-token']!.length}');
       } else if (cookies.containsKey('__Secure-authjs.session-token')) {
-        await storage.write(key: sessionCookieNameKey, value: '__Secure-authjs.session-token');
-        await storage.write(key: sessionTokenKey, value: cookies['__Secure-authjs.session-token']!);
+        await saveSession(
+          cookieName: '__Secure-authjs.session-token',
+          token: cookies['__Secure-authjs.session-token']!,
+        );
         // ignore: avoid_print
         print('[R12 debug] wrote __Secure-authjs.session-token');
       }
@@ -325,8 +366,7 @@ class ApiClient {
             if (c.isSession) {
               // 换 session 时清掉旧的, 再写新的 (名 + 值 都要存)
               await clearSession();
-              await storage.write(key: sessionCookieNameKey, value: c.name);
-              await storage.write(key: sessionTokenKey, value: c.value);
+              await saveSession(cookieName: c.name, token: c.value);
             } else {
               client._jar[c.name] = c.value;
             }

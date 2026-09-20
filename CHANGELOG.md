@@ -2,6 +2,29 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (退出 App 后又要重新登录 → 同设备长期记住登录, 2026-09-20 主人要)
+
+**主人要**: 「当前 app 退出后又要重新登录。在同一个设备需要能够长期记住登录状态，不限时长」
+
+**根因 (代码事实)**: `src/lib/auth/config.ts` 的 `session` **没写 maxAge** → Auth.js 默认 **30 天**;
+`/api/auth/flutter-login` 又自己写了一份 30 天 (两处各写一份, 改一处忘一处) → 到期 JWT 失效 → 401 → 重新登录。
+另外安卓 `flutter_secure_storage` 读取**没有 try/catch**, keystore 失效时异常冒泡 → 表现为"莫名被登出"。
+
+| 改动 | 内容 |
+|---|---|
+| 会话上限 | **10 年** (`315360000s`) + **7 天滚动续期** (`updateAge`) → 常用设备实际永不掉线 |
+| 唯一真相 | 新 `src/lib/auth/session.ts`: Auth.js 与 dev 端点共用; 运维手闸 `SESSION_MAX_AGE_DAYS` (1-3650, 非法值回退) |
+| Flutter 存储 | `sessionToken()/sessionCookieName()` 加 try/catch (读失败=当作未登录但**不删**数据); 新增 `saveSession()` 统一写入路径 (3 处重复写收敛成 1 处) |
+| 自检可见 | 新 `core/http/session_token.dart` (JWS 解 exp / JWE 解不开不瞎猜) + 「我的 → 网络自检」新增「登录状态」一行: 「已记住登录, 有效期至 2036-09-17 (无需重复登录)」 |
+| 退出登录 | 注释写明: 纯 JWT 阶段**服务端无法单点吊销**, 设备丢失要走 停用账号 / 换 `AUTH_SECRET` (记入 ADR-0013 §3) |
+
+**验证 (实测)**
+- `curl /api/auth/session` (带 cookie) → `expires: 2036-09-17T05:45:39.757Z` = **10.0 年** ✓
+- 登录响应头 → `authjs.session-token=…; Expires=Wed, 17 Sep 2036; Max-Age=315360000` ✓
+- `tests/auth-session-ttl.test.ts` **5 pass** (含"Auth.js 配置真的接上了这两个值"——防"写了常量没接线")
+- `flutter_app/test/session_token_test.dart` **5 pass** (JWS/JWE/脏数据/文案)
+- `npx tsc --noEmit` / `flutter analyze` (我的文件) 0 error
+
 ### Fixed (推荐关系加 source: 区分「管理员代建」与「自助注册」两种 pending, 2026-09-20)
 
 **发现的真冲突**: 同仓另一 session 在 `src/lib/auth/registration.ts` 建了**唯一建号入口**

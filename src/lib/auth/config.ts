@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
+import { resolveSessionMaxAgeSeconds, SESSION_UPDATE_AGE_SECONDS } from "./session";
 
 // ============================================
 // Auth.js v5 配置 — **Edge 安全部分** (middleware 专用)
@@ -10,9 +11,15 @@ import type { NextAuthConfig } from "next-auth";
 //   providers (含 DB) 在 src/lib/auth/index.ts 的 Node 侧注入。
 // ============================================
 
+// 会话有效期见 src/lib/auth/session.ts (唯一真相, ADR-0013):
+//   maxAge 10 年 + 7 天滚动续期 → 常用设备长期记住登录 (主人 2026-09-20 要求)
 export const authConfig = {
   trustHost: true,
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: resolveSessionMaxAgeSeconds(),
+    updateAge: SESSION_UPDATE_AGE_SECONDS,
+  },
 
   // dev mode (NODE_ENV !== production) → 不发 Secure cookie.
   // 根因: .env AUTH_URL=https://nuankebao.tooyang.top → Auth.js 自动用 Secure cookie

@@ -27,8 +27,12 @@ import {
   findActiveUserByIdentifier,
   verifyCredentials,
 } from "@/lib/auth/credentials";
+import { resolveSessionMaxAgeSeconds } from "@/lib/auth/session";
 
-const SESSION_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days, 同 Auth.js 默认
+// 跟 Auth.js 侧同一个源 (src/lib/auth/session.ts):
+//   10 年 + 7 天滚动续期 (主人 2026-09-20: 同设备长期记住登录, 不限时长)
+//   以前两边各写 30 天 → 到期后冷启动被判未登录, 用户又要重新登录
+const SESSION_TOKEN_TTL_SECONDS = resolveSessionMaxAgeSeconds();
 const LEGACY_DEV_CODE = "123456";
 
 export async function POST(request: NextRequest) {

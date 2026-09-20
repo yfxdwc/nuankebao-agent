@@ -151,9 +151,17 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
+  /// 退出登录: 清本地凭证 (服务端的 JWT 仍在有效期内, 但客户端不再使用)
+  /// ⚠ 因为 JWT 是"长期有效"的 (ADR-0013), 服务端**无法**主动吊销单个 token ——
+  ///   设备丢了要作废: 管理员停用账号 (user.is_active=false) 或换 AUTH_SECRET (全体失效)
   Future<void> logout() async {
-    await ApiClient.storage.delete(key: ApiClient.sessionTokenKey);
-    await ApiClient.storage.delete(key: ApiClient.sessionCookieNameKey);
+    try {
+      await ApiClient.storage.delete(key: ApiClient.sessionTokenKey);
+      await ApiClient.storage.delete(key: ApiClient.sessionCookieNameKey);
+    } catch (e) {
+      // ignore: avoid_print
+      print('[session] logout cleanup failed: $e');
+    }
   }
 }
 
