@@ -5,6 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nuankebao/core/providers/settings_provider.dart';
+import 'package:nuankebao/core/router/app_router.dart';
 import 'package:nuankebao/modules/auth/screens/register_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,7 +27,49 @@ Future<void> _pumpRegister(WidgetTester tester, {String? code}) async {
   expect(prefs, isNotNull);
 }
 
+/// 端到端复现原 bug: 在**真路由**上从登录页点「去注册」→ 必须看到注册页
+///
+/// 为什么必须用真 router: 原 bug 不在按钮(按钮本身对), 而在鉴权重定向把 /register 踢走了
+/// —— 只测按钮 onPressed 是测不出来的 (这正是当初漏掉的原因)。
+Future<void> _pumpRealApp(WidgetTester tester) async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  final container = ProviderContainer(
+    overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+  );
+  addTearDown(container.dispose);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: Consumer(
+        builder: (context, ref, _) => MaterialApp.router(
+          routerConfig: ref.watch(appRouterProvider),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  testWidgets('★ 回归: 登录页点「去注册」→ 进注册页 (不是被踢回登录页)', (tester) async {
+    await _pumpRealApp(tester);
+
+    // 未登录 → 落在登录页
+    expect(find.text('账号 / 手机号'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('有新推荐码? 去注册'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('有新推荐码? 去注册'));
+    await tester.pumpAndSettle();
+
+    // 关键断言: 到了注册页, 且没被 redirect 踢回登录页
+    expect(find.text('注册账号'), findsOneWidget);           // 注册页 AppBar
+    expect(find.text('推荐码 *'), findsOneWidget);
+    expect(find.text('账号 / 手机号'), findsNothing);         // 登录页已离开
+  });
+
   testWidgets('注册页: 四个必填项 + 真实姓名/真实手机号提示 + 邀请制说明', (tester) async {
     await _pumpRegister(tester);
 

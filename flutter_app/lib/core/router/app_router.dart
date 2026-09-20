@@ -31,6 +31,26 @@ import '../../modules/salon/screens/salon_form_page.dart';
 import '../../modules/salon/screens/salon_manage_page.dart';
 import '../../modules/salon/screens/salon_guests_page.dart';
 
+/// 未登录也能访问的公开路由 (改这里 = 改鉴权门 → 必须同步改 test/app_router_test.dart)
+///
+/// 2026-09-21 修 bug: 加上 `/register` 时**漏了这个白名单** → redirect 把未登录用户
+/// 从 /register 又踢回 /login, 用户看到的现象就是"点『去注册』没反应"。
+/// 教训: 鉴权门是"新增公开页必须一起改"的地方, 所以抽成纯函数 + 单测锁住。
+const Set<String> kPublicRoutes = {"/login", "/register"};
+
+/// 鉴权重定向 (纯函数版, 从 GoRouter.redirect 里抽出来才能单测)
+///
+/// 返回值: null = 放行; 非空 = 该跳到哪
+String? resolveAuthRedirect({
+  required bool isLoggedIn,
+  required String location,
+}) {
+  final isPublic = kPublicRoutes.contains(location);
+  if (!isLoggedIn && !isPublic) return "/login";
+  if (isLoggedIn && isPublic) return "/customers";
+  return null;
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
@@ -71,14 +91,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
     ),
-    redirect: (context, state) {
-      final isLoggedIn = authState.isLoggedIn;
-      final isLoginRoute = state.matchedLocation == '/login';
-
-      if (!isLoggedIn && !isLoginRoute) return '/login';
-      if (isLoggedIn && isLoginRoute) return '/customers';
-      return null;
-    },
+    redirect: (context, state) => resolveAuthRedirect(
+      isLoggedIn: authState.isLoggedIn,
+      location: state.matchedLocation,
+    ),
     routes: [
       // 登录
       GoRoute(
