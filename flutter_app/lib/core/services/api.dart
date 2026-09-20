@@ -670,6 +670,9 @@ class ManualPayInfo {
   final bool enabled;
   final String qrUrl;
   final bool isFallbackQr;
+
+  /// 这张码现在能不能取到 (配置过 或 静态文件存在)
+  final bool qrAvailable;
   final String payeeName;
   final String noteHint;
   final List<ManualPayProduct> products;
@@ -679,6 +682,7 @@ class ManualPayInfo {
     this.enabled = true,
     this.qrUrl = '/payment/wechat-qr.png',
     this.isFallbackQr = true,
+    this.qrAvailable = false,
     this.payeeName = '管理员',
     this.noteHint = '',
     this.products = const [],
@@ -692,6 +696,7 @@ class ManualPayInfo {
         enabled: j['enabled'] as bool? ?? true,
         qrUrl: j['qrUrl']?.toString() ?? '/payment/wechat-qr.png',
         isFallbackQr: j['isFallbackQr'] as bool? ?? true,
+        qrAvailable: j['qrAvailable'] as bool? ?? true,
         payeeName: j['payeeName']?.toString() ?? '管理员',
         noteHint: j['noteHint']?.toString() ?? '',
         products: (j['products'] as List?)

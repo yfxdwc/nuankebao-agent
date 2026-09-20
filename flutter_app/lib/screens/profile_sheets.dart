@@ -1311,7 +1311,8 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (info.isFallbackQr)
+                      // 只有"真的取不到码"才提示 (静态兜底文件存在时不再误报)
+                      if (!info.qrAvailable)
                         const Padding(
                           padding: EdgeInsets.only(top: 6),
                           child: Text(

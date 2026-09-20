@@ -17,6 +17,8 @@
 //   - 金额只是"用户申报", 不当作已收钱: **以管理员对账为准** (人工通道的本质)
 //   - 审计: manual_payment_request / billing_config / membership / entitlement_grant 全挂触发器
 
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -42,11 +44,28 @@ export const CONFIG_KEYS = {
 /** 静态兜底路径: 管理员把收款码图片放到 public/payment/wechat-qr.png 就能用 */
 export const STATIC_QR_PATH = "/payment/wechat-qr.png";
 
+/** 静态兜底收款码在不在 (public/payment/wechat-qr.png) */
+async function staticQrExists(): Promise<boolean> {
+  try {
+    const abs = path.join(
+      process.cwd(),
+      "public",
+      STATIC_QR_PATH.replace(/^\//, "")
+    );
+    await fs.access(abs);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface ManualPayInfo {
   enabled: boolean;
   qrUrl: string | null;
-  /** qrUrl 是不是"兜底路径"(客户端据此提示"还没上传收款码") */
+  /** qrUrl 是不是"兜底路径"(没在后台配置过) —— 仅作信息, 不再用来判断"有没有码" */
   isFallbackQr: boolean;
+  /** 这张码**现在真的能取到吗** (配置了 URL 或静态文件存在) —— 客户端据此提示 */
+  qrAvailable: boolean;
   payeeName: string;
   noteHint: string;
   /** 可选的购买项 (内测只有单月; 将来加季/年) */
@@ -78,10 +97,14 @@ export async function getManualPayInfo(): Promise<ManualPayInfo> {
     readConfig(CONFIG_KEYS.ENABLED),
   ]);
 
+  // 兜底路径也要确认文件真的存在, 否则客户端会显示"还没设置收款码"空框
+  const qrAvailable = qr != null ? true : await staticQrExists();
+
   return {
     enabled: enabled !== "off",
     qrUrl: qr ?? STATIC_QR_PATH,
     isFallbackQr: qr == null,
+    qrAvailable,
     payeeName: payee ?? "管理员",
     noteHint: hint ?? "付款备注请填写你的手机号后 4 位, 方便对账",
     products: MANUAL_PRODUCTS.map((p) => ({ ...p })),
