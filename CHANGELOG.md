@@ -2,6 +2,36 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (预览频繁「网络不太好」+ 刷新慢, 2026-09-20 w21 主人反馈)
+
+**症状**: `/app-preview` iframe 模式下, 任何「首次进页面」都频繁弹「网络不太好, 请检查网络后重试」; 主人硬刷新也常常慢 30s+。
+
+**根因**: Next.js dev mode 懒编译 — 每个 API 路由**首次 hit 触发 webpack 编译**, 实测最坏 43s (`/api/franchisees/placement-requests`), 个别 `auth-flutter-login` 188s。
+Flutter web dio 之前 `connectTimeout=10s` 完全不够, 任何冷路由都超时 → 落到 `ErrorState`(「网络不太好」) UI。
+
+**治本 (两层, 互补)**
+
+| 改动 | 文件 | 作用 |
+|---|---|---|
+| dio `connectTimeout` 10s → **60s** (web) | `flutter_app/lib/core/http/api_client.dart:255-274` | 兜住 dev mode 冷编译最坏情况 |
+| dio `receiveTimeout` 30s → **60s** (web) | 同上 | 配套 |
+| `kIsWeb` 分平台 | 同上 | native APK 保持 10s/30s (蜂窝网络应快显, 失败不卡人) |
+| 新增 `tools/prewarm-dev-routes.sh` | `tools/prewarm-dev-routes.sh` | 默认预热 10 个最热路由, `--all` 全 33, `--top N` `--parallel N` 可调 |
+
+**prewarm 脚本默认预热列表** (按真实 hit 频率排): `/api/auth/session` `/api/auth/csrf` `/api/auth/flutter-login` `/api/me` `/api/health` `/api/customers` `/api/customers/stats` `/api/wellness-records` `/api/salons` `/api/franchisees/me/tree`。
+
+**不要**给 systemd `ExecStartPost=` 加这个脚本 (dev server 启动期还没就绪, 会跑空 + 把启动队列拖入 33 路由编译 = 卡死); 主人手跑。
+
+**验证**
+- `pnpm test tests/preview-framework-snapshot.test.ts` → 19/19 pass (128ms)
+- Playwright 现场 `/app-preview` → iframe 加载 OK, 无错误 UI, `main.dart.js` HTTP 200
+- API 真实响应: 之前 32s+, 现在 200ms (路由已编译)
+
+**关联**:
+- 同步修了 `flutter_app/lib/modules/wellness/screens/wellness_record_detail_page.dart:209` — 照片 URL 之前硬编码 `192.168.1.200:3003` (跟 dio IP bug 同根), 改为 `ApiClient.baseOrigin`
+- 同步重建 Flutter web (`./tools/build-flutter-web.sh --auto`), main.dart.js 不再含硬编码 IP, web 模式从 `Uri.base.origin` 运行时推导
+- AGENTS §5 待补: "Dart 源码不要硬编码 host:port" (code smell 条目, 跟 R12 同类治本)
+
 ### Added (内测收款码接入 App: 微信个人收款码已就位, 2026-09-20)
 
 **主人要**: 「把内测模式的收款码接入应用」
