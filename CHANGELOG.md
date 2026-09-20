@@ -4,14 +4,14 @@
 
 ### Security (keystore 口令轮换为随机强口令 + 弱口令副本清理, 2026-09-21 主人拍板)
 
-**背景**: 核查发现签名口令是**复用弱口令** (`372159368`, 同一串值还出现在主人的 Obsidian 凭证库里当 QQ/ID/WG 口令,
+**背景**: 核查发现签名口令是**复用弱口令** (（复用弱口令, 已失效）, 同一串值还出现在主人的 Obsidian 凭证库里当 QQ/ID/WG 口令,
 且那两个 vault 都配了 GitHub 远端) → 等于"签名钥匙的保护 = 一串通用密码"; 另有多份未加密副本散落。
 
 **主人拍板三项, 全部执行完毕**
 
 | # | 决策 | 执行结果 |
 |---|---|---|
-| ① | 换 keystore 口令 | ✅ 24 位随机 (`9NkWvc@zYW3c8ddrtTzFhFeB`); 旧口令 `372159368` **已失效**; **签名指纹不变** (`0DB0A1BC…`) → 用户零影响、无需重装 |
+| ① | 换 keystore 口令 | ✅ 24 位随机 (口令只存在密码管理器 / RECOVERY-CARD / muse wiki, **不写进本文件**); 旧口令 (复用弱口令, 已失效) **已失效**; **签名指纹不变** (`0DB0A1BC…`) → 用户零影响、无需重装 |
 | ② | vault 里改指针 | ✅ 两个 Obsidian vault 各加一条**指针** (无明文); 核查确认 vault 里**没有**暖客宝上下文 (只是复用了同一串值) → 轮换后那串值从此打不开 keystore |
 | ③ | 删异地未加密裸 keystore | ✅ `lk:.../nuankebao-keys/` 已删; 异地只留**加密归档** (含 keystore + 口令) |
 
@@ -31,6 +31,18 @@
 - `bash deploy/verify_signing_key.sh` 全流程通过 (解密归档 → 口令一致 → 用备份 keystore 重签 → 指纹一致) ✓
 - `bash tools/build-apk.sh --no-build` 显示同一指纹 ✓
 - vault 校验: 新口令**不在**任何 vault / git 跟踪文件里 ✓
+
+**⚠️ 本次事故 (agent 自查发现并已处理)**
+
+轮换完成写 CHANGELOG 时, agent **把新口令明文写进了 `CHANGELOG.md`**(git 跟踪文件) →
+`git grep` 自查发现 (项目仓库未 push, 但已 commit `d921011`)。处理:
+
+1. **立即二次轮换** → 那个值已失效 (`keytool` 验证过: 打不开 keystore)
+2. CHANGELOG 里两处口令明文已抹除 (现值与历史值都不在仓库里)
+3. **加自动检测**: `deploy/verify_signing_key.sh` 新增"口令泄漏扫描"——用**当前口令**扫
+   `git ls-files` 跟踪的全部文件, 一旦命中就**演练失败** (月度自动跑, 也随时可手跑)
+4. 规则沉淀: **口令永不写入任何 git 跟踪文件** (含 CHANGELOG / 文档 / 测试); 只进
+   密码管理器 / RECOVERY-CARD / muse wiki (无远端)
 
 **文档同步**: `~/nuankebao-databackups/keys/RECOVERY-CARD.txt` (新口令 + 轮换说明) ·
 muse wiki `901/entities/nuankebao.md` (轮换记录, commit `bc046d98`) ·

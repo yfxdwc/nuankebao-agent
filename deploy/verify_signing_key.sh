@@ -20,7 +20,7 @@
 #
 # 退出码:
 #   0 演练通过   1 参数/环境错   2 工作副本打不开   3 找不到加密备份
-#   4 解密/校验失败   5 真签失败/指纹不一致
+#   4 解密/校验失败   5 真签失败/指纹不一致   6 口令泄漏进 git 跟踪文件
 #
 # 调度建议: 跟着 PG 月度演练 (nuankebao-restore-verify.timer) 一起跑, 见 deploy/README.md §10
 # ============================================================
@@ -56,7 +56,7 @@ KEY_PASS="$(grep -oP '(?<=keyPassword=).*' "$KEY_PROPS")"
 [ -n "$STORE_PASS" ] || fail "key.properties 里没有 storePassword" 1
 
 # ---------- 1. 工作副本能用吗 ----------
-say "1/3 工作副本: $WORK_JKS"
+say "1/4 工作副本: $WORK_JKS"
 if ! keytool -list -keystore "$WORK_JKS" -storepass "$STORE_PASS" >/dev/null 2>&1; then
     fail "工作副本打不开 (口令不对? 文件损坏?)" 2
 fi
@@ -64,7 +64,7 @@ WORK_SHA=$(sha256sum "$WORK_JKS" | awk '{print $1}')
 say "    ✓ 可打开, sha256=${WORK_SHA:0:16}…"
 
 # ---------- 2. 加密备份能解出来并且一致吗 ----------
-say "2/3 加密备份: $KEYS_ARCHIVE"
+say "2/4 加密备份: $KEYS_ARCHIVE"
 [ -f "$KEYS_ARCHIVE" ] || fail "找不到签名密钥加密备份 (先跑备份: deploy/backup.sh)" 3
 STAGE="$(mktemp -d /tmp/nuankebao-signkey-XXXXXX)"
 trap 'rm -rf "$STAGE"' EXIT
@@ -87,16 +87,32 @@ if [ -n "$BACKUP_PASS" ] && [ "$BACKUP_PASS" != "$STORE_PASS" ]; then
 fi
 say "    ✓ 口令一致"
 
-# ---------- 3. 真签一次 (证明备份能用来发版) ----------
+# ---------- 3. 口令泄漏扫描 (2026-09-21 事故后加) ----------
+# 为什么在这: agent 把新口令写进过 CHANGELOG (git 跟踪文件) → 靠人自觉不可靠, 必须机器扫。
+# 命中即失败: 口令只允许存在于密码管理器 / RECOVERY-CARD / muse wiki (非 git 仓库)。
+say "3/4 口令泄漏扫描 (git 跟踪文件)"
+if [ -d "$PROJECT_ROOT/.git" ]; then
+    LEAKED="$(cd "$PROJECT_ROOT" && git grep -l -F "$STORE_PASS" -- . 2>/dev/null || true)"
+    if [ -n "$LEAKED" ]; then
+        echo "[signing-key]     ✗ 口令出现在 git 跟踪文件里 (必须立刻轮换 + 抹除):" >&2
+        printf '%s\n' "$LEAKED" | sed 's/^/[signing-key]       /' >&2
+        exit 6
+    fi
+    say "    ✓ git 跟踪文件里没有口令"
+else
+    say "    - 跳过 (不是 git 仓库)"
+fi
+
+# ---------- 4. 真签一次 (证明备份能用来发版) ----------
 if [ "$QUICK" = "1" ]; then
-    say "3/3 跳过真签 (--quick)"
+    say "4/4 跳过真签 (--quick)"
     say "✅ 演练通过 (quick)"
     exit 0
 fi
 [ -n "$APKSIGNER" ] || fail "找不到 apksigner (设 APKSIGNER 或装 Android SDK build-tools)" 1
 [ -f "$APK" ] || fail "找不到用于重签的 APK: $APK" 1
 
-say "3/3 用**备份 keystore** 重签一次并验指纹"
+say "4/4 用**备份 keystore** 重签一次并验指纹"
 OUT="$STAGE/resigned.apk"
 cp "$APK" "$OUT"
 if ! "$APKSIGNER" sign --ks "$BACKUP_JKS" --ks-pass "pass:$BACKUP_PASS" \
