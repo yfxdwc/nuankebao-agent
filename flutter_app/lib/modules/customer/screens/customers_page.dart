@@ -90,6 +90,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   /// 紧急度排序被会员墙挡住? (后端在响应里回 urgencyLocked)
   bool _sortUrgencyLocked = false;
 
+  /// 折叠的分组 (主人 2026-09-20 拍 P1: 分组可折叠; 默认全展开, 休眠池默认折叠)
+  final Set<String> _collapsedGroups = {'p4'};
+
   /// 视图模式: 默认列表; 但可以从 URL ?view=graph 进入 (路由 /franchise-tree 重定向过来)
   _CustomerViewMode _viewMode = _CustomerViewMode.list;
 
@@ -358,6 +361,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
               ),
             ),
 
+          // 顶部提醒条 (主人 2026-09-20 拍 P1): 「今天要联系 N 位」—— 仅会员 (summary 有值才显示)
+          if (_viewMode == _CustomerViewMode.list &&
+              (asyncCustomers.valueOrNull?.summary?.isEmpty == false))
+            _buildReminderBar(asyncCustomers.valueOrNull!.summary!),
+
           // 主体: 列表 / 图谱
           Expanded(
             child: _viewMode == _CustomerViewMode.list
@@ -375,6 +383,92 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  static String _levelLabelOf(String level) {
+    switch (level) {
+      case 'p0':
+        return '今天必须联系';
+      case 'p1':
+        return '本周联系';
+      case 'p2':
+        return '两周内联系';
+      case 'p3':
+        return '正常节奏';
+      default:
+        return '休眠池';
+    }
+  }
+
+  /// 顶部提醒条: 今天要联系 / 逾期 / 本周 (会员)
+  Widget _buildReminderBar(FollowUpSummary s) {
+    final parts = <String>[];
+    if (s.dueToday > 0) parts.add('今天要联系 ${s.dueToday} 位');
+    if (s.overdue > 0) parts.add('逾期 ${s.overdue} 位');
+    if (s.thisWeek > 0) parts.add('本周 ${s.thisWeek} 位');
+    final text = parts.isEmpty ? '节奏都很稳，没有要紧急联系的客户' : parts.join(' · ');
+    final urgent = s.dueToday > 0 || s.overdue > 0;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: (urgent ? AppTheme.danger : AppTheme.primary).withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: (urgent ? AppTheme.danger : AppTheme.primary).withOpacity(0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(urgent ? '🔴' : '🟢', style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: AppTheme.fontSm,
+                fontWeight: FontWeight.w600,
+                color: urgent ? AppTheme.danger : AppTheme.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 分组表头 (可折叠): 🔴 今天必须联系 (3)
+  Widget _buildGroupHeader(String level, String label, int count) {
+    final collapsed = _collapsedGroups.contains(level);
+    final color = CustomerRow.levelColor(level);
+    return InkWell(
+      onTap: () => setState(() {
+        if (collapsed) {
+          _collapsedGroups.remove(level);
+        } else {
+          _collapsedGroups.add(level);
+        }
+      }),
+      child: Container(
+        color: AppTheme.bgWarm,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+        child: Row(
+          children: [
+            Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(fontSize: AppTheme.fontSm, fontWeight: FontWeight.w700, color: color),
+            ),
+            const SizedBox(width: 6),
+            Text('($count)', style: TextStyle(fontSize: AppTheme.fontXs, color: color)),
+            const Spacer(),
+            Icon(collapsed ? Icons.expand_more : Icons.expand_less, size: 20, color: AppTheme.textSecondary),
+          ],
+        ),
+      ),
     );
   }
 
@@ -404,12 +498,41 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             actionLabel: '+ 添加客户',
           );
         }
+        // 分组 (主人 2026-09-20 拍 P1): 仅紧急度排序下按分档分组; 表头可折叠 (休眠池默认折叠)
+        final display = <Object>[];
+        if (result.sort == 'urgency') {
+          final counts = <String, int>{};
+          for (final r in customers) {
+            final lv = r.followUp?.level ?? 'p4';
+            counts[lv] = (counts[lv] ?? 0) + 1;
+          }
+          String? cur;
+          for (final r in customers) {
+            final lv = r.followUp?.level ?? 'p4';
+            if (lv != cur) {
+              cur = lv;
+              display.add(_GroupHeaderData(
+                level: lv,
+                label: r.followUp?.levelLabel ?? _levelLabelOf(lv),
+                count: counts[lv] ?? 0,
+              ));
+            }
+            if (!_collapsedGroups.contains(lv)) display.add(r);
+          }
+        } else {
+          display.addAll(customers);
+        }
+
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(customersProvider),
           child: ListView.builder(
-            itemCount: customers.length,
+            itemCount: display.length,
             itemBuilder: (context, i) {
-              final row = customers[i];
+              final item = display[i];
+              if (item is _GroupHeaderData) {
+                return _buildGroupHeader(item.level, item.label, item.count);
+              }
+              final row = item as CustomerWithFollowUp;
               final c = row.customer;
               return CustomerRow(
                 customer: c,
@@ -3114,3 +3237,10 @@ Customer c,
   }
 }
 
+/// 分组表头数据 (列表渲染用的小载体)
+class _GroupHeaderData {
+  final String level;
+  final String label;
+  final int count;
+  const _GroupHeaderData({required this.level, required this.label, required this.count});
+}

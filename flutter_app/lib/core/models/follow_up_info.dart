@@ -152,6 +152,41 @@ class CustomerWithFollowUp {
   const CustomerWithFollowUp({required this.customer, this.followUp});
 }
 
+/// 列表顶部提醒条 / 分组计数 (仅会员; 后端 summarizeFollowUp)
+class FollowUpSummary {
+  final int dueToday;     // P0 今天必须联系
+  final int overdue;      // 有逾期任务
+  final int thisWeek;     // P1 本周
+  final int hibernating;  // P4 休眠
+  final int total;
+
+  const FollowUpSummary({
+    required this.dueToday,
+    required this.overdue,
+    required this.thisWeek,
+    required this.hibernating,
+    required this.total,
+  });
+
+  static const zero = FollowUpSummary(
+    dueToday: 0,
+    overdue: 0,
+    thisWeek: 0,
+    hibernating: 0,
+    total: 0,
+  );
+
+  factory FollowUpSummary.fromJson(Map<String, dynamic> json) => FollowUpSummary(
+        dueToday: (json['dueToday'] as num?)?.toInt() ?? 0,
+        overdue: (json['overdue'] as num?)?.toInt() ?? 0,
+        thisWeek: (json['thisWeek'] as num?)?.toInt() ?? 0,
+        hibernating: (json['hibernating'] as num?)?.toInt() ?? 0,
+        total: (json['total'] as num?)?.toInt() ?? 0,
+      );
+
+  bool get isEmpty => dueToday == 0 && overdue == 0 && thisWeek == 0;
+}
+
 /// 列表接口返回 (含排序元信息)
 class CustomerListResult {
   final List<CustomerWithFollowUp> items;
@@ -160,12 +195,15 @@ class CustomerListResult {
   final String sort;
   /// 用户是否请求了紧急度但被会员墙挡住 → 前端显示 🔒 + 升级提示
   final bool urgencyLocked;
+  /// 顶部提醒条计数 (仅会员有)
+  final FollowUpSummary? summary;
 
   const CustomerListResult({
     required this.items,
     required this.total,
     required this.sort,
     required this.urgencyLocked,
+    this.summary,
   });
 
   static const empty = CustomerListResult(
@@ -189,6 +227,9 @@ class CustomerListResult {
       total: (json['total'] as num?)?.toInt() ?? raw.length,
       sort: (json['sort'] as String?) ?? 'new',
       urgencyLocked: json['urgencyLocked'] == true,
+      summary: json['summary'] is Map<String, dynamic>
+          ? FollowUpSummary.fromJson(json['summary'] as Map<String, dynamic>)
+          : null,
     );
   }
 }

@@ -148,6 +148,40 @@ export async function attachFollowUp<T extends FollowUpUpdatable>(
   });
 }
 
+export interface FollowUpSummary {
+  /** 今天必须联系 (P0) */
+  dueToday: number;
+  /** 有逾期跟进任务 */
+  overdue: number;
+  /** 本周联系 (P1) */
+  thisWeek: number;
+  /** 休眠池 (P4) */
+  hibernating: number;
+  /** 全部命中客户数 */
+  total: number;
+}
+
+/**
+ * 列表顶部提醒条 / 分组计数 (主人 2026-09-20 拍 P1)
+ *   口径: P0 → 「今天要联系」; 逾期 = 有逾期任务; P1 → 本周; P4 → 休眠
+ */
+export function summarizeFollowUp(
+  items: Array<{ followUp: FollowUpBlock }>
+): FollowUpSummary {
+  let dueToday = 0;
+  let overdue = 0;
+  let thisWeek = 0;
+  let hibernating = 0;
+  for (const it of items) {
+    const f = it.followUp;
+    if (f.level === "p0") dueToday++;
+    if (f.level === "p1") thisWeek++;
+    if (f.level === "p4") hibernating++;
+    if (f.nextDueAt != null && new Date(f.nextDueAt) < new Date()) overdue++;
+  }
+  return { dueToday, overdue, thisWeek, hibernating, total: items.length };
+}
+
 /** 紧急度排序 (会员专用): 分档 → 分数 → 距上次联系 → 建档时间 */
 export function sortByUrgency<
   T extends { followUp: FollowUpBlock; createdAt: Date },

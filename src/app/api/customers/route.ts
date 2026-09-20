@@ -11,7 +11,11 @@ import { getAuditContextFromRequest } from "@/lib/audit/context";
 import { hasFeatureAccess } from "@/lib/billing/guard";
 import { stripBirthdayReminderFromList } from "@/lib/billing/membership-filter";
 import { FEATURES } from "@/lib/billing/features";
-import { attachFollowUp, sortByUrgency } from "@/lib/follow-up/attach";
+import {
+  attachFollowUp,
+  sortByUrgency,
+  summarizeFollowUp,
+} from "@/lib/follow-up/attach";
 
 const CreateCustomerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -115,8 +119,10 @@ export async function GET(request: NextRequest) {
 
   // 3) 会员: 按紧急度排序 + 内存分页; 非会员: 已由 SQL 排好
   let total = result.total;
+  let sortedAll: typeof items | null = null;
   if (effectiveSort === "urgency") {
     const sorted = sortByUrgency(items);
+    sortedAll = sorted;
     total = sorted.length;
     items = sorted.slice(offset, offset + limit);
   }
@@ -127,6 +133,10 @@ export async function GET(request: NextRequest) {
     sort: effectiveSort,
     sortRequested: requestedSort ?? "urgency",
     urgencyLocked,
+    // 顶部提醒条/分组计数: 仅会员 (与紧急度同一判权, 非会员没有这套体系)
+    ...(urgencySortOn
+      ? { summary: summarizeFollowUp(sortedAll ?? items) }
+      : {}),
   };
 
   // ADR-0012: 生日提醒是会员功能 —— 非会员读出来 birthdayRemindDays = null (提醒自然不触发),
