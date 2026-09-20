@@ -34,7 +34,8 @@
 **红线**:
 
 - `.env.prod` 权限 600、不进 git；**严禁** 写 `DEV_SKIP_AUTH` / `DEV_LOGIN_ANY_USER`
-- prod 端口只绑 `127.0.0.1:3004`；不要改成 `0.0.0.0`
+- prod 端口只绑 `127.0.0.1:3004`，不要改成 `0.0.0.0`；**公网入口 = `nuankebao.tooyang.top` → :3004**
+  （dev = `nuankebao-dev.tooyang.top` → :3003；2026-09-20 P5 切换）
 - 改域名/证书前先看 production-plan §4 强绑定三件套 (hostname / AUTH_URL / APK base URL)
 - 备份/恢复: `NUANKEBAO_PROFILE=prod` 隔离目录 (`nuankebao-databackups/prod/`)，不要手动指定 dev 路径覆盖
 

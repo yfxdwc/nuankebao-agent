@@ -2,6 +2,20 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (P5: 公网域名切换 — 生产正式上线, 2026-09-20)
+
+- `nuankebao.tooyang.top` → 生产 Docker 栈 `127.0.0.1:3004`（原指 dev :3003）
+- 新增 `nuankebao-dev.tooyang.top` → dev :3003（Cloudflare CNAME + tunnel ingress）;
+  dev 预览 `/app-preview` 与 Flutter dev server `/dev-app*` (8181) 同步迁到 dev 域名
+- dev `.env.local` 增 `AUTH_URL=https://nuankebao-dev.tooyang.top`
+  （原先无该行, 一直从 `.env` 读主域名）
+- 运维: `cloudflared-tc-prod.service` 重启生效; 配置备份
+  `~/.cloudflared-tc-prod/config.yml.bak-20260920-030337`
+- 验证 (公网 HTTPS): prod 登录 302 + session、`/api/me` 200、`/admin/download` 200、
+  `/api/apk-download` 200 (26.1MB); prod `/app-preview` 404（生产门闸）、`flutter-login` 404;
+  dev 健康/预览 200、`flutter-login` 400; `sales-ai` 等其他隧道 200 不受影响
+- 回滚: tunnel config `3004` 改回 `3003` + dev 规则搬回主域名 → 重启 cloudflared
+
 ### Fixed (预览频繁「网络不太好」+ 刷新慢, 2026-09-20 w21 主人反馈)
 
 **症状**: `/app-preview` iframe 模式下, 任何「首次进页面」都频繁弹「网络不太好, 请检查网络后重试」; 主人硬刷新也常常慢 30s+。

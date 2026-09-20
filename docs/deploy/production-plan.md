@@ -173,6 +173,15 @@
 
 ## 4. 域名与切换
 
+> ✅ **2026-09-20 P5 已切换**:
+> - `https://nuankebao.tooyang.top` → 生产 :3004
+> - `https://nuankebao-dev.tooyang.top` → dev :3003（预览 `/app-preview`；Flutter dev server `/dev-app*`）
+> - dev `.env.local` 已加 `AUTH_URL=https://nuankebao-dev.tooyang.top`；
+>   tunnel 配置备份 `~/.cloudflared-tc-prod/config.yml.bak-20260920-030337`
+> - 验证: prod 登录/会话/APK 下载 200，prod `/app-preview` 404（生产门闸）；
+>   dev 预览 200；sales-ai 等其他隧道不受影响
+> - 回滚: tunnel config 3004 → 3003 + dev 规则搬回主域名 → 重启 `cloudflared-tc-prod.service`
+
 **切换顺序（先 dev 后 prod，随时可回滚）**：
 
 1. **加 dev 入口**：Cloudflare DNS 加 `nuankebao-dev.tooyang.top` → 同一 tunnel；`/home/tooyan/.cloudflared-tc-prod/config.yml` 加 ingress（dev → :3003）；`systemctl --user restart cloudflared-tc-prod.service`
@@ -210,7 +219,7 @@
 | **P2 账号密码登录** | ✅ 已完成 (§3.B: 含 `admin` 建档) | 密码登录成功；两个账号 = 两个身份；错误密码被限流；首登改密可用 | ~1 天 |
 | **P3 tc 生产部署** | ✅ 已完成 (§3.C/E: 备份 profile + 健康检查 + systemd) | LAN `http://192.168.1.99:3004/api/health` 200；第一份加密备份；恢复演练 | ~1 天 |
 | **P4 APK 签名发布** | ✅ 已完成 (§3.D keystore/构建/分发; 真机安装待主人) | 真机安装 release APK → 登录 → 录入养生记录 | 0.5 天 |
-| **P5 域名切换 + 内测** | §4；邀请 1–2 销售 | 销售日常可用；dev 预览不受影响 | 0.5 天 + 内测周期 |
+| **P5 域名切换 + 内测** | ✅ 域名切换完成（2026-09-20）; ⏳ 内测待开始 | 销售日常可用；dev 预览不受影响 | 0.5 天 + 内测周期 |
 
 **开工到可内测 ≈ 4–5 个工作日。**
 
