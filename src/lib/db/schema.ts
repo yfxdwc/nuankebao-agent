@@ -1178,6 +1178,16 @@ export const referralReward = pgTable(
       .default("pending"),
     rejectReason: text("reject_reason"),
 
+    /// 关系来源 —— 决定 pending 到底是"等谁确认":
+    ///   admin        = 管理员建号时填的码 (管理员已背书 → 新人**立刻**拿 15 天;
+    ///                  这条 pending 只是"等被推荐人成为加盟者"再给推荐人发奖, D23)
+    ///   self_signup  = 新用户自己填码注册 → **等推荐人点"这是我朋友"** 才给新人发 15 天
+    /// ⚠ 不加这个字段的话, 两种 pending 在 UI 上分不开, 推荐人会以为自己要确认一堆
+    ///   其实已经生效的关系
+    source: text("source", { enum: ["admin", "self_signup"] })
+      .notNull()
+      .default("admin"),
+
     /// 被推荐人注册时的手机号 hash / 设备指纹 / IP —— 只用于事后反作弊审计, 不外发
     refereePhoneHash: text("referee_phone_hash"),
     refereeSignupIp: text("referee_signup_ip"),

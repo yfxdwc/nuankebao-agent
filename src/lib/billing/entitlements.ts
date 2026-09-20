@@ -407,6 +407,8 @@ export async function claimReferralCode(opts: {
       refereeUserId: opts.refereeUserId,
       code,
       status: "pending",
+      // 管理员/脚本建号时填的码 = 管理员已背书 → 新人立刻拿 15 天 (source 用于 UI 区分)
+      source: "admin",
       refereePhoneHash: opts.refereePhoneHash ?? null,
       refereeSignupIp: opts.refereeIp ?? null,
       createdAt: now,

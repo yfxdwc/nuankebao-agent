@@ -313,8 +313,17 @@ void main() {
       }),
       extraOverrides: [
         myReferralsProvider.overrideWith((ref) async => const [
-              MyReferral(id: '1', name: '李秀兰', phoneMasked: '139****3013', status: 'pending'),
-              MyReferral(id: '2', name: '赵小兰', phoneMasked: '139****3014', status: 'confirmed'),
+              // 自助注册 + 未处理 → 需要我确认
+              MyReferral(
+                  id: '1',
+                  name: '李秀兰',
+                  phoneMasked: '139****3013',
+                  status: 'pending',
+                  source: 'self_signup'),
+              // 管理员代建 (已生效) → 不该算进"待确认"
+              MyReferral(
+                  id: '2', name: '孙代建', phoneMasked: '139****3015', status: 'pending'),
+              MyReferral(id: '3', name: '赵小兰', phoneMasked: '139****3014', status: 'confirmed'),
             ]),
       ],
     );

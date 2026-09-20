@@ -718,6 +718,11 @@ class MyReferral {
   final String name;
   final String phoneMasked;
   final String status; // pending / confirmed / rewarded / rejected
+
+  /// 关系来源 (决定 pending 是不是"要你操作"):
+  ///   admin       = 管理员代建 (对方已拿到 15 天; 这条只是等对方成为加盟者后给你发奖)
+  ///   self_signup = 对方自己填你的码注册 → **要你点"这是我朋友"才发**
+  final String source;
   final String createdAt;
 
   const MyReferral({
@@ -725,22 +730,30 @@ class MyReferral {
     required this.name,
     this.phoneMasked = '',
     this.status = 'pending',
+    this.source = 'admin',
     this.createdAt = '',
   });
 
-  String get statusLabel => switch (status) {
-        'pending' => '等你确认',
-        'confirmed' => '已确认 (对方得 15 天)',
-        'rewarded' => '已完成 (你也拿到 15 天)',
-        'rejected' => '已驳回',
-        _ => status,
-      };
+  /// 需要我点确认的 (只有自助注册 + 还没处理)
+  bool get needsMyConfirmation => status == 'pending' && source == 'self_signup';
+
+  String get statusLabel {
+    if (needsMyConfirmation) return '等你确认';
+    return switch (status) {
+      'pending' => '已生效 (等对方成为加盟者后你得 15 天)',
+      'confirmed' => '已确认 (对方得 15 天)',
+      'rewarded' => '已完成 (你也拿到 15 天)',
+      'rejected' => '已驳回',
+      _ => status,
+    };
+  }
 
   static MyReferral fromJson(Map<String, dynamic> j) => MyReferral(
         id: j['id']?.toString() ?? '',
         name: j['name']?.toString() ?? '',
         phoneMasked: j['phoneMasked']?.toString() ?? '',
         status: j['status']?.toString() ?? 'pending',
+        source: j['source']?.toString() ?? 'admin',
         createdAt: j['createdAt']?.toString() ?? '',
       );
 }

@@ -147,6 +147,8 @@ export async function registerWithReferral(opts: {
     refereeUserId: created.id,
     code,
     status: "pending",
+    // 自助注册 = **等推荐人确认**才发权益 (防码被转发后陌生人白嫖)
+    source: "self_signup",
     refereePhoneHash: phoneHash,
     refereeSignupIp: opts.ip ?? null,
   });
@@ -171,12 +173,15 @@ export async function listMyReferrals(
   name: string;
   phoneMasked: string;
   status: string;
+  /** 'admin' | 'self_signup' (见 schema 注释: pending 的两种含义靠它区分) */
+  source: string;
   createdAt: string;
 }>> {
   const rows = await db
     .select({
       id: referralReward.id,
       status: referralReward.status,
+      source: referralReward.source,
       createdAt: referralReward.createdAt,
       name: user.name,
       phoneEncrypted: user.phoneEncrypted,
@@ -194,6 +199,8 @@ export async function listMyReferrals(
     name: r.name,
     phoneMasked: maskPhone(decryptField(r.phoneEncrypted)),
     status: r.status,
+    // 'admin' = 管理员代建(已生效, 无需推荐人操作) / 'self_signup' = 等推荐人确认
+    source: r.source,
     createdAt: r.createdAt.toISOString(),
   }));
 }

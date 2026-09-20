@@ -98,7 +98,8 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                       ),
                     ),
                     ...rows.map((r) {
-                      final pending = r.status == 'pending';
+                      // 只有"自助注册 + 未处理"才需要推荐人动手 (管理员代建的已生效)
+                      final pending = r.needsMyConfirmation;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(12),

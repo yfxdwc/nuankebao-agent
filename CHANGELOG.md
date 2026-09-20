@@ -2,6 +2,34 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (推荐关系加 source: 区分「管理员代建」与「自助注册」两种 pending, 2026-09-20)
+
+**发现的真冲突**: 同仓另一 session 在 `src/lib/auth/registration.ts` 建了**唯一建号入口**
+`createAccountWithProfile()` (建号 = 建账号 + 强制建客户档案 + 推荐码必填, 主人 2026-09-19 拍),
+它内部会调 `claimReferralCode()` → 新人**立刻**拿 15 天 (管理员已背书)。
+
+而我新加的 B1 自助注册走 `registerWithReferral()` → 关系是 `pending`, **等推荐人确认**才发。
+
+两者都用 `status='pending'`, UI 上分不开 → 推荐人会看到一堆"等你确认"其实**早就生效**的关系
+(点确认还会得到"之前已经发过了")。已修:
+
+| 改动 | 说明 |
+|---|---|
+| `referral_reward.source` (migration `0015_referral_source`, 加性 NOT NULL DEFAULT 'admin') | `admin` = 管理员代建 (已生效) / `self_signup` = 自助注册 (等推荐人确认) |
+| `claimReferralCode()` | 写 `source: 'admin'` (管理员/脚本建号路径) |
+| `registerWithReferral()` | 写 `source: 'self_signup'` |
+| `GET /api/billing/referral/pending` | 返回 `source` |
+| Flutter `MyReferral` | 新增 `needsMyConfirmation` (= pending && self_signup); 只有它才显示「这是我朋友 / 不认识」按钮 |
+| 状态文案 | pending(admin) → 「已生效 (等对方成为加盟者后你得 15 天)」; pending(self_signup) → 「等你确认」 |
+| 「我的」页入口 | 「好友待确认 (N)」只统计 `needsMyConfirmation` 的 |
+| 顺带核对 | 另一 session 已把我早前在 `import-users.ts` 里加的重复 `claimReferralCode` 调用换成 `createAccountWithProfile` 的返回值 → **无重复认领** (已 grep 确认) |
+
+**验证**
+- `tests/billing-integration.test.ts` **21 pass** (新增 1 例: 管理员建号路径 → `source='admin'` + 新人立刻拿到 15 天;
+  自助注册用例补断言 `source='self_signup'`)
+- `flutter test` **42 pass** (推荐人用例改成 3 条: 自助待确认 / 管理员代建 / 已确认 → 只显示「好友待确认 (1 人)」)
+- `pnpm db:compat` 0 error; `npx tsc --noEmit` / `flutter analyze` (我的文件) 0 error
+
 ### Added (B1 自助注册: 凭推荐码注册 + 推荐人确认, 2026-09-20 主人拍)
 
 **主人问**: 「当前 app 的登录界面里没有注册账户的入口，新用户怎么注册？是邀请人代注册吗」

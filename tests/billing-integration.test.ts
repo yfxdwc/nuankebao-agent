@@ -504,6 +504,35 @@ describe("B1 自助注册 (凭推荐码) + 推荐人确认 (主人 2026-09-20)",
       .where(eq(referralReward.refereeUserId, r.userId));
     expect(row.status).toBe("pending");
     expect(row.confirmedAt).toBe(null);
+    expect(row.source).toBe("self_signup"); // 自助注册 → 等推荐人确认
+  });
+
+  it("管理员建号路径 (claimReferralCode) 的来源是 admin, 且新人立刻拿到 15 天", async () => {
+    const [u] = await db
+      .insert(user)
+      .values({
+        name: `${TAG}-管理员代建`,
+        phoneEncrypted: encryptField("13900003015"),
+        phoneHash: hashForLookup("13900003015"),
+        role: "sales",
+      })
+      .returning({ id: user.id });
+
+    const r = await claimReferralCode({ refereeUserId: u.id, rawCode: codeA });
+    expect(r.accepted).toBe(true);
+    expect(r.refereeGranted).toBe(true); // 管理员背书 → 立刻发
+
+    const [row] = await db
+      .select()
+      .from(referralReward)
+      .where(eq(referralReward.refereeUserId, u.id));
+    expect(row.source).toBe("admin");
+
+    // 清理
+    await db.delete(entitlementGrant).where(eq(entitlementGrant.userId, u.id));
+    await db.delete(membership).where(eq(membership.userId, u.id));
+    await db.delete(referralReward).where(eq(referralReward.refereeUserId, u.id));
+    await db.delete(user).where(eq(user.id, u.id));
   });
 
   it("同一手机号不能注册第二次", async () => {

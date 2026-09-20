@@ -1016,7 +1016,7 @@ class _PendingReferralsTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(myReferralsProvider);
     final pending = async.maybeWhen(
-      data: (rows) => rows.where((r) => r.status == 'pending').length,
+      data: (rows) => rows.where((r) => r.needsMyConfirmation).length,
       orElse: () => 0,
     );
 

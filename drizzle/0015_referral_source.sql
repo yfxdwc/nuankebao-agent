@@ -1,0 +1,1 @@
+ALTER TABLE "referral_reward" ADD COLUMN "source" text DEFAULT 'admin' NOT NULL;
