@@ -15,6 +15,7 @@
 //   现在: 真实姓名/角色/手机号 (可显示可复制可改) + 加盟身份明细 (编号/位置/上级/加入时间/下线数)
 //   + 数据概览 5 项 + 字号设置 + 账号与安全 (缓存/退出) + 关于与帮助 (版本/更新/自检/说明)
 
+import '../modules/follow_up/screens/follow_ups_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -536,6 +537,17 @@ class _StatsCard extends StatelessWidget {
       icon: Icons.insights_outlined,
       hint: '全部数据',
       children: [
+        // 跟进待办入口 (主人 2026-09-20 拍 P1): 今天要打给谁, 一屏看完
+        Consumer(builder: (context, ref, _) {
+          final n = ref.watch(pendingFollowUpsProvider).valueOrNull?.length ?? 0;
+          return ProfileTile(
+            icon: Icons.checklist_rtl,
+            title: '跟进待办',
+            subtitle: n > 0 ? '$n 条待办：今天该联系谁' : '今天没有待办',
+            color: n > 0 ? AppTheme.danger : AppTheme.primary,
+            onTap: () => context.push('/follow-ups'),
+          );
+        }),
         if (s == null)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),

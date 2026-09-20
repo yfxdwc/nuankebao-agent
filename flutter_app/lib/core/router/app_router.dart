@@ -19,6 +19,7 @@ import '../../modules/relation/screens/franchisee_detail_page.dart';
 import '../../modules/relation/screens/add_franchisee_page.dart';
 import '../../modules/relation/screens/edit_franchisee_page.dart';
 import '../../modules/relation/screens/placement_requests_page.dart';
+import '../../modules/follow_up/screens/follow_ups_page.dart';
 import '../../screens/about_page.dart';
 import '../../screens/admin_tools_page.dart';
 import '../../screens/my_referrals_page.dart';
@@ -129,6 +130,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/customers/new',
         name: 'customer-new',
         builder: (context, state) => const CustomerFormPage(),
+      ),
+      // 跟进待办 (主人 2026-09-20 拍 P1)
+      GoRoute(
+        path: '/follow-ups',
+        name: 'follow-ups',
+        builder: (context, state) => const FollowUpsPage(),
       ),
       // 落位「三方确认」待办 (主人 2026-09-18 拍)
       GoRoute(
