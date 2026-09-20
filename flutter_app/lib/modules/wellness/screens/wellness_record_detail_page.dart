@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/http/api_client.dart';
 import '../../../core/models/wellness_record.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
@@ -204,9 +205,11 @@ class WellnessRecordDetailPage extends ConsumerWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: r.photos.map((url) {
+                  // 用 ApiClient.baseOrigin 推导绝对 URL, 跟 dio baseUrl 同源 (web 自动检测 / APK 走 dart-define)
+                  // 不要硬编码 IP: 主人机器换 IP (.200 ↔ .99) 不用 rebuild + 部署机器 IP 不同也能跑
                   final fullUrl = url.startsWith('http')
                       ? url
-                      : 'http://192.168.1.200:3003$url'; // TODO: 改 env
+                      : '${ApiClient.baseOrigin}$url';
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
