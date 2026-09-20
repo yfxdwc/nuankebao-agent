@@ -2,6 +2,16 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Chore (预览静态包重建 0.2.6#7 — 补上注册入口等新功能, 2026-09-20)
+
+- 背景: 主人发现 LAN `/app-preview` 界面旧 (没有注册入口); 静态包停在 02:25 (`0.2.4#5`),
+  而注册入口/B1 自助注册等是 05:08 之后才进源码 —— `/app-preview` 吃静态 `public/app`,
+  不自动跟随源码变化
+- 处理: `tools/build-flutter-web.sh --auto` 重建 + 同步 `public/app`（§9.3, `--no-verify` 提交）
+- 验证: `version.json` = `0.2.6#7`; 注册入口/收款码 字符串命中; 预览快照测试通过
+- 备忘: 热更新预览走 `https://nuankebao-dev.tooyang.top/app-preview?dev=1`
+  （`/dev-app` 反代只在 dev 公网域名下，LAN IP 访问不到）
+
 ### Changed (生产同步 + APK 0.2.5+6, 2026-09-20)
 
 - 生产 web 重新部署: 同步 03:45 后全部提交 (自助注册 B1 + 推荐人确认、账号=客户建档、
