@@ -60,3 +60,31 @@ String sessionExpiryLabel(String? token) {
   if (days > 365) return '已记住登录, 有效期至 $date (无需重复登录)';
   return '已记住登录, 有效期至 $date (还有 $days 天)';
 }
+
+
+// ============================================
+// 安装包信息 (给"升级会不会掉登录"这类问题做自检)
+// ============================================
+// 主人 2026-09-21 问「升级 app 后能保持登录状态吗」:
+//   能, 但前提之一是**同一个签名密钥** —— 签名变了 Android 不让覆盖安装,
+//   必须先卸载 → app 数据(含加密存储里的登录凭证)一起没了。
+//   → 把签名指纹显示在 App 里, 发版前后能自己核对。
+
+/// 签名指纹简写: 只取前 16 位 (完整 SHA-1/SHA-256 太长, 对上前面就够用)
+String shortBuildSignature(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return '(非 Android / 取不到)';
+  final compact = raw.replaceAll(RegExp(r'[^0-9a-fA-F]'), '').toUpperCase();
+  if (compact.isEmpty) return '(格式未知)';
+  if (compact.length <= 16) return compact;
+  return '${compact.substring(0, 16)}…';
+}
+
+/// 给用户看的安装信息一行 (发版/排障时对照)
+String installInfoLine({
+  required String packageName,
+  required String version,
+  required String buildNumber,
+  String? buildSignature,
+}) {
+  return '$packageName v$version ($buildNumber) · 签名 ${shortBuildSignature(buildSignature)}';
+}

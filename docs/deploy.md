@@ -587,3 +587,41 @@ npx tsx scripts/ensure-admin.ts --phone=19957347866 --name=管理员
 
 **详细运维流程**: `tools/SOP.md`
 **用户使用手册**: `docs/user-manual.md`
+
+---
+
+## APK 签名 (升级不掉登录的前提)
+
+> 背景: 主人 2026-09-21 问「升级 app 后能保持登录状态吗」。**能不能保持, 取决于签名密钥是否一致**。
+
+Android 只允许**同一签名**的包覆盖安装:
+
+| 情况 | 结果 |
+|---|---|
+| 同包名 + 同签名, 直接装 (不卸载) | ✅ 升级成功, app 数据保留 → **登录状态保持** (会话 10 年, 见 ADR-0013) |
+| 签名不同 (例如误用 debug 签名) | ❌ 安装失败 "应用未安装"; 必须先卸载 → **登录状态 + 本地缓存全丢** |
+| 先卸载再装 (任何情况) | ⚠️ 同上, 数据丢失 (服务端数据仍在, 重新登录即可恢复) |
+
+### 签名材料 (本机现状)
+
+| 项 | 值 |
+|---|---|
+| 包名 | `cn.nuankebao.app` |
+| keystore | `/home/tooyan/nuankebao-keys/nuankebao-release.jks` (chmod 600, **务必备份**) |
+| 配置 | `flutter_app/android/key.properties` (含密码, 不入 git) |
+| 证书 | `CN=NuankeBao, OU=Mobile, O=NuankeBao` |
+| SHA-256 | `0D:B0:A1:BC:FF:6D:A7:03:B9:FE:3A:3C:05:03:3C:CF:2D:67:E4:F0:B0:4D:69:16:43:19:C1:6B:62:19:00:B6` |
+
+### 发版 SOP
+
+```bash
+# 一条命令: 检查签名 → 打包 → 打印指纹
+bash tools/build-apk.sh                          # 生产域名
+bash tools/build-apk.sh http://192.168.1.200:3004  # 内测 (局域网)
+
+# 装之前对一眼: 旧版 App → 我的 → 网络自检 → 「安装包」那行的签名前 16 位
+#   必须与新 APK 的 SHA-256 前 16 位一致 (0DB0A1BCFF6DA703)
+```
+
+> ⚠️ keystore 丢了 = 以后所有版本的签名都变了 = **全体用户必须卸载重装**。请把
+> `/home/tooyan/nuankebao-keys/` 备份到与代码异地的地方 (建议纳入 `deploy/backup.sh` 的加密备份清单)。

@@ -2,6 +2,25 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (APK 升级与登录态: 签名硬拦截 + 指纹自检 + 一键打包脚本, 2026-09-21)
+
+**主人问**: 「升级 app 后能保持登录状态吗」→ 答案的关键是**签名密钥一致** (Android 只允许同签名覆盖安装,
+签名变了必须先卸载 → app 数据含登录凭证一起没了)。为此做了三件让这件事"可核对"的事:
+
+| 改动 | 内容 |
+|---|---|
+| **硬拦截** (gradle) | `flutter_app/android/app/build.gradle`: release 构建缺少 `key.properties` 时**直接失败**并给中文指引 —— 以前会**静默回退 debug 签名**, 打出与线上签名不同的包 (用户装不上 → 卸载 → 掉登录)。只拦 release (debug/`flutter run` 不受影响), 已实测: 移开 key.properties 跑 `assembleRelease` → 报 [暖客宝] 明确指出原因 |
+| **指纹自检** (App 内) | 新 `shortBuildSignature()` / `installInfoLine()`: 「我的 → 网络自检」新增「安装包」行 (包名 + 版本 + **签名前 16 位**); 「复制诊断信息」也带上; 「关于与帮助」显示同一行 → 发版前后在手机上对一眼即可 |
+| **一键打包** (新脚本) | `tools/build-apk.sh [api-base] [--no-build]`: 检查签名材料 → 打包 (自动带 `--dart-define=NUANKEBAO_API_BASE`) → 打印产物大小 + **签名指纹** (keytool) + 对照口诀 |
+
+**实测**
+- 现有 release APK 签名: `CN=NuankeBao` / `SHA256 0DB0A1BCFF6DA703…` —— **是正式 keystore, 不是 debug key** ✓
+  (debug key 会是 `CN=Android Debug`; 也就是说**历史版本之间签名是连续的, 升级不会掉登录**)
+- `bash tools/build-apk.sh --no-build` → 打印 25.0 MB + SHA1/SHA256 + 对照办法 ✓
+- release 缺 key.properties → 构建失败并指出修法 (fail fast, 不把问题带到用户手机上) ✓
+- `flutter test test/session_token_test.dart` **8 pass** (新增 3 例: 指纹简写/取不到时说人话/安装信息一行文案)
+- `flutter analyze` / `npx tsc --noEmit` (我的文件) 0 error
+
 ### Fixed (退出 App 后又要重新登录 → 同设备长期记住登录, 2026-09-20 主人要)
 
 **主人要**: 「当前 app 退出后又要重新登录。在同一个设备需要能够长期记住登录状态，不限时长」

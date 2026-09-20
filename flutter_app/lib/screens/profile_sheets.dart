@@ -445,6 +445,21 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           _Line(label: '服务地址', value: ApiClient.baseUrl),
+          // 安装包信息: 升级/发版前对照签名 (签名变了 = 覆盖安装会失败, 必须卸载 = 掉登录)
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snap) => _Line(
+              label: '安装包',
+              value: snap.hasData
+                  ? installInfoLine(
+                      packageName: snap.data!.packageName,
+                      version: snap.data!.version,
+                      buildNumber: snap.data!.buildNumber,
+                      buildSignature: snap.data!.buildSignature,
+                    )
+                  : '读取中...',
+            ),
+          ),
           // 登录态 (主人 2026-09-20: 想看"会不会又要重新登录")
           FutureBuilder<String?>(
             future: ApiClient.sessionToken(),
@@ -596,6 +611,12 @@ Future<String> buildDiagnosticText(
     '【暖客宝 诊断信息】',
     '时间: $ts',
     'App: v${info.version} (${info.buildNumber})',
+    '安装包: ${installInfoLine(
+      packageName: info.packageName,
+      version: info.version,
+      buildNumber: info.buildNumber,
+      buildSignature: info.buildSignature,
+    )}',
     '平台: $platform',
     '账号: #${p?.user?.id ?? '?'} ${p?.user?.roleLabel ?? ''}',
     '服务地址: ${ApiClient.baseUrl}',

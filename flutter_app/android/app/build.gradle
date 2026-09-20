@@ -51,10 +51,31 @@ android {
 
     buildTypes {
         release {
-            // 正式签名 (key.properties 存在); 否则回退 debug (仅调试用)
+            // 正式签名 (key.properties 存在); 缺失时见下面 gradle.taskGraph 的硬拦截
             signingConfig = keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }
+}
+
+// ============================================
+// 【硬拦截】release 构建没有 key.properties → 直接失败, 不再静默用 debug 签名
+// ============================================
+// 为什么必须拦 (主人 2026-09-21 问「升级 app 后能保持登录状态吗」):
+//   签名密钥 = Android 允许"覆盖安装"的前提。以前 key.properties 缺失会**静默回退 debug 签名**,
+//   于是打出来的 APK 与线上 APK 签名不同 → 用户装不上, 必须**先卸载** → app 数据(含加密存储里的
+//   登录凭证)一起被清掉 → 用户看到的现象就是"升级后又要重新登录"。
+//   拦在这里: fail fast, 让问题在构建机上暴露, 而不是在用户手机上。
+//
+// 注: 只拦 release 任务 (debug/`flutter run` 不受影响) —— 用 taskGraph 而不是 buildTypes 里 throw,
+//     因为 buildTypes 的闭包在**配置阶段**对所有变体都会执行, 那样 debug 构建也会挂。
+def isReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+if (isReleaseBuild && !keystorePropertiesFile.exists()) {
+    throw new GradleException(
+        "\n\n[暖客宝] release 构建缺少 flutter_app/android/key.properties\n" +
+        "  → 没有它就会静默用 debug 签名, 打出来的 APK 无法覆盖安装到现有用户手机上\n" +
+        "     (用户必须先卸载 → 登录状态与本地数据全丢)\n" +
+        "  修: 放好 key.properties (storeFile 指向正式 keystore), 见 docs/deploy.md 「APK 签名」\n"
+    )
 }
 
 flutter {

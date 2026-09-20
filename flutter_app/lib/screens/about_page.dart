@@ -17,6 +17,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../core/http/session_token.dart';
 import '../core/providers/service_providers.dart';
 import '../core/theme/app_theme.dart';
 import 'profile_sheets.dart';
@@ -82,13 +83,31 @@ class AboutPage extends ConsumerWidget {
                       '版本读取失败',
                       style: TextStyle(fontSize: AppTheme.fontSm),
                     ),
-                    data: (info) => Text(
-                      '版本 v${info.version} (${info.buildNumber})',
-                      style: const TextStyle(
-                        fontSize: AppTheme.fontMd,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primaryDark,
-                      ),
+                    data: (info) => Column(
+                      children: [
+                        Text(
+                          '版本 v${info.version} (${info.buildNumber})',
+                          style: const TextStyle(
+                            fontSize: AppTheme.fontMd,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryDark,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          installInfoLine(
+                            packageName: info.packageName,
+                            version: info.version,
+                            buildNumber: info.buildNumber,
+                            buildSignature: info.buildSignature,
+                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: AppTheme.fontXs,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 4),

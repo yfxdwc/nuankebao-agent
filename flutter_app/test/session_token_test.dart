@@ -71,4 +71,32 @@ void main() {
     expect(sessionExpiryLabel('a.b.c.d.e'), contains('服务器校验'));
     expect(sessionExpiryLabel(null), contains('服务器校验'));
   });
+
+  group('安装包信息 (升级是否掉登录的自检)', () {
+    test('签名指纹: 只显示前 16 位 + 归一化大小写/冒号', () {
+      const sig = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678abc';
+      expect(shortBuildSignature(sig), 'A1B2C3D4E5F60718…');
+      // 安卓可能给 "AA:BB:CC:..." 形式
+      expect(shortBuildSignature('AA:BB:CC:DD'), 'AABBCCDD');
+    });
+
+    test('取不到签名/空值: 说人话, 不崩', () {
+      expect(shortBuildSignature(null), contains('非 Android'));
+      expect(shortBuildSignature(''), contains('非 Android'));
+      expect(shortBuildSignature('   '), contains('非 Android'));
+      expect(shortBuildSignature('zzz'), contains('格式未知'));
+    });
+
+    test('installInfoLine: 包名 + 版本 + 签名都在一行里 (发版前对照用)', () {
+      final line = installInfoLine(
+        packageName: 'cn.nuankebao.app',
+        version: '0.2.5',
+        buildNumber: '7',
+        buildSignature: 'a1b2c3d4e5f60718293a4b5c',
+      );
+      expect(line, contains('cn.nuankebao.app'));
+      expect(line, contains('v0.2.5 (7)'));
+      expect(line, contains('签名 A1B2C3D4E5F60718…'));
+    });
+  });
 }
