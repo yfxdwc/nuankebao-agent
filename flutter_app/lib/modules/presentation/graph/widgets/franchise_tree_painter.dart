@@ -17,6 +17,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../core/models/franchisee.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/member_avatar.dart';
 
 // ============================================
 // 布局结果
@@ -881,6 +882,51 @@ class FranchiseTreePainter extends CustomPainter {
         _drawBadge(canvas, center, '上', AppTheme.badgeNeutral, radius);
       }
     }
+
+    // 7. 会员标识 (主人 2026-09-21 拍): 金色外环 + 👑
+    //   环在**所有**缩放下都画 (细环不占地方, 缩小看全局也要能一眼扫出会员);
+    //   👑 只在 scale >= 0.5 画 (跟关系角标同一减噪口径)。
+    //   位置: 金环在圆外 (radius + 8), 👑 在**右下角** —— 右上角被「直/上」占了,
+    //   错开一角两个信息都看得见 (与列表行「👑 右上 / 类型 右下」是同一套避让原则)。
+    if (node.member && !isFaded) {
+      canvas.drawCircle(
+        center,
+        radius + 8,
+        Paint()
+          ..color = kMemberGold
+          ..strokeWidth = 3
+          ..style = PaintingStyle.stroke,
+      );
+      if (scale >= 0.5) {
+        _drawMemberCrown(canvas, center, radius);
+      }
+    }
+  }
+
+  /// 👑 会员角标 (右下角; 与客户类型/关系角标错位)
+  void _drawMemberCrown(Canvas canvas, Offset center, double nodeRadius) {
+    final badgeCenter = Offset(
+      center.dx + nodeRadius * 0.74,
+      center.dy + nodeRadius * 0.74,
+    );
+    final badgeRadius = math.max(9.0, nodeRadius * 0.32);
+    canvas.drawCircle(
+      badgeCenter,
+      badgeRadius,
+      Paint()..color = Colors.white.withOpacity(0.95),
+    );
+    canvas.drawCircle(badgeCenter, badgeRadius, Paint()..color = kMemberGold);
+    final tp = TextPainter(
+      text: TextSpan(
+        text: '👑',
+        style: TextStyle(fontSize: math.max(10, badgeRadius * 1.25), height: 1.0),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(
+      canvas,
+      Offset(badgeCenter.dx - tp.width / 2, badgeCenter.dy - tp.height / 2),
+    );
   }
 
   /// 节点右上角小角标 (圆形 + 1 字)

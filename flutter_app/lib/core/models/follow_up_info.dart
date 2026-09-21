@@ -149,7 +149,19 @@ class CustomerWithFollowUp {
   final Customer customer;
   final FollowUpInfo? followUp;
 
-  const CustomerWithFollowUp({required this.customer, this.followUp});
+  /// 会员标识 (主人 2026-09-21 拍): 后端 /api/customers 每条现算 (同手机号账号的会员状态)
+  ///
+  /// 为什么挂在这里而不是 freezed 的 Customer 上: `Customer` 是 freezed 生成的,
+  ///   而本仓 build_runner 当前不可用 (`docs/backlog.md` ②: .dart_tool/build_resolvers/sdk.sum
+  ///   缺失 → freezed/json_serializable 无法重新生成)。列表行加字段走手写模型 = 零代码生成。
+  ///   `Customer` 收到多余 JSON key 会被 json_serializable 忽略, 安全。
+  final bool isMember;
+
+  const CustomerWithFollowUp({
+    required this.customer,
+    this.followUp,
+    this.isMember = false,
+  });
 }
 
 /// 列表顶部提醒条 / 分组计数 (仅会员; 后端 summarizeFollowUp)
@@ -222,6 +234,7 @@ class CustomerListResult {
           followUp: m['followUp'] is Map<String, dynamic>
               ? FollowUpInfo.fromJson(m['followUp'] as Map<String, dynamic>)
               : null,
+          isMember: m['isMember'] as bool? ?? false,
         );
       }).toList(),
       total: (json['total'] as num?)?.toInt() ?? raw.length,

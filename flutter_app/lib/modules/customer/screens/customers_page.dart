@@ -18,6 +18,7 @@ import 'dart:math' as math;
 import '../../../core/models/franchisee.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/big_fab.dart';
 import '../widgets/ai_insight_cards.dart';
@@ -470,6 +471,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 customerType: c.customerType,
                 pendingCount: 0,
                 followUp: row.followUp,
+                // 会员标识 = 后端算好的 isMember (同手机号账号的会员状态)
+                isMember: row.isMember,
                 onTap: () => context.push('/customers/${c.id}'),
               );
             },
@@ -626,6 +629,51 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     setState(() => _graphFilter = s.first),
               ),
             ),
+            // 会员图例 + 计数 (主人 2026-09-21 拍): 「20 位加盟客户里 5 位是会员」
+            //   只在真有会员时出现 —— 没会员不占地方 (大多数树一开始没会员)
+            if (_memberCountInTree(tree) > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: kMemberGold.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: kMemberGold.withOpacity(0.55), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('👑', style: TextStyle(fontSize: 13)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '会员 ${_memberCountInTree(tree)} 位',
+                            style: const TextStyle(
+                              fontSize: AppTheme.fontXs,
+                              color: AppTheme.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        '金环 + 👑 = 会员',
+                        style: TextStyle(
+                          fontSize: AppTheme.fontXs,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             // 图谱本体 (复用 modules/presentation/graph 的 painter)
             // fix-graph-ui-v3 (2026-09-17, 主人反馈「ui一堆错误」): 重写初始视图方案
             //   v2 两个致命 bug:
@@ -1059,6 +1107,21 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       aLine: layout.aLineIds.length,
       bLine: layout.bLineIds.length,
     );
+  }
+
+  /// 树里的会员数 (只数下属, 不含「我」= 根节点; 与顶部「共 N 位」同口径)
+  ///   口径 = 后端每个节点现算的 member (绑定账号是会员) → 充值/到期下次拉树即变
+  int _memberCountInTree(FranchiseeTreeNode tree) {
+    var n = 0;
+    void walk(FranchiseeTreeNode node, {required bool isRoot}) {
+      if (!isRoot && node.member) n++;
+      for (final c in node.children) {
+        walk(c, isRoot: false);
+      }
+    }
+
+    walk(tree, isRoot: true);
+    return n;
   }
 
   /// 当前筛选命中的节点 id 集合 (null = 无筛选)

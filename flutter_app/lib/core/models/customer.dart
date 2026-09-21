@@ -71,10 +71,16 @@ class CustomerGraphNode {
   final String name;
   final String? referrerId;
 
+  /// 会员标识 (主人 2026-09-21 拍): 同手机号的账号是不是会员, 后端每次现算
+  ///   充值转会员 / 到期掉会员 → 下次拉图即变 (无需同步任务)
+  ///   老后端不返回该字段 → 默认 false
+  final bool member;
+
   const CustomerGraphNode({
     required this.id,
     required this.name,
     this.referrerId,
+    this.member = false,
   });
 
   factory CustomerGraphNode.fromJson(Map<String, dynamic> json) {
@@ -82,6 +88,7 @@ class CustomerGraphNode {
       id: (json['id'] as String?) ?? '',
       name: (json['name'] as String?) ?? '',
       referrerId: json['referrerId'] as String?,
+      member: json['member'] as bool? ?? false,
     );
   }
 }

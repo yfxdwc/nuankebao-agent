@@ -20,7 +20,7 @@ import { db } from "@/lib/db";
 import { franchisee, membership, referralCode, user } from "@/lib/db/schema";
 import { decryptField, encryptField } from "@/lib/crypto/field";
 import { maskPhone } from "@/lib/utils";
-import { isMemberUntil } from "@/lib/billing/referral";
+import { memberFlagOf } from "@/lib/billing/member-flag";
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 
 export interface AdminUserView {
@@ -53,7 +53,12 @@ export interface AdminNodeView {
   name: string;
   /** 绑定账号的姓名 (与加盟商名不同时前端可补一行「账号: x」) */
   accountName: string | null;
-  /** 父子关系 (placement 二叉树; path 去掉最后 2 字符 = 父 path) */
+  /**
+   * 父子关系 = franchisee.referrer_id (父节点 id)。
+   *
+   * ⚠ 别用 placement_path 推导父: 多根时每个根 path 都是 '' → depth=1 的节点会同时
+   *   匹配到全部根 (JOIN 出重复行, 图谱错位)。path 只是根内相对路径, 跨根不唯一。
+   */
   parentFid: string | null;
   side: "left" | "right" | null;
   depth: number;
@@ -90,7 +95,8 @@ function memberOf(
     return { isMember: true, permanent: true, until: null };
   }
   return {
-    isMember: isMemberUntil(memberUntil, now),
+    // 判定口径唯一在 member-flag.ts (admin 分支上面已提前返回, 这里 role 传非 admin)
+    isMember: memberFlagOf(role, memberUntil, now),
     permanent: false,
     until: memberUntil ? memberUntil.toISOString() : null,
   };
@@ -177,10 +183,12 @@ export async function listAdminNodes(now: Date = new Date()): Promise<AdminNodeV
            u.role                                      AS role,
            m.member_until                              AS member_until
     FROM franchisee f
+    -- ⚠ 父子关系用 referrer_id (父节点 id), 不要用 placement_path 推导:
+    --   多根系统里每个根的 placement_path 都是 '' → 按 path 连父会把 depth=1 的节点
+    --   连到**每一个根**上 (实测 2 个根时节点行数翻倍, 图谱整棵错位)
     LEFT JOIN franchisee p
-           ON f.placement_path <> ''
+           ON p.id = f.referrer_id
           AND p.deleted_at IS NULL
-          AND p.placement_path = left(f.placement_path, length(f.placement_path) - 2)
     LEFT JOIN "user" u
            ON u.franchisee_id = f.id
     LEFT JOIN membership m

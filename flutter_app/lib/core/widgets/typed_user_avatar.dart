@@ -15,10 +15,15 @@
 // 视觉重量刻意分层: 加盟 (环+彩徽章) > 种子 (环+彩徽章) > 普通 (浅灰徽章, 无环)
 //   —— 普通占大多数, 让它安静, 加盟/种子才跳得出来
 // 尺寸: 徽章只在 size >= 40 时画 (更小的头像只留环, 否则 emoji 糊成一团)
+//
+// ★ 会员标识 (主人 2026-09-21 拍): 传 isMember=true → 外环换金色 + 右上角 👑
+//   客户类型 = 右下角 emoji 角标; 会员 = 右上角 👑 角标 → 两种信息两个角, 不打架
+//   (详情见 core/widgets/member_avatar.dart 的三件套说明)
 
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'member_avatar.dart';
 import 'user_avatar.dart';
 
 class TypedUserAvatar extends StatelessWidget {
@@ -32,6 +37,12 @@ class TypedUserAvatar extends StatelessWidget {
   /// 上传图加载中/失败是否显示小菊花 (列表里建议关掉)
   final bool showLoadingIndicator;
 
+  /// 会员标识 (主人 2026-09-21 拍): true = 金环 + 右上角 👑
+  ///   与「客户类型」(环色 + 右下角 🤝/🌱/👤) 各占一套视觉, 互不覆盖:
+  ///     会员 → 外环金色 (类型环让位, 类型仍由右下角 emoji 表达), 右上角 👑
+  ///     非会员 → 类型环照旧, 无 👑
+  final bool isMember;
+
   const TypedUserAvatar({
     super.key,
     required this.avatarUrl,
@@ -39,6 +50,7 @@ class TypedUserAvatar extends StatelessWidget {
     required this.customerType,
     this.size = AppTheme.avatarMd,
     this.showLoadingIndicator = false,
+    this.isMember = false,
   });
 
   /// 类型 → (环/徽章颜色, 角标 emoji, 无障碍文案)
@@ -58,13 +70,18 @@ class TypedUserAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final (badgeColor, badge, typeLabel) = styleOf(customerType);
     // 普通不加环 (只有彩徽章), 加盟/种子加环 → 视觉重量分层
-    final ringColor = customerType == 'normal' ? null : badgeColor;
+    // 会员优先: 金环盖过类型环 (颜色是"这个人付费了"的强信号; 类型看右下角 emoji)
+    final ringColor = isMember
+        ? kMemberGold
+        : (customerType == 'normal' ? null : badgeColor);
     final ringWidth = size >= 48 ? 2.5 : 2.0;
     final showBadge = size >= 40;
+    // 小头像 (size < 40) 放不下第二个角标 → 只留金环 (会员仍然分得出)
+    final showCrown = isMember && showBadge;
     final badgeSize = size * 0.42;
 
     return Semantics(
-      label: '$name, $typeLabel',
+      label: showCrown ? '$name, $typeLabel, 会员' : '$name, $typeLabel',
       child: SizedBox(
         width: size,
         height: size,
@@ -112,6 +129,13 @@ class TypedUserAvatar extends StatelessWidget {
                     ),
                   ),
                 ),
+              ),
+            // 右上角 👑 会员角标 (客户类型角标固定在右下角 → 两角各一个, 不重叠)
+            if (showCrown)
+              Positioned(
+                right: -1,
+                top: -1,
+                child: MemberCrown(avatarSize: size),
               ),
           ],
         ),

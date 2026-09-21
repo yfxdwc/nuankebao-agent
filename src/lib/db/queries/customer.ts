@@ -24,6 +24,10 @@ import {
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
 import { customerRbacFilter, type RbacContext } from "@/lib/auth/rbac";
+import {
+  memberExistsSql,
+  memberFlagByPhoneHash,
+} from "@/lib/billing/member-flag";
 
 // ============================================
 // 客户类型 (API 层用, 包含解密的明文)
@@ -55,6 +59,13 @@ export interface CustomerView {
   isSeed: boolean;
   /** 客户类型 (混合判定, 派生): 加盟 > 种子 > 普通 (「加盟」= 我的下级加盟商) */
   customerType: CustomerType;
+  /**
+   * 会员标识 (主人 2026-09-21 拍: 「会员在别人的列表里也要有明显标识」)
+   *   口径 = 同手机号的**账号**是不是会员 (账号=客户, ADR-0013; role='admin' 也算),
+   *   见 src/lib/billing/member-flag.ts。没有账号的客户恒 false。
+   *   ★ 每次查询现算 (不落库) → 充值 / 到期后下次拉列表即变, 无需同步任务
+   */
+  isMember: boolean;
   /** 上次联系 (互动记录; 跟进紧急度用, 主人 2026-09-20) */
   lastInteractionAt: Date | null;
   /** 上次到店 (养生记录; 跟进紧急度用) */
@@ -161,7 +172,8 @@ export function resolveCustomerType(
 
 function toView(
   row: Customer,
-  isMyDownline: boolean = false
+  isMyDownline: boolean = false,
+  isMember: boolean = false
 ): CustomerView {
   return {
     id: row.id.toString(),
@@ -188,6 +200,7 @@ function toView(
     avatar: readAvatarValue(row.avatar),
     isSeed: row.isSeed,
     customerType: resolveCustomerType(row, isMyDownline),
+    isMember,
     lastInteractionAt: row.lastInteractionAt ?? null,
     lastVisitAt: row.lastVisitAt ?? null,
     createdAt: row.createdAt,
@@ -360,7 +373,12 @@ export async function createCustomer(
     return await tx.insert(customer).values(encryptedData).returning();
   });
   // 新建客户可能同时是「我的下级加盟商」(同手机号有 franchisee 记录) → 类型一次算准
-  return toView(row, await isMyDownlineFranchisee(viewerFranchiseeId, row.phoneHash));
+  // 会员标识同理: 这个手机号可能已经是会员账号 (建号即建档, ADR-0013)
+  return toView(
+    row,
+    await isMyDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
+    await memberFlagByPhoneHash(row.phoneHash)
+  );
 }
 
 export async function getCustomerById(
@@ -380,7 +398,8 @@ export async function getCustomerById(
   return row
     ? toView(
         row,
-        await isMyDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.phoneHash)
+        await isMyDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.phoneHash),
+        await memberFlagByPhoneHash(row.phoneHash)
       )
     : null;
 }
@@ -435,7 +454,12 @@ export async function listCustomers(
   const downline = myDownlineFranchiseeSql(viewerFranchiseeId ?? null);
   const [rows, [{ count }]] = await Promise.all([
     db
-      .select({ row: customer, isDownline: sql<boolean>`${downline}` })
+      .select({
+        row: customer,
+        isDownline: sql<boolean>`${downline}`,
+        // 会员标识: 同手机号账号的会员状态 (EXISTS 子查询, 不产生重复行)
+        isMember: memberExistsSql(sql`u.phone_hash = ${customer.phoneHash}`),
+      })
       .from(customer)
       .where(whereClause)
       .orderBy(
@@ -454,7 +478,9 @@ export async function listCustomers(
   ]);
 
   return {
-    items: rows.map((r) => toView(r.row, r.isDownline === true)),
+    items: rows.map((r) =>
+      toView(r.row, r.isDownline === true, r.isMember === true)
+    ),
     total: count,
   };
 }
@@ -598,7 +624,11 @@ export async function updateCustomer(
   });
 
   return row
-    ? toView(row, await isMyDownlineFranchisee(viewerFranchiseeId, row.phoneHash))
+    ? toView(
+        row,
+        await isMyDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
+        await memberFlagByPhoneHash(row.phoneHash)
+      )
     : null;
 }
 
@@ -632,6 +662,8 @@ export interface CustomerGraphNode {
   name: string;
   /** 推荐人 customer.id, null = 根/孤儿 (无推荐人) */
   referrerId: string | null;
+  /** 会员标识 (同手机号账号的会员状态; 无账号 = false); 口径见 member-flag.ts */
+  member: boolean;
 }
 
 /**
@@ -664,6 +696,7 @@ export async function getCustomerReferralGraph(
       id: customer.id,
       name: customer.name,
       referrerId: customer.referrerId,
+      member: memberExistsSql(sql`u.phone_hash = ${customer.phoneHash}`),
     })
     .from(customer)
     .where(and(...conditions))
@@ -673,5 +706,6 @@ export async function getCustomerReferralGraph(
     id: r.id.toString(),
     name: r.name,
     referrerId: r.referrerId?.toString() ?? null,
+    member: r.member === true,
   }));
 }

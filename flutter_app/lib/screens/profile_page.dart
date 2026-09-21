@@ -32,7 +32,7 @@ import '../core/providers/settings_provider.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/empty_state.dart';
 import '../core/widgets/franchise_chip.dart';
-import '../core/widgets/user_avatar.dart';
+import '../core/widgets/member_avatar.dart';
 import 'profile_sheets.dart';
 import 'profile_widgets.dart';
 
@@ -118,7 +118,7 @@ class _ProfileBody extends ConsumerWidget {
         if (profile.franchisee != null)
           _FranchiseCard(franchisee: profile.franchisee!)
         else
-          const _NotFranchiseeCard(),
+          _NotFranchiseeCard(isAdmin: profile.user?.role == 'admin'),
         profileSectionGap,
         _MembershipCard(profile: profile),
         profileSectionGap,
@@ -183,10 +183,13 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    UserAvatar(
+                    // 会员标识 (主人 2026-09-21 拍): 「会员在自己 app 的头像上也看得到」
+                    //   isMember 来自 GET /api/me → membership (非会员原样, 不加灰框)
+                    MemberAvatar(
                       avatarUrl: p.user?.avatarUrl,
                       name: name,
                       size: AppTheme.avatarLg,
+                      isMember: p.isMember,
                     ),
                     Positioned(
                       right: 0,
@@ -481,10 +484,14 @@ class _FranchiseCard extends StatelessWidget {
 
 /// 没绑加盟关系 (合法状态): 说明清楚 + 给管理员的提示, 不是错误页
 class _NotFranchiseeCard extends StatelessWidget {
-  const _NotFranchiseeCard();
+  /// 系统管理员不参与加盟网络 (§6.5: 管理员身份与加盟商身份建议分离) ——
+  /// 对他来说"找管理员把您加进去"是句废话, 所以要换成"你能做什么"。
+  final bool isAdmin;
+  const _NotFranchiseeCard({this.isAdmin = false});
 
   @override
   Widget build(BuildContext context) {
+    if (isAdmin) return const _AdminNoFranchiseeCard();
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -513,6 +520,53 @@ class _NotFranchiseeCard extends StatelessWidget {
                 fontSize: AppTheme.fontSm,
                 height: 1.5,
                 color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 系统管理员专属: 没有加盟关系, 但要能进**整个系统**的用户页 (不是自己的客户页)
+class _AdminNoFranchiseeCard extends StatelessWidget {
+  const _AdminNoFranchiseeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    // ⚠ 用 elevation:0 + 不透明底色: Card 默认 elevation 1 + 半透明 color 会叠出一层
+    //   灰罩 (2026-09-21 截图实测, 见 /tmp/pa1_top.png), 不是想要的浅绿
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: const Color(0xFFE9F4EE), // 很浅的绿 (primaryLight #A8D5BA 当整卡底色太扎眼)
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.shield_outlined, size: 24, color: AppTheme.primaryDark),
+                SizedBox(width: 8),
+                Text(
+                  '系统管理员',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontMd,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '管理员不挂在加盟网络上 (不参与分佣/上下级), 但能看整个系统的注册用户与加盟商。'
+              '要新开一棵加盟树: 先让本人注册, 再到「管理员工具 → 用户管理」把他设为根节点。',
+              style: TextStyle(
+                fontSize: AppTheme.fontSm,
+                height: 1.5,
+                color: AppTheme.textPrimary,
               ),
             ),
           ],
@@ -584,13 +638,17 @@ class _StatsCard extends StatelessWidget {
           const SizedBox(height: 4),
           const Divider(height: 1),
           InfoRow(label: '累计互动', value: '${s.totalInteractions} 次'),
-          ProfileTile(
-            icon: Icons.account_tree,
-            title: '我的加盟网络',
-            subtitle: '查看上下级 (A线 / B线 图谱)',
-            color: AppTheme.franchisee,
-            onTap: () => context.go('/customers?view=graph'),
-          ),
+          // 加盟网络入口只给**非管理员**: 管理员不挂加盟网络 (看自己的上下级没意义),
+          //   系统级的用户管理/建根收在「管理员工具」里 (主人 2026-09-21 拍:
+          //   「用户管理属于管理员才有的, 应该把入口收到管理员工具页中」)
+          if (profile.user?.role != 'admin')
+            ProfileTile(
+              icon: Icons.account_tree,
+              title: '我的加盟网络',
+              subtitle: '查看上下级 (A线 / B线 图谱)',
+              color: AppTheme.franchisee,
+              onTap: () => context.go('/customers?view=graph'),
+            ),
         ],
       ],
     );
@@ -891,20 +949,12 @@ class _AboutCard extends ConsumerWidget {
           ProfileTile(
             icon: Icons.admin_panel_settings_outlined,
             title: '管理员工具',
-            subtitle: '收款码设置 · 付款申请核销',
+            subtitle: '用户管理 · 收款码设置 · 付款申请核销',
             color: AppTheme.danger,
             onTap: () => context.push('/profile/admin'),
           ),
-        // 用户管理 (主人 2026-09-21 拍): 全部注册用户 + 加盟/未加盟 + 建根
-        //   同样只有 admin 看得见; 建根这种写操作服务端会再查一次 role
-        if (profile.user?.role == 'admin')
-          ProfileTile(
-            icon: Icons.people_alt_outlined,
-            title: '用户管理',
-            subtitle: '全部注册用户 · 加盟 / 未加盟 · 建根',
-            color: AppTheme.primary,
-            onTap: () => context.push('/profile/users'),
-          ),
+        // 「全部用户与加盟商」入口**只放数据概览**那一处 (2026-09-21: 原来这里也有一份,
+        //   同一个页面两个入口 = 冗余; 管理员的主入口应该在最显眼的数据概览区)
         // 服务地址: 开发/排障可见 (生产用户看到 IP 只会困惑)
         if (kDebugMode)
           ProfileTile(

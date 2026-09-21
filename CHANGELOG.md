@@ -2,6 +2,135 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (用户管理入口收进「管理员工具」+ 多棵加盟树可辨识, 2026-09-21)
+
+> **主人原话 (第一次)**: 「系统管理员在'我的'页中要进入的不是'我的加盟网络', 而是整个服务后台的全部用户, 加盟商。
+> 在图谱页显示的就是孤儿节点（未加盟用户）和节点树（已加盟用户）。节点树可能有多个，多个不同的加盟系统
+> 或同一个加盟系统上的不同枝（暂还没上溯到枝的共同上层）」
+> **主人原话 (第二次)**: 「用户管理属于管理员才有的, 应该把入口收到管理员工具页中」
+
+**入口归属: 用户管理 → 管理员工具 (系统级功能不散在「我的」主页)**
+
+- `admin_tools_page.dart` 顶部新增「**用户与加盟**」区 (hint「系统后台」) → 「用户管理」入口 (→ `/profile/users`)
+- `profile_page.dart`:
+  - 「数据概览」**不再**给管理员放用户管理入口 (上一版临时放在这里的, 按主人意见收回)
+  - 「数据概览」的「我的加盟网络」(→ `/customers?view=graph`, = 自己的上下级 A/B 线)
+    对 `role=admin` **不显示** (管理员不挂加盟网络, 进去是空的); 非管理员不变
+  - 「还没绑定加盟关系」提示卡对 admin 换成「**系统管理员**」卡: 说明管理员不挂加盟网络 +
+    指路「管理员工具 → 用户管理」 (原文案"需要挂靠的话找管理员"对管理员本人是句废话)
+  - 「关于与帮助」→「管理员工具」副标题补上「用户管理 · 收款码设置 · 付款申请核销」
+  - 修: 这张卡原来用 `Card(color: primary.withOpacity(0.06))` → M3 Card 默认 elevation 1 +
+    半透明底色会叠出一层**灰罩** (截图实测); 改 `elevation: 0` + 不透明浅绿
+- 权限没变: 入口只对 `role=admin` 显示 (客户端过滤), `GET /api/admin/users` +
+  `POST /api/admin/users/[id]/root` 服务端每次重新查 role (非管理员 403, 冒烟已覆盖)
+
+**图谱: 多棵加盟树 (不同系统 / 同一系统的不同枝)**
+
+- 统计条: 多于 1 棵时显示「加盟树 N 棵」
+- 每棵树顶标「**第 N 棵**」; 图谱区顶部提示「图谱里有 N 棵加盟树 · 左右拖动看其它树」
+- **两个视图按钮** (中老年用户不熟双指缩放, 必须给按钮):
+  「**适应屏幕**」= 缩到装下整张画布 (看结构: 一眼看到所有树 + 未加盟带);
+  「**回到树根**」= 1:1 对准树根 (名字看得清)
+  - 初始视图 = 1:1 对准树根 (字能看清优先), 因为 2000pt 宽的树**不可能**既全又清楚
+- **修一个真 bug (多根才会触发)**: `listAdminNodes` 原来按
+  `p.placement_path = left(f.placement_path, len-2)` 连父子 → 多根时每个根 path 都是 `''`,
+  于是 `L.` 这类 depth=1 节点**同时挂到每一个根**上 → 实测节点行数翻倍 (33 → 35, `76`/`77` 各两份),
+  图谱整棵错位。改成 `p.id = f.referrer_id` (父节点 id, 无歧义)
+- 顺带按 AGENTS §3「修一处必全仓扫同类」全仓扫了 `placement_path` 推导父节点的写法 →
+  `getPlacementTree` / `getFranchiseeTree` / `customer.ts` 子树筛选同样受影响, 属**架构层面**
+  (schema 没存"节点属于哪棵树") → 记入 `docs/backlog.md ⑤` 待主人拍板 (建议加 additive `root_id` 列)
+
+**视觉验收** (playwright + dev 服务): `/tmp/at3.png` (管理员工具 → 用户与加盟区) ·
+`/tmp/at2.png` (点进去 = 用户管理页) · `/tmp/pb1.png` (管理员「我的」: 无用户管理/加盟网络入口 + 新卡) ·
+`/tmp/gd_default.png` (1:1 对准树根) · `/tmp/gd_fit.png` (适应屏幕: 两棵树 + 未加盟带一屏看完)
+
+
+### Added (建根 + 用户管理页: 列表/图谱两视图, 2026-09-21)
+
+> **主人原话**: 「建根 = 先有账号。admin 能建根, 但要用户先注册。管理员的『我的』页面中增加一个
+> 页面入口, 点击可进入全部注册用户管理页面, 可切换列表和图谱 2 种视图, 图谱页中要能显示加盟
+> （接入了节点树的）、未加盟（独立节点）, 付费会员要在头像上有会员标识以作区分」
+
+**建根 (Bootstrap Root) —— 不破坏三方确认怎么启动原始节点**:
+
+- 三方确认 = 发起人 + 本人 + **父节点**; 根**没有父节点** → 三方里有一方物理不存在。
+  所以建根**不进** `placement_requests` 状态机 (硬塞 = 开一条「零确认即执行」的特例分支),
+  改走 **admin 单方 + 审计留痕**, 与 §6.5 管理员落位豁免、§6.6 建号豁免同源; 根存在后节点照旧三方确认
+- **根必须挂到已注册账号** (一个账号一个节点): 不做"凭空造节点", 因为 §6.6「建号即建档」已保证
+  账号背后是真人。校验: 账号存在 / `is_active` / 未在树里 / `note` 必填 2-200 字
+- `src/lib/db/queries/admin-users.ts::createRootForUser()` —— 单事务: `INSERT franchisee
+  (path='', depth=0)` + `UPDATE user.franchisee_id` + 审计上下文; 返回 `rootCount` (支持多根 = 多门店/多团队)
+- `POST /api/admin/users/[id]/root` (admin; 400 业务拒绝不打成 500)
+- 冒烟 `scripts/smoke-bootstrap-root.ts` **13 项全过**: 空原因 / 账号不存在 / 已停用 / 二次建根 400,
+  成功 = `path='' depth=0` + `user.franchisee_id` 指向 + 原因加密留痕 + `audit_log` 有 user 变更记录,
+  以及 **非管理员打两个接口都 403** (HTTP 段, 服务器不可达自动跳过); 幂等自清理 (实测跑完库行数不变)
+- 拍板归档: 允许**多根**; 根**不能解除**; 审计留 `created_by` + `note`; 团队标识暂用 `store_id`
+
+**用户管理页 (APK「我的」→ 关于与帮助 → 用户管理, 仅 `role=admin` 可见)**:
+
+- `GET /api/admin/users` → 一次拉全 `{ users, nodes, summary }`:
+  - `users` = 全部注册账号 (含会员/推荐码/加盟绑定), **手机号只回打码** (明文不出服务端)
+  - `nodes` = 全部加盟节点,**含 29 个没有账号的历史节点** (只回有账号的 = 图谱断成孤岛)
+  - 判"加盟"用 **JOIN 出来的活节点 id** —— dev 库存在 `user.franchisee_id` 指向**软删节点**的脏数据,
+    直接看 `franchisee_id != null` 会把软删节点算成"已加盟" (实测踩到, 已修)
+- Flutter `screens/admin_users_page.dart` + `admin_users_graph.dart`:
+  - 顶部统计条 (共 N 人 · 加盟 · 未加盟 · 会员 · 树里 M 个无账号节点), 列表/图谱切换
+  - **列表视图**: 会员头像 (金环 + 👑)、`加盟`/`未加盟` 胶囊、未加盟账号右侧「设为根节点」(填原因)
+  - **图谱视图**: 上半 = 加盟树 (多根支持; 会员节点 👑; 无账号节点灰圈标「无账号」),
+    下半 = **未加盟 · 独立节点** 平铺带; `InteractiveViewer` 双指缩放 + 拖动 + 「回到树根」FAB
+  - 修 3 个图谱真 bug (都是截图才发现): ① `InteractiveViewer` 默认 `constrained: true` 把画布压成
+    视口大小 → Stack 裁掉画布正中的根节点 → **整片空白** (必须 `constrained: false`);
+    ② 只放 `Positioned` 的 `Stack` 会缩成 0 尺寸 (必须 `StackFit.expand`);
+    ③ 未加盟带贴在画布最左 → 居中到树根后整条在屏幕外 (改为随画布居中)
+  - 图谱初始视图 = 对准**根节点**居中 + 按画布宽度自适应缩放 (`clamp(0.35, 1.0)`),
+    不这么做 2000pt 宽的树只能看到一个节点
+- `core/models/admin_user.dart` (手写模型, 不走 build_runner —— 见 `docs/backlog.md` ②) +
+  `core/services/api.dart::AdminUsersService` + `core/providers/service_providers.dart::adminUsersProvider`
+- 入口 `profile_page.dart`: 「用户管理」只在 `profile.user?.role == 'admin'` 时显示
+  (客户端隐藏只是体验, 两个接口服务端每次重新查 role)
+- 视觉验收 (真浏览器 playwright + dev 服务 + 截图): 「我的」入口 / 列表视图 / 图谱视图
+  (`/tmp/p3.png` · `/tmp/l1.png` · `/tmp/g6.png`)
+- 文档: `docs/api.md` §15 (两个接口 + 不变量表 + 为什么不复用三方确认) · `docs/backlog.md` ① 结项
+
+
+### Added (会员标识体系: 自己 / 图谱 / 列表, 2026-09-21)
+
+> **主人原话**: 「会员不仅能看到自己头像上的会员标识, 在图谱里也要有明显的标识 … 实时同步的,
+> 20 个加盟客户里 5 个是会员 → 那 5 个节点上有标识; 有人充值转为会员标识就出现,
+> 到期没续费标识就消失」
+
+- **后端 (口径唯一在 `src/lib/billing/member-flag.ts`)**:
+  - 新增 `memberFlagOf()` (JS 单行版) + `memberExistsSql()` (SQL 批量版, EXISTS 子查询不产生重复行);
+    判定 = `role='admin'` (永久会员) 或 `membership.member_until > NOW()`, 与 `getMembership` 同一条规则
+  - `getPlacementTree` / `getFranchiseeChildren` / `getFranchiseeTree` → 每个节点带 `member`
+  - `listCustomers` → 每条 `items[].isMember`; `getCustomerReferralGraph` → `nodes[].member`
+  - `admin-users.ts` 的会员判定改用同一函数 (去重复口径)
+  - ★ **不落库不缓存**: 每次查询现算 → 充值/到期后下次拉列表/图谱即变, 零同步任务
+- **Flutter**:
+  - `core/widgets/member_avatar.dart` 拆出可复用三件套 `MemberCrown` (👑 角标) /
+    `MemberRing` (金环) / `MemberAvatar` (三合一)
+  - `TypedUserAvatar` 加 `isMember`: 会员 = 金环 + 右上角 👑; **客户类型角标仍在右下角**
+    (`🤝`/`🌱`/`👤`), 两角各一个不打架; 小头像 (size<40) 只留金环
+  - 客户列表行 `CustomerRow` / 客户页 → 传 `isMember`
+  - 图谱 painter (`franchise_tree_painter.dart`): 会员节点金环 (任意缩放都画) + 右下角 👑
+    (scale≥0.5, 与「直/上」角标错角)
+  - 图谱顶部新增图例行「👑 会员 N 位 · 金环 + 👑 = 会员」(没会员时不出现, 不占地方)
+  - 「我的」页头像改用 `MemberAvatar` (`isMember` 来自 `GET /api/me`)
+  - 模型: `FranchiseeTreeNode.member` (含 copyWith) / `CustomerGraphNode.member` /
+    `CustomerWithFollowUp.isMember` (手写模型 —— freezed 未动, 见下)
+- **测试**: `tests/member-flag.test.ts` (13 例: 纯函数口径 + SQL 等价 + 同一节点
+  「非会员 → 充值 → 到期」三次翻转) · `flutter test test/member_badge_test.dart`
+  (13 例: 角标/金环/两角共存/小头像降级/语义标签/模型兜底)
+- **视觉验收** (真浏览器 playwright, dev 环境): 「我的」页会员头像 👑 / 非会员原样 /
+  图谱会员节点 👑 + 图例计数 / 客户列表会员行 👑; 并实测 **充值 → 标识出现, 到期 → 标识消失**
+  (`/tmp/member-*-graph.png` + `/tmp/member-during-list-search.png`)
+- **文档**: `docs/membership-billing-draft.md` §5.1.1 (标识体系 + 实时口径) · `docs/api.md`
+  (`isMember` / `member` 字段 + `/api/customers/graph` 补文档)
+- ⚠ **为什么列表行的 `isMember` 挂手写模型**: 本仓 `build_runner` 仍不可用
+  (`docs/backlog.md` ②: `.dart_tool/build_resolvers/sdk.sum` 缺失) → 改 freezed 的 `Customer`
+  需要重新生成 `.freezed.dart`/`.g.dart`。绕行 = 手写模型 `CustomerWithFollowUp` 收 `isMember`
+  (`Customer.fromJson` 会忽略多余 key, 安全); 备份/恢复生成物时不受影响
+
 ### Changed (客户列表排序 = 内部规则, 去掉用户选择控件, 2026-09-21)
 
 > **主人原话**: 「排序不需要标签供选择 …… 这是一套背后的排序规则, 不需要标签选择」

@@ -37,6 +37,13 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   bool _viewInitialized = false;
   String _busy = '';
 
+  /// 图谱重置用的 key: 自增 = 重新挂载图谱 → 顺便重摆初始视图
+  int _graphEpoch = 0;
+
+  /// 图谱初始视图: true = 缩到装下整张画布 (主人 2026-09-21 拍: 「图谱默认进来要直接适应屏幕」)
+  /// / false = 对准树根 1:1 (名字清楚, 靠「回到树根」按钮切)
+  bool _graphFitAll = true;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -312,13 +319,75 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                   onSelectionChanged: (v) => setState(() => _view = v.first),
                 ),
               ),
+              // 多棵树时给一句方向提示: 中老年用户不会自己想到"往右拖还有树"
+              if (_view == _View.graph && s.roots > 1)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.swipe_outlined,
+                          size: 18, color: AppTheme.textSecondary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '图谱里有 ${s.roots} 棵加盟树 (不同系统 / 不同枝) · 左右拖动看其它树',
+                          style: const TextStyle(
+                            fontSize: AppTheme.fontSm,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: _view == _View.list
                     ? _list(data)
-                    : AdminUsersGraph(
-                        data: data,
-                        onTapNode: _showNodeSheet,
-                        onTapUser: _showUserSheet,
+                    : Stack(
+                        // ⚠ 必须 expand: 只放 Positioned 子节点的 Stack 会缩成 0 尺寸
+                        //   (截图实测: 图谱整片空白, 只剩重置按钮)
+                        fit: StackFit.expand,
+                        children: [
+                          Positioned.fill(
+                            child: AdminUsersGraph(
+                              key: ValueKey('graph-$_graphEpoch-$_graphFitAll'),
+                              data: data,
+                              fitAll: _graphFitAll,
+                              onTapNode: _showNodeSheet,
+                              onTapUser: _showUserSheet,
+                            ),
+                          ),
+                          // 两个视图按钮 (中老年用户不熟双指缩放复位, 得给按钮):
+                          //   适应屏幕 = 看整张图 (结构) / 回到树根 = 回 1:1 看名字
+                          Positioned(
+                            right: 12,
+                            bottom: 12,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                FloatingActionButton.small(
+                                  heroTag: 'admin-users-graph-fit',
+                                  tooltip: '适应屏幕 (看整张图)',
+                                  onPressed: () => setState(() {
+                                    _graphFitAll = true;
+                                    _graphEpoch += 1;
+                                  }),
+                                  child: const Icon(Icons.zoom_out_map),
+                                ),
+                                const SizedBox(height: 10),
+                                FloatingActionButton.small(
+                                  heroTag: 'admin-users-graph-root',
+                                  tooltip: '回到树根 (1:1 看名字)',
+                                  onPressed: () => setState(() {
+                                    _graphFitAll = false;
+                                    _graphEpoch += 1;
+                                  }),
+                                  child: const Icon(Icons.center_focus_strong),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
               ),
             ],
@@ -335,6 +404,9 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
       '未加盟 ${s.notJoined}',
       '会员 ${s.members}',
     ];
+    // 加盟树可能不止一棵 (不同加盟系统 / 同一系统的不同枝, 暂未上溯到共同上层)
+    //   → 主人数 1 时才不写, 免得常规情况多一句废话
+    if (s.roots > 1) parts.add('加盟树 ${s.roots} 棵');
     if (s.nodesWithoutAccount > 0) parts.add('树里 ${s.nodesWithoutAccount} 个无账号节点');
     return Container(
       width: double.infinity,
@@ -406,7 +478,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                             if (u.referralCode != null) '推荐码 ${u.referralCode}',
                             if (u.createdDate.isNotEmpty) '注册 ${u.createdDate}',
                           ].join(' · '),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: AppTheme.fontXs,

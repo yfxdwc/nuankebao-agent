@@ -154,6 +154,12 @@ class FranchiseeTreeNode {
   /// 仅树根有: 我的下级全深度总数 (不受 depth 影响; 顶部「共 N 位」用)
   final int? totalDescendants;
 
+  /// 会员标识 (主人 2026-09-21 拍: 「会员在别人的图谱里也要有明显标识」)
+  ///   口径 = 该节点绑定账号是不是会员 (role=admin 或 member_until > now()), 后端每次现算
+  ///   → 充值转会员 / 到期掉会员, 下次拉树即变 (无需同步任务)
+  ///   老后端不返回该字段 → 默认 false (非会员/无账号)
+  final bool member;
+
   FranchiseeTreeNode({
     required this.id,
     required this.name,
@@ -165,6 +171,7 @@ class FranchiseeTreeNode {
     this.hasChildren = false,
     this.totalDescendants,
     this.pendingPlacements = const [],
+    this.member = false,
   });
 
   factory FranchiseeTreeNode.fromJson(Map<String, dynamic> json) {
@@ -183,6 +190,7 @@ class FranchiseeTreeNode {
       pendingPlacements: ((json['pendingPlacements'] as List?) ?? [])
           .map((e) => PendingPlacement.fromJson(e as Map<String, dynamic>))
           .toList(),
+      member: json['member'] as bool? ?? false,
     );
   }
 
@@ -204,6 +212,7 @@ class FranchiseeTreeNode {
       // ★ 修 (主人 2026-09-19 虚位可点排查发现): copyWith 漏带 pendingPlacements →
       //   _withLazyChildren 拷贝根节点后「待确认虚位」整个消失 (图谱不画 + 点不到)
       pendingPlacements: pendingPlacements,
+      member: member,
     );
   }
 }

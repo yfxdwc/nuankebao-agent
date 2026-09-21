@@ -218,6 +218,39 @@
 - **永不删用户数据** (含到期一年后)
 - 权益来源可叠加: `member_until = max(now, member_until) + N 天` (顺延, 不吞掉已付时间)
 
+#### 5.1.1 会员标识 (在别人眼里也看得见) — 2026-09-21 主人拍
+
+> **主人原话**: 「会员不仅能看到自己头像上的会员标识, 在图谱里 / 列表里也要有明显的标识,
+> 实时同步的 —— 20 个加盟客户里 5 个是会员, 那 5 个节点上就有标识; 有人充值转会员了
+> 标识就出现, 到期没续费标识就消失」
+
+**标识长什么样** (颜色 + 形状双编码, 老花眼/色弱都认得出):
+- 金色描边 (金环) + 右上角 👑 角标; **非会员什么都不画** (人人带框 = 没有区分度)
+- 与「客户类型」角标 (右下角 🤝/🌱/👤, 见 `core/widgets/typed_user_avatar.dart`) 各占一角, 互不遮挡
+- 只有一个实现: `flutter_app/lib/core/widgets/member_avatar.dart` (`MemberCrown` / `MemberRing` / `MemberAvatar`)
+
+**哪里会出现**:
+
+| 场景 | 位置 | 数据来源 |
+|---|---|---|
+| 自己看自己 | 「我的」页头像 | `GET /api/me` → `membership.isMember` |
+| 看别人的**图谱** | 客户页图谱 tab 每个节点 (含「我」) | `GET /api/franchisees/me/tree` · `/api/franchisees/:id/children` → `member` |
+| 图谱图例 | 节点下方一行「👑 会员 N 位 · 金环 + 👑 = 会员」 | 前端按树里 `member` 计数 (无会员则不占地方) |
+| 看别人的**列表** | 客户列表行头像 | `GET /api/customers` → `items[].isMember` |
+| (预留) 客户推荐图 | `/api/customers/graph` 节点 `member` | 同上口径 |
+
+**「实时同步」怎么做到的 (关键设计)**:
+- 不落库、不缓存任何 member 布尔值: 每次查询用 **EXISTS 子查询现算**
+  (`role='admin' OR membership.member_until > NOW()`), 见 `src/lib/billing/member-flag.ts`
+- 链接关系: 加盟节点 → 绑定账号 (`user.franchisee_id`); 客户档案 → 同手机号账号 (`phone_hash`, ADR-0013)
+- 因此**不需要任何同步任务/定时刷新**: 充值成功或到期后, 下一次拉列表/图谱就是新状态
+- 判定口径只有一处 (`memberFlagOf` = JS 单用户版, `memberExistsSql` = SQL 批量版), 改规则两处一起改
+
+**边界**:
+- 没有账号的节点/客户 (历史数据、脚本造的) 恒判 false —— 没有账号就没有会员/免费之分
+- 管理员账号 (`role='admin'`) 一律算会员 (永久, 与 `getMembership` 同一条"角色即规则")
+- 标识**不泄露隐私**: 只暴露"是不是会员"这一位信息, 不含到期时间/金额/套餐
+
 ### 5.2 订单状态
 
 `created → pending(待支付) → paid` / `closed(30 分钟超时)` / `refunding → refunded`

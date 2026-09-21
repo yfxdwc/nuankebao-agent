@@ -22,6 +22,7 @@ import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 import { logger } from "@/lib/errors";
 import { franchiseeCustomerValues } from "./customer";
 import { franchiseeRbacFilter, type RbacContext } from "@/lib/auth/rbac";
+import { memberExistsSql } from "@/lib/billing/member-flag";
 import { placeNewFranchisee } from "./franchisee-tree";
 
 // ============================================
@@ -374,6 +375,13 @@ export interface TreeNode {
    * — 图谱顶部「共 N 位」用这个, 避免懒加载后数字缩水
    */
   totalDescendants?: number;
+  /**
+   * 会员标识 (主人 2026-09-21 拍: 「会员在别人的图谱里也要有明显标识」)
+   *   口径 = 该节点**绑定账号**的会员状态 (role='admin' 或 member_until > now()),
+   *   见 src/lib/billing/member-flag.ts。没有账号的节点恒 false。
+   *   ★ 每次查询现算 (不落库) → 充值 / 到期后下次拉树即变, 无需同步任务
+   */
+  member: boolean;
 }
 
 interface BuildCtx {
@@ -418,7 +426,15 @@ export async function getFranchiseeTree(
 ): Promise<TreeNode | null> {
   // 查 root
   const [root] = await db
-    .select()
+    .select({
+      id: franchisee.id,
+      name: franchisee.name,
+      placementSide: franchisee.placementSide,
+      placementPath: franchisee.placementPath,
+      placementDepth: franchisee.placementDepth,
+      referrerId: franchisee.referrerId,
+      member: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
+    })
     .from(franchisee)
     .where(and(eq(franchisee.id, rootId), isNull(franchisee.deletedAt)))
     .limit(1);
@@ -440,6 +456,7 @@ export async function getFranchiseeTree(
       placementPath: franchisee.placementPath,
       placementDepth: franchisee.placementDepth,
       referrerId: franchisee.referrerId,
+      member: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
     })
     .from(franchisee)
     .where(
@@ -462,6 +479,7 @@ export async function getFranchiseeTree(
     placementDepth: r.placementDepth,
     placementPath: r.placementPath,
     referrerId: r.referrerId?.toString() ?? null,
+    member: r.member === true,
   }));
   const ctx: BuildCtx = {
     rootId: root.id.toString(),
@@ -478,6 +496,7 @@ export async function getFranchiseeTree(
       placementDepth: root.placementDepth,
       placementPath: root.placementPath,
       referrerId: root.referrerId?.toString() ?? null,
+      member: root.member === true,
     },
     rows,
     depth,
@@ -501,7 +520,15 @@ export async function getPlacementTree(
   depth: number = 3
 ): Promise<TreeNode | null> {
   const [root] = await db
-    .select()
+    .select({
+      id: franchisee.id,
+      name: franchisee.name,
+      placementSide: franchisee.placementSide,
+      placementPath: franchisee.placementPath,
+      placementDepth: franchisee.placementDepth,
+      referrerId: franchisee.referrerId,
+      member: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
+    })
     .from(franchisee)
     .where(and(eq(franchisee.id, rootId), isNull(franchisee.deletedAt)))
     .limit(1);
@@ -518,6 +545,7 @@ export async function getPlacementTree(
         placementPath: franchisee.placementPath,
         placementDepth: franchisee.placementDepth,
         referrerId: franchisee.referrerId,
+        member: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
       })
       .from(franchisee)
       .where(
@@ -536,6 +564,7 @@ export async function getPlacementTree(
     placementDepth: r.placementDepth,
     placementPath: r.placementPath,
     referrerId: r.referrerId?.toString() ?? null,
+    member: r.member === true,
   }));
 
   const rootRaw: RawNode = {
@@ -545,6 +574,7 @@ export async function getPlacementTree(
     placementDepth: root.placementDepth,
     placementPath: root.placementPath,
     referrerId: root.referrerId?.toString() ?? null,
+    member: root.member === true,
   };
 
   const ctx: BuildCtx = {
@@ -576,6 +606,7 @@ export async function getPlacementTree(
       children: rawChildren.map((c) => build(c, depthRemaining - 1)),
       // 全深度真值: 本次没取到的子级也算「有下级」→ 前端才知道能不能展开
       hasChildren: allChildren.length > 0,
+      member: node.member,
     };
   };
 
@@ -629,6 +660,7 @@ export async function getFranchiseeChildren(
       placementPath: franchisee.placementPath,
       placementDepth: franchisee.placementDepth,
       referrerId: franchisee.referrerId,
+      member: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
     })
     .from(franchisee)
     .where(
@@ -667,6 +699,7 @@ export async function getFranchiseeChildren(
     relation: c.referrerId?.toString() === me.id.toString() ? "direct" : "downline",
     children: [],
     hasChildren: hasGrandchild.has(c.id.toString()),
+    member: c.member === true,
   }));
 }
 
@@ -677,6 +710,8 @@ interface RawNode {
   placementDepth: number;
   placementPath: string;
   referrerId: string | null;
+  /** 绑定账号是不是会员 (无账号恒 false); 判定口径见 member-flag.ts */
+  member: boolean;
 }
 
 function buildTree(
@@ -710,6 +745,7 @@ function buildTree(
         children: [],
         // 推荐树模式也标全深度真值 (该节点是否还有更低层下级)
         hasChildren: descendants.some((d) => d.referrerId === c.id),
+        member: c.member,
       };
     }
     return buildTree(c, descendants, depthRemaining - 1, ctx);
@@ -724,6 +760,7 @@ function buildTree(
     relation: classifyRelation(root.id, root.referrerId, ctx),
     children,
     hasChildren: descendants.some((d) => d.referrerId === root.id),
+    member: root.member,
   };
 }
 

@@ -19,6 +19,10 @@ class CustomerRow extends StatelessWidget {
   /// 跟进信息块 (后端算好; 老后端/详情页不传 → null)
   /// 主人 2026-09-20 拍: 左色条(仅会员) + 名字右侧推荐标签 + 第二行「21 天没联系 · 上次电话」
   final FollowUpInfo? followUp;
+
+  /// 会员标识 (主人 2026-09-21 拍): 金环 + 右上角 👑, 画在头像上
+  ///   后端每条客户现算 (同手机号账号的会员状态); 老后端不返回 → false
+  final bool isMember;
   final VoidCallback onTap;
 
   const CustomerRow({
@@ -31,6 +35,7 @@ class CustomerRow extends StatelessWidget {
     this.lastVisitDate,
     this.pendingCount = 0,
     this.followUp,
+    this.isMember = false,
   });
 
   /// 距离生日还有几天 (只在「她设的提醒窗口内」返回, 否则 null → 不显示徽章)
@@ -114,6 +119,8 @@ class CustomerRow extends StatelessWidget {
               customerType: _type,
               size: AppTheme.avatarMd,
               showLoadingIndicator: false,
+              // 会员 = 金环 + 右上角 👑 (客户类型角标仍在右下角, 互不遮挡)
+              isMember: isMember,
             ),
             const SizedBox(width: 12),
 

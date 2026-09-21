@@ -27,11 +27,17 @@ class AdminUsersGraph extends StatefulWidget {
   final void Function(AdminNode node) onTapNode;
   final void Function(AdminUser user) onTapUser;
 
+  /// 初始视图: false (默认) = 对准树根 1:1 (名字看得清, 大树要自己拖);
+  ///           true = 缩到装下整张画布 (看结构, 字会变小)。
+  /// 页面用「回到树根 / 适应屏幕」两个按钮重挂载本组件来切换 (见 _graphEpoch)。
+  final bool fitAll;
+
   const AdminUsersGraph({
     super.key,
     required this.data,
     required this.onTapNode,
     required this.onTapUser,
+    this.fitAll = false,
   });
 
   @override
@@ -40,7 +46,7 @@ class AdminUsersGraph extends StatefulWidget {
 
 // ---------- 布局常量 ----------
 const double _nodeW = 108; // 节点槽宽
-const double _nodeH = 104; // 节点高 (头像 48 + 名字 + 提示)
+const double _nodeH = 112; // 节点高 (头像 48 + 名字 + 提示)
 const double _levelH = 132; // 层高
 const double _gapX = 12; // 兄弟间距
 const double _padX = 40; // 画布左右留白
@@ -60,6 +66,10 @@ class _Box {
 class _AdminUsersGraphState extends State<AdminUsersGraph> {
   final _transform = TransformationController();
 
+  /// 首次布局后把视图居中到树根 (否则从画布左上角开始 = 一大片空白,
+  /// 截图实测: 根看不见, 用户以为"图没出来")
+  bool _centered = false;
+
   @override
   void dispose() {
     _transform.dispose();
@@ -67,7 +77,8 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
   }
 
   // ---------- 加盟树布局 ----------
-  ({List<_Box> roots, Map<String, Offset> pos, Size size}) _layoutTree() {
+  ({List<_Box> roots, Map<String, Offset> pos, Size size, double topPad})
+      _layoutTree() {
     final nodes = widget.data.nodes;
     final byFid = <String, _Box>{for (final n in nodes) n.fid: _Box(n)};
     final roots = <_Box>[];
@@ -95,9 +106,12 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
       return b.width;
     }
 
+    // 多棵树时在最上面留一行放「第 N 棵」标号 (单棵树不占地方)
+    final topPad = roots.length > 1 ? 26.0 : 0.0;
+
     void place(_Box b, double left, double depth) {
       b.x = left;
-      b.y = depth * _levelH;
+      b.y = topPad + depth * _levelH;
       double cursor = left + (b.width - _childrenWidth(b)) / 2;
       for (final c in b.children) {
         place(c, cursor, depth + 1);
@@ -127,9 +141,10 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
     return (
       roots: roots,
       pos: pos,
+      topPad: topPad,
       size: Size(
         w + _padX * 2,
-        (maxDepth + 1) * _levelH + _padY * 2,
+        topPad + (maxDepth + 1) * _levelH + _padY * 2,
       ),
     );
   }
@@ -157,10 +172,33 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
     final isoRows = (isolated.length / isoPerRow).ceil();
     final isoTop = tree.size.height + (isolated.isEmpty ? 0 : 24);
     final canvasH = isoTop + isoRows * _isoSlotH + _padY;
+    // 未加盟带**跟着画布居中**: 贴左边的话, 视图居中到树根后它整条都在屏幕外
+    // (2026-09-21 截图实测: 4 个未加盟只看得见最右 1 个)
+    final isoRowW =
+        (isolated.length < isoPerRow ? isolated.length : isoPerRow) * _isoSlotW;
+    final isoLeft = (canvasW - isoRowW) / 2;
+
+    // 首次挂载 (或点两个视图按钮重挂载后) → 摆好初始视图。
+    // 不摆的话 viewport 从画布左上角开始, 根节点看不见 = 用户以为"图没出来"。
+    if (!_centered) {
+      _centered = true;
+      final rootX = tree.roots.isEmpty
+          ? canvasW / 2
+          : (tree.pos[tree.roots.first.node.fid]?.dx ?? canvasW / 2);
+      _applyInitialView(
+        rootCenterX: rootX,
+        canvasW: canvasW,
+        viewportW: MediaQuery.of(context).size.width,
+        fitAll: widget.fitAll,
+      );
+    }
 
     return ClipRect(
       child: InteractiveViewer(
         transformationController: _transform,
+        // ⚠ 必须 false: 默认 true 会把画布压成视口大小 → Stack 裁掉画布中心的
+        //   根节点 → 整页空白 (2026-09-21 截图实测)。false = 子节点按自身尺寸布局。
+        constrained: false,
         minScale: 0.4,
         maxScale: 2.5,
         boundaryMargin: const EdgeInsets.all(80),
@@ -172,10 +210,7 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
               // 1) 边
               Positioned.fill(
                 child: CustomPaint(
-                  painter: _EdgePainter(
-                    pos: tree.pos,
-                    nodes: data.nodes,
-                  ),
+                  painter: _EdgePainter(pos: tree.pos, nodes: data.nodes),
                 ),
               ),
               // 2) 加盟节点
@@ -191,13 +226,30 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
                       subtitle: n.hasAccount
                           ? (n.isRoot ? '根节点' : '第 ${n.depth + 1} 层')
                           : '无账号',
-                      accountName: n.accountName,
                       avatarUrl: n.avatarUrl,
                       isMember: n.member,
                       noAccount: !n.hasAccount,
                       onTap: () => widget.onTapNode(n),
                     ),
                   ),
+              // 2.5) 多棵树的标号 (不同加盟系统 / 同一系统的不同枝)
+              if (tree.roots.length > 1)
+                for (var i = 0; i < tree.roots.length; i++)
+                  if (tree.pos[tree.roots[i].node.fid] != null)
+                    Positioned(
+                      left: tree.pos[tree.roots[i].node.fid]!.dx - 70,
+                      top: tree.topPad - 24,
+                      width: 140,
+                      child: Text(
+                        '第 ${i + 1} 棵',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: AppTheme.fontSm,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ),
               // 3) 未加盟带 (分隔线 + 标题 + 独立节点)
               if (isolated.isNotEmpty) ...[
                 Positioned(
@@ -208,10 +260,12 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
                   child: Container(color: const Color(0xFFE6E9E5)),
                 ),
                 Positioned(
-                  left: _padX,
+                  left: 0,
+                  width: canvasW,
                   top: tree.size.height + 12,
                   child: Text(
                     '未加盟 · 独立节点 (${isolated.length})',
+                    textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: AppTheme.fontSm,
                       color: AppTheme.textSecondary,
@@ -221,7 +275,7 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
                 ),
                 for (var i = 0; i < isolated.length; i++)
                   Positioned(
-                    left: _padX + (i % isoPerRow) * _isoSlotW,
+                    left: isoLeft + (i % isoPerRow) * _isoSlotW,
                     top: isoTop + 24 + (i ~/ isoPerRow) * _isoSlotH,
                     width: _isoSlotW,
                     height: _isoSlotH,
@@ -240,13 +294,39 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
       ),
     );
   }
+
+  /// 摆初始视图 (首次挂载 / 点「回到树根」「适应屏幕」都走这里)
+  ///
+  /// 两种模式, 因为一张 2000pt 宽的树**装不进手机屏**:
+  ///   - 1:1 对准树根 (默认): 名字看得清, 但只看得到根附近 —— 大树要靠拖动/双指缩放
+  ///   - 适应屏幕: 整张画布缩到屏幕里 (看结构; 20+ 节点的树字会小到看不清)
+  /// 硬要"又全又清楚"是做不到的, 所以给两个按钮让用户自己选, 别替他决定
+  void _applyInitialView({
+    required double rootCenterX,
+    required double canvasW,
+    required double viewportW,
+    required bool fitAll,
+  }) {
+    if (viewportW <= 0) return;
+    if (fitAll) {
+      // 0.15 下限: 防止极端宽的画布算出接近 0 的缩放 (整张图变一个点)
+      final scale = ((viewportW - 16) / canvasW).clamp(0.15, 1.0);
+      final dx = (viewportW - canvasW * scale) / 2;
+      _transform.value = Matrix4.identity()
+        ..translate(dx, 24.0)
+        ..scale(scale);
+      return;
+    }
+    // 1:1 对准树根: 根横向居中, 纵向留 24pt 顶
+    _transform.value = Matrix4.identity()
+      ..translate(viewportW / 2 - rootCenterX, 24.0);
+  }
 }
 
 // ---------- 单个节点卡 ----------
 class _NodeCard extends StatelessWidget {
   final String title;
   final String subtitle;
-  final String? accountName;
   final String? avatarUrl;
   final bool isMember;
   final bool noAccount;
@@ -256,7 +336,6 @@ class _NodeCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.accountName,
     this.avatarUrl,
     this.isMember = false,
     this.noAccount = false,

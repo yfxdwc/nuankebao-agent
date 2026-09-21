@@ -13,6 +13,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/http/api_client.dart';
@@ -171,6 +172,23 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
+            // 用户管理 (主人 2026-09-21 拍): 系统级功能, 收在管理员工具里,
+            //   不散在「我的」主页 (那是每个用户都看得到的页面)
+            ProfileSection(
+              title: '用户与加盟',
+              icon: Icons.people_alt_outlined,
+              hint: '系统后台',
+              children: [
+                ProfileTile(
+                  icon: Icons.people_alt_outlined,
+                  title: '用户管理',
+                  subtitle: '全部注册用户 · 加盟 / 未加盟 · 建根',
+                  color: AppTheme.primary,
+                  onTap: () => context.push('/profile/users'),
+                ),
+              ],
+            ),
+            profileSectionGap,
             ProfileSection(
               title: '收款设置',
               icon: Icons.qr_code_2,

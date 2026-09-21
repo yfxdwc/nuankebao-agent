@@ -105,6 +105,7 @@ callbackUrl: string
       "notes": null,
       "createdAt": "2026-09-03T...",
       "updatedAt": "2026-09-03T...",
+      "isMember": false,                 // ★ 会员标识 (同手机号账号是不是会员)
       "followUp": {
         "daysSinceContact": 21,          // null = 从没联系过
         "lastContactAt": "2026-08-29T...",
@@ -135,6 +136,13 @@ callbackUrl: string
 
 > `summary` 与 `repurchase` **仅会员**下发 (非会员响应里没有这两个键)。
 > 兼容: 老客户端不传 `sort` → 仍是紧急度排序 (新默认); 要旧行为显式传 `sort=new`。
+>
+> **`isMember`** (2026-09-21 加): 这一**条客户**对应的账号是不是会员 ——
+> 口径 = 同 `phone_hash` 的账号 `role='admin'` 或 `membership.member_until > now()`
+> (账号=客户, 见 ADR-0013); 没有账号的客户恒 `false`。
+> 客户端拿它画头像上的会员标识 (金环 + 👑)。
+> **每次查询现算, 不落库** → 充值转会员 / 到期掉会员, 下次拉列表就变 (无需同步任务)。
+> 判定口径唯一在 `src/lib/billing/member-flag.ts` (`memberFlagOf` / `memberExistsSql`)。
 
 ### `GET /api/customers/[id]/follow-up-analysis`
 客户详情页「跟进分析」卡的客观指标 (方案 §7.1)。**全部免费** (方案 §11)。
@@ -163,6 +171,13 @@ callbackUrl: string
 客户详情。
 
 **响应**: `CustomerView` (同 list 项)
+
+### `GET /api/customers/graph`
+客户推荐关系图 (客户页图谱数据源)。节点 `{ id, name, referrerId, member }`, 边由 `referrerId` 派生。
+
+- `referrerId`: 推荐人 `customer.id`, `null` = 根/孤儿
+- `member` (2026-09-21 加): 该客户同手机号账号是不是会员 (口径同列表的 `isMember`)
+- 手机号 / 健康数据**不返回** (PII 最小化); 上限 1000 节点
 
 ### `POST /api/customers`
 创建客户。
@@ -689,6 +704,80 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 
 ### `GET /api/salons/[id]/aggregates`
 聚合统计 (主理人/会务; 受邀者 404): 报名状态分布 + 预计带约总人数 + 已登记客人 + 名额剩余 + 带约任务总额 (`quotaAssignees`/`quotaTotal`/`quotaExpectedTotal`/`quotaGuestTotal`)。
+
+---
+
+## 15. 用户管理 (管理员, 主人 2026-09-21 拍)
+
+> 入口: APK「我的」→ 关于与帮助 → **用户管理** (仅 `role=admin` 可见; 客户端隐藏只是体验)。
+> 为什么做在 APK 不做在 web admin: web admin 冻结中 (ADR-0005), 而建根/看人主人在手机上要做。
+
+### `GET /api/admin/users`
+
+全部注册账号 + 全部加盟节点 (一次拉全, 前端切列表/图谱两种视图)。
+
+```jsonc
+{
+  "users": [{
+    "id": "8", "name": "管理员", "username": null, "role": "admin",
+    "isActive": true, "avatarUrl": null,
+    "phoneMasked": "199****7866",      // ⚠ 只回打码, 明文不出服务端
+    "referralCode": "NP3P3M",
+    "member": { "isMember": true, "permanent": true, "until": null },
+    "franchiseeId": null,               // null = 未加盟 = 图谱里的独立节点
+    "createdAt": "2026-09-19T..."
+  }],
+  "nodes": [{
+    "fid": "75", "name": "杨望", "accountName": "SeedTest-dev用户",
+    "parentFid": null, "side": null, "depth": 0, "isRoot": true,
+    "userId": "1",                       // null = 历史/脚本造的无账号节点
+    "avatarUrl": null, "member": true
+  }],
+  "summary": {
+    "total": 7, "joined": 3, "notJoined": 4, "members": 3,
+    "roots": 1, "nodesWithoutAccount": 29
+  }
+}
+```
+
+- 403 = 非管理员 (`code=FORBIDDEN`)
+- `member` 现算不落库 (`src/lib/billing/member-flag.ts`): `role='admin'` 或 `member_until > NOW()`
+- 节点必须连着**无账号**的一起回: dev 库 32 个节点里 29 个没账号, 只回有账号的 = 图谱断成孤岛
+- `nodes[].parentFid` = `franchisee.referrer_id` (父节点 id), **不是**用 `placement_path` 推导。
+  多棵树时每个根的 `placement_path` 都是 `''`, 按 path 连父会让 depth=1 的节点同时挂到每个根上
+  (实测行数翻倍) → 详见 `docs/backlog.md ⑤` (多根架构问题, 待拍板)
+
+### `POST /api/admin/users/[id]/root` — 建根
+
+主人拍板: 「建根 = 先有账号。admin 能建根, 但要用户先注册」。
+
+```jsonc
+// body
+{ "note": "杭州西湖店 店长" }   // 必填 2-200 字, 审计留痕
+// 201
+{ "franchiseeId": "138", "userId": "9", "name": "小王", "rootCount": 2 }
+```
+
+**为什么不复用 `POST /api/franchisees` / 三方确认**:
+
+三方确认 = 设置者 + 本人 + **父节点**; 根没有父节点 → 三方里有一方物理不存在,
+0 节点时更是两方都不存在。硬塞进状态机会开一条「零确认即执行」的分支 (最容易被后续改动滥用)。
+所以建根走 **admin 单方 + 审计**, 与「管理员落位免多方确认」(`§6.5`) 同一条原则;
+根一旦存在, 后续节点照旧三方确认 (本接口不碰 `placement_requests`)。
+
+**不变量** (任一条不满足 → 400):
+
+| 条件 | 结果 |
+|---|---|
+| `note` 空 / 超 200 字 | 400 建根必须填写原因 |
+| 目标账号不存在 | 400 目标账号不存在 |
+| 目标账号 `is_active=false` | 400 目标账号已停用 |
+| 目标账号已有 `franchisee_id` | 400 该账号已经在加盟树里了 (一人一节点) |
+
+**副作用**: `INSERT franchisee (path='', depth=0)` + `UPDATE user.franchisee_id`。
+账号侧留痕走 `user` 表的审计触发器 (`audit_log`), `note` 加密存进 `franchisee.notes_encrypted`。
+
+**冒烟**: `npx tsx scripts/smoke-bootstrap-root.ts` (13 项, 含非管理员 403; 幂等自清理)
 
 ---
 
