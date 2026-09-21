@@ -314,7 +314,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                                   width: 260,
                                   height: 260,
                                   child:
-                                      _QrImage(url: release.apk!.downloadUrl),
+                                      QrImage(url: release.apk!.downloadUrl),
                                 ),
                                 actions: [
                                   TextButton(
@@ -365,10 +365,14 @@ final _packageInfoProvider = FutureProvider<PackageInfo>(
   (ref) => PackageInfo.fromPlatform(),
 );
 
-/// 服务器生成的下载二维码 (需要登录态 → 用 dio 带 cookie 取字节)
-class _QrImage extends ConsumerWidget {
+/// 服务器生成的下载二维码 (公开端点, 用登录态 dio 仅是因为 dioProvider 已带 cookie
+/// — 后端 apk-qr 已去登录保护, 这里 dio 不带 cookie 也能用)
+///
+/// [size] = 渲染正方形边长 (默认 300; "我的" 页面 APK 二维码传 180 更紧凑)
+class QrImage extends ConsumerWidget {
   final String url;
-  const _QrImage({required this.url});
+  final double size;
+  const QrImage({super.key, required this.url, this.size = 300});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -382,19 +386,32 @@ class _QrImage extends ConsumerWidget {
           .then((r) => Uint8List.fromList(r.data ?? const [])),
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return SizedBox(
+            width: size,
+            height: size,
+            child: const Center(child: CircularProgressIndicator()),
+          );
         }
         final bytes = snap.data;
         if (snap.hasError || bytes == null || bytes.isEmpty) {
-          return const Center(
-            child: Text(
-              '二维码生成失败\n可以先用「复制链接」发给同事',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: AppTheme.fontSm),
+          return SizedBox(
+            width: size,
+            height: size,
+            child: const Center(
+              child: Text(
+                '二维码生成失败\n可以先用「复制链接」发给同事',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: AppTheme.fontSm),
+              ),
             ),
           );
         }
-        return Image.memory(bytes, fit: BoxFit.contain);
+        return Image.memory(
+          bytes,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
       },
     );
   }

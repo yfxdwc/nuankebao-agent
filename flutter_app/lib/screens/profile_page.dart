@@ -122,6 +122,8 @@ class _ProfileBody extends ConsumerWidget {
         profileSectionGap,
         _MembershipCard(profile: profile),
         profileSectionGap,
+        const _InviteCard(),
+        profileSectionGap,
         _StatsCard(profile: profile),
         profileSectionGap,
         const _DisplaySettingsCard(),
@@ -930,13 +932,9 @@ class _AboutCard extends ConsumerWidget {
       title: '关于与帮助',
       icon: Icons.info_outline,
       children: [
+        // 「当前版本」行可点 = 检查更新 (调 showUpdateSheet, 跟旧「检查更新」入口同一弹层)
+        // 2026-09-21 主人: 移除单独的「检查更新」入口 — 两个按钮调同一弹层 = 重复
         const _VersionTile(),
-        ProfileTile(
-          icon: Icons.system_update_alt,
-          title: '检查更新',
-          subtitle: '看服务器上有没有新版本',
-          onTap: () => showUpdateSheet(context, ref),
-        ),
         ProfileTile(
           icon: Icons.menu_book_outlined,
           title: '使用帮助 / 数据安全',
@@ -1018,6 +1016,141 @@ class _VersionTile extends ConsumerWidget {
       },
     );
   }
+}
+
+// ============================================
+// 7.5 邀请被推荐人 (主人 2026-09-21 拍: "app 不准备上应用商店,
+//    需要让被推荐人方便下载 apk")
+// ============================================
+// 设计:
+//   - 二维码链接 = /api/apk-download (公开, 见 src/app/api/apk-download/route.ts 注释)
+//   - 位置: 紧挨「会员」区块 —— 推荐码 + APK 二维码同源 ("被推荐人接入")
+//   - 所有账号可见 (admin / sales / 客服 / 加盟 / 免费), 无关会员状态
+//   - 二维码组件复用 profile_sheets.QrImage (公开化的 _QrImage), size=180 更紧凑
+//   - 备用「复制链接」按钮: 二维码看不清 / 文字渠道 (短信/微信) 直接发链接
+
+class _InviteCard extends ConsumerWidget {
+  const _InviteCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final releaseAsync = ref.watch(appReleaseProvider);
+
+    return ProfileSection(
+      title: '邀请被推荐人',
+      icon: Icons.qr_code_2,
+      hint: '扫码下载暖客宝',
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 4, bottom: 12),
+          child: Text(
+            '把下面的二维码发给被推荐人；他们扫码下载 App 后, 用你的推荐码注册 (双方各得 15 天会员)',
+            style: TextStyle(
+              fontSize: AppTheme.fontSm,
+              color: AppTheme.textSecondary,
+              height: 1.5,
+            ),
+          ),
+        ),
+        releaseAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              '获取 APK 信息失败, 请下拉刷新页面重试 ($e)',
+              style: const TextStyle(
+                fontSize: AppTheme.fontSm,
+                color: AppTheme.danger,
+              ),
+            ),
+          ),
+          data: (release) {
+            final apk = release.apk;
+            if (apk == null || apk.downloadUrl.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  '服务器上还没发布 APK, 请联系管理员',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontSm,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              );
+            }
+            return Column(
+              children: [
+                // 二维码白底卡 (中老年看起来边界清晰, 微信扫码稳)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.primaryLight,
+                      width: 2,
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: QrImage(url: apk.downloadUrl, size: 180),
+                ),
+                const SizedBox(height: 12),
+                // 版本 + 大小 (用户问"这是最新版本吗?" 不必再翻)
+                Text(
+                  '${release.label} · ${_formatSize(apk.sizeBytes)}',
+                  style: const TextStyle(
+                    fontSize: AppTheme.fontXs,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // 备用: 复制链接 (二维码看不清 / 短信/微信直接发)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: apk.downloadUrl),
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              '下载链接已复制',
+                              style: TextStyle(fontSize: AppTheme.fontMd),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.link, size: 22),
+                    label: const Text(
+                      '复制下载链接',
+                      style: TextStyle(fontSize: AppTheme.fontSm),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// 字节数 → "22.2 MB" / "512 KB" (跟 _AboutCard 里「检查更新」按钮显示同口径)
+String _formatSize(int bytes) {
+  if (bytes <= 0) return '—';
+  if (bytes >= 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  if (bytes >= 1024) {
+    return '${(bytes / 1024).toStringAsFixed(0)} KB';
+  }
+  return '$bytes B';
 }
 
 // ============================================
