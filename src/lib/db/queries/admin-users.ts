@@ -54,15 +54,24 @@ export interface AdminNodeView {
   /** 绑定账号的姓名 (与加盟商名不同时前端可补一行「账号: x」) */
   accountName: string | null;
   /**
-   * 父子关系 = franchisee.referrer_id (父节点 id)。
+   * 父子关系 = **placement 父节点 id**, 由 `placement_path` 去尾段推导 —— 但**必须带
+   * `root_id = root_id` 一起匹配** (主人 2026-09-21 拍 B1)。
    *
-   * ⚠ 别用 placement_path 推导父: 多根时每个根 path 都是 '' → depth=1 的节点会同时
-   *   匹配到全部根 (JOIN 出重复行, 图谱错位)。path 只是根内相对路径, 跨根不唯一。
+   * ⚠ 这是踩过两次的坑:
+   *   ① 只用 `p.placement_path = left(f.placement_path, len-2)` → 多根时每个根 path 都是 ''
+   *      → depth=1 的节点同时挂到**每一个根**上 (实测 2 个根时节点行数翻倍, 图谱错位);
+   *   ② 改用 `p.id = f.referrer_id` → 不重复了, 但 `referrer_id` 是**推荐人**不是点位父
+   *      (任意点位落位时 设置者≠点位父, 见 franchisee-placement.ts) → 深度与 path 不一致,
+   *      树会画歪。
+   *
+   * 正解 = ① + root_id 限定 (path 在根内唯一, 加上 root 就全局唯一)。
    */
   parentFid: string | null;
   side: "left" | "right" | null;
   depth: number;
   isRoot: boolean;
+  /** 归属的加盟树 = 根节点 franchisee.id (同 rootFid 的一批节点才是同一棵树) */
+  rootFid: string;
   /** 绑定的账号 (null = 历史/脚本造的节点, 没有账号能登录) */
   userId: string | null;
   avatarUrl: string | null;
@@ -155,7 +164,9 @@ export async function listAdminUsers(now: Date = new Date()): Promise<AdminUserV
 
 /**
  * 全部加盟节点 (含**没有账号**的历史/脚本节点 —— 不带上它们图谱会断成一片孤岛)
- * 父子关系由 placement_path 推导: 'L.R.' 的父 = 'L.' (路径末尾固定 2 字符)
+ *
+ * 父子关系 = placement_path 去尾段 (每段固定 2 字符: 'L.' / 'R.') **+ root_id 同树**。
+ * 多根下 path 只在根内唯一, 所以 root_id 必须进 JOIN 条件 (见 AdminNodeView.parentFid 注释)。
  */
 export async function listAdminNodes(now: Date = new Date()): Promise<AdminNodeView[]> {
   const rows = await db.execute<{
@@ -165,6 +176,7 @@ export async function listAdminNodes(now: Date = new Date()): Promise<AdminNodeV
     side: string | null;
     depth: number;
     path: string;
+    root_fid: string;
     user_id: string | null;
     user_name: string | null;
     avatar_url: string | null;
@@ -177,17 +189,23 @@ export async function listAdminNodes(now: Date = new Date()): Promise<AdminNodeV
            f.placement_side                            AS side,
            f.placement_depth                           AS depth,
            f.placement_path                            AS path,
+           COALESCE(f.root_id, f.id)                   AS root_fid,
            u.id                                        AS user_id,
            u.name                                      AS user_name,
            u.avatar_url                                AS avatar_url,
            u.role                                      AS role,
            m.member_until                              AS member_until
     FROM franchisee f
-    -- ⚠ 父子关系用 referrer_id (父节点 id), 不要用 placement_path 推导:
-    --   多根系统里每个根的 placement_path 都是 '' → 按 path 连父会把 depth=1 的节点
-    --   连到**每一个根**上 (实测 2 个根时节点行数翻倍, 图谱整棵错位)
+    -- 父子关系 = placement_path 去尾段 + **同 root_id**
+    --   (path 段固定 2 字符; root 的 path='' → 减完是 '' → 只能匹配自己 → p.id <> f.id 排除 → NULL)
+    --   ⚠ root_id 不能省: 少了它就是 backlog ⑤ 的跨根串味 (depth=1 挂到每个根上)
     LEFT JOIN franchisee p
-           ON p.id = f.referrer_id
+           ON p.root_id = f.root_id
+          AND p.placement_path = CASE
+                WHEN length(f.placement_path) <= 2 THEN ''
+                ELSE left(f.placement_path, length(f.placement_path) - 2)
+              END
+          AND p.id <> f.id
           AND p.deleted_at IS NULL
     LEFT JOIN "user" u
            ON u.franchisee_id = f.id
@@ -212,6 +230,7 @@ export async function listAdminNodes(now: Date = new Date()): Promise<AdminNodeV
       side: (r.side as "left" | "right" | null) ?? null,
       depth: Number(r.depth ?? 0),
       isRoot: (r.path ?? "") === "",
+      rootFid: String(r.root_fid),
       userId: r.user_id == null ? null : String(r.user_id),
       avatarUrl: r.avatar_url ?? null,
       member: memberOf(r.role ?? "sales", until, now).isMember,
@@ -302,17 +321,27 @@ export async function createRootForUser(
         placementSide: null,
         placementPath: "",
         placementDepth: 0,
+        // root_id 自指: 这一行本身就把新树标识出来了 (INSERT 时还没有 id →
+        //   先写 null, 拿到 id 后立刻补上; 见下面 UPDATE)
+        rootId: null,
         isActive: true,
         notesEncrypted: encryptField(`建根: ${input.note.trim()}`),
         createdBy: input.adminUserId,
       })
       .returning();
 
+    // root_id 自指 (INSERT 时 id 未知, 这里补; 与 placement_path='' 一起构成"这是棵树"的定义)
+    await tx
+      .update(franchisee)
+      .set({ rootId: created.id, updatedAt: sql`NOW()` })
+      .where(eq(franchisee.id, created.id));
+
     await tx
       .update(user)
       .set({ franchiseeId: created.id, updatedAt: sql`NOW()` })
       .where(eq(user.id, input.userId));
 
+    // 根数 = 活着的 path='' 节点 (root_id 自指且在根内唯一, 两者等价; 用 path 保持口径不变)
     const roots = await tx
       .select({ id: franchisee.id })
       .from(franchisee)

@@ -83,6 +83,15 @@ export const franchisee = pgTable(
     placementPath: text("placement_path").notNull().default(""),
     placementDepth: integer("placement_depth").notNull().default(0),
 
+    // 归属哪棵树 (多根支持; 主人 2026-09-21 拍 B1)
+    //   - 值 = 该节点所在**那棵树的根节点 franchisee.id**
+    //   - 根节点自己: rootId = 自己的 id (自指)
+    //   - 为什么必须显式存: placement_path 只在**根内**唯一 —— 多根时每个根 path 都是 ''
+    //     → 「path LIKE 我的 path%」这类子树判定会跨根串味 (根用户会把别的树当下线;
+    //       图谱按 path 连父会把 depth=1 的节点挂到每一个根上, 实测节点行数翻倍)
+    //   - nullable: 兼容 ADR-0004 (老 APK INSERT 不带此列不炸); 新代码一律显式写
+    rootId: bigint("root_id", { mode: "bigint" }),
+
     // 元信息
     joinedAt: timestamp("joined_at", { withTimezone: true })
       .notNull()
@@ -110,6 +119,7 @@ export const franchisee = pgTable(
       table.placementSide
     ),
     pathIdx: index("idx_franchisee_path").on(table.placementPath),
+    rootIdx: index("idx_franchisee_root").on(table.rootId),
     deletedAtIdx: index("idx_franchisee_deleted_at").on(table.deletedAt),
   })
 );
@@ -140,10 +150,14 @@ export const franchisePlacementRequest = pgTable(
   "franchise_placement_request",
   {
     id: bigserial("id", { mode: "bigint" }).primaryKey(),
-    // create 新设 / move 改位置 / unjoin 解除加盟 (主人 2026-09-18 拍)
+    // create 新设 / unjoin 解除加盟 / promote 向上认领上级 (主人 2026-09-18 + 2026-09-21 拍)
     // 主人 2026-09-19 拍: 「移动到其他点位」功能下线 (点位不能直接移动, 必须先解除再重新加盟)
     //   → kind 不再产生 'move'; 列类型保留 text (DB 无 enum 约束, 存量无 move 行)
-    kind: text("kind", { enum: ["create", "unjoin"] }).notNull(),
+    // 主人 2026-09-21 拍 (B2): 新增 'promote' —— 把「我现实里的上级」拉进 app 树, 原树整体下降一层
+    //   字段语义 (promote): initiator_fid = 被上移的现根; target_parent_fid = 同一个锚点
+    //     (= initiator, 于是 requiredRoles 自然给出「双方确认」);
+    //     target_side = 锚点在新根下的左/右; new_* = 新根 (上级) 的资料
+    kind: text("kind", { enum: ["create", "unjoin", "promote"] }).notNull(),
     status: text("status", {
       enum: ["pending", "executed", "rejected", "expired", "cancelled"],
     })
@@ -164,6 +178,7 @@ export const franchisePlacementRequest = pgTable(
     moveFid: bigint("move_fid", { mode: "bigint" }),
 
     // 目标点位 = 父节点 + 左/右
+    //   promote: target_parent_fid = **锚点** (要被上移的现根节点 id), 不是"未来的父"
     targetParentFid: bigint("target_parent_fid", { mode: "bigint" }).notNull(),
     targetSide: text("target_side", { enum: ["left", "right"] }).notNull(),
 
@@ -185,9 +200,11 @@ export const franchisePlacementRequest = pgTable(
   },
   (table) => ({
     // Q4 预占: 同一个 (父节点, 左/右) 只能有一个 pending —— DB 层兜底防并发抢位
+    //   只对 kind='create' 生效 (主人 2026-09-21 拍): unjoin 不占新位;
+    //   promote 的 target_parent_fid 是"锚点"而非空位, 不该占用锚点的子位
     pendingSlotUnique: uniqueIndex("idx_placement_pending_slot")
       .on(table.targetParentFid, table.targetSide)
-      .where(sql`status = 'pending'`),
+      .where(sql`status = 'pending' AND kind = 'create'`),
     initiatorIdx: index("idx_placement_initiator").on(table.initiatorFid),
     statusIdx: index("idx_placement_status").on(table.status, table.expiresAt),
     moveFidIdx: index("idx_placement_move_fid").on(table.moveFid),

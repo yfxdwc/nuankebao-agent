@@ -465,6 +465,28 @@ class FranchiseeService {
     return PlacementRequest.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// 向上认领上级 (主人 2026-09-21 拍 B2): 把现实里的直接上级拉进 app
+  ///   - 我必须是**树根** (服务端硬校验); 上级成为新根, 我这棵子树整体下降一层
+  ///   - 双方确认: 我 (发起人, 自动记 1 票) + 上级本人 (注册登录后在自己的「加盟落位确认」里点同意)
+  ///   - 不需要 targetParentId: 锚点 = 我自己那个根 (服务端填)
+  Future<PlacementRequest> claimUpline({
+    required String side,
+    required String newName,
+    required String newPhone,
+    String? newNotes,
+  }) async {
+    final res = await _dio.post('/franchisees/placement-requests', data: {
+      'kind': 'promote',
+      // ⚠ 后端 promote 不读 targetParentId (锚点=发起人自己); 传 0 只为兼容校验
+      'targetParentId': '0',
+      'side': side,
+      'newName': newName,
+      'newPhone': newPhone,
+      if (newNotes != null) 'newNotes': newNotes,
+    });
+    return PlacementRequest.fromJson(res.data as Map<String, dynamic>);
+  }
+
   /// 列表: scope=mine (我发起的) / to_confirm (等我拍板的)
   Future<List<PlacementRequest>> listPlacementRequests({
     String scope = 'mine',

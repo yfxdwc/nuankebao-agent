@@ -99,11 +99,17 @@ async function rollbackMigration(sql: postgres.Sql, idx: number) {
   }
 
   const tag = entry.tag; // e.g., "0000_elite_ultimo"
-  const downPath = join(process.cwd(), "drizzle", "down", `${tag}.sql`);
+  // ⚠ 两种命名都要认 (2026-09-21 修): 仓里 16 个 down 文件历史上都叫 `<tag>.down.sql`,
+  //   而本脚本原来只找 `<tag>.sql` → `db:migrate:down` 对**所有** migration 都报"找不到"。
+  const candidates = [
+    join(process.cwd(), "drizzle", "down", `${tag}.down.sql`),
+    join(process.cwd(), "drizzle", "down", `${tag}.sql`),
+  ];
+  const downPath = candidates.find((p) => existsSync(p));
 
-  if (!existsSync(downPath)) {
+  if (!downPath) {
     throw new Error(
-      `找不到 down 文件: ${downPath}\n` +
+      `找不到 down 文件: ${candidates.join(" 或 ")}\n` +
         `  → 加性 migration (CREATE TABLE / ADD COLUMN) 可不强求 down, 但破坏性 migration 必带\n` +
         `  → 见 CHARTER §3.5 + ADR-0004`,
     );
@@ -119,9 +125,14 @@ async function rollbackMigration(sql: postgres.Sql, idx: number) {
   console.log(`✓ 回滚 ${tag} 完成\n`);
 
   // 从 __drizzle_migrations 表删记录 (让 up migration 可重跑)
+  // ⚠ 2026-09-21 修: 原来写的是 `WHERE id = ${entry.when}` —— 两处都错:
+  //   ① `id` 是 serial, 跟 journal 的 `when` 无关 → 删错行 (多半删不到);
+  //   ② `entry.when` 是毫秒时间戳 (bigint), 传给 integer 参数 → 22003 out of range,
+  //      于是"down 明明执行成功"却整体报错退出。
+  //   正解 = 按 `created_at` (journal 的 when 写进这一列) 匹配 + 显式 ::bigint
   await sql`
     DELETE FROM drizzle.__drizzle_migrations
-    WHERE id = ${entry.when}
+    WHERE created_at = ${entry.when}::bigint
   `;
   console.log(`✓ 清理 migration journal\n`);
 }

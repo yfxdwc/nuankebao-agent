@@ -109,7 +109,7 @@ export const CUSTOMER_TYPES: readonly CustomerType[] = [
  * SQL: 「这位客户 (customer.phone_hash) 是不是我 (viewerFranchiseeId) 的下级加盟商」
  *
  * 口径与 `getPlacementTree` (图谱 tab 数据源) 严格一致:
- *   - 我的子树 = placement_path 前缀匹配 (`''` 根 → 所有 path <> '' 的节点)
+ *   - 我的子树 = **同 root_id** + placement_path 前缀匹配 (`''` 根 → 同树内所有 path <> '')
  *   - 排除我自己
  *   - 软删加盟商不算
  *
@@ -128,6 +128,9 @@ export function myDownlineFranchiseeSql(
         SELECT 1 FROM franchisee me
         WHERE me.id = ${viewerFranchiseeId}
           AND me.deleted_at IS NULL
+          -- 多根 (B1): 必须先同树 —— path 只在根内唯一, 根用户 path='' 时
+          --   少了这条会把**别的树**的加盟商全部算成"我的下线"
+          AND me.root_id = ${franchisee.rootId}
           AND (
             (me.placement_path = '' AND ${franchisee.placementPath} <> '')
             OR (me.placement_path <> '' AND ${franchisee.placementPath} LIKE me.placement_path || '%')
@@ -151,6 +154,9 @@ async function isMyDownlineFranchisee(
         SELECT 1 FROM franchisee me
         WHERE me.id = ${viewerFranchiseeId}
           AND me.deleted_at IS NULL
+          -- 多根 (B1): 必须先同树 —— path 只在根内唯一, 根用户 path='' 时
+          --   少了这条会把**别的树**的加盟商全部算成"我的下线"
+          AND me.root_id = ${franchisee.rootId}
           AND (
             (me.placement_path = '' AND ${franchisee.placementPath} <> '')
             OR (me.placement_path <> '' AND ${franchisee.placementPath} LIKE me.placement_path || '%')

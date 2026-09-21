@@ -823,6 +823,17 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                               label: '全景',
                               onTap: _fitGraphView,
                             ),
+                            // 向上认领上级 (主人 2026-09-21 拍 B2): 只有**树根**才显示 ——
+                            //   非根用户上面已经有 app 内的上级, 往上发展该由那个根去做
+                            //   (placementSide == null ⟺ 我这张图的根无侧别 = 我是树根)
+                            if (tree.placementSide == null) ...[
+                              const SizedBox(width: 8),
+                              _graphControlButton(
+                                icon: Icons.arrow_circle_up,
+                                label: '认领上级',
+                                onTap: _showClaimUplineDialog,
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -835,6 +846,123 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         );
       },
     );
+  }
+
+  /// 向上认领上级 (主人 2026-09-21 拍 B2) —— 「往根部发展」
+  ///
+  /// 场景 (主人原话): 客户公司 (如碧波庭) 现实里**早就有固有加盟体系**了, app 只是把
+  ///   现公司的加盟树同步进来。admin 指定的初始用户**大概率只是公司体系里的中间层**
+  ///   (比如第 10 层) → 她下面能长 (老的三方确认), 但**上面接不进来** (第 9 层那个上级)。
+  ///
+  /// 做法: 把我现实里的**直接上级 U** 接进 app → U 成为**新根**, 我这棵子树整体下降一层。
+  ///
+  /// 确认方 = **双方** (我 + U 本人): app 里根本没有"上上层"那个人, 也就没人能当老三方
+  ///   —— 跟老规则"父节点 == 设置者 → 双方"是同一条 (U 就是我 app 里的邻接点)。
+  ///   老的三方确认往下生长的方案**完全不变**。
+  Future<void> _showClaimUplineDialog() async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    var side = 'left';
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: const Text('认领我的上级',
+              style: TextStyle(fontSize: AppTheme.fontLg)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '公司现实里的加盟体系已经存在, app 只是把它同步进来。'
+                  '这里把您的直接上级接进来: 她成为新的树根, 您这棵子树整体往下挪一层。\n\n'
+                  '需要双方确认: 您 (自动记 1 票) + 上级本人 (要她先注册登录, '
+                  '再到「加盟落位确认」里点同意)。',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontXs,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('我在上级的哪条线上',
+                    style: TextStyle(fontSize: AppTheme.fontSm)),
+                const SizedBox(height: 6),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'left', label: Text('A线')),
+                    ButtonSegment(value: 'right', label: Text('B线')),
+                  ],
+                  selected: {side},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (v) => setDlg(() => side = v.first),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  style: const TextStyle(fontSize: AppTheme.fontMd),
+                  decoration: const InputDecoration(labelText: '上级姓名 *'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: phoneCtrl,
+                  style: const TextStyle(fontSize: AppTheme.fontMd),
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: '上级手机号 *'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('提交确认', style: TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+          ],
+        ),
+      ),
+    );
+    final name = nameCtrl.text.trim();
+    final phone = phoneCtrl.text.trim();
+    nameCtrl.dispose();
+    phoneCtrl.dispose();
+    if (submitted != true) return;
+    if (name.isEmpty || !RegExp(r'^1[3-9]\d{9}$').hasMatch(phone)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('姓名 / 手机号 填对再提交')),
+      );
+      return;
+    }
+    try {
+      final req = await ref.read(franchiseeServiceProvider).claimUpline(
+            side: side,
+            newName: name,
+            newPhone: phone,
+          );
+      if (!mounted) return;
+      ref.invalidate(placementToConfirmCountProvider);
+      final done = req.status == 'executed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            done
+                ? '已认领: 「$name」成为新的树根 (管理员设置, 立即生效)'
+                : '已提交: 认领「$name」为上级, 等她本人在「加盟落位确认」里同意',
+            style: const TextStyle(fontSize: AppTheme.fontSm),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('提交失败: $e')),
+      );
+    }
   }
 
   /// 选中节点属性条 (名字 · 线别 · 关系 · 层级)

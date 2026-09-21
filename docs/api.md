@@ -781,6 +781,53 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 
 ---
 
+## 16. 加盟落位 (三方确认 + 向上认领)
+
+> 设计: [placement-confirmation-design.md](./placement-confirmation-design.md) ·
+> 多根 + 向上认领: [ADR-0014](./adr/0014-multi-root-and-upline-claim.md)
+> 落位/改位**不立即生效**, 走确认状态机; 72h 未齐自动失效 (`PLACEMENT_TIMEOUT_HOURS`)
+
+### `POST /api/franchisees/placement-requests`
+
+发起一张落位申请 (发起人自动记 1 票 `initiator`)。
+
+| 字段 | 说明 |
+|---|---|
+| `kind` | `create` (新增加盟商) · `unjoin` (解除加盟) · `promote` (**向上认领上级**) |
+| `targetParentId` / `side` | `create`: 目标父节点 + `left`/`right`; `promote`: **免传** `targetParentId` (锚点 = 发起人自己的根) |
+| `newName` / `newPhone` / `newNotes` | `create` = 新加盟商; `promote` = **上级本人** 的姓名/手机 |
+| `unjoinFid` | `unjoin`: 要解除的节点 (老的 `moveFid` 仍接受为别名) |
+
+- `kind='move'` **明确拒绝** (主人 2026-09-19 拍: 点位不能直接移动, 必须先解除再重新落位)
+- 权限: **已加盟用户** 或 **系统管理员**; `promote` 额外要求发起人是**树根**
+  (且不能是管理员代发起); 非管理员只能在自己的 placement 子树内落位 (同一棵树)
+- **管理员发起 = 免多方确认** → 单子直接 `executed` (`verifiedBy='admin'`)
+- 确认方 (`required`):
+  - `create`/`unjoin`: 设置者 + 本人 + 目标父节点 (父节点 == 设置者 → **双方**)
+  - **`promote`: 双方** (发起人 + 上级本人) —— app 里没有"上上层"那个人可当老三方
+- 副作用 (`executed` 后): `create` → INSERT 一个新节点 + 绑账号 + 落客户档案;
+  `promote` → **新节点成为新根**, 原树整体 `path` 加 `L.`/`R.` 前缀 + `depth+1` + `root_id` 迁到新根
+
+**冒烟**: `npx tsx scripts/smoke-upline-promote.ts` (26 项; 含多根不串味 / 图谱不跨树)
+
+### `GET /api/franchisees/placement-requests?scope=mine|to_confirm&status=pending`
+
+- `mine` = 我发起的 · `to_confirm` = 等我拍板的 (我只收到还没表态的那几张)
+- 返回项含 `kind` / `required[]` / `confirms[]` / `myRole` / `myDecision` / `resultFid`
+
+### `POST /api/franchisees/placement-requests/[id]/decide`
+
+`{ "decision": "approve" | "reject" }` — 全 `approve` → 事务内执行落位; 任一 `reject` → 整单作废。
+
+### `POST /api/franchisees/placement-requests/[id]/cancel`
+
+发起人撤回 (pending → cancelled, 点位释放)。
+
+**多根**: `franchisee.root_id` = 所在树的根 `franchisee.id` (根自己自指)。子树/归属判定一律
+「同 `root_id` + `path` 前缀」双条件 —— 少了 `root_id` 会跨树串味 (根用户把别的树当自己的下线)。
+
+---
+
 ## 错误码
 
 | 状态 | 含义 |

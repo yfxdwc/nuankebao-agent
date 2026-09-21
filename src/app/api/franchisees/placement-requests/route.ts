@@ -1,8 +1,10 @@
 // /api/franchisees/placement-requests
 // 加盟落位「三方确认」工作流 (主人 2026-09-18 拍; 见 docs/placement-confirmation-design.md)
 //
-// POST 发起: { kind: 'create'|'unjoin', targetParentId, side, newName?, newPhone?, newNotes?, unjoinFid? }
+// POST 发起: { kind: 'create'|'unjoin'|'promote', targetParentId, side, newName?, newPhone?, newNotes?, unjoinFid? }
 //   - unjoin (解除加盟): 传 kind='unjoin' + unjoinFid=要解除的节点; targetParentId/side 可省 (服务端按节点推)
+//   - promote (向上认领上级, 主人 2026-09-21 拍 B2): 传 kind='promote' + side + 上级 newName/newPhone;
+//     targetParentId 免传 —— 锚点 = 发起人自己的那个根 (服务端填). 双方确认 (我 + 上级本人)
 //   - ⚠ kind='move' (直接移动点位) 已下线 (主人 2026-09-19 拍): 点位变更必须先解除加盟再重新落位
 //     （老的 moveFid 字段名仍接受作为 unjoin 的兼容别名, 但 kind='move' 会被明确拒绝）
 //   - 发起人自动记 1 票 (设置者本人)
@@ -63,10 +65,16 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const kind: "create" | "unjoin" = body.kind === "unjoin" ? "unjoin" : "create";
+  const kind: "create" | "unjoin" | "promote" =
+    body.kind === "unjoin"
+      ? "unjoin"
+      : body.kind === "promote"
+        ? "promote"
+        : "create";
   const unjoinFidRaw = body.unjoinFid ?? body.moveFid;
+  // promote 的锚点 = 发起人自己的根 → 不需要（也不该）让客户端传 targetParentId
   if (
-    kind !== "unjoin" &&
+    kind === "create" &&
     (!body.targetParentId || !/^\d+$/.test(body.targetParentId))
   ) {
     return NextResponse.json({ error: "targetParentId 必填" }, { status: 400 });

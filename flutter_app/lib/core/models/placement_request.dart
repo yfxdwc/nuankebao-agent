@@ -5,8 +5,9 @@
 
 /// 三方确认角色
 /// - initiator      设置者本人 (发起时自动记 1 票)
-/// - new_franchisee 新加盟商本人 (create 按手机号匹配; move 是被移动节点本人)
-/// - target_parent  新位置的上一个节点加盟商 (父节点 == 设置者时不需要)
+/// - new_franchisee 新加盟商本人 (create/promote 按手机号匹配; unjoin 是被解除节点本人)
+/// - target_parent  新位置的上一个节点加盟商 (父节点 == 设置者时不需要;
+///                  promote 的更特殊: app 里没有"上上层"这个人 → 也不需要)
 class PlacementConfirm {
   final String role;
   final String decision; // approve | reject
@@ -34,7 +35,7 @@ class PlacementConfirm {
 
 class PlacementRequest {
   final String id;
-  final String kind; // create | move
+  final String kind; // create | unjoin | promote
   final String status; // pending | executed | rejected | expired | cancelled
   final String initiatorFid;
   final String initiatorName;
@@ -49,6 +50,8 @@ class PlacementRequest {
   final List<PlacementConfirm> confirms;
   final String? myRole;
   final String? myDecision;
+  /// 执行结果: create/promote → 新节点 id; unjoin → 被解除节点 id
+  final String? resultFid;
   final bool backfilled;
   final DateTime? expiresAt;
   final DateTime? createdAt;
@@ -69,6 +72,7 @@ class PlacementRequest {
     required this.confirms,
     this.myRole,
     this.myDecision,
+    this.resultFid,
     this.backfilled = false,
     this.expiresAt,
     this.createdAt,
@@ -93,6 +97,7 @@ class PlacementRequest {
           .toList(),
       myRole: json['myRole'] as String?,
       myDecision: json['myDecision'] as String?,
+      resultFid: json['resultFid']?.toString(),
       backfilled: json['backfilled'] as bool? ?? false,
       expiresAt: json['expiresAt'] != null
           ? DateTime.tryParse(json['expiresAt'].toString())
@@ -127,12 +132,19 @@ class PlacementRequest {
     switch (kind) {
       case 'unjoin':
         return '${initiatorName} 想解除「${unjoinName ?? "加盟商"}」的加盟';
+      case 'promote':
+        // 往上长 (主人 2026-09-21 拍 B2): 我是现根, 把现实里的直接上级拉进来当我上面这层
+        return '${initiatorName} 想把「${newName ?? "上级"}」认领为自己的**上级** '
+            '(接在 ${targetParentName} 上方, 整棵树下降一层)';
       default:
         return '${initiatorName} 想把「${newName ?? "新加盟商"}」加到 ${targetParentName} 的${sideText}';
     }
   }
 
   bool get isUnjoin => kind == 'unjoin';
+
+  /// 向上认领上级 (把现实里的上级接进 app)
+  bool get isPromote => kind == 'promote';
 
   /// 「移动到其他点位」已下线 (主人 2026-09-19 拍): 老存量单只读展示, 不再产生新单
 

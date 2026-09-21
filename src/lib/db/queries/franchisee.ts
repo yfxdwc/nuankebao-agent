@@ -133,6 +133,7 @@ export async function createFranchisee(
     let newDepth: number;
     let newReferrerId: bigint | null;
     let newSide: PlacementSide | null;
+    let newRootId: bigint | null;
 
     if (input.referrerId) {
       const [parent] = await tx
@@ -149,11 +150,14 @@ export async function createFranchisee(
       newSide = placement.side;
       newPath = parent.placementPath + (placement.side === "left" ? "L." : "R.");
       newDepth = parent.placementDepth + 1;
+      // 同树 (B1): 跟着落位的父节点走
+      newRootId = parent.rootId ?? parent.id;
     } else {
       newReferrerId = null;
       newSide = null;
       newPath = "";
       newDepth = 0;
+      newRootId = null; // 新根 → INSERT 后自指 (见下)
     }
 
     // 3. INSERT franchisee
@@ -165,15 +169,25 @@ export async function createFranchisee(
       placementSide: newSide,
       placementPath: newPath,
       placementDepth: newDepth,
+      rootId: newRootId,
       isActive: true,
       notesEncrypted: input.notes ? encryptField(input.notes) : null,
       createdBy,
     };
 
-    const [newFranchiseeRow] = await tx
+    let [newFranchiseeRow] = await tx
       .insert(franchisee)
       .values(encryptedData)
       .returning();
+
+    // 新根: root_id 自指 (INSERT 时没有 id, 只能建完补)
+    if (newRootId == null) {
+      [newFranchiseeRow] = await tx
+        .update(franchisee)
+        .set({ rootId: newFranchiseeRow.id, updatedAt: sql`NOW()` })
+        .where(eq(franchisee.id, newFranchiseeRow.id))
+        .returning();
+    }
 
     // 4. 打通: 加盟商同步落一份客户档案 (主人 2026-09-18 拍, 方案 A)
     //    - 同一事务 → 任一步失败一起回滚 (不会出现“有加盟商没客户”)
@@ -433,6 +447,7 @@ export async function getFranchiseeTree(
       placementPath: franchisee.placementPath,
       placementDepth: franchisee.placementDepth,
       referrerId: franchisee.referrerId,
+      rootId: franchisee.rootId,
       member: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
     })
     .from(franchisee)
@@ -446,6 +461,9 @@ export async function getFranchiseeTree(
   // depth = 1 → path LIKE 'L.%' OR 'R.%' (depth 1)
   // depth = 2 → path LIKE 'L.%.%' OR 'R.%.%'... 用正则
   const pathPrefix = root.placementPath;
+  // ⚠ 多根 (B1): path 只在根内唯一 → 必须同时限定 root_id, 否则根的 '所有 path<>'' 的节点'
+  //   会把别的树整棵吞进来
+  const rootIdOf = root.rootId;
 
   // 简单做法: 查所有 path 起始于 root.path 的节点, 然后在应用层剪枝
   const allDescendants = await db
@@ -462,6 +480,7 @@ export async function getFranchiseeTree(
     .where(
       and(
         isNull(franchisee.deletedAt),
+        sql`${franchisee.rootId} IS NOT DISTINCT FROM ${rootIdOf}`,
         // path 是 '' (root) 时, 所有非 root 都是子孙
         // path 非 '' 时, 找 path 以 root.path 开头的节点
         root.placementPath === ""
@@ -527,6 +546,7 @@ export async function getPlacementTree(
       placementPath: franchisee.placementPath,
       placementDepth: franchisee.placementDepth,
       referrerId: franchisee.referrerId,
+      rootId: franchisee.rootId,
       member: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
     })
     .from(franchisee)
@@ -551,6 +571,8 @@ export async function getPlacementTree(
       .where(
         and(
           isNull(franchisee.deletedAt),
+          // 多根 (B1): 同树限定; 少了它, 根用户的图谱会把别的树整棵画进来
+          sql`${franchisee.rootId} IS NOT DISTINCT FROM ${root.rootId}`,
           root.placementPath === ""
             ? ne(franchisee.placementPath, "")
             : like(franchisee.placementPath, root.placementPath + "%")
@@ -645,11 +667,14 @@ export async function getFranchiseeChildren(
     .limit(1);
   if (!me) return [];
 
+  // 多根 (B1): 先判同树, 再判 path 前缀 (根用户 path='' 时"谁都是我的子孙"只在同一棵树里成立)
+  const sameRoot = (node.rootId ?? node.id) === (me.rootId ?? me.id);
   const inMySubtree =
     node.id === me.id ||
-    (me.placementPath === ""
-      ? node.placementPath !== ""
-      : node.placementPath.startsWith(me.placementPath));
+    (sameRoot &&
+      (me.placementPath === ""
+        ? node.placementPath !== ""
+        : node.placementPath.startsWith(me.placementPath)));
   if (!inMySubtree) return [];
 
   const children = await db

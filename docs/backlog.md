@@ -96,7 +96,24 @@
 
 ---
 
-## ⑤ 多根加盟树: `placement_path` 跨根不唯一 · 🔴 待主人拍板（2026-09-21）
+## ⑤ 多根加盟树: `placement_path` 跨根不唯一 · ✅ 已落地（2026-09-21）
+
+> **主人 2026-09-21 拍板**: 「**要支持多根**」→ 走**方案 A**（additive `root_id` 列）。
+> 同时拍板**新增「往根部发展」方案**（向上认领上级, `kind=promote`）——
+> 因为客户公司现实里已有固有加盟树, app 只是同步它, 而初始用户大概率是中间层。
+> 落地清单 / 决策全文: **[ADR-0014](../adr/0014-multi-root-and-upline-claim.md)**;
+> 变更: `CHANGELOG.md`; 冒烟: `scripts/smoke-upline-promote.ts`（26 项全过）。
+>
+> **落地摘要**:
+> - `drizzle/0017_multi_root_promote.sql`: `franchisee.root_id` + 索引 + 递归 CTE 回填 + 预占索引收紧到 `kind='create'`
+> - 5 处子树/归属判定加「同 `root_id`」限定（`admin-users` / `getPlacementTree` / `getFranchiseeTree` /
+>   `getFranchiseeChildren` / `customer.ts` 加盟判定 / `rbac.ts`）
+> - `kind='promote'`: 现根认领现实里的直接上级 → 上级成新根, 整棵子树下降一层; 双方确认; 往下生长的三方确认**不变**
+> - Flutter: 客户图谱底部「认领上级」（仅树根可见）+ 待确认页 promote 文案
+>
+> ⬇️ 以下为**原始 recon 记录**（保留作决策背景, 结论以上文为准）
+
+### 原始 recon（2026-09-21 上午）
 
 > **怎么发现的**: 主人说「节点树可能有多个（不同加盟系统 / 同一系统的不同枝）」→ 我用
 > `POST /api/admin/users/2/root` 在 dev 库里真造了第 2 个根（先用后回滚），第一次拉

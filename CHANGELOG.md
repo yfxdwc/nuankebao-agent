@@ -2,6 +2,72 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (多根加盟树 + 向上认领上级, 2026-09-21)
+
+> **主人原话**: 「要支持多根。」「图谱默认进来要『直接适应屏幕』。」
+> 「在使用暖客宝 app 之前, 用户 (比如碧波庭公司的加盟系统) 公司系统**已经存在固有的加盟体系 (节点树)** 了
+> …… app 在**兼容已有加盟树**的同时也长出新枝 …… 新团队初始用户大概率只是公司加盟系统里的**中间层**
+> …… 原来的三方确认**往上生长**的方案不变, 需要增加**往根部发展**用户的方案。」
+
+**多根 (B1): `franchisee.root_id`** — ADR-0014
+
+- 根因: `placement_path` 只在**根内**唯一 (每个根都是 `''`) → 一切"从根往下找子树"的写法跨根串味。
+  实测: 2 个根时 `listAdminNodes` 节点行数翻倍 (33 → 35, `L.` 同时挂在两个根上)。
+  更严重的是**可见性**: 根用户的「我的加盟网络」/客户列表「加盟」筛选会把**别的树**全算成自己的下线
+  (`customer.ts` / `rbac.ts` 同源)
+- `drizzle/0017_multi_root_promote.sql`: 加 `root_id` (值 = 所在树的根 franchisee.id, 根自己自指) +
+  `idx_franchisee_root` + **递归 CTE 回填**(沿 `referrer_id` 爬到最高祖先, 不爬进软删父节点);
+  `pnpm db:compat` 0 error / 0 warning; 带 `drizzle/down/0017_*.down.sql`
+- 维护点 (所有 `INSERT franchisee` 路径都写): `createRootForUser` / `executeRequest` /
+  `createFranchisee` / promote 新根
+- 5 处查询改成「**同 root_id + path 前缀**」双条件: `admin-users.listAdminNodes` (父子改为
+  `path 去尾段 + root_id`, 不再用 `referrer_id` 当父 —— 那是**推荐人**, 任意点位落位时 ≠ 点位父) /
+  `getPlacementTree` / `getFranchiseeTree` / `getFranchiseeChildren` / `myDownlineFranchiseeSql` /
+  `franchiseeRbacFilter` / `slotTaken` / 各子树校验
+- 拍板: 根用户的「我的加盟网络」**只显示自己那棵**; 别的树归管理员图谱看
+
+**向上认领上级 (B2): `kind='promote'`** — 往根部发展
+
+- 老方案物理上做不到: 三方确认 = 设置者 + 本人 + **父节点**, 且强制 `targetParentFid` 已存在;
+  「第 10 层想把第 9 层拉进来」时第 9 层的父 (第 8 层) 在 app 里不存在 → 第三方物理不存在
+- 做法: 现根 A 填上级 U 的姓名/手机 + 我在 U 的哪条线 → **U 成为新根, A 整棵子树整体下降一层**
+  (path 统一加 `L.`/`R.` 前缀 + depth +1 + root_id 迁到 U)。可反复执行 → 一层层同步公司现有体系
+- 确认方 = **双方** (A + U 本人): promote 的 `target_parent_fid` 存的就是锚点 A →
+  `requiredRoles(A, A)` 自然给出双方, 与老规则「父节点 == 设置者 → 双方」**同一条, 代码零特例**
+- **老的往下生长的三方确认完全不变** (只新增 kind, 没动 `create` / `unjoin`)
+- 硬校验: 只有**树根**能发起 / 管理员不能代发起 / 不能认领自己 / 上级已是加盟商则拒 / 同根同时只能 1 张 pending
+- 预占唯一索引收紧为 `WHERE status='pending' AND kind='create'` (unjoin 不占新位; promote 的锚点不是空位)
+- `PlacementRequestView` 新增透出 `resultFid` (客户端可知道执行后落在哪个节点)
+
+**Flutter**
+
+- 客户图谱底部新增「**认领上级**」按钮 (**仅树根可见** = `tree.placementSide == null`) →
+  填上级姓名/手机 + A线/B线 → 提交后等双方确认 (上级本人注册登录后在「加盟落位确认」点同意)
+- 「加盟落位确认」页 promote 文案: 「X 想把「U」认领为自己的上级 (接在 X 上方, 整棵树下降一层)」
+- 图谱**默认进来就是「适应屏幕」** (主人 2026-09-21 拍): `admin_users_page.dart` 初始 `_graphFitAll = true`
+  → 进页面一屏看完所有树 + 未加盟带; 右下角两个 FAB 仍可切「回到树根」1:1
+
+**顺带修: `pnpm db:migrate:down` 两个 bug** (为验证 0017 的 down 才暴露, 影响全部 16 个历史 down 文件)
+
+- ① down 文件查找路径写死 `<tag>.sql`, 而仓里历史 down 全叫 `<tag>.down.sql` →
+  **所有** migration 回滚都报"找不到 down 文件"; 改成两种命名都认
+- ② 清 journal 写的是 `WHERE id = <journal.when>` —— `id` 是 serial 与 when 无关 (删错行) 且
+  when 是毫秒 bigint 传给 integer 参数 → `22003 out of range`, 于是"down 明明执行成功"却整体报错退出;
+  改成 `WHERE created_at = <when>::bigint`
+- 验证: `db:migrate:down 17` → `db:migrate` 往返一次, `root_id` 38/38 回填正确
+
+**验证**
+
+- 后端冒烟 `scripts/smoke-upline-promote.ts` **26 项全过** (非根发起拒 / 认领自己拒 / 上级已在树拒 /
+  双方确认 / 重复认领拒 / 执行后新根 path='' depth=0 root_id 自指 + 原根 `L.` depth=1 + 子孙 `L.L.` depth=2 /
+  **另一棵树没被动过** / **图谱查询不跨树** / 管理员图谱**无重复节点行**)
+- 回归: `smoke-bootstrap-root` 13/13 · `smoke-placement-confirm` (create/unjoin 全流程) 全过 ·
+  `smoke-placement-rules` 6/6 · `npx vitest run` **239/239 全过**
+- 前端截图: `/tmp/mr_fit2.png` (用户管理图谱默认适应屏幕: 整棵树 + 未加盟独立节点一屏装下) ·
+  `/tmp/claim_dlg.png` (认领上级弹层) · `/tmp/mr_after_claim.png` (UI 走完 promote 后: 新根在顶, 原根降到第 2 层, 整棵树下降一层)
+- 记忆: `docs/adr/0014-multi-root-and-upline-claim.md` (新建) · `docs/backlog.md ⑤` → ✅ · ADR INDEX 更新
+
+
 ### Changed (用户管理入口收进「管理员工具」+ 多棵加盟树可辨识, 2026-09-21)
 
 > **主人原话 (第一次)**: 「系统管理员在'我的'页中要进入的不是'我的加盟网络', 而是整个服务后台的全部用户, 加盟商。

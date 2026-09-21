@@ -122,11 +122,13 @@ export async function franchiseeRbacFilter(ctx: RbacContext) {
   // depth 3: path LIKE 'myPath.%.%.%'
   // 简化为: 我 + 我直接下线 + 我的上线的下线 (depth ≤ 3)
   const [my] = await db
-    .select({ path: franchisee.placementPath })
+    .select({ path: franchisee.placementPath, rootId: franchisee.rootId })
     .from(franchisee)
     .where(eq(franchisee.id, myFid))
     .limit(1);
   const myPath = my?.path ?? "";
+  // 多根 (B1): 子树判定必须同树; 少了它, 根用户 (path='') 会看见所有树的节点
+  const myRootId = my?.rootId ?? myFid;
 
   const conditions = [
     eq(franchisee.id, myFid),                 // 我自己
@@ -140,7 +142,9 @@ export async function franchiseeRbacFilter(ctx: RbacContext) {
     // 但更精确: referrer = my_referrer, depth <= 3
     // 简化: 包括所有 path LIKE 'myPath%' 但 depth - my_depth <= 3
     // 这里我们用 placement_path LIKE myPath% 覆盖子树
-    conditions.push(sql`${franchisee.placementPath} LIKE ${myPath + "%"}`);
+    conditions.push(
+      sql`(${franchisee.rootId} = ${myRootId} AND ${franchisee.placementPath} LIKE ${myPath + "%"})`
+    );
   }
 
   return or(...conditions)!;
