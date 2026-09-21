@@ -4,8 +4,10 @@
 // 规则: ① 只有「已加盟用户」或「系统管理员」能设置加盟
 //       ② 系统管理员设置加盟**不需要多方确认** (直接落位)
 //       ③ 用户不能给自己设置成加盟用户
+//       ④ **节点 ⇒ 账号** (主人 2026-09-21 拍: 「要成为节点首先必需有账号」)
+//          → 给一个没注册过的人落位 = 拒 (事务回滚, 不留下无账号节点)
 //
-// 跑: npx tsx scripts/smoke-placement-rules.ts
+// 跑: set -a && . ./.env.local && set +a && npx tsx scripts/smoke-placement-rules.ts
 // 幂等: 用手机号 13900006666, 跑完自己清理
 // ============================================
 
@@ -19,9 +21,12 @@ import {
   customer,
   franchisePlacementRequest,
   franchisePlacementConfirm,
+  referralCode,
+  user,
 } from "@/lib/db/schema";
 import { hashForLookup } from "@/lib/crypto/field";
 import { createPlacementRequest } from "@/lib/db/queries/franchisee-placement";
+import { createAccountWithProfile } from "@/lib/auth/registration";
 
 const ROOT_FID = BigInt(process.env.ROOT_FID ?? "75");
 const NEW_PHONE = "13900006666";
@@ -87,6 +92,15 @@ async function cleanup() {
   for (const f of created) {
     await db.delete(franchisee).where(eq(franchisee.id, f.id));
   }
+  // ④ 之后会真建一个账号 → 一并清干净 (否则下一轮撞"该手机号已有账号")
+  const users = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.phoneHash, hash));
+  for (const u of users) {
+    await db.delete(referralCode).where(eq(referralCode.userId, u.id));
+    await db.delete(user).where(eq(user.id, u.id));
+  }
 }
 
 (async () => {
@@ -134,6 +148,53 @@ async function cleanup() {
       msg
     );
   }
+
+  // ④ 节点 ⇒ 账号: 这位还没注册 → 管理员也不能凭空给她造节点 (事务回滚)
+  try {
+    await createPlacementRequest(
+      {
+        ...base,
+        initiatorFid: ROOT_FID,
+        initiatorIsAdmin: true,
+        initiatorPhoneHash: hashForLookup("13800138000"),
+      },
+      ctx
+    );
+    check("④ 给未注册的人落位 → 应该被拒", false, "居然成功了");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    check(
+      "④ 给未注册的人落位 → 被拒 (节点必须对应账号)",
+      msg.includes("节点必须对应一个账号"),
+      msg
+    );
+  }
+  // ④ 之后: 建号 (走正规建号入口) → 再落位就通了
+  const [code] = await db
+    .select({ code: referralCode.code })
+    .from(referralCode)
+    .limit(1);
+  if (!code) throw new Error("库里没有推荐码, 先跑 seed");
+  const [admin] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.role, "admin"))
+    .limit(1);
+  if (!admin) throw new Error("库里没有 admin, 先跑 pnpm db:ensure-admin");
+  await createAccountWithProfile({
+    name: "规则冒烟-测试",
+    phone: NEW_PHONE,
+    password: "Test1234",
+    referralCode: code.code,
+    actorUserId: admin.id,
+  });
+  // 落位残留兜底: ④ 被拒后应该什么都没留下
+  const [leftover] = await db
+    .select({ id: franchisee.id })
+    .from(franchisee)
+    .where(eq(franchisee.phoneHash, hashForLookup(NEW_PHONE)))
+    .limit(1);
+  check("④ 被拒后没留下无账号节点 (事务回滚)", leftover == null, `残留 fid=${leftover?.id}`);
 
   // ② 管理员发起 → 免多方确认, 直接 executed
   const view = await createPlacementRequest(

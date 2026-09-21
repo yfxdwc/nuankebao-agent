@@ -358,6 +358,41 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 - ✅ 冒烟: `scripts/smoke-registration.ts` (无码被拒 / 建档 / 码归属 / no_link / 409 / admin 豁免)
 - ⚠️ 用户 ↔ 客户仍是**手机号 hash 约定, 无 FK 列** (后续可加 `user.customer_id`, additive)
 
+## §6.7 节点 ⇒ 账号 不变量 (加盟节点必须对应账号, 主人 2026-09-21 拍)
+
+> **主人原话**: 「无账号节点为什么要存在? 不能禁止/消除无账号节点吗, **要成为节点首先必需有账号**。」
+
+- ✅ **唯一口径** = `src/lib/db/queries/franchisee-account.ts`
+  - 新建节点前必过 `requireAccountForNode(tx, phoneHash)` (没有 active 账号 → 抛人话错误, 事务回滚)
+  - 建完必过 `assertNodeHasAccount(tx, fid)` (兜脏数据 / 并发停用; 失败即回滚)
+  - 三条建节点路径都已接入: `createFranchisee` (老 `POST /api/franchisees`) / 三方确认 `create` / `promote`
+- ✅ **注册自愈** (`adoptOrphanNodeForNewAccount`, 在 `registration.ts` 建号事务内):
+  新账号手机号命中"没账号的既有节点" → **自动绑上**, 不新建重复节点
+- ✅ **巡检 / 处理**: `npx tsx scripts/audit-orphan-nodes.ts`
+  (默认只报清单 / `--bind` 补账号 / `--prune` 软删**没有下线**的孤儿; 有下线的必须人工处理)
+- ❌ **禁止** 直接 `db.insert(franchisee)` 或绕过 `franchisee-account.ts` 建节点
+- ❌ **禁止** seed / 脚本 / 一次性任务 造"先建节点、后不管账号"的数据
+  (`scripts/seed-test-data.ts` 2026-09-21 已改: **每个节点先建账号再建节点**;
+  历史那 29 个孤儿是这么来的, 已用 `--bind` 补齐)
+- ⚠️ **没账号的节点不能被搬**: 既当不了上层, 也上不了「管理员强改上层」—— 逼着先解决账号
+
+## §6.8 加盟树结构改动 (含管理员「强改上层」, 主人 2026-09-21 拍)
+
+> **主人原话**: 「『上层』= 点位父 …… **上层一旦有人不能撤换, 除非联系系统管理员协商处理**」+「给管理员一个『协商处理后强改上层』的后台功能」
+
+- ✅ **用户侧零入口**: 上层 = `placement_path` 去尾段 + 同 `root_id` 推出; 上层一旦有人, 用户自己不能撤换
+- ✅ **管理员唯一例外通道** = `POST /api/admin/nodes/[fid]/reparent`
+  (仅 `role=admin`; `reason` 必填 2-200 字 → 加密备注 + `audit_log`)
+- ✅ **不塞进三方确认状态机** (`placement-requests`): 三方确认的价值 = 三方都点头, 本功能的前提正是三方谈不拢;
+  硬塞会给「单方即执行」开分支 (同建根 `POST /api/admin/users/[id]/root` 的理由)
+- ✅ **改一次动整棵子树**: `placement_path` / `placement_depth` / `root_id` (+ 顶层节点的
+  `referrer_id` / `placement_side`) —— 不是只改一行
+- ✅ **`franchisee` 表必须有审计触发器** (`drizzle/audit_trigger.sql` 的 `franchisee_audit`;
+  2026-09-21 补, 之前这张表一行审计都没有)
+- ⚠️ **已知取舍 (待拍)**: `franchisee.referrer_id` 同时是「推荐人」和「点位父」(旧遗留);
+  强改上层时 `referrer_id` 只能一起改 → 要只改点位父必须拆列 (`placement_parent_id`)。
+  详见 ADR-0014 §3.8.3
+
 ## §6.5 系统管理员账号 (长期保留, 主人 2026-09-19 拍)
 
 > **主人原话**: 「长期保留系统管理员账号 admin，生产环境也要保留」

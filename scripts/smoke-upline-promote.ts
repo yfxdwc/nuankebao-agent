@@ -49,6 +49,7 @@ import { createRootForUser, listAdminNodes } from "@/lib/db/queries/admin-users"
 import {
   createPlacementRequest,
   decidePlacementRequest,
+  listPlacementRequests,
   requiredRoles,
 } from "@/lib/db/queries/franchisee-placement";
 import { getPlacementTree } from "@/lib/db/queries/franchisee";
@@ -327,6 +328,15 @@ async function main() {
   const A_ACTOR = { userId: aUid, fid: fidA, phoneHash: hashForLookup(PH_A) };
   const B_ACTOR = { userId: bUid, fid: fidB, phoneHash: hashForLookup(PH_B) };
   const reqId = BigInt(mergeReq.id);
+
+  // ⑤c 上级本人是**已在 app 里的节点**时, 她必须在「待我确认」列表里能看到这张单
+  //     (列表 SQL 以前只按 target_parent/手机号筛 → 她永远看不到 = 单子没人能拍板)
+  const bToConfirm = await listPlacementRequests(B_ACTOR as never, "to_confirm");
+  ck(
+    "⑤c 上级本人「待我确认」能看到这张认领单",
+    bToConfirm.some((v) => v.id === mergeReq.id),
+    `${bToConfirm.length} 张`
+  );
 
   // ⑥ 发起人自己拍 → 还差上级
   const v1 = await decidePlacementRequest(reqId, A_ACTOR, "approve", ctx);

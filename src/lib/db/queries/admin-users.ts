@@ -69,6 +69,13 @@ export interface AdminNodeView {
   parentFid: string | null;
   side: "left" | "right" | null;
   depth: number;
+  /**
+   * 二叉树 materialized path (例: 'L.R.'; root = '') —— **只在同一棵树内唯一**
+   * 用途 (2026-09-21 加): 「协商处理改上层」选候选上层时, 前端要能算出
+   *   ① 谁在她的子树里 (不能选: 会成环) ② 目标线是否有人
+   * 判子树 = path 前缀 + 同 rootFid (少任一个都会跨树/串味)。
+   */
+  path: string;
   isRoot: boolean;
   /** 归属的加盟树 = 根节点 franchisee.id (同 rootFid 的一批节点才是同一棵树) */
   rootFid: string;
@@ -229,6 +236,7 @@ export async function listAdminNodes(now: Date = new Date()): Promise<AdminNodeV
       parentFid: r.parent_fid == null ? null : String(r.parent_fid),
       side: (r.side as "left" | "right" | null) ?? null,
       depth: Number(r.depth ?? 0),
+      path: (r.path as string) ?? "",
       isRoot: (r.path ?? "") === "",
       rootFid: String(r.root_fid),
       userId: r.user_id == null ? null : String(r.user_id),

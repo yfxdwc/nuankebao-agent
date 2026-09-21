@@ -100,6 +100,13 @@ class AdminNode {
   final String? parentFid;
   final String? side;
   final int depth;
+
+  /// 二叉树路径 (例: 'L.R.'; 树根 = '') —— 只在同一棵树内唯一
+  /// 「改上层」选候选上层时用它算: ① 谁在她子树里 (不能选) ② 那条线是否有人
+  final String path;
+
+  /// 归属的加盟树 = 根节点编号 (同 rootFid 的一批节点才是同一棵树)
+  final String rootFid;
   final bool isRoot;
   final String? userId;
   final String? avatarUrl;
@@ -112,6 +119,8 @@ class AdminNode {
     this.parentFid,
     this.side,
     this.depth = 0,
+    this.path = '',
+    this.rootFid = '',
     this.isRoot = false,
     this.userId,
     this.avatarUrl,
@@ -120,6 +129,13 @@ class AdminNode {
 
   bool get hasAccount => userId != null;
 
+  /// 我在我的上层下面哪条线 ('left' = A线 / 'right' = B线; 空 = 树根)
+  String? get sideFromPath {
+    if (path.endsWith('L.')) return 'left';
+    if (path.endsWith('R.')) return 'right';
+    return null;
+  }
+
   factory AdminNode.fromJson(Map<String, dynamic> j) => AdminNode(
         fid: j['fid']?.toString() ?? '',
         name: j['name']?.toString() ?? '',
@@ -127,6 +143,8 @@ class AdminNode {
         parentFid: j['parentFid']?.toString(),
         side: j['side']?.toString(),
         depth: (j['depth'] as num?)?.toInt() ?? 0,
+        path: j['path']?.toString() ?? '',
+        rootFid: j['rootFid']?.toString() ?? '',
         isRoot: j['isRoot'] == true,
         userId: j['userId']?.toString(),
         avatarUrl: j['avatarUrl']?.toString(),

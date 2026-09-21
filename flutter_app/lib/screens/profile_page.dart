@@ -896,10 +896,17 @@ class _AccountCard extends ConsumerWidget {
           subtitle: '首次登录后建议改掉初始密码',
           onTap: () => showChangePasswordSheet(context, ref),
         ),
+        // 自助改手机号 (替换原"换号找管理员"提示 — 验证用当前密码)
+        ProfileTile(
+          icon: Icons.phone_iphone,
+          title: '修改手机号',
+          subtitle: '需要当前密码验证; 同号客户档案会一起改',
+          onTap: () => showChangePhoneSheet(context, ref),
+        ),
         const Padding(
           padding: EdgeInsets.only(top: 4, bottom: 8),
           child: Text(
-            '登录账号由管理员开通; 换号 / 停用账号请联系管理员',
+            '登录账号由管理员开通; 停用账号请联系管理员',
             style: TextStyle(
                 fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
           ),

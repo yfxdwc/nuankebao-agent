@@ -34,6 +34,15 @@ CREATE TRIGGER follow_up_task_audit
 CREATE TRIGGER user_audit
   AFTER INSERT OR UPDATE OR DELETE ON "user"
   FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+-- 加盟节点 (franchisee) —— 加盟树结构本身最需要留痕
+--   (2026-09-21 补: 做「管理员协商处理后强改上级」时发现 franchisee 一行都没挂触发器,
+--    而这张表存的是整棵加盟树的 path / depth / root_id / referrer —— 改一次动一整棵子树,
+--    没有审计行 = 事后查不出"谁什么时候把谁挪到哪"。admin 改上层还必填原因, 原因要能落地。)
+DROP TRIGGER IF EXISTS franchisee_audit ON franchisee;
+CREATE TRIGGER franchisee_audit
+  AFTER INSERT OR UPDATE OR DELETE ON franchisee
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
 -- wellness_knowledge 触发器
 DROP TRIGGER IF EXISTS wellness_knowledge_audit ON wellness_knowledge;
 CREATE TRIGGER wellness_knowledge_audit

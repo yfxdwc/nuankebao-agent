@@ -20,7 +20,11 @@ import {
 } from "@/lib/crypto/field";
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 import { logger } from "@/lib/errors";
-import { franchiseeCustomerValues } from "./customer";
+import {
+  assertNodeHasAccount,
+  linkAccountAndCustomer,
+  requireAccountForNode,
+} from "./franchisee-account";
 import { franchiseeRbacFilter, type RbacContext } from "@/lib/auth/rbac";
 import { memberExistsSql } from "@/lib/billing/member-flag";
 import { placeNewFranchisee } from "./franchisee-tree";
@@ -102,12 +106,12 @@ export interface PlaceResult {
 /**
  * 创建加盟商
  * 步骤:
+ *   0. **节点 ⇒ 账号** 门槛 (主人 2026-09-21 拍): 该手机号必须已有账号, 否则直接拒
  *   1. 查 referrerId 是否有效
  *   2. 调 placeNewFranchisee 算法找位置
  *   3. 计算 placement_path / placement_depth
  *   4. INSERT franchisee
- *   5. INSERT user (1:1 强约束)
- *   6. UPDATE user.franchisee_id
+ *   5. 绑账号 (user.franchisee_id) + 落客户档案 + 自检绑定成功
  */
 export async function createFranchisee(
   input: CreateFranchiseeInput,
@@ -115,6 +119,9 @@ export async function createFranchisee(
   createdBy: bigint
 ): Promise<FranchiseeView> {
   const view = await withAuditContext(ctx, async (tx) => {
+    // 0. 节点必须对应一个账号 (主人 2026-09-21 拍)
+    await requireAccountForNode(tx, hashForLookup(input.phone));
+
     // 1. 找位置
     let placement: PlaceResult;
     if (input.referrerId) {
@@ -189,20 +196,19 @@ export async function createFranchisee(
         .returning();
     }
 
-    // 4. 打通: 加盟商同步落一份客户档案 (主人 2026-09-18 拍, 方案 A)
-    //    - 同一事务 → 任一步失败一起回滚 (不会出现“有加盟商没客户”)
+    // 4. 打通: 绑账号 + 加盟商同步落一份客户档案 (主人 2026-09-18 拍, 方案 A)
+    //    - 同一事务 → 任一步失败一起回滚 (不会出现“有加盟商没客户/没账号”)
     //    - onConflictDoNothing: 同手机号已有客户 → 保留客户侧数据 (幂等)
     //    - 审计: customer 表有 audit trigger, 写入自动进 audit_log
-    await tx
-      .insert(customer)
-      .values(
-        franchiseeCustomerValues({
-          name: input.name,
-          phone: input.phone,
-          createdBy,
-        })
-      )
-      .onConflictDoNothing({ target: customer.phoneHash });
+    await linkAccountAndCustomer(tx, {
+      fid: newFranchiseeRow.id,
+      phoneHash: newFranchiseeRow.phoneHash,
+      phoneEncrypted: newFranchiseeRow.phoneEncrypted,
+      name: input.name,
+      createdBy,
+    });
+    // 节点 ⇒ 账号 不变量: 建完必须真绑上 (没有 → 回滚)
+    await assertNodeHasAccount(tx, newFranchiseeRow.id, "新加盟节点");
 
     return toView(newFranchiseeRow);
   });
@@ -636,6 +642,70 @@ export async function getPlacementTree(
   // 树根带全深度下级总数 (懒加载后顶部「共 N 位」不缩水)
   tree.totalDescendants = rows.length;
   return tree;
+}
+
+/**
+ * 我的「上层点位」= **点位父** (不是推荐码提供人!) —— 主人 2026-09-21 拍.
+ *
+ * 图谱里画在「我」上面那一个节点 (每个用户有且只有一个上层节点):
+ *   - 口径: 我的 `placement_path` 去掉最后一段, 在**同一棵树** (root_id) 里找那个节点
+ *   - 我是 app 这棵树的根 (`placement_path === ''`) → 无上层 → 返回 null
+ *     (前端画「上层 · 虚位以待」, 且只有这种根用户能去认领; 见 promote 单)
+ *   - ⚠ **上层一旦有人就不可撤换** (主人拍) —— 本函数只读; 仓内没有任何"换上层"的入口,
+ *     确需调整只能联系系统管理员按运营流程处理
+ */
+export interface UplineView {
+  id: string;
+  name: string;
+  /** 我在她下面的线别 (left = A线 / right = B线) */
+  side: PlacementSide | null;
+  /** 她的绝对层号 (相对本树; 我是根时为 -1 的性质, 不返回) */
+  depth: number;
+  /** 会员标识 (与树节点同口径; 她没有账号 → false) */
+  member: boolean;
+}
+
+export async function getPlacementUpline(
+  fid: bigint
+): Promise<UplineView | null> {
+  const [me] = await db
+    .select({
+      placementPath: franchisee.placementPath,
+      rootId: franchisee.rootId,
+    })
+    .from(franchisee)
+    .where(and(eq(franchisee.id, fid), isNull(franchisee.deletedAt)))
+    .limit(1);
+  if (!me) return null;
+  const parent = parentPath(me.placementPath); // '' 的有根 → null
+  if (parent == null) return null; // 我是树根 → 上层虚位以待
+
+  const [up] = await db
+    .select({
+      id: franchisee.id,
+      name: franchisee.name,
+      placementDepth: franchisee.placementDepth,
+      member: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
+    })
+    .from(franchisee)
+    .where(
+      and(
+        isNull(franchisee.deletedAt),
+        // 多根 (B1): 必须同树, 否则两个根 path 都是 ''/前缀会串味
+        sql`${franchisee.rootId} IS NOT DISTINCT FROM ${me.rootId}`,
+        eq(franchisee.placementPath, parent)
+      )
+    )
+    .limit(1);
+  if (!up) return null; // 数据异常 (父节点被删) → 当作虚位, 不炸页面
+
+  return {
+    id: up.id.toString(),
+    name: up.name,
+    side: sideFromPath(me.placementPath),
+    depth: up.placementDepth,
+    member: up.member === true,
+  };
 }
 
 /**

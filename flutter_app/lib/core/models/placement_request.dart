@@ -45,6 +45,12 @@ class PlacementRequest {
   final String? unjoinName;
   final String targetParentFid;
   final String targetParentName;
+  /// promote 单: 认领的上级**已在 app 里**时的现存节点 id (null = 上级还没进 app)
+  final String? uplineFid;
+  /// promote 单: 上级节点名字
+  final String? uplineName;
+  /// promote 单: 上级**当前空着的**点位 (由上级本人在同意时挑一个; 两条都空才需他选)
+  final List<String> availableSides;
   final String targetSide; // left | right
   final List<String> required;
   final List<PlacementConfirm> confirms;
@@ -67,6 +73,9 @@ class PlacementRequest {
     this.unjoinName,
     required this.targetParentFid,
     required this.targetParentName,
+    this.uplineFid,
+    this.uplineName,
+    this.availableSides = const [],
     required this.targetSide,
     required this.required,
     required this.confirms,
@@ -90,6 +99,11 @@ class PlacementRequest {
       unjoinName: (json['unjoinName'] ?? json['moveName']) as String?,
       targetParentFid: json['targetParentFid']?.toString() ?? '',
       targetParentName: (json['targetParentName'] as String?) ?? '?',
+      uplineFid: json['uplineFid']?.toString(),
+      uplineName: json['uplineName'] as String?,
+      availableSides: ((json['availableSides'] as List?) ?? [])
+          .map((e) => e.toString())
+          .toList(),
       targetSide: (json['targetSide'] as String?) ?? 'left',
       required: ((json['required'] as List?) ?? []).map((e) => e.toString()).toList(),
       confirms: ((json['confirms'] as List?) ?? [])
@@ -134,8 +148,10 @@ class PlacementRequest {
         return '${initiatorName} 想解除「${unjoinName ?? "加盟商"}」的加盟';
       case 'promote':
         // 往上长 (主人 2026-09-21 拍 B2): 我是现根, 把现实里的直接上级拉进来当我上面这层
-        return '${initiatorName} 想把「${newName ?? "上级"}」认领为自己的**上级** '
-            '(接在 ${targetParentName} 上方, 整棵树下降一层)';
+        // 主人拍: 「我在上级的 A线/B线 由上级自己决定」→ 文案不提线别, 由上级挑
+        return '${initiatorName} 想把「${newName ?? "上级"}」认领为自己的上级 '
+            '(接在 ${targetParentName} 上方, 整棵树下降一层; '
+            '放在她的哪条线由她本人定)';
       default:
         return '${initiatorName} 想把「${newName ?? "新加盟商"}」加到 ${targetParentName} 的${sideText}';
     }
@@ -145,6 +161,11 @@ class PlacementRequest {
 
   /// 向上认领上级 (把现实里的上级接进 app)
   bool get isPromote => kind == 'promote';
+
+  /// 我这张 promote 单要不要先挑线再同意 (主人拍 ④):
+  ///   只有**上级本人**且两条线都空时才要他选; 只剩一条空位 → 服务端自动落那一条
+  bool get needsSidePick =>
+      isPromote && myRole == 'new_franchisee' && availableSides.length >= 2;
 
   /// 「移动到其他点位」已下线 (主人 2026-09-19 拍): 老存量单只读展示, 不再产生新单
 

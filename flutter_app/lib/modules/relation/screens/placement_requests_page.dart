@@ -70,11 +70,14 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
     }
   }
 
-  Future<void> _decide(PlacementRequest r, bool approve) async {
+  /// 同意 / 拒绝
+  ///   - [side] 只有「认领上级 (promote) 单里的上级本人」要传: 主人拍
+  ///     「我在我的上级是处于 a线还是 b线由我的上级自己决定」→ 由她在这里挑
+  Future<void> _decide(PlacementRequest r, bool approve, {String? side}) async {
     try {
       await ref
           .read(franchiseeServiceProvider)
-          .decidePlacementRequest(r.id, approve: approve);
+          .decidePlacementRequest(r.id, approve: approve, side: side);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -91,6 +94,69 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
         SnackBar(content: Text('操作失败: $e')),
       );
     }
+  }
+
+  /// 同意前先挑线 (只有 promote 单的**上级本人** + 她两条线都空时)
+  ///
+  /// 主人原话: 「『我在上级的 A线/B线』不在我的考虑范围, 由我的上级自己决定」
+  /// → 所以挑线这一步落在**上级**这边; 只剩一条空位时服务端自动落那一条, 不问。
+  Future<void> _approveWithSidePick(PlacementRequest r) async {
+    final sides = r.availableSides.isEmpty
+        ? const ['left', 'right']
+        : r.availableSides;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppTheme.bgWarm,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                '这位下线放在您的哪条线?',
+                style: TextStyle(
+                  fontSize: AppTheme.fontLg,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${r.initiatorName} 认领您为上级, 她整棵树会接在您选的那条线下面。'
+                '接上以后不能撤换 (确需调整请联系系统管理员)。',
+                style: const TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              for (final sd in sides) ...[
+                FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(sd),
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 56)),
+                  child: Text(
+                    sd == 'left' ? '放在我的 A线 (左)' : '放在我的 B线 (右)',
+                    style: const TextStyle(fontSize: AppTheme.fontMd),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              OutlinedButton(
+                onPressed: () => Navigator.of(ctx).pop(null),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 56)),
+                child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null) return;
+    await _decide(r, true, side: picked);
   }
 
   Future<void> _cancel(PlacementRequest r) async {
@@ -215,13 +281,25 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                 ),
               ),
             ],
+            if (r.needsSidePick && r.awaitingMe) ...[
+              const SizedBox(height: 4),
+              const Text(
+                '同意时请挑一条线: 她接在您的 A线 还是 B线, 由您决定',
+                style: TextStyle(
+                  fontSize: AppTheme.fontXs,
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             if (!mine && r.awaitingMe)
               Row(
                 children: [
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => _decide(r, true),
+                      onPressed: () =>
+                          r.needsSidePick ? _approveWithSidePick(r) : _decide(r, true),
                       icon: const Icon(Icons.check, size: 22),
                       label: const Text('同意', style: TextStyle(fontSize: AppTheme.fontMd)),
                       style: FilledButton.styleFrom(

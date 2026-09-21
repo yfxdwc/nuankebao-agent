@@ -24,17 +24,20 @@
 import { and, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
-  customer,
   franchisee,
   franchisePlacementConfirm,
   franchisePlacementRequest,
   user,
 } from "@/lib/db/schema";
-import { decryptField, encryptField, hashForLookup } from "@/lib/crypto/field";
+import { encryptField, hashForLookup } from "@/lib/crypto/field";
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 import { logger } from "@/lib/errors";
 import { rewardReferrerOnFranchisee } from "@/lib/billing/entitlements";
-import { franchiseeCustomerValues } from "./customer";
+import {
+  assertNodeHasAccount,
+  requireAccountForNode,
+  linkAccountAndCustomer,
+} from "./franchisee-account";
 
 /** Q3: 待确认超时 (小时) */
 export const PLACEMENT_TIMEOUT_HOURS = 72;
@@ -861,11 +864,14 @@ export async function listPlacementRequests(
     if (actor.fid == null) return [];
     conds.push(eq(franchisePlacementRequest.initiatorFid, actor.fid));
   } else {
-    // 待我确认: 我是目标父节点 / 新加盟商本人
+    // 待我确认: 我是目标父节点 / 新加盟商本人 / **被认领的上级本人**
+    //   ⚠ promote 认领「已在 app 里的节点」时, 本人是按 upline_fid 认的 —— 少了这一条,
+    //     她的「待我确认」永远是空的 (promote 单就永远没人能拍板)
     const mine: SQL[] = [];
     if (actor.fid != null) {
       mine.push(eq(franchisePlacementRequest.targetParentFid, actor.fid));
       mine.push(eq(franchisePlacementRequest.moveFid, actor.fid));
+      mine.push(eq(franchisePlacementRequest.uplineFid, actor.fid));
     }
     if (actor.phoneHash != null) {
       mine.push(eq(franchisePlacementRequest.newPhoneHash, actor.phoneHash));
@@ -1110,63 +1116,6 @@ async function safeRewardReferrer(phoneHash: string | null): Promise<void> {
   }
 }
 
-/**
- * 新节点落地后的两件标准配套动作 (create / promote 共用):
- *   ① 新加盟商若已有账号 (手机号匹配) → 绑 user.franchisee_id
- *      (绑了他才能: 登录进图谱 / 在后续「三方确认」里作为本人拍板)
- *   ② 跟 createFranchisee 一致落一份客户档案 (主人 2026-09-18 拍, 方案 A)
- *
- * 客户档案要明文 → 申请单里存的是密文, 这里解密 (franchiseeCustomerValues 内部再加密)
- */
-async function linkAccountAndCustomer(
-  tx: Tx,
-  opts: {
-    fid: bigint;
-    phoneHash: string | null;
-    phoneEncrypted: string | null;
-    name: string;
-    createdBy: bigint;
-  }
-): Promise<void> {
-  if (opts.phoneHash) {
-    const [u] = await tx
-      .select({ id: user.id, fid: user.franchiseeId })
-      .from(user)
-      .where(eq(user.phoneHash, opts.phoneHash))
-      .limit(1);
-    if (u) {
-      let needBind = u.fid == null;
-      if (!needBind && u.fid != null) {
-        // 旧绑定指向已删/不存在的加盟商 → 重新绑到新节点
-        const [old] = await tx
-          .select({ deletedAt: franchisee.deletedAt })
-          .from(franchisee)
-          .where(eq(franchisee.id, u.fid))
-          .limit(1);
-        needBind = old == null || old.deletedAt != null;
-      }
-      if (needBind) {
-        await tx
-          .update(user)
-          .set({ franchiseeId: opts.fid, updatedAt: sql`NOW()` })
-          .where(eq(user.id, u.id));
-      }
-    }
-  }
-
-  const plainPhone = opts.phoneEncrypted ? decryptField(opts.phoneEncrypted) : "";
-  await tx
-    .insert(customer)
-    .values(
-      franchiseeCustomerValues({
-        name: opts.name,
-        phone: plainPhone,
-        createdBy: opts.createdBy,
-      })
-    )
-    .onConflictDoNothing({ target: customer.phoneHash });
-}
-
 async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> {
   // 再校验一次点位 (预占期间理论上没人抢, 兜底)
   const [parent] = await tx
@@ -1196,6 +1145,12 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
   let createdOutcome: ExecuteOutcome = { createdPhoneHash: null };
 
   if (raw.kind === "create") {
+    // 节点 ⇒ 账号 门槛 (主人 2026-09-21 拍): 先给一句人话的拒, 再谈落位
+    //   (执行末段的 assertNodeHasAccount 是兜底自检 —— 那条报错会带一个其实不存在的节点 id,
+    //    给用户看不好, 所以能提前判的都提前判)
+    if (raw.newPhoneHash && !raw.newPhoneHash.startsWith("pending:")) {
+      await requireAccountForNode(tx, raw.newPhoneHash);
+    }
     const [inserted] = await tx
       .insert(franchisee)
       .values({
@@ -1224,6 +1179,9 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
       createdBy: raw.initiatorUserId,
     });
 
+    // 节点 ⇒ 账号 不变量 (主人 2026-09-21 拍): 建完必须绑上账号, 否则整单回滚
+    await assertNodeHasAccount(tx, inserted.id, "新加盟节点");
+
     createdOutcome = { createdPhoneHash: raw.newPhoneHash ?? null };
   } else if (raw.kind === "promote") {
     // 向上认领 (主人 2026-09-21 拍 B2 + 补充): 让 U 成为我的上层。
@@ -1249,6 +1207,10 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
     let uplineIsNew = false;
 
     if (raw.uplineFid == null) {
+      // 认领的上级还没进 app → 要给他建节点 → 他必须已有账号 (节点 ⇒ 账号)
+      if (raw.newPhoneHash && !raw.newPhoneHash.startsWith("pending:")) {
+        await requireAccountForNode(tx, raw.newPhoneHash);
+      }
       const [created] = await tx
         .insert(franchisee)
         .values({
@@ -1334,6 +1296,9 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
       createdBy: raw.initiatorUserId,
     });
 
+    // 节点 ⇒ 账号 不变量 (主人 2026-09-21 拍)
+    await assertNodeHasAccount(tx, upline.id, "上级节点");
+
     resultFid = upline.id;
     // 只有"新建了上级节点"才算新增了一个加盟商 → 才发推荐奖励; 复用已有节点不算
     createdOutcome = { createdPhoneHash: uplineIsNew ? raw.newPhoneHash ?? null : null };
@@ -1395,6 +1360,36 @@ export interface PendingPlacementSlot {
   targetSide: "left" | "right";
   label: string;
   initiatorFid: string;
+}
+
+/**
+ * 我发起的、还在 pending 的「认领上级」单 (图谱里「上层」那格显示「待她确认」)
+ *   - 一个根同时只能有一张 (createPlacementRequest 已硬校验)
+ */
+export async function getMyPendingPromoteRequest(
+  initiatorFid: bigint
+): Promise<{ id: string; newName: string | null; uplineFid: string | null } | null> {
+  const [row] = await db
+    .select({
+      id: franchisePlacementRequest.id,
+      newName: franchisePlacementRequest.newName,
+      uplineFid: franchisePlacementRequest.uplineFid,
+    })
+    .from(franchisePlacementRequest)
+    .where(
+      and(
+        eq(franchisePlacementRequest.kind, "promote"),
+        eq(franchisePlacementRequest.status, "pending"),
+        eq(franchisePlacementRequest.initiatorFid, initiatorFid)
+      )
+    )
+    .limit(1);
+  if (!row) return null;
+  return {
+    id: row.id.toString(),
+    newName: row.newName,
+    uplineFid: row.uplineFid?.toString() ?? null,
+  };
 }
 
 export async function listPendingPlacementsUnder(

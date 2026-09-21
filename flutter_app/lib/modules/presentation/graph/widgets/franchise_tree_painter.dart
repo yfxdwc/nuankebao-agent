@@ -413,6 +413,21 @@ class TreeLayout {
 // Painter
 // ============================================
 
+/// 图谱最上方「上层点位」那一格 (主人 2026-09-21 拍)
+///   - 有人: 画成正常节点 (关系标成「上」, 加外环) + 一条连到「我」的线
+///   - 没人 (我是树根): 虚线虚位 + 「点此认领」→ 全 app 唯一能往上发展的入口
+///   - 已发起认领: 虚线 + 「待她确认」
+class UplineCap {
+  /// 要画的节点 (虚位时用哨兵 id; 位置由页面塞进 positions)
+  final FranchiseeTreeNode node;
+  /// true = 虚线 (虚位待认领 / 待上级确认)
+  final bool ghost;
+  /// 虚线格圆下方的说明文字
+  final String? hint;
+
+  const UplineCap({required this.node, this.ghost = false, this.hint});
+}
+
 class FranchiseTreePainter extends CustomPainter {
   final FranchiseeTreeNode root;
   final Map<String, Offset> positions;
@@ -457,6 +472,12 @@ class FranchiseTreePainter extends CustomPainter {
   /// 子树内「待确认」的落位点位 (三方确认工作流; 画成虚线虚位)
   final List<PendingPlacement> pendingPlacements;
 
+  /// 最上方「上层点位」那一格 (主人 2026-09-21 拍; null = 不画)
+  final UplineCap? uplineCap;
+
+  /// 上层格的中心 (画布坐标; 页面已把 tree 整体下移一层, 这一格在原来根的位置)
+  final Offset? uplineCapCenter;
+
   FranchiseTreePainter({
     required this.root,
     required this.positions,
@@ -464,6 +485,8 @@ class FranchiseTreePainter extends CustomPainter {
     this.scale = 1.0,
     this.columnPitch = TreeLayout.columnWidth,
     this.pendingPlacements = const [],
+    this.uplineCap,
+    this.uplineCapCenter,
     this.searchMatchedIds,
     this.currentUserId,
     this.selectedNodeId,
@@ -547,6 +570,161 @@ class FranchiseTreePainter extends CustomPainter {
 
     // 待确认虚位 (主人 2026-09-18 拍): 虚线圆 + 「待确认」, 在最上层
     _drawPendingGhosts(canvas, size);
+
+    // 上层点位 (主人 2026-09-21 拍): 最上面那一格 + 连到「我」的线
+    _drawUplineCap(canvas);
+  }
+
+  /// 上层点位那一格
+  void _drawUplineCap(Canvas canvas) {
+    final cap = uplineCap;
+    final center = uplineCapCenter;
+    if (cap == null || center == null) return;
+    final myRoot = positions[root.id];
+
+    final boost = (1.0 / scale).clamp(1.0, 4.0);
+    final capColor = AppTheme.primary;
+
+    // 1. 连线 (上层 → 我): 有人 = 实线; 虚位 = 虚线 (还没接上)
+    if (myRoot != null) {
+      final from = Offset(center.dx, center.dy + TreeLayout.nodeRadius);
+      final to = Offset(myRoot.dx, myRoot.dy - TreeLayout.nodeRadius);
+      final paint = Paint()
+        ..color = cap.ghost
+            ? AppTheme.accent.withOpacity(0.75)
+            : capColor.withOpacity(0.75)
+        ..strokeWidth = (cap.ghost ? 2.2 : 3.0) * boost
+        ..style = PaintingStyle.stroke;
+      if (cap.ghost) {
+        _drawDashedLine(
+          canvas,
+          from,
+          to,
+          paint,
+          dash: 7 * boost,
+          gap: 5 * boost,
+        );
+      } else {
+        canvas.drawLine(from, to, paint);
+      }
+    }
+
+    if (!cap.ghost) {
+      // 有上层: 跟别的节点同一套画法 (含会员金环/角标)
+      _drawNode(canvas, cap.node);
+      return;
+    }
+
+    // 虚位 / 待确认: 浅底 + 虚线圆 + 圆内提示 + 圆下说明
+    canvas.drawCircle(
+      center,
+      TreeLayout.nodeRadius,
+      Paint()..color = AppTheme.accent.withOpacity(0.10),
+    );
+    _drawDashedCircle(
+      canvas,
+      center,
+      TreeLayout.nodeRadius,
+      Paint()
+        ..color = AppTheme.accent.withOpacity(0.85)
+        ..strokeWidth = 2.4 * boost
+        ..style = PaintingStyle.stroke,
+      dash: 7 * boost,
+      gap: 5 * boost,
+    );
+    final inside = TextPainter(
+      text: TextSpan(
+        text: '＋',
+        style: TextStyle(
+          fontSize: 34 * boost,
+          color: AppTheme.accent.withOpacity(0.9),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    inside.paint(
+      canvas,
+      Offset(center.dx - inside.width / 2, center.dy - inside.height / 2),
+    );
+
+    final label = cap.node.name;
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          fontSize: 12 * boost,
+          color: AppTheme.accent,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      ellipsis: '…',
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: TreeLayout.labelMaxWidth + 40);
+    // 名字放**圆上方** (圆下面 78px 就是「我」那个节点, 放下面会和它压在一起)
+    final labelTop = center.dy - TreeLayout.nodeRadius - tp.height - 4;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          center.dx - tp.width / 2 - 5,
+          labelTop - 2,
+          tp.width + 10,
+          tp.height + 4,
+        ),
+        const Radius.circular(6),
+      ),
+      Paint()..color = AppTheme.bgWarm.withOpacity(0.92),
+    );
+    tp.paint(canvas, Offset(center.dx - tp.width / 2, labelTop));
+
+    final hint = cap.hint;
+    if (hint != null && hint.isNotEmpty) {
+      final tpHint = TextPainter(
+        text: TextSpan(
+          text: hint,
+          style: TextStyle(
+            fontSize: 11 * boost,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        ellipsis: '…',
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: TreeLayout.labelMaxWidth + 40);
+      // 提示放圆下方 (那一行离「我」还有 12px 余量)
+      tpHint.paint(
+        canvas,
+        Offset(
+          center.dx - tpHint.width / 2,
+          center.dy + TreeLayout.nodeRadius + 4,
+        ),
+      );
+    }
+  }
+
+  /// 画虚线 (跟 _drawDashedCircle 同一套 PathMetrics 切段)
+  void _drawDashedLine(
+    Canvas canvas,
+    Offset from,
+    Offset to,
+    Paint paint, {
+    double dash = 7,
+    double gap = 5,
+  }) {
+    final path = Path()
+      ..moveTo(from.dx, from.dy)
+      ..lineTo(to.dx, to.dy);
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < metric.length) {
+        final next = math.min(d + dash, metric.length);
+        canvas.drawPath(metric.extractPath(d, next), paint);
+        d = next + gap;
+      }
+    }
   }
 
   /// 待确认虚位中心点 (与点击区共用同一份公式 —— 主人 2026-09-19: 虚位可点)
@@ -752,9 +930,10 @@ class FranchiseTreePainter extends CustomPainter {
     _drawNodeLabel(canvas, pos, node, isCurrentUser, isFaded);
   }
 
-  /// 节点颜色: 我=绿, A线=深蓝, B线=紫
+  /// 节点颜色: 我=绿, A线=深蓝, B线=紫, 上层格=绿
   Color _lineColorOf(String id, bool isCurrentUser) {
     if (isCurrentUser) return AppTheme.primary;
+    if (uplineCap?.node.id == id) return AppTheme.primary;
     if (aLineIds.contains(id)) return AppTheme.franchiseeA;
     return AppTheme.franchiseeB;
   }
@@ -1152,6 +1331,8 @@ class FranchiseTreePainter extends CustomPainter {
         _setChanged(old.bLineIds, bLineIds) ||
         _mapChanged(old.relations, relations) ||
         _setChanged(old.filterIds, filterIds) ||
+        old.uplineCap != uplineCap ||
+        old.uplineCapCenter != uplineCapCenter ||
         old.pendingPlacements.length != pendingPlacements.length ||
         !_samePending(old.pendingPlacements) ||
         _setChanged(old.searchMatchedIds, searchMatchedIds);

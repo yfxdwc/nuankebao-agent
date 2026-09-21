@@ -21,6 +21,7 @@ import '../core/providers/service_providers.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/empty_state.dart';
 import '../core/widgets/member_avatar.dart';
+import 'admin_reparent_sheet.dart';
 import 'admin_users_graph.dart';
 
 class AdminUsersPage extends ConsumerStatefulWidget {
@@ -197,6 +198,21 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                   ),
                 ),
               ],
+              // 已加盟 → 节点操作 (改上层). 这里找不到节点行 (脏数据) 就不显示, 免得点了报错
+              if (u.isJoined && _nodeOfUser(u) != null) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _openReparent(_nodeOfUser(u)!);
+                    },
+                    icon: const Icon(Icons.swap_vert, size: 18),
+                    label: const Text('协商处理: 改上层'),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -205,6 +221,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   }
 
   void _showNodeSheet(AdminNode n) {
+    final parent = _parentOf(n);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -225,14 +242,64 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
               const SizedBox(height: 12),
               _kv('节点编号', '#${n.fid}'),
               if (n.accountName != null) _kv('账号', n.accountName!),
+              _kv(
+                '上层 (点位父)',
+                parent == null
+                    ? (n.isRoot ? '无 (她是树根)' : '—')
+                    : '${parent.name} 的${n.side == 'left' ? 'A线' : 'B线'}',
+              ),
               _kv('位置', n.isRoot ? '根节点 (没有上级)' : '第 ${n.depth + 1} 层'),
               _kv('会员', n.member ? '会员' : '免费'),
               _kv('账号状态', n.hasAccount ? '有账号' : '无账号 (历史/脚本站的节点)'),
+              const SizedBox(height: 8),
+              if (n.hasAccount)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _openReparent(n);
+                    },
+                    icon: const Icon(Icons.swap_vert, size: 18),
+                    label: const Text('协商处理: 改上层'),
+                  ),
+                )
+              else
+                const Text(
+                  '她没有账号 → 不能当节点被搬动。先让她用这个手机号注册登录 '
+                  '(注册会自动认领这个节点), 再改上层。',
+                  style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+                ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// 按节点找她的点位父 (无 → null)
+  AdminNode? _parentOf(AdminNode n) {
+    if (n.parentFid == null) return null;
+    for (final x in _lastData?.nodes ?? const <AdminNode>[]) {
+      if (x.fid == n.parentFid) return x;
+    }
+    return null;
+  }
+
+  /// 按账号找她的节点行 (未加盟 / 脏数据 → null)
+  AdminNode? _nodeOfUser(AdminUser u) {
+    if (u.franchiseeId == null) return null;
+    for (final x in _lastData?.nodes ?? const <AdminNode>[]) {
+      if (x.fid == u.franchiseeId) return x;
+    }
+    return null;
+  }
+
+  Future<void> _openReparent(AdminNode n) async {
+    final data = _lastData;
+    if (data == null) return;
+    final ok = await showReparentSheet(context, ref, move: n, data: data);
+    if (ok == true) await _refresh();
   }
 
   String _memberText(AdminUser u) {
@@ -265,6 +332,9 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
         ),
       );
 
+  /// 最近一次拿到的总览 (弹层里要按 id 找节点/父节点; build 里顺手存一份)
+  AdminUsersOverview? _lastData;
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(adminUsersProvider);
@@ -290,6 +360,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
               )
             : ErrorState(error: e, onRetry: _refresh),
         data: (data) {
+          _lastData = data;
           if (data.users.isEmpty) {
             return const EmptyState(
               icon: Icons.people_outline,

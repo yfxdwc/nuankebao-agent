@@ -130,6 +130,54 @@ class PendingPlacement {
   }
 }
 
+/// 我的「上层点位」= **点位父** (不是推荐码提供人!) —— 主人 2026-09-21 拍
+///   图谱在「我」上面画这一个节点; 每个用户有且只有一个上层节点。
+///   - 后端 `GET /franchisees/me/tree?mode=placement` 顶层 `upline` 字段
+///   - null = 我是 app 这棵树的根 (上层虚位以待) → 只有这种用户能去「认领上级」
+///   - ⚠ 上层一旦有人就不可撤换 (联系系统管理员协商处理, 仓内无换上层入口)
+class FranchiseeUpline {
+  final String id;
+  final String name;
+  /// 我在她下面的线别 (left = A线 / right = B线)
+  final String? side;
+  final int depth;
+  final bool member;
+
+  const FranchiseeUpline({
+    required this.id,
+    required this.name,
+    required this.side,
+    required this.depth,
+    this.member = false,
+  });
+
+  factory FranchiseeUpline.fromJson(Map<String, dynamic> json) =>
+      FranchiseeUpline(
+        id: json['id']?.toString() ?? '',
+        name: (json['name'] as String?) ?? '',
+        side: json['side'] as String?,
+        depth: (json['depth'] as num?)?.toInt() ?? 0,
+        member: json['member'] as bool? ?? false,
+      );
+
+  String get sideLabel => side == 'right' ? 'B线' : 'A线';
+}
+
+/// 我发起、还在等上级本人确认的「认领上级」单 (图谱上层那格显示「待她确认」)
+class UplineRequest {
+  final String id;
+  final String? newName;
+  final String? uplineFid;
+
+  const UplineRequest({required this.id, this.newName, this.uplineFid});
+
+  factory UplineRequest.fromJson(Map<String, dynamic> json) => UplineRequest(
+        id: json['id']?.toString() ?? '',
+        newName: json['newName'] as String?,
+        uplineFid: json['uplineFid']?.toString(),
+      );
+}
+
 /// 树节点 (用于图谱视图, Plan F3 用)
 class FranchiseeTreeNode {
   final String id;
@@ -154,6 +202,13 @@ class FranchiseeTreeNode {
   /// 仅树根有: 我的下级全深度总数 (不受 depth 影响; 顶部「共 N 位」用)
   final int? totalDescendants;
 
+  /// 我的「上层点位」(只有返回树的根节点有; 见 [FranchiseeUpline])
+  ///   null = 上层虚位以待 (我是树根, 可以去认领一位上级进来)
+  final FranchiseeUpline? upline;
+
+  /// 我发起的认领上级单 (还在等上级本人确认) — 只有根节点有
+  final UplineRequest? uplineRequest;
+
   /// 会员标识 (主人 2026-09-21 拍: 「会员在别人的图谱里也要有明显标识」)
   ///   口径 = 该节点绑定账号是不是会员 (role=admin 或 member_until > now()), 后端每次现算
   ///   → 充值转会员 / 到期掉会员, 下次拉树即变 (无需同步任务)
@@ -172,6 +227,8 @@ class FranchiseeTreeNode {
     this.totalDescendants,
     this.pendingPlacements = const [],
     this.member = false,
+    this.upline,
+    this.uplineRequest,
   });
 
   factory FranchiseeTreeNode.fromJson(Map<String, dynamic> json) {
@@ -191,6 +248,13 @@ class FranchiseeTreeNode {
           .map((e) => PendingPlacement.fromJson(e as Map<String, dynamic>))
           .toList(),
       member: json['member'] as bool? ?? false,
+      upline: json['upline'] == null
+          ? null
+          : FranchiseeUpline.fromJson(json['upline'] as Map<String, dynamic>),
+      uplineRequest: json['uplineRequest'] == null
+          ? null
+          : UplineRequest.fromJson(
+              json['uplineRequest'] as Map<String, dynamic>),
     );
   }
 
@@ -213,6 +277,9 @@ class FranchiseeTreeNode {
       //   _withLazyChildren 拷贝根节点后「待确认虚位」整个消失 (图谱不画 + 点不到)
       pendingPlacements: pendingPlacements,
       member: member,
+      // ★ 同 pendingPlacements 的教训: copyWith 漏带 → 懒加载拷贝根节点后整格消失
+      upline: upline,
+      uplineRequest: uplineRequest,
     );
   }
 }

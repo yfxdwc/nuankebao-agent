@@ -12,8 +12,12 @@ import {
   getFranchiseeIdByUserId,
   getFranchiseeTree,
   getPlacementTree,
+  getPlacementUpline,
 } from "@/lib/db/queries/franchisee";
-import { listPendingPlacementsUnder } from "@/lib/db/queries/franchisee-placement";
+import {
+  getMyPendingPromoteRequest,
+  listPendingPlacementsUnder,
+} from "@/lib/db/queries/franchisee-placement";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -50,6 +54,9 @@ export async function GET(request: NextRequest) {
       referrerId: null,
       relation: "root",
       children: [],
+      // 未加盟 → 没有上层点位可言 (前端口径统一: 这两个键一直在)
+      upline: null,
+      uplineRequest: null,
     });
   }
 
@@ -62,13 +69,21 @@ export async function GET(request: NextRequest) {
   const pendingPlacements =
     tree && mode === "placement"
       ? await listPendingPlacementsUnder(fid)
-      : [];  if (!tree) {
+      : [];
+  // 上层点位 (主人 2026-09-21 拍): 图谱在「我」上面画的那一格 —— 有人画人, 没人画虚位;
+  //   我发起的认领单还在 pending → 前端显示「待她确认」
+  const upline =
+    tree && mode === "placement" ? await getPlacementUpline(fid) : null;
+  const uplineRequest =
+    tree && mode === "placement" ? await getMyPendingPromoteRequest(fid) : null;
+  if (!tree) {
     // franchiseeId 存在但记录被删/查不到 → 真正的 404 (前后端不一致)
     return NextResponse.json({ error: "Tree root not found" }, { status: 404 });
   }
-  return NextResponse.json(
-    pendingPlacements.length > 0
-      ? { ...tree, pendingPlacements }
-      : tree
-  );
+  return NextResponse.json({
+    ...tree,
+    ...(pendingPlacements.length > 0 ? { pendingPlacements } : {}),
+    upline,
+    uplineRequest,
+  });
 }

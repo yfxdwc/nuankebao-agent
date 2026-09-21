@@ -2,6 +2,135 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (节点 ⇒ 账号 不变量 + 管理员「协商处理后强改上层」, 2026-09-21)
+
+> **主人原话**:
+> ①「**无账号节点为什么要存在? 不能禁止/消除无账号节点吗, 要成为节点首先必需有账号。**」
+> ②「**给管理员一个『协商处理后强改上层』的后台功能。**」(承接"上层一旦有人不能撤换, 除非联系系统管理员协商处理")
+
+**A. 节点 ⇒ 账号 (三道闸 + 一次存量清理)**
+
+- 新增 `src/lib/db/queries/franchisee-account.ts` —— 不变量集中一处:
+  - `requireAccountForNode(exec, phoneHash)` = **新建硬门槛** (该手机号没有 active 账号 → 人话报错 + 事务回滚)
+  - `assertNodeHasAccount(exec, fid)` = 建完自检 (兜脏数据/并发停用, 失败即回滚)
+  - `linkAccountAndCustomer()` = 从 `franchisee-placement.ts` 抽出的公共落位配套 (绑账号 + 落客户档案)
+  - `adoptOrphanNodeForNewAccount()` = **注册自愈**: 新账号手机号命中"没账号的既有节点" → 自动绑上
+- 接入四处: `createFranchisee` (老 `POST /api/franchisees`) · 三方确认 `create` 分支 · `promote` 分支 ·
+  `registration.ts` 建号流程 (事务内自愈, `CreateAccountResult` 新增 `adoptedFranchiseeId`)
+- 新增 `scripts/audit-orphan-nodes.ts`: 巡检 (默认只报) / `--bind` 补账号 / `--prune` 软删**没有下线**的孤儿
+- **存量清理 (dev 库)**: 29 个 `SeedTest-*` 无账号节点 (早期 seed 直接 `POST /api/franchisees` 造的)
+  → `--bind --password=dev123456` 29/29 认领成功; 现巡检输出「✅ 没有无账号节点」
+- **根因修复**: `scripts/seed-test-data.ts` 现在**每个节点先建账号再建节点** (账号手机号 = 节点手机号,
+  密码 `dev123456`), 否则会被新门槛拒掉
+
+**B. 管理员「协商处理后强改上层」(唯一的人工例外通道)**
+
+- 新增 `POST /api/admin/nodes/[fid]/reparent` `{ newParentFid, side, reason }` (仅 `role=admin`, 服务端查库判权)
+- 新增 `src/lib/db/queries/franchisee-reparent.ts::adminReparentNode()` —— 整棵子树搬迁:
+  `placement_path` (新基路径 + 原子树相对后缀) / `placement_depth` (整体位移) / `root_id` (改宗),
+  顶层节点再加 `referrer_id` + `placement_side` 与备注追加一行留痕
+  - `path` 变换不是简单前缀拼接: 顶层层换线 (A↔B) 时它自己那段要丢掉, 只有后代保留相对后缀
+    → `新基路径 || substring(path from len(旧顶层path)+1)` (SQL 里起始位必须 `::int`, 否则 PG 挑中
+    `substring(text from text)` 正则版 → 返回 NULL → 撞 NOT NULL, 已踩)
+- 9 条硬拒: 原因太短 / 节点不存在 / 新上层不存在 / 她是自己上层 / 新上层在她下线里 (成环) /
+  那条线有人 / 她本来就在那 / 任一方没账号 / root_id 缺失
+- **两棵树在这里合并**: `mergedTrees=true` 时把孤立的那棵挂到主树上, 返回值带合并后树数量
+- **留痕**: `reason` 必填 2-200 字 → 加密追加到 `franchisee.notes_encrypted` +
+  `audit_log` (**一并给 `franchisee` 表补上了审计触发器** —— 之前这张表一行审计都没有,
+  而它存的是整棵加盟树的 path/depth/root_id)
+- Flutter: 新增 `flutter_app/lib/screens/admin_reparent_sheet.dart` (搜人 → 选 A线/B线
+  (有人那条禁用并标出占位者) → 填原因 → 提交); 节点弹层 + 已加盟用户弹层各加「协商处理: 改上层」入口;
+  `AdminNode` 新增 `path` / `rootFid` (选候选上层时算子树与空位); 无账号节点显示"先让她注册"的提示
+- 冒烟 `scripts/smoke-admin-reparent.ts` **35 项全过** (9 条拒绝 + 非根换上层子树整体跟着走 +
+  树根挂到别的树 + **无关的第三棵树一点没动** + 图谱无重复行 + 留痕 + 非管理员 403)
+
+**文档**: ADR-0014 §3.7 / §3.8 · `docs/api.md §15` · AGENTS §6.7
+
+---
+
+### Changed (向上认领第二轮: 上层 = 点位父 · 可认领已有节点 · 由上级挑线 · 图谱「上层」那一格, 2026-09-21)
+
+> **主人原话 (同日第二轮 5 条)**:
+> ①「**『上层』= 点位父, 不一定是推荐码提供人。**」
+> ②「**上层一旦有人不能撤换, 除非联系系统管理员协商处理。**」
+> ③「**一个人已经在别的树里是节点, 可以被认领为我的上级, 前提是这个人的一层 2 个点位必需有空位。**」
+> ④「**认领时『我在上级的 A线/B线』不在我的考虑范围, 我在我的上级是处于 a线还是 b线由我的上级自己决定。**」
+> ⑤「(根用户看到自己枝上的节点) **这根本不是问题, 而是理当如此。**」
+
+**B2 修正: promote 从「新建一个上级」扩成「把我这棵树挂到上级的一个空位」**
+
+- migration `0018_placement_upline_fid.sql` (纯 additive): `franchise_placement_request.upline_fid` +
+  `idx_placement_upline_fid` —— 认领的上级**已在 app 里**时记他的现存节点 id, 执行时**复用不建副本**
+  → **两棵树在此合并** (同一加盟系统不同枝上溯共同上层); `null` = 上级不在 app 里 (执行时才新建)
+- `createPlacementRequest` (promote 分支): 手机号查到已有节点 → 校验 ① 不能在同一棵树里 (会成环)
+  ② **他必须有可登录账号** (否则「还没有可登录的账号…请先让他注册登录」——确认要他本人点)
+  ③ 他一层两个点位至少空一个 → 存 `uplineFid`; 新增「同一个上级同时只能 1 张 pending」(避免两个枝抢同一个空位)
+- `executeRequest` (promote 分支) 整段重写: 统一成
+  `uplineRootId = U.root_id ?? U.id` / `newBasePath = U.path + 'L.'|'R.'` / `depthShift = U.depth + 1`
+  → `UPDATE franchisee SET path = newBasePath||path, depth = depthShift+depth, root_id = uplineRootId
+  WHERE root_id = 我的旧根`; **只有新建 U 才发推荐奖励** (复用旧节点不算新增加盟商);
+  两种情形都补 `linkAccountAndCustomer(U)` (`roleFor` 也让 `actor.fid === uplineFid` 认得出上级本人)
+- `PlacementRequestView` 新增 `uplineFid` / `uplineName` / `availableSides` (上级挑线用)
+
+**拍板 ④: 我在上级哪条线由上级自己挑**
+
+- 发起时**免传** `side` (`POST /api/franchisees/placement-requests`); 新增
+  `decidePlacementRequest(id, actor, decision, ctx, side?)` 第 5 参 + `/decide` body 接 `side`
+- 规则: 上级本人同意时 —— 两条都空 → 400「请选择这位下线放在您的 A线 还是 B线」;
+  只剩一条 → 自动落那一条; 传了已有人的 → 400「这条线已经有下线了」
+
+**图谱: 「我」正上方新增「上层点位」那一格** (拍板 ①/②/⑤ 的 UI 落地)
+
+- `GET /api/franchisees/me/tree?mode=placement` 顶层新增 `upline` (我的**点位父**, `null` = 虚位以待) +
+  `uplineRequest` (我发起的 pending 认领单); 口径 `getPlacementUpline` = `placement_path` **去尾段 + 同 root_id**
+  (**不是** `referrer_id` —— 那是推荐人, 拍板 ① 明确两者不是一回事)
+- 图谱: 有人 → 画人 + 实线连到「我」 + 可点开看「我的上层 · 姓名 / 我在她的 A线 / 第 N 层 + 上层不可撤换」;
+  空着 → 虚线「＋ 上层 · 虚位以待 · 点此认领一位上级」; 已发起 → 虚线「待她确认」
+- 初始相机改为**对齐上层格** (`_focusRootMatrix(capCenter:)`): 否则那一格会被顶出屏幕看不见
+  (第一次截图就踩到: 只有文字露出来, 虚线圆整圈在屏幕外)
+- 「我是加盟商但还没下线」不再被空状态拦住 —— 刚被建根的用户必须能看到这一格 (那是往上发展的唯一入口)
+- 认领对话框**去掉 A线/B线 选择器**, 文案改为「您在她哪条线**由她本人决定**」;
+  「加盟落位确认」页: 上级本人同意 promote 单时弹层挑「放在我的 A线(左) / B线(右)」
+
+**顺带修一个真 bug: 上级的「待我确认」永远是空的**
+
+- `listPlacementRequests(scope='to_confirm')` 的 SQL 过滤只认 `target_parent_fid` / `move_fid` / `new_phone_hash`
+  —— 认领「**已在 app 里的节点**」时, 上级本人是按 `upline_fid` 认的 → 她的「待我确认」列表**永远是空的**,
+  这张单**没人能拍板** (UI 实测: 待我确认 (0))
+- 修法: 过滤加上 `upline_fid = 我的 fid`; 冒烟补 ⑤c (上级本人在列表里能看到这张单)
+- 发现方式: 造了一条真实的 pending promote 单 + 登录上级账号看页面 (踩到才补)
+
+**验证**
+
+- `scripts/smoke-upline-promote.ts` 重写为 **36 项全过**: 非根拒 / 认领自己拒 / 同树拒 /
+  **无账号节点拒 (本人点不了同意)** / 认领别的树的节点成功 + 复用节点 (不新建副本) /
+  `availableSides` / 双方确认 / 重复认领拒 / **上级不选线拒 → 选线后 executed** /
+  A 挂 `L.` depth=1 子孙 `L.L.` / **合并后那棵树 = 4 节点** / **无关第三棵树没被动过** /
+  管理员图谱无重复行 / 「上级不在 app」的**新建路径**照样走通
+- 回归: `smoke-bootstrap-root` 13/13 · `smoke-placement-confirm` · `smoke-placement-rules` 6/6 ·
+  `npx vitest run` **239/239** · `npx tsc --noEmit` 0 error · `flutter analyze` 无新增问题
+- 前端截图: `/tmp/graph-root2.png` (根用户图谱: 「上层 · 虚位以待」虚位挂在「我」正上方)
+- 记忆: `docs/adr/0014-multi-root-and-upline-claim.md` 新增 §3.6 (5 条拍板 + 分支表) · `docs/api.md §16` 更新
+
+### Added (自助改手机号 — 替换原"换号找管理员", 2026-09-21)
+
+> **主人原话**: 「用户的电话号码需要可以修改。修改入口放在账号与安全区块里」
+
+- 新增 `PATCH /api/me/phone` (`src/app/api/me/phone/route.ts`):
+  - 必须登录 + 验证当前密码 (防偷设备改号, 跟改密码同模型)
+  - `newPhone` 跟注册同正则 `/^1[3-9]\d{9}$/`; 5 次/分钟限流 (同改密码档)
+  - 新手机号已被其他 active user 占用 → 409
+  - **事务里同时改 user + 同 phoneHash 的所有 customer 档案** (CHARTER §6.6 约定
+    user ↔ customer 用手机号 hash 关联, 软删的也一起改, 改完仍软删)
+  - user 表走 user_audit 触发器 (谁/IP/旧→新); customer 走 customer_audit
+- Flutter: `AuthService.changePhone(password, newPhone)` + `showChangePhoneSheet`
+  (旧密码 → 新手机号 → 确认; 改完 invalidate `meProfileProvider` 让头部立刻显示新号)
+- 入口放进 `profile_page.dart` 的 `_AccountCard`「账号与安全」区块 (跟「修改密码」平级,
+  `Icons.phone_iphone`), 替换原"换号 / 停用账号请联系管理员" → "停用账号请联系管理员"
+- 不强制重新登录: 跟改密码一致; 提示"下次登录用新手机号"; jwt 里的 session.user.phone
+  是首次签发快照, 不刷新
+- 文档: `docs/api.md §13` 新增 `PATCH /api/me/phone` 边界/响应/不做的事
+
 ### Added (多根加盟树 + 向上认领上级, 2026-09-21)
 
 > **主人原话**: 「要支持多根。」「图谱默认进来要『直接适应屏幕』。」

@@ -24,6 +24,7 @@ import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
 import { hashPassword, isValidPassword } from "@/lib/auth/password";
 import { claimReferralCode, ensureReferralCode } from "@/lib/billing/entitlements";
+import { adoptOrphanNodeForNewAccount } from "@/lib/db/queries/franchisee-account";
 import { referralCode as referralCodeTable } from "@/lib/db/schema";
 import { normalizeReferralCode } from "@/lib/billing/referral";
 
@@ -54,6 +55,12 @@ export interface CreateAccountInput {
 export interface CreateAccountResult {
   userId: bigint;
   customerId: bigint;
+  /**
+   * 建号时自动认领的"无账号加盟节点" id (主人 2026-09-21 拍: 消除无账号节点)
+   *   - 她本来就是树里的人 (老 seed / 老数据留下的孤儿节点), 一注册就补上账号
+   *   - null = 没有待认领的节点 (常规情况)
+   */
+  adoptedFranchiseeId: bigint | null;
   /** 新建客户档案? false = 复用同手机号的既有档案 */
   customerCreated: boolean;
   /** 新账号自己的推荐码 (注册即分配) */
@@ -109,7 +116,8 @@ export async function createAccountWithProfile(
   const passwordHash = input.password ? hashPassword(input.password) : null;
 
   // ---- 事务: 账号 + 客户档案 (审计由 withAuditContext 兜住) ----
-  const { userId, customerId, customerCreated } = await withAuditContext(
+  const { userId, customerId, customerCreated, adoptedFranchiseeId } =
+    await withAuditContext(
     { userId: input.actorUserId, ipAddress: input.ipAddress } satisfies AuditContext,
     async (tx) => {
       const [dupe] = await tx
@@ -134,6 +142,13 @@ export async function createAccountWithProfile(
         })
         .returning({ id: user.id });
 
+      // ⓪ 节点 ⇒ 账号 不变量 (主人 2026-09-21 拍): 同手机号若已有一个**没账号**的加盟节点
+      //    (老 seed / 老数据留下的孤儿节点) → 这次注册直接把账号绑上去 = 自愈
+      const adopted = await adoptOrphanNodeForNewAccount(tx, {
+        userId: created.id,
+        phoneHash,
+      });
+
       // ① 客户档案: 同手机号已有 (例如他早就是客户/加盟商) → 复用, 不重复建
       const [existingCustomer] = await tx
         .select({ id: customer.id })
@@ -145,6 +160,7 @@ export async function createAccountWithProfile(
           userId: created.id,
           customerId: existingCustomer.id,
           customerCreated: false,
+          adoptedFranchiseeId: adopted?.adoptedFid ?? null,
         };
       }
 
@@ -164,6 +180,7 @@ export async function createAccountWithProfile(
         userId: created.id,
         customerId: newCustomer.id,
         customerCreated: true,
+        adoptedFranchiseeId: adopted?.adoptedFid ?? null,
       };
     }
   );
@@ -198,6 +215,7 @@ export async function createAccountWithProfile(
 
   return {
     userId,
+    adoptedFranchiseeId,
     customerId,
     customerCreated,
     ownReferralCode,

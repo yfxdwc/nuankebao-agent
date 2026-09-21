@@ -116,6 +116,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   Size? _graphCanvasSize;
   double? _graphContentHeight;
   Offset? _graphRootCenter;
+  /// 上层格中心 (画布坐标; null = 这一格不画) —— 初始相机要以它为上沿, 否则它被顶出屏幕
+  Offset? _graphUplineCapCenter;
   bool _graphViewInitialized = false;
 
   /// 单击选中的节点 id (选中后突显它 + 高亮 它→「我」整条线 + 其余淡化)
@@ -482,6 +484,183 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     );
   }
 
+  /// 图谱最上方「上层点位」那一格 (主人 2026-09-21 拍)
+  ///
+  ///   口径 (主人原话): 「上层」= **点位父**, 不一定是推荐码提供人; 每个用户有且只有一个。
+  ///   - 后端给了 upline → 有人 (她在别的树里也算, 认领后两棵树就并成一棵)
+  ///   - 我发起的认领单还 pending → 虚线「待她确认」
+  ///   - 我是树根 (上层空着) → 虚线「上层 · 虚位以待」→ 点它去认领
+  ///   ⚠ 上层一旦有人就不可撤换 (联系系统管理员协商处理); 所以这里**没有**换上层入口
+  UplineCap? _uplineCapOf(FranchiseeTreeNode tree) {
+    if (tree.id == '0' || tree.name == '未加盟') return null;
+    final up = tree.upline;
+    if (up != null) {
+      return UplineCap(
+        node: FranchiseeTreeNode(
+          id: up.id,
+          name: up.name,
+          // ⚠ side 不往节点上放: painter 会在圆下再画一次「A线/B线」标签, 而那一行的位置
+          //   正好压在「我」的圆上 (而且我自己的节点下面已经标了我在她的哪条线) → 只留在弹层里说
+          placementSide: null,
+          placementDepth: up.depth,
+          relation: FranchiseeRelation.upline,
+          children: const [],
+          member: up.member,
+        ),
+      );
+    }
+    // 不是树根却没有上层 → 数据异常 (父节点被删), 不画, 免得误导
+    if (tree.placementSide != null) return null;
+    final req = tree.uplineRequest;
+    if (req != null) {
+      return UplineCap(
+        node: FranchiseeTreeNode(
+          id: '__upline_slot__',
+          name: '「${req.newName ?? "上级"}」· 待她确认',
+          placementSide: null,
+          placementDepth: -1,
+          relation: FranchiseeRelation.upline,
+          children: const [],
+        ),
+        ghost: true,
+        hint: '点此查看确认进度',
+      );
+    }
+    return UplineCap(
+      node: FranchiseeTreeNode(
+        id: '__upline_slot__',
+        name: '上层 · 虚位以待',
+        placementSide: null,
+        placementDepth: -1,
+        relation: FranchiseeRelation.upline,
+        children: const [],
+      ),
+      ghost: true,
+      hint: '点此认领一位上级',
+    );
+  }
+
+  /// 布局 + 上层格: 整棵树整体下移一层, 空出来的最上层放「上层点位」
+  ///
+  /// 为什么不下移不显示、也不把上层塞进布局算法:
+  ///   塞进去 = 我这棵树会被当成上层的一条腿 (A线或B线), 整棵树被算歪到一侧;
+  ///   下移一层 = 我的子树保持原来的双主线形状, 上面顶一格, 视觉最稳。
+  TreeLayoutResult _layoutWithUpline(FranchiseeTreeNode tree, UplineCap? cap) {
+    final base = TreeLayout.compute(tree, maxDepth: _graphLayoutMaxDepth);
+    if (cap == null) return base;
+    final rootPos = base.positions[tree.id];
+    if (rootPos == null) return base;
+    final positions = <String, Offset>{
+      for (final e in base.positions.entries)
+        e.key: e.value + const Offset(0, TreeLayout.levelHeight),
+      cap.node.id: Offset(rootPos.dx, TreeLayout.padding + TreeLayout.nodeRadius),
+    };
+    return TreeLayoutResult(
+      positions: positions,
+      columns: {...base.columns, cap.node.id: 0},
+      depths: {...base.depths, cap.node.id: 0},
+      spineIds: base.spineIds,
+      aLineIds: base.aLineIds,
+      bLineIds: base.bLineIds,
+      leftColumns: base.leftColumns,
+      rightColumns: base.rightColumns,
+      contentHeight: base.contentHeight + TreeLayout.levelHeight,
+      columnPitch: base.columnPitch,
+      canvasSize: Size(
+        base.canvasSize.width,
+        base.canvasSize.height + TreeLayout.levelHeight,
+      ),
+    );
+  }
+
+  /// 上层格点击区: 虚位 → 认领; 待确认 → 「待我确认」页; 有人 → 她的信息
+  List<Widget> _buildUplineCapHitarea(
+    FranchiseeTreeNode tree,
+    Map<String, Offset> positions,
+  ) {
+    final cap = _uplineCapOf(tree);
+    if (cap == null) return const [];
+    final center = positions[cap.node.id];
+    if (center == null) return const [];
+    final radius = TreeLayout.nodeRadius;
+    return [
+      Positioned(
+        left: center.dx - radius,
+        top: center.dy - radius,
+        width: radius * 2,
+        height: radius * 2 + 52,
+        child: Semantics(
+          button: true,
+          label: cap.ghost ? '上层点位 ${cap.node.name}, 点击认领上级' : '我的上层 ${cap.node.name}',
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              _onTapUplineCap(tree);
+            },
+            behavior: HitTestBehavior.opaque,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  /// 点上层格
+  Future<void> _onTapUplineCap(FranchiseeTreeNode tree) async {
+    final up = tree.upline;
+    if (up != null) {
+      // 有人: 只给看信息 (上层不可撤换, 没有「换掉」按钮)
+      await showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: AppTheme.bgWarm,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '我的上层 · ${up.name}',
+                  style: const TextStyle(
+                    fontSize: AppTheme.fontLg,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '我在她的${up.sideLabel} · 第${up.depth}层\n'
+                  '上层一旦确定就不能撤换; 确需调整请联系系统管理员。',
+                  style: const TextStyle(
+                    fontSize: AppTheme.fontSm,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    context.push('/franchisees/${up.id}');
+                  },
+                  child: const Text('查看她的加盟商详情'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    if (tree.uplineRequest != null) {
+      context.push('/franchisees/placement-requests');
+      return;
+    }
+    await _showClaimUplineDialog();
+  }
+
   Widget _buildGraphView(AsyncValue<dynamic> asyncTree) {
     return asyncTree.when(
       loading: () => const LoadingState(),
@@ -498,21 +677,16 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         // ★ 业务空状态 (非错误, 不走 ErrorState):
         //   - tree == null: 后端 404 真错误 (franchiseeId 存在但记录被删)
         //   - id == "0" / name == "未加盟": user 没加盟关系 (dev mode / 普通用户)
-        //   - 没有下级: 加盟了但没发展 (totalDescendants 是服务端全深度真值,
-        //     不能拿 _countDescendants 比 — 懒加载后本地只加载了前两层)
         final isUnaffiliated =
             tree == null || tree.id == '0' || tree.name == '未加盟';
-        final hasDownline = tree != null &&
-            ((tree.totalDescendants ?? (_countDescendants(tree) - 1)) > 0);
-        if (isUnaffiliated || !hasDownline) {
-          return EmptyState(
+        // ★ 主人 2026-09-21 拍: 图谱在「我」上面永远留一格「上层点位」——
+        //   刚被建根、还没有下线的加盟商也要能看到这一格 (那是往上发展的唯一入口),
+        //   所以「我是加盟商但还没下线」不再拦成空状态 (只留「未加盟」这一种空状态)
+        if (isUnaffiliated) {
+          return const EmptyState(
             icon: Icons.account_tree_outlined,
-            title: isUnaffiliated
-                ? '还不是加盟商, 没有加盟网络'
-                : '还没有加盟客户, 无法生成图谱',
-            hint: isUnaffiliated
-                ? '当前账号未关联加盟关系, 无法查看加盟图谱'
-                : '图谱里只显示加盟客户 —— 在客户列表把普通客户转为加盟商后, 会自动出现在这里',
+            title: '还不是加盟商, 没有加盟网络',
+            hint: '当前账号未关联加盟关系, 无法查看加盟图谱',
           );
         }
         // 预算搜索匹配数 (全树 O(n) 走一遍)
@@ -523,7 +697,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 
         // 双主线「对碰」布局: 两条主线平行直下, 侧枝往外侧展开
         // ADR-0011: 层数不限 → 布局深度给足, 实际节点由懒加载合并进来
-        final layout = TreeLayout.compute(tree, maxDepth: _graphLayoutMaxDepth);
+        // 上层点位 (主人 2026-09-21 拍): 在「我」正上方留一格 (整树下移一层)
+        final uplineCap = _uplineCapOf(tree);
+        final layout = _layoutWithUpline(tree, uplineCap);
         final canvasSize = layout.canvasSize;
         final positions = layout.positions;
         final searchMatchedIds = searchQuery.isEmpty
@@ -697,6 +873,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                           TreeLayout.padding + TreeLayout.nodeRadius);
                   _graphViewport = viewport;
                   _graphRootCenter = rootCenter;
+                  _graphUplineCapCenter = uplineCap == null
+                      ? null
+                      : positions[uplineCap.node.id];
                   _graphContentHeight = layout.contentHeight;
 
                   // 树结构变了 (画布尺寸变) → 重算初始视图
@@ -714,7 +893,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                       _graphPathIds = const {};
                     }
                     final matrix =
-                        _focusRootMatrix(viewport, canvasSize, rootCenter);
+                        _focusRootMatrix(viewport, canvasSize, rootCenter,
+                            capCenter: _graphUplineCapCenter);
                     if (treeChanged) {
                       // 懒加载引起的树变化 (展开/收起) → 不重置相机,
                       // 否则用户每展开一个深节点就被弹回根部 (很难用)
@@ -773,6 +953,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                                             root: tree,
                                             positions: positions,
                                             columns: layout.columns,
+                                            uplineCap: uplineCap,
+                                            uplineCapCenter: uplineCap == null
+                                                ? null
+                                                : positions[uplineCap.node.id],
                                             scale: scale,
                                             columnPitch: layout.columnPitch,
                                             pendingPlacements:
@@ -797,6 +981,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                                   ..._buildGhostHitareas(tree, positions,
                                       layout.columns, layout.aLineIds,
                                       layout.bLineIds, layout.columnPitch),
+                                  // 上层格也能点 (主人 2026-09-21: 虚位 → 认领; 待确认 → 确认页)
+                                  ..._buildUplineCapHitarea(tree, positions),
                                 ],
                               ),
                             ),
@@ -821,7 +1007,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                               label: '全景',
                               onTap: _fitGraphView,
                             ),
-                            // 向上认领上级 (主人 2026-09-21 拍 B2): 只有**树根**才显示 ——
+                            // 认领上级 (主人 2026-09-21 拍 B2): 只有**树根**才显示 ——
+                            //   (上层格点「＋」也能进来, 这条是显式按钮, 老用户习惯)
                             //   非根用户上面已经有 app 内的上级, 往上发展该由那个根去做
                             //   (placementSide == null ⟺ 我这张图的根无侧别 = 我是树根)
                             if (tree.placementSide == null) ...[
@@ -860,11 +1047,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   Future<void> _showClaimUplineDialog() async {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
-    var side = 'left';
     final submitted = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlg) => AlertDialog(
+      builder: (ctx) => AlertDialog(
           title: const Text('认领我的上级',
               style: TextStyle(fontSize: AppTheme.fontLg)),
           content: SingleChildScrollView(
@@ -876,24 +1061,12 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   '公司现实里的加盟体系已经存在, app 只是把它同步进来。'
                   '这里把您的直接上级接进来: 她成为新的树根, 您这棵子树整体往下挪一层。\n\n'
                   '需要双方确认: 您 (自动记 1 票) + 上级本人 (要她先注册登录, '
-                  '再到「加盟落位确认」里点同意)。',
+                  '再到「加盟落位确认」里点同意)。\n\n'
+                  '⚠ 您在她哪条线 (A线/B线) 不用您选 —— 由她本人在同意时决定。',
                   style: TextStyle(
                     fontSize: AppTheme.fontXs,
                     color: AppTheme.textSecondary,
                   ),
-                ),
-                const SizedBox(height: 12),
-                const Text('我在上级的哪条线上',
-                    style: TextStyle(fontSize: AppTheme.fontSm)),
-                const SizedBox(height: 6),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'left', label: Text('A线')),
-                    ButtonSegment(value: 'right', label: Text('B线')),
-                  ],
-                  selected: {side},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (v) => setDlg(() => side = v.first),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -921,7 +1094,6 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
               child: const Text('提交确认', style: TextStyle(fontSize: AppTheme.fontMd)),
             ),
           ],
-        ),
       ),
     );
     final name = nameCtrl.text.trim();
@@ -938,7 +1110,6 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     }
     try {
       final req = await ref.read(franchiseeServiceProvider).claimUpline(
-            side: side,
             newName: name,
             newPhone: phone,
           );
@@ -950,7 +1121,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           content: Text(
             done
                 ? '已认领: 「$name」成为新的树根 (管理员设置, 立即生效)'
-                : '已提交: 认领「$name」为上级, 等她本人在「加盟落位确认」里同意',
+                : '已提交: 认领「$name」为上级, 等她本人在「加盟落位确认」里同意'
+                    ' (您在她哪条线由她定)',
             style: const TextStyle(fontSize: AppTheme.fontSm),
           ),
         ),
@@ -1328,14 +1500,23 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   }
 
   /// 「回到我」视图: 根节点 (我) 顶部居中 + 竖直能放下整棵树的可读缩放 (上限 1:1)
-  Matrix4 _focusRootMatrix(Size viewport, Size canvasSize, Offset rootCenter) {
-    const topMargin = 20.0;
+  /// 上沿对齐谁: 有上层格 → 对齐上层格 (否则它会伸出屏幕外被裁掉), 没有 → 对齐我
+  Matrix4 _focusRootMatrix(
+    Size viewport,
+    Size canvasSize,
+    Offset rootCenter, {
+    Offset? capCenter,
+  }) {
+    // 有上层格 → 上沿多留一圈 (名字画在虚位圆上方, 不留就被顶出屏幕)
+    final topMargin =
+        capCenter == null ? 20.0 : 20.0 + TreeLayout.nodeRadius + 26;
     final contentHeight = _graphContentHeight ?? canvasSize.height;
     final fit = (viewport.height - topMargin - 8) / contentHeight;
     // 0.5 下限: 再小就没法读了; 1.0 上限: 不放大超过 1:1
     final scale = math.min(1.0, math.max(0.5, fit));
+    final anchor = capCenter ?? rootCenter;
     final dx = viewport.width / 2 - rootCenter.dx * scale;
-    final dy = topMargin - (rootCenter.dy - TreeLayout.nodeRadius) * scale;
+    final dy = topMargin - (anchor.dy - TreeLayout.nodeRadius) * scale;
     return Matrix4.identity()
       ..translate(dx, dy)
       ..scale(scale);
@@ -1380,7 +1561,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     final hit = _firstMatchNode(tree, lower);
     if (hit == null) return;
     final center =
-        TreeLayout.compute(tree, maxDepth: _graphLayoutMaxDepth).positions[hit.id];
+        _layoutWithUpline(tree, _uplineCapOf(tree)).positions[hit.id];
     if (center == null) return;
     setState(() {
       _graphTransformController.value = Matrix4.identity()
@@ -1397,7 +1578,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     if (viewport == null || canvasSize == null || rootCenter == null) return;
     setState(() {
       _graphTransformController.value =
-          _focusRootMatrix(viewport, canvasSize, rootCenter);
+          _focusRootMatrix(viewport, canvasSize, rootCenter,
+              capCenter: _graphUplineCapCenter);
     });
   }
 

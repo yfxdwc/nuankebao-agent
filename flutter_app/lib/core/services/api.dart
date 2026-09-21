@@ -91,6 +91,19 @@ class AuthService {
     });
   }
 
+  /// 修改登录手机号 (自助改号)
+  /// PATCH /api/me/phone { password, newPhone }
+  /// 成功 → caller 自己 invalidate me provider 拿新号
+  Future<void> changePhone({
+    required String password,
+    required String newPhone,
+  }) async {
+    await _dio.patch('/me/phone', data: {
+      'password': password,
+      'newPhone': newPhone,
+    });
+  }
+
   /// R12 治本方案 A: dev + web 平台走专用 endpoint 拿 body 返回的 session token
   ///
   /// Auth.js 默认 httpOnly=true, JS 读不到。dio XHR 拿不到 Set-Cookie 头。
@@ -465,12 +478,14 @@ class FranchiseeService {
     return PlacementRequest.fromJson(res.data as Map<String, dynamic>);
   }
 
-  /// 向上认领上级 (主人 2026-09-21 拍 B2): 把现实里的直接上级拉进 app
-  ///   - 我必须是**树根** (服务端硬校验); 上级成为新根, 我这棵子树整体下降一层
-  ///   - 双方确认: 我 (发起人, 自动记 1 票) + 上级本人 (注册登录后在自己的「加盟落位确认」里点同意)
+  /// 认领我的「上层点位」= 现实里的直接上级 (主人 2026-09-21 拍 B2 + 补充)
+  ///   - 我必须是**树根** (服务端硬校验; = 我的上层点位空着)
+  ///   - 上级已在 app 里 → 复用他那个节点 (两棵树合并); 不在 → 执行时新建 (他成为新根)
+  ///   - 双方确认: 我 (发起人, 自动记 1 票) + 上级本人 (在自己的「加盟落位确认」里点同意)
+  ///   - ⚠ **不传 side**: 主人拍「我在我的上级是处于 a线还是 b线由我的上级自己决定」
+  ///     → 由上级本人在同意那一步挑一条自己空着的线
   ///   - 不需要 targetParentId: 锚点 = 我自己那个根 (服务端填)
   Future<PlacementRequest> claimUpline({
-    required String side,
     required String newName,
     required String newPhone,
     String? newNotes,
@@ -479,7 +494,6 @@ class FranchiseeService {
       'kind': 'promote',
       // ⚠ 后端 promote 不读 targetParentId (锚点=发起人自己); 传 0 只为兼容校验
       'targetParentId': '0',
-      'side': side,
       'newName': newName,
       'newPhone': newPhone,
       if (newNotes != null) 'newNotes': newNotes,
@@ -501,13 +515,19 @@ class FranchiseeService {
   }
 
   /// 三方之一拍板
+  ///   - [side] 只有一种情况要传 (主人 2026-09-21 拍): **认领上级 (promote) 单里的上级本人**
+  ///     同意时挑「这位下线放在我的 A线 还是 B线」(她两条线都空时才需要选)
   Future<PlacementRequest> decidePlacementRequest(
     String id, {
     required bool approve,
+    String? side,
   }) async {
     final res = await _dio.post(
       '/franchisees/placement-requests/$id/decide',
-      data: {'decision': approve ? 'approve' : 'reject'},
+      data: {
+        'decision': approve ? 'approve' : 'reject',
+        if (side != null) 'side': side,
+      },
     );
     return PlacementRequest.fromJson(res.data as Map<String, dynamic>);
   }
@@ -1040,6 +1060,41 @@ class AdminUsersService {
       final data = e.response?.data;
       final msg = data is Map ? data['error']?.toString() : null;
       return (ok: false, message: msg ?? '建根失败, 请重试', rootCount: 0);
+    }
+  }
+
+  /// 协商处理后**强改上层** (管理员专用, 单方生效 + 必填原因留痕)
+  ///   主人 2026-09-21 拍: 「『上层』= 点位父 …… 上层一旦有人不能撤换,
+  ///   除非联系系统管理员协商处理」→ 这是唯一的人工例外通道。
+  ///   - [fid] 要调整的节点 (她的整棵子树跟着走)
+  ///   - [newParentFid] 新的上层节点
+  ///   - [side] 她在新上层下面哪条线 ('left' = A线 / 'right' = B线)
+  ///   - [reason] 原因 (必填 2-200 字)
+  Future<({bool ok, String message})> reparentNode({
+    required String fid,
+    required String newParentFid,
+    required String side,
+    required String reason,
+  }) async {
+    try {
+      final res = await _dio.post('/admin/nodes/$fid/reparent', data: {
+        'newParentFid': newParentFid,
+        'side': side,
+        'reason': reason,
+      });
+      final data = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : {};
+      final to = data['toParentName']?.toString() ?? '';
+      final size = (data['subtreeSize'] as num?)?.toInt() ?? 1;
+      final merged = data['mergedTrees'] == true;
+      final roots = (data['rootCount'] as num?)?.toInt() ?? 0;
+      final parts = <String>['已把「${data['moveName'] ?? ''}」改挂到「$to」'];
+      if (size > 1) parts.add('整棵子树 $size 个节点一起移');
+      if (merged) parts.add('两棵树合并了 (现在共 $roots 棵)');
+      return (ok: true, message: parts.join(' · '));
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final msg = data is Map ? data['error']?.toString() : null;
+      return (ok: false, message: msg ?? '改上层失败, 请重试');
     }
   }
 }

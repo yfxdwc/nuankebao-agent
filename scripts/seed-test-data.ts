@@ -19,17 +19,22 @@
 //   API_BASE=http://x.x.x.x:3003 pnpm tsx scripts/seed-test-data.ts
 //   pnpm tsx scripts/seed-test-data.ts --dry-run   # 仅打印, 不真创建
 //
+// ⚠ 节点 ⇒ 账号 (主人 2026-09-21 拍): 「要成为节点首先必需有账号」
+//   所以本脚本给每个加盟节点**先建账号再建节点** (账号手机号 = 节点手机号)。
+//   历史版本先建节点、后不管账号 → 2026-09-21 巡检出 29 个"无账号节点"
+//   (那批脏数据用 scripts/audit-orphan-nodes.ts --bind 补齐)。
+//
 // 关联:
 //   - ADR-0010 (≤4 层 override, 本任务前提)
+//   - ADR-0014 §3.7 (节点 ⇒ 账号 不变量)
 //   - CHANGELOG [Unreleased] / 主人 ask d234bdd4 (2026-09-16)
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-
-if (process.env.NODE_ENV !== "production") {
-  loadEnv({ path: ".env.local" });
-  loadEnv({ path: ".env" });
-}
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+//   历史写法 (手动 `loadEnv` + `if (NODE_ENV !== "production")` 守卫) 在 NODE_ENV=production
+//   的 shell 里**静默不加载** → DATABASE_URL 缺失 → postgres 退化成 OS 用户登录直接认证失败
+//   (2026-09-21 给节点建账号时踩到, 现统一走 _env.ts)
+import "./_env";
 
 const API_BASE = process.env.API_BASE ?? "http://127.0.0.1:3003";
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -116,6 +121,75 @@ async function initPhoneCounter() {
 function nextPhone(): string {
   _phoneCounter++;
   return _phoneCounter.toString();
+}
+
+// ============================================
+// Part A 前置: 给每个加盟节点建账号 (主人 2026-09-21 拍: 节点必须对应账号)
+//   为什么要先建号: POST /api/franchisees 现在有硬门槛 —— 目标手机号没有可登录账号
+//   直接拒 (requireAccountForNode, 见 src/lib/db/queries/franchisee-account.ts)。
+//   密码统一为 SEED_PASSWORD, 方便真机 / 截图脚本用任意种子账号切号验证。
+// ============================================
+
+const SEED_PASSWORD = "dev123456";
+
+/** 库里必须有一个 admin 账号当建号 actor (没有就建一个 dev 管理员) */
+async function ensureSeedAdmin(): Promise<bigint> {
+  const postgres = (await import("postgres")).default;
+  const { drizzle } = await import("drizzle-orm/postgres-js");
+  const { user } = await import("../src/lib/db/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const conn = postgres(process.env.DATABASE_URL!);
+  const db = drizzle(conn);
+  try {
+    const [admin] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.role, "admin"))
+      .limit(1);
+    if (!admin) {
+      throw new Error("库里没有 admin 账号 —— 先跑 pnpm db:ensure-admin");
+    }
+    return admin.id;
+  } finally {
+    await conn.end();
+  }
+}
+
+async function ensureSeedAccount(
+  name: string,
+  phone: string,
+  adminId: bigint
+): Promise<"created" | "existed" | "skipped"> {
+  if (DRY_RUN) return "skipped";
+  const { createAccountWithProfile } = await import("../src/lib/auth/registration");
+  const postgres = (await import("postgres")).default;
+  const { drizzle } = await import("drizzle-orm/postgres-js");
+  const { user } = await import("../src/lib/db/schema");
+  const { hashForLookup } = await import("../src/lib/crypto/field");
+  const { eq } = await import("drizzle-orm");
+
+  const conn = postgres(process.env.DATABASE_URL!);
+  const db = drizzle(conn);
+  try {
+    const [existed] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.phoneHash, hashForLookup(phone)))
+      .limit(1);
+    if (existed) return "existed";
+    await createAccountWithProfile({
+      name,
+      phone,
+      password: SEED_PASSWORD,
+      // 种子节点不是"被谁拉进来的" → 没有推荐码可填 (admin 建号豁免)
+      allowNoReferral: true,
+      actorUserId: adminId,
+    });
+    return "created";
+  } finally {
+    await conn.end();
+  }
 }
 
 // ============================================
@@ -367,8 +441,12 @@ async function main() {
 
   await initPhoneCounter();
 
+  // 取一个管理员账号 (建号要 actorUserId; 库里没有就先建)
+  const adminId = await ensureSeedAdmin();
+
   // ===== Part A: 加盟商 31 节点 =====
   info("\n=== Part A: 创建加盟商 (31 节点满二叉, depth 0-4) ===");
+  info("  节点 ⇒ 账号: 每个节点先建账号, 再建节点 (主人 2026-09-21 拍)");
   const createdFranchisees: { id: string; name: string }[] = [];
 
   for (let i = 0; i < FRANCHISEE_SPECS.length; i++) {
@@ -379,6 +457,14 @@ async function main() {
       phone,
       notes: spec.notes,
     };
+    // 先建账号 (否则 POST /api/franchisees 会被"节点必须对应账号"门槛拒掉)
+    try {
+      const acc = await ensureSeedAccount(`${PREFIX}${spec.name}`, phone, adminId);
+      if (acc === "created") info(`  · 账号已建 ${phone}`);
+    } catch (e) {
+      err(`账号创建失败 (${spec.name}): ${e}`);
+      if (!DRY_RUN) process.exit(1);
+    }
     if (spec.referrerIndex !== undefined && createdFranchisees[spec.referrerIndex]) {
       payload.referrerId = createdFranchisees[spec.referrerIndex].id;
       payload.sideHint = spec.sideHint;

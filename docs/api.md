@@ -611,6 +611,34 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 > 兼容性: JWT session 策略下改密不会使旧 token 立即失效 (最长 30 天);
 > 后续可加 `password_changed_at` 校验 (Phase 2 安全加固)。
 
+### `PATCH /api/me/phone`
+自助修改登录手机号 (替换原"换号找管理员"提示)。
+
+**Body**:
+```json
+{ "password": "当前密码", "newPhone": "新手机号" }
+```
+
+**规则**:
+- `newPhone` 必须 11 位中国大陆手机号 `/^1[3-9]\d{9}$/` (跟注册一致); 否则 400
+- 必须验证 `password` (错 → 401); 每用户 5 次/分钟限流 (跟改密码同档)
+- 新手机号不能与当前手机号相同 → 400
+- 新手机号已被其他 active user 占用 → 409「新手机号已被其他账号使用」
+- 未设置密码的账号 (老数据) → 400「请联系管理员重置密码后再改手机号」
+- 账号 inactive → 403
+- 改号是事务: 同时更新 `user` 和**同 phoneHash 的所有 customer 档案** (CHARTER §6.6 约定
+  user ↔ customer 用手机号 hash 关联, 改号后两边都要跟上; 软删记录也一起改, 改完还是软删)
+- 写库走 `user` 表 → 审计触发器记录 (旧号 → 新号, 谁/IP/什么时候)
+
+**响应**:
+```json
+{ "ok": true, "phone": { "full": "新号", "masked": "打码" } }
+```
+
+> 不做的事: **不强制重新登录** (跟改密码一致); session.user.phone 是 jwt 首次签发时的
+> 快照, 改完下次登录才一致; 前端 invalidate `meProfileProvider` 即可让「我的」页头部立刻显示新号。
+> 同号客户档案的"会员身份"用 `user.phoneHash = customer.phoneHash` 判断 → 改号后自动迁移。
+
 ### `GET /api/app-version`
 服务器版本 + 可下载安装包元数据 (Flutter 「检查更新」)。
 
@@ -728,24 +756,84 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
     "createdAt": "2026-09-19T..."
   }],
   "nodes": [{
-    "fid": "75", "name": "杨望", "accountName": "SeedTest-dev用户",
-    "parentFid": null, "side": null, "depth": 0, "isRoot": true,
-    "userId": "1",                       // null = 历史/脚本造的无账号节点
+    "fid": "75", "name": "杨望", "accountName": "杨望",
+    "parentFid": null, "side": null, "depth": 0,
+    "path": "",                          // 二叉树路径; 只在同一棵树内唯一
+    "rootFid": "75",                     // 同 rootFid 的一批节点才是同一棵树
+    "isRoot": true,
+    "userId": "190",                     // null = 历史/脚本造的无账号节点 (2026-09-21 起应为 0)
     "avatarUrl": null, "member": true
   }],
   "summary": {
     "total": 7, "joined": 3, "notJoined": 4, "members": 3,
-    "roots": 1, "nodesWithoutAccount": 29
+    "roots": 1, "nodesWithoutAccount": 0
   }
 }
 ```
 
 - 403 = 非管理员 (`code=FORBIDDEN`)
 - `member` 现算不落库 (`src/lib/billing/member-flag.ts`): `role='admin'` 或 `member_until > NOW()`
-- 节点必须连着**无账号**的一起回: dev 库 32 个节点里 29 个没账号, 只回有账号的 = 图谱断成孤岛
-- `nodes[].parentFid` = `franchisee.referrer_id` (父节点 id), **不是**用 `placement_path` 推导。
-  多棵树时每个根的 `placement_path` 都是 `''`, 按 path 连父会让 depth=1 的节点同时挂到每个根上
-  (实测行数翻倍) → 详见 `docs/backlog.md ⑤` (多根架构问题, 待拍板)
+- 节点必须连着**无账号**的一起回: 只回有账号的 = 图谱断成孤岛
+- `nodes[].parentFid` = **`placement_path` 去尾段 + 同 `rootFid`** 推导 (不是 `referrer_id` ——
+  它是"推荐人", 未必是点位父)。多棵树时每个根的 path 都是 `''`, 少了 `rootFid` 会让 depth=1
+  的节点同时挂到每个根上 (实测行数翻倍) → 详见 `docs/backlog.md ⑤` (已解决)
+- `nodes[].path` / `rootFid` 是「改上层」选候选上层用的: 前端据此算 ① 谁在她子树里 (不能选)
+  ② 目标线是否有人 (与后端同一口径)
+
+---
+
+### `POST /api/admin/nodes/[fid]/reparent` — 协商处理后**强改上层**
+
+主人 2026-09-21 拍: 「『上层』= 点位父 …… **上层一旦有人不能撤换, 除非联系系统管理员协商处理**」
++「给管理员一个『协商处理后强改上层』的后台功能」。
+
+```jsonc
+// body
+{
+  "newParentFid": "137",        // 新的上层 (点位父) = franchisee.id
+  "side": "left",               // "left" = A线 / "right" = B线 (她在这位上层下面走哪条)
+  "reason": "她现实里的上级换成了张姐"   // 必填 2-200 字 → 加密备注 + audit_log 留痕
+}
+// 200
+{
+  "moveFid": "152", "moveName": "李秀兰",
+  "fromParentFid": "140", "fromParentName": "王芳",
+  "toParentFid": "137", "toParentName": "张姐",
+  "side": "left", "newPath": "L.R.", "newDepth": 2,
+  "subtreeSize": 3,             // 跟着一起搬的节点数 (含她自己)
+  "mergedTrees": false,         // true = 两棵树在这里合并 (把孤立的那棵挂到主树上)
+  "rootCount": 3                // 改完之后全库树数量
+}
+```
+
+**动什么**: 整棵子树 —— `placement_path` (新基路径 + 原子树相对后缀) / `placement_depth` (整体位移) /
+`root_id` (改宗); 顶层节点再加 `referrer_id` + `placement_side` (指向新上层 + 新线别) 与备注追加一行。
+`path` 变换**不是简单前缀拼接**: 顶层层节点换线 (A↔B) 时它自己那段要丢掉, 只有后代保留相对后缀。
+
+**拒绝情形** (全部 400, 文案是人话直接给管理员看):
+
+| 条件 | 结果 |
+|---|---|
+| `reason` < 2 字 / > 200 字 | 改上层必须填写原因 |
+| 被搬节点 / 新上层不存在 (已软删) | 400 …不存在 (可能已解除加盟) |
+| `newParentFid === fid` | 400 不能把她自己的上层设成她自己 |
+| 新上层在她自己的下线里 | 400 「X」在她自己的下线里 —— 会把树打断 |
+| 那条线已经有人 | 400 「X」的A线已经有「Y」了 (一层只有 A线/B线 两个位置) |
+| 她本来就在那个位置 | 400 不需要改 (幂等, 不写假审计) |
+| 任一方**没有账号** | 400 先让她/他用这个手机号注册登录 (节点 ⇒ 账号, 见 §3.7) |
+| 任一方 `root_id` 缺失 (脏数据) | 400 缺少加盟树归属, 先跑数据修复 |
+| 调用者 `role != admin` | 403 只有系统管理员能协商处理改上层 |
+
+**为什么不塞进 `/api/franchisees/placement-requests`**: 三方确认的价值 = 三方都点头; 本功能的前提
+**正是三方谈不拢**, 塞进同一状态机会开一条「单方即执行」的分支 (同建根的理由)。
+
+**留痕**: `reason` 加密追加进 `franchisee.notes_encrypted` (`[日期 管理员改上层] 从 X → 「Y」的A线: 原因`)
++ `audit_log` (本次一并给 `franchisee` 表补上了审计触发器 —— 之前这张表没有)。
+
+**冒烟**: `npx tsx scripts/smoke-admin-reparent.ts` (35 项: 9 条拒绝路径 + 非根换上层 + 树根挂到别的树 +
+无关的第三棵树没被动过 + 图谱无重复行 + 留痕; 幂等自清理)
+
+---
 
 ### `POST /api/admin/users/[id]/root` — 建根
 
@@ -794,7 +882,7 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 | 字段 | 说明 |
 |---|---|
 | `kind` | `create` (新增加盟商) · `unjoin` (解除加盟) · `promote` (**向上认领上级**) |
-| `targetParentId` / `side` | `create`: 目标父节点 + `left`/`right`; `promote`: **免传** `targetParentId` (锚点 = 发起人自己的根) |
+| `targetParentId` / `side` | `create`: 目标父节点 + `left`/`right`; `promote`: **两个都免传** (`targetParentId` 锚点 = 发起人自己的根; `side` 由**上级本人**在同意时挑, 见 `decide`) |
 | `newName` / `newPhone` / `newNotes` | `create` = 新加盟商; `promote` = **上级本人** 的姓名/手机 |
 | `unjoinFid` | `unjoin`: 要解除的节点 (老的 `moveFid` 仍接受为别名) |
 
@@ -805,10 +893,19 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 - 确认方 (`required`):
   - `create`/`unjoin`: 设置者 + 本人 + 目标父节点 (父节点 == 设置者 → **双方**)
   - **`promote`: 双方** (发起人 + 上级本人) —— app 里没有"上上层"那个人可当老三方
+- `promote` 的**两种情形** (统一成"把我这棵树挂到上级 U 的一个空位"):
+  - U 不在 app 里 (手机号查不到节点) → 执行时新建 U (path='', depth=0) → **U 成新根**
+  - U **已在 app 里** (手机号查到节点, 可能在别的树/别的枝) → **复用他现有节点** (不建副本)
+    → **两棵树在此合并**; 前提: U 一层两个点位至少空一个
+  - 上级手机号已有节点但**没有可登录账号** → 400「还没有可登录的账号…请先让他注册登录」
+  - 上级已在我这棵树里 → 400 (会成环)
 - 副作用 (`executed` 后): `create` → INSERT 一个新节点 + 绑账号 + 落客户档案;
-  `promote` → **新节点成为新根**, 原树整体 `path` 加 `L.`/`R.` 前缀 + `depth+1` + `root_id` 迁到新根
+  `promote` → 我的整棵子树 `path` 加基路径 + `depth` 整体下移 + `root_id` 改宗到 U 所在那棵:
+  - 新建 U (= 情形①) → U 是那棵新树的根, 顺带发推荐奖励
+  - 复用 U (= 情形②) → 不算新增加盟商, **不发**推荐奖励
+  - 两种情况都补 `linkAccountAndCustomer(U)`
 
-**冒烟**: `npx tsx scripts/smoke-upline-promote.ts` (26 项; 含多根不串味 / 图谱不跨树)
+**冒烟**: `npx tsx scripts/smoke-upline-promote.ts` (36 项; 含多根不串味 / 图谱不跨树 / 认领已有节点合并 / 上级挑线)
 
 ### `GET /api/franchisees/placement-requests?scope=mine|to_confirm&status=pending`
 
@@ -817,11 +914,48 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 
 ### `POST /api/franchisees/placement-requests/[id]/decide`
 
-`{ "decision": "approve" | "reject" }` — 全 `approve` → 事务内执行落位; 任一 `reject` → 整单作废。
+`{ "decision": "approve" | "reject", "side"?: "left" | "right" }`
+全 `approve` → 事务内执行落位; 任一 `reject` → 整单作废。
+
+`side` **只有一种情况要传**: `promote` 单里的**上级本人** —— 主人 2026-09-21 拍
+「我在我的上级是处于 a线还是 b线**由我的上级自己决定**」→ 认领人发起时不选线, 由上级在同意这一步挑:
+
+| 上级当前空位 | 不传 `side` 的结果 |
+|---|---|
+| 两条都空 | 400「请选择这位下线放在您的 A线 还是 B线」 |
+| 只剩一条 | 自动落那一条 (不用传) |
+| 传了一条已有人的 | 400「这条线已经有下线了, 请换一条」 |
 
 ### `POST /api/franchisees/placement-requests/[id]/cancel`
 
 发起人撤回 (pending → cancelled, 点位释放)。
+
+**返回项**: `PlacementRequestView` 含 `kind` / `targetParentFid` / `targetSide` / `required[]` /
+`confirms[]` / `myRole` / `myDecision` / `resultFid`; `promote` 单另有:
+
+| 字段 | 说明 |
+|---|---|
+| `uplineFid` | 认领的上级**已在 app 里**时的现存节点 id; `null` = 上级还没进 app (执行时新建) |
+| `uplineName` | 上级节点名字 (文案用) |
+| `availableSides` | 上级**当前空着的**点位 (`["left","right"]` / 单条 / `[]`) — 上级本人挑线用 |
+
+---
+
+### `GET /api/franchisees/me/tree?mode=placement` 的「上层点位」
+
+返回树的**根**上多两个键 (主人 2026-09-21 拍: 「图谱在『我』上面增加一个上层节点, 每个用户有且只有一个上层节点」):
+
+| 字段 | 说明 |
+|---|---|
+| `upline` | 我的**点位父** (不是推荐码提供人): `{ id, name, side, depth, member }`; `null` = 我是这棵树的根 = 上层**虚位以待** |
+| `uplineRequest` | 我发起、还在 pending 的「认领上级」单 `{ id, newName, uplineFid }`; 没有则 `null` |
+
+口径: `upline` 由 `placement_path` **去尾段 + 同 `root_id`** 推出 (`src/lib/db/queries/franchisee.ts::getPlacementUpline`)。
+`upline == null` ⟺ `placement_path === ''` ⟺ 我是树根 ⟺ **只有我能去认领一位上级**。
+**上层一旦有人就不可撤换** —— 用户侧没有换上层入口, 需联系系统管理员协商处理
+(`POST /api/admin/nodes/[fid]/reparent`, 见 §15)。
+
+---
 
 **多根**: `franchisee.root_id` = 所在树的根 `franchisee.id` (根自己自指)。子树/归属判定一律
 「同 `root_id` + `path` 前缀」双条件 —— 少了 `root_id` 会跨树串味 (根用户把别的树当自己的下线)。

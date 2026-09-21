@@ -1106,6 +1106,155 @@ Future<void> showChangePasswordSheet(
   confirmCtrl.dispose();
 }
 
+/// 修改登录手机号 (自助改号 — 替代"换号要找管理员")
+/// 流程: 当前密码验证身份 + 新手机号 + 二次输入确认
+///   校验同注册 (/^1[3-9]\d{9}$/), 改完提示"下次登录用新手机号"
+///   改完自动 invalidate meProfileProvider → 「我的」页头部立刻显示新号
+/// 不做的事:
+///   - 不强制重新登录 (跟改密码一致; session.user.phone 是 jwt 首次签发快照, 不刷新)
+///   - 不同号 SMS 验证码 (项目没接真短信网关, 旧密码即当前身份的最强证据)
+Future<void> showChangePhoneSheet(
+    BuildContext context, WidgetRef ref) async {
+  final pwdCtrl = TextEditingController();
+  final phoneCtrl = TextEditingController();
+  final confirmCtrl = TextEditingController();
+  var submitting = false;
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setSheetState) {
+        Future<void> submit() async {
+          final pwd = pwdCtrl.text;
+          final newPhone = phoneCtrl.text.trim();
+          final confirm = confirmCtrl.text.trim();
+
+          if (pwd.isEmpty) {
+            _toast(ctx, '请输入当前密码');
+            return;
+          }
+          if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(newPhone)) {
+            _toast(ctx, '新手机号格式不对 (11 位, 1[3-9] 开头)');
+            return;
+          }
+          if (newPhone != confirm) {
+            _toast(ctx, '两次输入的新手机号不一致');
+            return;
+          }
+
+          setSheetState(() => submitting = true);
+          try {
+            await ref.read(authServiceProvider).changePhone(
+                  password: pwd,
+                  newPhone: newPhone,
+                );
+            // 改完刷新「我的」资料 (新号立刻显示在头部)
+            ref.invalidate(meProfileProvider);
+            if (ctx.mounted) Navigator.pop(ctx);
+            _toast(context, '手机号已修改, 下次登录用新手机号');
+          } catch (e) {
+            var msg = '修改失败, 请稍后再试';
+            if (e is DioException) {
+              final data = e.response?.data;
+              if (data is Map && data['error'] is String) {
+                msg = data['error'] as String;
+              } else if (e.response?.statusCode == 401) {
+                msg = '当前密码不正确';
+              } else if (e.response?.statusCode == 409) {
+                msg = data is Map && data['error'] is String
+                    ? data['error'] as String
+                    : '新手机号已被其他账号使用';
+              }
+            }
+            if (ctx.mounted) _toast(ctx, msg);
+          } finally {
+            if (ctx.mounted) setSheetState(() => submitting = false);
+          }
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            16 + MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '修改登录手机号',
+                style: TextStyle(
+                  fontSize: AppTheme.fontLg,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '改完下次登录请用新手机号; 同手机号的客户档案会一起改',
+                style: TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: pwdCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '当前密码',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: '新手机号',
+                  prefixIcon: Icon(Icons.phone_iphone),
+                  hintText: '11 位, 1[3-9] 开头',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: '确认新手机号',
+                  prefixIcon: Icon(Icons.check_circle_outline),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: submitting ? null : submit,
+                  child: submitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('确认修改'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+
+  pwdCtrl.dispose();
+  phoneCtrl.dispose();
+  confirmCtrl.dispose();
+}
+
 /// 从字节头判图片类型 (image_picker 在 web 上不改后缀, 只信后缀会传错 mime)
 String _sniffImageMime(List<int> bytes) {
   if (bytes.length >= 8 &&

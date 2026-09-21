@@ -44,11 +44,19 @@
 | B4 | 根的"团队"标识？ | 暂用 `store_id`（W5 RBAC 已有列），SaaS 阶段升级为 tenant |
 | B5 | 建根入口放哪？ | APK「我的」（web admin 冻结中）—— 主人要在手机上就能建 |
 
+### 同日追加（主人拍板: 节点必须有账号 + 管理员强改上层）· ✅ 已落地 2026-09-21
+
+> 原话: ①「无账号节点为什么要存在? 不能禁止/消除无账号节点吗, **要成为节点首先必需有账号**。」
+> ②「给管理员一个『**协商处理后强改上层**』的后台功能。」（承接"上层一旦有人不能撤换, 除非联系系统管理员协商处理"）
+>
+> ① 的三道闸 + 存量清理 + seed 根因修复 → **ADR-0014 §3.7** / **AGENTS §6.7**
+> ② 的接口 / 子树搬迁 / 留痕 / Flutter 弹层 → **ADR-0014 §3.8** / **AGENTS §6.8** / `docs/api.md §15`
+> 冒烟: `scripts/smoke-admin-reparent.ts`（**35 项全过**）; 巡检修: `scripts/audit-orphan-nodes.ts`
+
 ### 还没做（下一步可选）
 
 - **换绑 / 解除根**：根账号换人（`user.franchisee_id` 重指）—— 需要主人拍板"历史节点数据怎么办"
-- **`franchisee` 表没挂审计触发器**（只有 `user` 有）→ 建根只在 `audit_log` 留下 user 侧记录；
-  加 `franchisee_audit` 触发器是独立小改动（见 `drizzle/audit_trigger.sql`）
+- ~~`franchisee` 表没挂审计触发器~~ → ✅ 2026-09-21 已补 (`franchisee_audit`, 见 backlog ⑧)
 
 ---
 
@@ -102,7 +110,7 @@
 > 同时拍板**新增「往根部发展」方案**（向上认领上级, `kind=promote`）——
 > 因为客户公司现实里已有固有加盟树, app 只是同步它, 而初始用户大概率是中间层。
 > 落地清单 / 决策全文: **[ADR-0014](../adr/0014-multi-root-and-upline-claim.md)**;
-> 变更: `CHANGELOG.md`; 冒烟: `scripts/smoke-upline-promote.ts`（26 项全过）。
+> 变更: `CHANGELOG.md`; 冒烟: `scripts/smoke-upline-promote.ts`（**36 项全过**）。
 >
 > **落地摘要**:
 > - `drizzle/0017_multi_root_promote.sql`: `franchisee.root_id` + 索引 + 递归 CTE 回填 + 预占索引收紧到 `kind='create'`
@@ -110,6 +118,13 @@
 >   `getFranchiseeChildren` / `customer.ts` 加盟判定 / `rbac.ts`）
 > - `kind='promote'`: 现根认领现实里的直接上级 → 上级成新根, 整棵子树下降一层; 双方确认; 往下生长的三方确认**不变**
 > - Flutter: 客户图谱底部「认领上级」（仅树根可见）+ 待确认页 promote 文案
+>
+> **同日第二轮 5 条拍板已一并落地**（ADR-0014 §3.6）:
+> ① 上层 = **点位父**（≠ 推荐码提供人）→ `getPlacementUpline` 按 path 认，不看 `referrer_id`
+> ② 上层一旦有人**不能撤换**（无换上层入口，联系管理员协商）
+> ③ 可认领**已在别的树里的节点**（`0018_placement_upline_fid.sql`，前提是她一层 2 个点位有空位）→ 两棵树合并
+> ④ 我在上级的 **A线/B线 由上级自己挑**（发起免传 `side`，`decide` 接 `side`）
+> ⑤ 图谱在「我」正上方新增**上层点位**那一格（有人画人 / 空着画虚线虚位「点此认领」/ 待确认画「待她确认」）
 >
 > ⬇️ 以下为**原始 recon 记录**（保留作决策背景, 结论以上文为准）
 
@@ -168,6 +183,38 @@ schema 里**没有存"这个节点属于哪棵树"**：`placement_path` 只在�
 - 图谱多棵树的可辨识度（每棵标「第 N 棵」+ 拖动提示 + 「适应屏幕」按钮）✅
 - 本条目**先记不改**：其余 3 处要等 C1 拍板（都是跨根可见性/归属问题，不能顺手改）
 
+
+---
+
+## ⑦ `referrer_id` 双重语义必须拆列 (点位父 ≠ 推荐人) · ⚠️ 升级为"要做"（2026-09-21）
+
+> **背景**: `franchisee.referrer_id` 这一列现在**同时**承担两个角色:
+> ① 「推荐人」(Flutter 加盟商详情页把它显示成「推荐人」卡片)
+> ② 「点位父」( `placeNewFranchisee` 的槽位判定用它; `createFranchisee` 也把 `referrer_id` 写成落位父节点)
+>
+> 而主人 2026-09-21 已明确拍板: 「**『上层』= 点位父, 不一定是推荐码提供人**」—— 两者在业务上是**两件事**。
+>
+> **为什么现在必须做**: 管理员「协商处理后强改上层」(`POST /api/admin/nodes/[fid]/reparent`) 落地后,
+> 为了让新上层那条线不出现"看着空、其实有人"(→ 新节点 path 撞车), 强改上层时**只能把 `referrer_id`
+> 一起改**。后果 = 连带改写「谁推荐了她」这句话。原值在 `audit_log.changed_fields` 里可追, 但界面上已经错了。
+>
+> **拆法 (additive, 待主人拍)**:
+> 1. 加列 `franchisee.placement_parent_id` (nullable) + 索引; migration 用「path 去尾段 + 同 root_id」回填
+> 2. `placeNewFranchisee` / `slotTaken` / 子树判定改读 `placement_parent_id`
+> 3. `reparent` 只改 `placement_parent_id`, 不动 `referrer_id`
+> 4. Flutter 详情页「推荐人」继续读 `referrer_id`; 图谱/上层读 path (已经是了)
+> 5. 冒烟加一条: 强改上层后 `franchisee.referrer_id` **不变**
+>
+> **关联**: ADR-0014 §3.8.3 / §5 第 1 条; AGENTS §6.8
+
+## ⑧ 审计触发器覆盖不全 · 🔧 待补（2026-09-21）
+
+> **现象**: 做「管理员强改上层」时发现 `franchisee` 表**一行审计都没有** (19 个触发器里没它) ——
+> 而这张库存的是整棵加盟树的 `placement_path` / `placement_depth` / `root_id` / `referrer_id`,
+> 改一次动一整棵子树。本次已给 `franchisee` 补上 (`drizzle/audit_trigger.sql` 的 `franchisee_audit`)。
+>
+> **待办**: 全库过一遍「哪些表还没有 `*_audit` 触发器」, 按「这行数据改动要不要能查是谁改的」判:
+> 字典 / 服务项 / 配置类要不要挂 (噪声 vs 价值)。CHARTER §3 红线摆在那, 但不必无脑全挂。
 
 ---
 
