@@ -277,19 +277,30 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
   Widget build(BuildContext context) {
     if (_isEdit && !_prefilled) {
       final asyncSalon = ref.watch(salonDetailProvider(widget.salonId!));
-      return Scaffold(
-        appBar: AppBar(title: const Text('编辑沙龙'), toolbarHeight: 64),
-        body: asyncSalon.when(
-          loading: () => const LoadingState(),
-          error: (e, _) => ErrorState(
+      // 加载 / 失败态需要外 Scaffold + AppBar; data 态直接返回 _buildForm(),
+      // 避免嵌进外 Scaffold 出现「两个 AppBar + 两个返回键」的重复。
+      return asyncSalon.when(
+        loading: () => Scaffold(
+          appBar: AppBar(title: const Text('编辑沙龙'), toolbarHeight: 64),
+          body: const LoadingState(),
+        ),
+        error: (e, _) => Scaffold(
+          appBar: AppBar(title: const Text('编辑沙龙'), toolbarHeight: 64),
+          body: ErrorState(
             error: e,
             onRetry: () => ref.invalidate(salonDetailProvider(widget.salonId!)),
           ),
-          data: (salon) {
-            _prefill(salon);
-            return _buildForm();
-          },
         ),
+        data: (salon) {
+          _prefill(salon);
+          // _prefill 改了 _prefilled 但不 setState (避免多余重建);
+          // postFrame 触发重建让 build 走 return _buildForm() 路径,
+          // data 帧本身直接返回 _buildForm() (无外 Scaffold) → 单 AppBar
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() {});
+          });
+          return _buildForm();
+        },
       );
     }
     return _buildForm();

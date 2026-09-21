@@ -243,7 +243,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
               _kv('节点编号', '#${n.fid}'),
               if (n.accountName != null) _kv('账号', n.accountName!),
               _kv(
-                '上层 (点位父)',
+                '上层点位',
                 parent == null
                     ? (n.isRoot ? '无 (她是树根)' : '—')
                     : '${parent.name} 的${n.side == 'left' ? 'A线' : 'B线'}',
