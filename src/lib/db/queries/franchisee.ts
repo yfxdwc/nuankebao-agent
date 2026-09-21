@@ -893,6 +893,103 @@ export async function getFranchiseeIdByUserId(userId: bigint): Promise<bigint | 
 }
 
 /**
+ * 上层加盟商 (沿 placement_path 向上走 N 层), 用于「沙龙快速邀请」等场景
+ *
+ * - 起点 = 我 (fid); 沿 path 删末段 → 上层 path → 查同 path 的 franchisee 行
+ * - 软删节点不计入 (deletedAt != null)
+ * - 多根 (B1) 防护: 必须同 rootId, 否则两个根 path 都以 '' 开头会串味
+ * - 上限 maxLevels, 到达根或缺失父节点时立即停
+ * - 返回顺序: 由近及远 (level 1 → level N)
+ */
+export interface UplineAncestorRow {
+  id: string;
+  name: string;
+  phoneEncrypted: string;
+  /** 1 = 直接上层 / 2 = 上 2 层 / 3 = 上 3 层 (基于我的 path 删了几次末段) */
+  level: number;
+  /** 我在她下面的线别 (level 1 直接上层才有意义; 更上层同理, 二叉对称) */
+  side: "left" | "right" | null;
+  /** 是否 app 会员 (同 franchisee_id 有 active user) */
+  isMember: boolean;
+}
+
+export async function getUplineAncestors(
+  fid: bigint,
+  maxLevels = 3
+): Promise<UplineAncestorRow[]> {
+  const [me] = await db
+    .select({
+      placementPath: franchisee.placementPath,
+      rootId: franchisee.rootId,
+    })
+    .from(franchisee)
+    .where(and(eq(franchisee.id, fid), isNull(franchisee.deletedAt)))
+    .limit(1);
+  if (!me) return [];
+
+  // 沿 path 删末段得到 N 个上层 path (L.L.R. → ['L.L.', 'L.', ''])
+  // 内联 parentPath (原函数在同文件但未 export)
+  const parentPath = (path: string): string | null => {
+    const segs = path.split(".").filter(Boolean);
+    if (segs.length === 0) return null;
+    segs.pop();
+    return segs.length === 0 ? "" : segs.join(".") + ".";
+  };
+  const ancestorPaths: string[] = [];
+  let cur = me.placementPath;
+  for (let i = 0; i < maxLevels; i++) {
+    const p = parentPath(cur);
+    if (p == null) break;
+    ancestorPaths.push(p);
+    cur = p;
+  }
+  if (ancestorPaths.length === 0) return [];
+
+  // 单次 IN 查询拿所有上层节点 (placementDepth 推 level; mySide 推 side)
+  const selected = await db
+    .select({
+      id: franchisee.id,
+      name: franchisee.name,
+      phoneEncrypted: franchisee.phoneEncrypted,
+      placementDepth: franchisee.placementDepth,
+      isMember: sql<boolean>`EXISTS (
+        SELECT 1 FROM "user" u
+        WHERE u.franchisee_id = ${franchisee.id} AND u.is_active = true
+      )`,
+    })
+    .from(franchisee)
+    .where(
+      and(
+        inArray(franchisee.placementPath, ancestorPaths),
+        isNull(franchisee.deletedAt),
+        sql`${franchisee.rootId} IS NOT DISTINCT FROM ${me.rootId}`,
+      )
+    );
+
+  const mySide = sideFromPath(me.placementPath); // 我在直接上层下的线别
+
+  // 用 ancestorPaths 顺序保证「level 1 → level N」稳定排序
+  // (ancestorPaths 是从近到远依次 push, 所以 [0] = 直接上层)
+  return ancestorPaths
+    .map((ap, idx) => {
+      const expectedDepth = ap.split(".").filter(Boolean).length;
+      const row = selected.find((s) => s.placementDepth === expectedDepth);
+      if (!row) return null;
+      return {
+        id: row.id.toString(),
+        name: row.name,
+        phoneEncrypted: row.phoneEncrypted,
+        /** 1 = 直接上层 / 2 = 上 2 层 / 3 = 上 3 层 */
+        level: idx + 1,
+        /** 我在直接上层下的线别; 更上层同理 (二叉对称, 都按「我→上层」的 left/right 标注) */
+        side: mySide,
+        isMember: row.isMember === true,
+      } satisfies UplineAncestorRow;
+    })
+    .filter((r): r is UplineAncestorRow => r != null);
+}
+
+/**
  * 直接下级加盟商计数 (「我的」页: 我的下线 N 人 · A线 X / B线 Y)
  *
  * 只算**直接下线** (referrer_id = 我), 不递归 —— 递归计数是图谱/树页的活,

@@ -1193,6 +1193,15 @@ class SalonService {
     return SalonInvitation.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// 快速邀请建议 (创建沙龙用): 我的客户 + 图谱上层 ≤3 层
+  /// 编辑模式请走 [addInvitation] 单条添加
+  Future<QuickInviteSuggestions> quickInviteSuggestions() async {
+    final res = await _dio.get('/salons/quick-invite-suggestions');
+    return QuickInviteSuggestions.fromJson(
+      res.data as Map<String, dynamic>,
+    );
+  }
+
   Future<SalonInvitation> updateInvitation(
     String salonId,
     String invitationId,

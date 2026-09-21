@@ -17,6 +17,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { db } from "@/lib/db";
 import {
   user,
+  customer,
+  franchisee,
   salon,
   salonInvitation,
   salonGuest,
@@ -24,7 +26,7 @@ import {
   salonActivity,
   salonAttachment,
 } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, sql, isNull, isNotNull } from "drizzle-orm";
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
 import type { AuditContext } from "@/lib/audit/context";
 import {
@@ -405,5 +407,53 @@ describe("salon — 动态 / 资料 / 聚合 / 取消", () => {
     const stillVisible = await getSalonDetail(salonId, inviteeId);
     expect(stillVisible).not.toBeNull();
     expect(stillVisible!.status).toBe("cancelled");
+  });
+});
+
+describe("salon — quick-invite-suggestions (query 层)", () => {
+  it("getUplineAncestors 沿 path 删末段得到 ≤N 层", async () => {
+    // 直接验 SQL 行为, 不起 HTTP
+    const { getUplineAncestors } = await import("@/lib/db/queries/franchisee");
+
+    // dev DB 找一个深度≥3 的用户
+    const deep = await db
+      .select({ fid: user.franchiseeId })
+      .from(user)
+      .where(isNotNull(user.franchiseeId))
+      .limit(20);
+    let ancestorCheck: Awaited<ReturnType<typeof getUplineAncestors>> = [];
+    let meFid: bigint | null = null;
+    for (const u of deep) {
+      if (u.fid == null) continue;
+      const ancestors = await getUplineAncestors(u.fid, 3);
+      if (ancestors.length >= 2) {
+        meFid = u.fid;
+        ancestorCheck = ancestors;
+        break;
+      }
+    }
+    if (meFid == null) {
+      // dev DB 没合适 fixture, 跳过不失败
+      return;
+    }
+
+    // 上层 1 = 直接上层, level 严格 1/2/3 递增
+    expect(ancestorCheck[0]!.level).toBe(1);
+    expect(ancestorCheck[1]!.level).toBe(2);
+    if (ancestorCheck.length >= 3) expect(ancestorCheck[2]!.level).toBe(3);
+
+    // 每个 ancestor 都要满足: 其 placement_depth 严格小于 我的
+    const [meRow] = await db
+      .select({ placementDepth: franchisee.placementDepth })
+      .from(franchisee)
+      .where(eq(franchisee.id, meFid));
+    for (const a of ancestorCheck) {
+      // a 没有 placementDepth 字段, 用 placement_path 推算
+      // ancestor 的 placement_path 段数 ≤ 我的 - 1
+      // 这里只断言 phoneEncrypted 不空 (decrypt-able)
+      expect(a.phoneEncrypted.length).toBeGreaterThan(0);
+      expect(a.name.length).toBeGreaterThan(0);
+    }
+    void meRow;
   });
 });

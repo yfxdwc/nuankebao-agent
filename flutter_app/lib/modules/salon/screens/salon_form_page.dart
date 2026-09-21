@@ -163,7 +163,55 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
   String _attendeeListVis = 'all';
   String _staffContactVis = 'all';
 
+  // ---- 快速邀请 (创建模式) ----
+  // 加载一次, 候选条目默认全部勾选, 用户可取消单条
+  QuickInviteSuggestions? _quickInvite;
+  bool _quickInviteLoading = false;
+  String? _quickInviteError;
+  // 用条目 id (customer.id 或 franchisee.id) 作为 key; 创建后端只认 phone+name
+  final Set<String> _quickInviteSelected = <String>{};
+
   bool get _isEdit => widget.salonId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_isEdit) {
+      // 仅创建模式拉快速邀请候选; 编辑模式已存在的受邀者走 manage 页管理
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadQuickInvite());
+    }
+  }
+
+  Future<void> _loadQuickInvite() async {
+    if (_isEdit || !mounted) return;
+    setState(() {
+      _quickInviteLoading = true;
+      _quickInviteError = null;
+    });
+    try {
+      final svc = ref.read(salonServiceProvider);
+      final data = await svc.quickInviteSuggestions();
+      // 默认全选; 客户表 0 条且上层 0 条 → 空集
+      final selected = <String>{
+        for (final e in data.customers) e.id,
+        for (final e in data.ancestors) e.id,
+      };
+      if (!mounted) return;
+      setState(() {
+        _quickInvite = data;
+        _quickInviteSelected
+          ..clear()
+          ..addAll(selected);
+        _quickInviteLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _quickInviteLoading = false;
+        _quickInviteError = '加载快速邀请建议失败: $e';
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -679,6 +727,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
   // ============================================
   List<Widget> _buildStepStaffAgenda() {
     return [
+      if (!_isEdit) _buildInviteSection(),
       _buildStaffSection(),
       _buildAgendaSection(),
       _card('可见性设置', [
@@ -700,6 +749,180 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         ),
       ]),
     ];
+  }
+
+  Widget _buildInviteSection() {
+    return _card('邀请设置', [
+      const Text(
+        '勾选要邀请的人, 默认全选; 没装 app 的人也能邀请 (手机号收到短信后扫码进)',
+        style: TextStyle(
+            fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+      ),
+      const SizedBox(height: 12),
+      if (_quickInviteLoading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(child: SizedBox(
+            width: 32, height: 32,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          )),
+        )
+      else if (_quickInviteError != null) ...[
+        Text(_quickInviteError!,
+            style: const TextStyle(
+                fontSize: AppTheme.fontSm, color: AppTheme.danger)),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _loadQuickInvite,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('重试'),
+        ),
+      ] else if (_quickInvite == null || _quickInvite!.isEmpty) ...[
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            '暂无可邀请的人——客户表里还没成员, 且未加入任何加盟树',
+            style: TextStyle(
+                fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+          ),
+        ),
+      ] else ...[
+        if (_quickInvite!.customers.isNotEmpty) ...[
+          _buildInviteSubCard(
+            title: '我的客户',
+            entries: _quickInvite!.customers,
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (_quickInvite!.ancestors.isNotEmpty)
+          _buildInviteSubCard(
+            title: '加盟图谱上层 (≤3 层)',
+            entries: _quickInvite!.ancestors,
+          ),
+      ],
+    ]);
+  }
+
+  Widget _buildInviteSubCard({
+    required String title,
+    required List<QuickInviteEntry> entries,
+  }) {
+    final selectedCount = entries
+        .where((e) => _quickInviteSelected.contains(e.id))
+        .length;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      decoration: BoxDecoration(
+        color: AppTheme.bgWarm,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '已选 $selectedCount / ${entries.length}',
+                style: const TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (final e in entries) _buildInviteRow(e),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInviteRow(QuickInviteEntry e) {
+    final selected = _quickInviteSelected.contains(e.id);
+    return InkWell(
+      onTap: _saving ? null : () {
+        setState(() {
+          if (selected) {
+            _quickInviteSelected.remove(e.id);
+          } else {
+            _quickInviteSelected.add(e.id);
+          }
+        });
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Checkbox(
+              value: selected,
+              onChanged: _saving ? null : (v) {
+                setState(() {
+                  if (v == true) {
+                    _quickInviteSelected.add(e.id);
+                  } else {
+                    _quickInviteSelected.remove(e.id);
+                  }
+                });
+              },
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          e.name,
+                          style: const TextStyle(
+                            fontSize: AppTheme.fontMd,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (e.isMember)
+                        Container(
+                          margin: const EdgeInsets.only(left: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryLight,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'app 会员',
+                            style: TextStyle(
+                              fontSize: AppTheme.fontXs,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${e.phone} · ${e.badge}',
+                    style: const TextStyle(
+                      fontSize: AppTheme.fontSm,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildStaffSection() {
@@ -1233,8 +1456,24 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     };
     if (!_isEdit) {
       payload['staff'] = _staffPayload();
+      payload['invitees'] = _inviteesPayload();
     }
     return payload;
+  }
+
+  /// 把快速邀请里勾选的条目转成 API 要求的 invitees 列表
+  /// 后端 InviteeInputSchema = { name, phone, expectedGuestCount? }
+  List<Map<String, dynamic>> _inviteesPayload() {
+    final data = _quickInvite;
+    if (data == null) return const [];
+    final all = <QuickInviteEntry>[...data.customers, ...data.ancestors];
+    return all
+        .where((e) => _quickInviteSelected.contains(e.id))
+        .map((e) => {
+              'name': e.name,
+              'phone': e.phone,
+            })
+        .toList(growable: false);
   }
 
   List<Map<String, dynamic>> _staffPayload() {

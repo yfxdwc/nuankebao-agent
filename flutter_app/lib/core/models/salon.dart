@@ -928,3 +928,85 @@ class SalonAggregates extends SalonCounts {
     );
   }
 }
+
+// ============================================
+// 快速邀请建议 (v0.1.5+ Phase 7.5)
+// ============================================
+// 主理人创建沙龙时, 一键拉「我的客户 + 图谱上层 ≤3 层」作为受邀者候选
+// 边界:
+//   - source = 'customer'    → 我的客户表 (customer.created_by = 我)
+//   - source = 'ancestor'    → 加盟图谱上层 (沿 path 删末段, 1=直接, 2=上2层, 3=上3层)
+//   - selected 默认全选, 用户可单条取消
+//   - 编辑模式本期不展示 (manage 页另走 POST /api/salons/:id/invitations)
+// ============================================
+
+enum QuickInviteSource { customer, ancestor }
+
+class QuickInviteEntry {
+  final String id; // customer.id 或 franchisee.id (字符串)
+  final QuickInviteSource source;
+  final String name;
+  final String phone;
+  final bool isMember;
+  /// 仅 ancestor: 上层层号 1/2/3
+  final int? level;
+  /// 仅 ancestor: 'left' (A线) / 'right' (B线) / null (树根)
+  final String? side;
+
+  const QuickInviteEntry({
+    required this.id,
+    required this.source,
+    required this.name,
+    required this.phone,
+    required this.isMember,
+    this.level,
+    this.side,
+  });
+
+  factory QuickInviteEntry.fromJson(Map<String, dynamic> j) {
+    final src = j['source'] as String? ?? 'customer';
+    return QuickInviteEntry(
+      id: j['id'].toString(),
+      source: src == 'ancestor'
+          ? QuickInviteSource.ancestor
+          : QuickInviteSource.customer,
+      name: j['name'] as String? ?? '',
+      phone: j['phone'] as String? ?? '',
+      isMember: j['isMember'] == true,
+      level: j['level'] as int?,
+      side: j['side'] as String?,
+    );
+  }
+
+  /// 副标签文本 (用于 UI: 「客户」/「1 层上层 · A线」)
+  String get badge {
+    if (source == QuickInviteSource.customer) return '我的客户';
+    final sideText = side == 'right' ? 'B线' : (side == 'left' ? 'A线' : '');
+    return '上层 ${level ?? '?'} 层${sideText.isEmpty ? '' : ' · $sideText'}';
+  }
+}
+
+class QuickInviteSuggestions {
+  final List<QuickInviteEntry> customers;
+  final List<QuickInviteEntry> ancestors;
+
+  const QuickInviteSuggestions({
+    required this.customers,
+    required this.ancestors,
+  });
+
+  factory QuickInviteSuggestions.fromJson(Map<String, dynamic> j) {
+    final cust = (j['customers'] as List? ?? const [])
+        .cast<Map<String, dynamic>>()
+        .map((m) => QuickInviteEntry.fromJson({...m, 'source': 'customer'}))
+        .toList();
+    final anc = (j['ancestors'] as List? ?? const [])
+        .cast<Map<String, dynamic>>()
+        .map((m) => QuickInviteEntry.fromJson({...m, 'source': 'ancestor'}))
+        .toList();
+    return QuickInviteSuggestions(customers: cust, ancestors: anc);
+  }
+
+  bool get isEmpty => customers.isEmpty && ancestors.isEmpty;
+  int get total => customers.length + ancestors.length;
+}
