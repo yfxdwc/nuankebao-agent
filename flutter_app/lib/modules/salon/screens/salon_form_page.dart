@@ -460,6 +460,14 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
       _snack('请选择开始时间');
       return;
     }
+    if (_step == 1 && _startAt != null && _startAt!.isBefore(DateTime.now())) {
+      _snack('开始时间不能早于当前时间');
+      return;
+    }
+    if (_step == 1 && _endAt != null && _startAt != null && _endAt!.isBefore(_startAt!)) {
+      _snack('结束时间不能早于开始时间');
+      return;
+    }
     setState(() => _step = (_step + 1).clamp(0, 3));
   }
 
@@ -1076,6 +1084,16 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     }
     if (_startAt == null) {
       _snack('请选择开始时间');
+      setState(() => _step = 1);
+      return false;
+    }
+    if (_startAt!.isBefore(DateTime.now())) {
+      _snack('开始时间不能早于当前时间');
+      setState(() => _step = 1);
+      return false;
+    }
+    if (_endAt != null && _endAt!.isBefore(_startAt!)) {
+      _snack('结束时间不能早于开始时间');
       setState(() => _step = 1);
       return false;
     }

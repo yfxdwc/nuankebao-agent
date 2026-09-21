@@ -135,7 +135,29 @@ export const SalonCreateSchema = SalonWritableSchema.extend({
   startAt: z.string().datetime({ offset: true }),
   staff: z.array(StaffInputSchema).max(50).optional(),
   invitees: z.array(InviteeInputSchema).max(500).optional(),
-});
+})
+  // 开始时间不能早于当前时间; 结束时间不能早于开始时间
+  .superRefine((val, ctx) => {
+    const startMs = Date.parse(val.startAt);
+    if (Number.isNaN(startMs)) return; // 格式错误已由 .datetime() 拦下
+    if (startMs < Date.now()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["startAt"],
+        message: "开始时间不能早于当前时间",
+      });
+    }
+    if (val.endAt) {
+      const endMs = Date.parse(val.endAt);
+      if (!Number.isNaN(endMs) && endMs < startMs) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["endAt"],
+          message: "结束时间不能早于开始时间",
+        });
+      }
+    }
+  });
 
 /** 更新: 全字段可选 (partial, 不含首批名单) */
 export const SalonUpdateSchema = SalonWritableSchema.partial();
