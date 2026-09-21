@@ -123,47 +123,46 @@ class CustomerRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 第一行: 姓名 + 加盟/普通徽章
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          customer.name,
-                          style: const TextStyle(
-                            fontSize: AppTheme.fontMd,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // 推荐标签 (主人 2026-09-20 拍: 名字右侧, 最多 2 个, 动作文案)
-                      if (f != null)
-                        for (final t in f.tags) ...[
-                          const SizedBox(width: 6),
-                          _FollowUpTagChip(tag: t),
-                        ],
-                      // 🎂 生日提醒 (落在她设的提醒窗口内才显示; 主人 2026-09-18 拍)
-                      if (_birthdayDays != null) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: AppTheme.accent,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Text(
-                            _birthdayDays == 0 ? '🎂 今天' : '🎂 ${_birthdayDays}天',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: AppTheme.fontXs,
-                              fontWeight: FontWeight.w600,
+                  // 第一行: 姓名 + 推荐标签 + 🎂 生日徽章
+                  //   ⚠ 布局 (2026-09-21 修 bug): 标签/徽章以前是**不可压缩**的, 长名字 +
+                  //   多个标签时名字会被挤成 0 宽 —— 截图实测「王女士」整行只剩标签, 名字
+                  //   直接消失。现在名字保底占 5/9, 标签尾巴占 4/9 且可横向滑动
+                  //   (放不下就滑动, 不裁字、不报 overflow)。
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      // 名字最多占 55%: 短名字 (「王女士」) 按真实宽度拿空间, 富余宽度
+                      // 让给标签; 长名字到 55% 就省略号, 不把标签挤到看不见
+                      final nameMax = constraints.maxWidth * 0.55;
+                      return Row(
+                        children: [
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: nameMax),
+                            child: Text(
+                              customer.name,
+                              style: const TextStyle(
+                                fontSize: AppTheme.fontMd,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        ),
-                      ],
-                    ],
+                          if (_rowTail.isNotEmpty) ...<Widget>[
+                            const SizedBox(width: 6),
+                            // 尾巴吃满剩余宽度; 实在放不下时可横向滑动 (不裁字/不报 overflow)
+                            Expanded(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: _rowTail,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 4),
                   // 第二行: 跟进信息优先 (主人 2026-09-20 拍 Q3: 动作在标签, 数据在这一行)
@@ -240,6 +239,37 @@ class CustomerRow extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// 第一行右侧的尾巴: 推荐标签 (主人 2026-09-20 拍: 最多 2 个, 动作文案)
+  /// + 🎂 生日提醒 (落在她设的提醒窗口内才显示; 主人 2026-09-18 拍)。
+  /// 抽出来是因为它现在是**一个可滑动整体**, 不再是 Row 里散开的子节点。
+  List<Widget> get _rowTail {
+    final tags = followUp?.tags ?? const <FollowUpTagInfo>[];
+    return <Widget>[
+      for (final t in tags) ...[
+        _FollowUpTagChip(tag: t),
+        const SizedBox(width: 6),
+      ],
+      if (_birthdayDays != null) ...[
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppTheme.accent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            _birthdayDays == 0 ? '🎂 今天' : '🎂 ${_birthdayDays}天',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: AppTheme.fontXs,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+      ],
+    ];
   }
 }
 

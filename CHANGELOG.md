@@ -2,6 +2,36 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (客户列表排序 = 内部规则, 去掉用户选择控件, 2026-09-21)
+
+> **主人原话**: 「排序不需要标签供选择 …… 这是一套背后的排序规则, 不需要标签选择」
+
+- **删掉客户列表的「排序」选择行** (原 4 段胶囊: 🔥紧急 / 最近联系 / 最近添加 / 姓名)
+  —— `flutter_app/lib/modules/customer/screens/customers_page.dart` 移除 `_sort` /
+  `_sortUrgencyLocked` 状态与整个 `SegmentedButton` 行 (−78 行)
+- 列表**恒定**按 `sortByUrgency` 级联排序: **紧急度 → 最近联系 → 最近添加**
+  (分档 → 分数 → 距上次联系天数 → 建档时间), 用户不需要理解排序概念
+- `GET /api/customers?sort=` 参数**保留** (后端能力 / 老客户端兼容), App 不再暴露;
+  非会员仍按 Q1 判权由后端降级为 `new`, 但不再有 🔒 提示胶囊
+- 筛选胶囊 (全部/加盟/普通/种子) 不变 —— 那是"看谁"不是"怎么排"
+- 方案: `docs/follow-up-list-plan.md` §6.2 改写为「排序 = 内部规则」
+
+### Fixed (客户行「名字被标签挤没」, 2026-09-21)
+
+> 来源: 改完排序后按 AGENTS §3「改前端必截图验证」跑预览截图 —— **截图才发现**的 bug。
+
+- **现象**: 客户行第一行是 `Row(名字 Flexible + 标签/🎂 徽章不可压缩)`, Flutter 先给
+  不可压缩的标签分空间 → 长名字 + 2~3 个标签时**名字被挤成 0 宽**,
+  截图实测「王女士」整行只剩 `🔥该回访了` `🔁复购窗口`, **名字看不见**
+- **修法** (`flutter_app/lib/modules/customer/widgets/customer_row.dart`):
+  名字改成「最多占 55% 宽」的 `ConstrainedBox` (短名字按真实宽度拿空间, 富余让给标签),
+  标签尾巴 (= 推荐标签 + 🎂 生日徽章, 抽成 `_rowTail`) 用 `Expanded` + 横向
+  `SingleChildScrollView` 吃剩余宽度 —— 放不下可滑动, 既不裁字也不报 overflow
+- 验证: 预览站截图 (修前 `/tmp/list-after.png`, 修后 `/tmp/list-fixed2.png`);
+  `flutter analyze lib` 0 error
+- ⚠ 遗留 (未修, 见交付说明): 标签排满时 🎂 徽章会露一半 (可滑动);
+  服务端 `pickFollowUpTags` 的生日标签与前端遗留 🎂 徽章仍是两套 (方案 §4.2 早说了要合并)
+
 ### Added (客户跟进引擎 P1 收尾 + P2 全部完成, 2026-09-21)
 
 > 方案: [docs/follow-up-list-plan.md](docs/follow-up-list-plan.md) (主人 2026-09-20 拍 8 项)

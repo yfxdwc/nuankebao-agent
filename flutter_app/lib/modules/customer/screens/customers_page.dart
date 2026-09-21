@@ -85,11 +85,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   String _search = '';
   _CustomerFilter _filter = _CustomerFilter.all;
 
-  /// 排序 (主人 2026-09-20 拍): urgency 紧急度 (**仅会员**) / recent 最近联系 / new 最近添加 / name 姓名
-  String _sort = 'urgency';
-
-  /// 紧急度排序被会员墙挡住? (后端在响应里回 urgencyLocked)
-  bool _sortUrgencyLocked = false;
+  /// 排序 = 产品内部规则, **不做用户选择** (主人 2026-09-21 拍):
+  ///   紧急度 → 最近联系 → 最近添加, 由后端 sortByUrgency 级联算好 (见 attach.ts)
+  ///   前端不摆胶囊给用户挑; 非会员后端降级为「最近添加」(Q1 会员判权不变)
+  static const String _sortRule = 'urgency';
 
   /// 折叠的分组 (主人 2026-09-20 拍 P1: 分组可折叠; 默认全展开, 休眠池默认折叠)
   final Set<String> _collapsedGroups = {'p4'};
@@ -152,18 +151,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       search: _search.isEmpty ? null : _search,
       // 'all' 不发给后端 (省一次白筛); 其余是真过滤 (加盟派生 / 种子 is_seed)
       type: _filter == _CustomerFilter.all ? null : _filterToApi,
-      // 排序 (主人 2026-09-20 拍): 默认紧急度; 非会员后端自动降级并回 urgencyLocked
-      sort: _sort,
+      // 排序 = 内部规则 (主人 2026-09-21): 固定紧急度, 用户不选
+      sort: _sortRule,
     );
     final asyncCustomers = ref.watch(customersProvider(query));
-    // 同步「紧急度被会员墙挡住」状态 (后端决议, 前端只显示)
-    final lockedNow = asyncCustomers.valueOrNull?.urgencyLocked ?? false;
-    if (lockedNow != _sortUrgencyLocked) {
-      // build 期间不能 setState → 下一帧再同步 (只影响 🔒 图标)
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _sortUrgencyLocked = lockedNow);
-      });
-    }
     // 胶囊数量 (跟当前搜索词联动; 加载中 = 不显示数字, 不闪 0)
     final typeCounts = ref
         .watch(customerTypeCountsProvider(_search.isEmpty ? null : _search))
@@ -296,69 +287,6 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 showSelectedIcon: false,
                 expandedInsets: EdgeInsets.zero, // 4 段平分整行宽
                 onSelectionChanged: (s) => setState(() => _filter = s.first),
-              ),
-            ),
-
-          // 排序 (主人 2026-09-20 拍: 跟进紧急度为第一排序规则, **紧急度仅会员**)
-          if (_viewMode == _CustomerViewMode.list)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Row(
-                children: [
-                  const Text(
-                    '排序',
-                    style: TextStyle(
-                      fontSize: AppTheme.fontXs,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: SegmentedButton<String>(
-                      segments: [
-                        ButtonSegment(
-                          value: 'urgency',
-                          label: Text(
-                            _sortUrgencyLocked ? '🔒 紧急' : '🔥 紧急',
-                            style: const TextStyle(fontSize: AppTheme.fontXs),
-                          ),
-                        ),
-                        const ButtonSegment(
-                          value: 'recent',
-                          label: Text('最近联系', style: TextStyle(fontSize: AppTheme.fontXs)),
-                        ),
-                        const ButtonSegment(
-                          value: 'new',
-                          label: Text('最近添加', style: TextStyle(fontSize: AppTheme.fontXs)),
-                        ),
-                        const ButtonSegment(
-                          value: 'name',
-                          label: Text('姓名', style: TextStyle(fontSize: AppTheme.fontXs)),
-                        ),
-                      ],
-                      selected: {_sort},
-                      showSelectedIcon: false,
-                      expandedInsets: EdgeInsets.zero,
-                      onSelectionChanged: (sel) {
-                        final v = sel.first;
-                        if (v == 'urgency' && _sortUrgencyLocked) {
-                          // 紧急度排序 = 会员功能 (主人 Q1): 给一句清楚的话, 不静默
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                '「紧急度排序」是会员功能：开通后自动按「今天该先联系谁」排好',
-                                style: TextStyle(fontSize: AppTheme.fontSm),
-                              ),
-                              duration: Duration(seconds: 3),
-                            ),
-                          );
-                          return;
-                        }
-                        setState(() => _sort = v);
-                      },
-                    ),
-                  ),
-                ],
               ),
             ),
 
