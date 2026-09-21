@@ -129,38 +129,47 @@ export const InviteeInputSchema = z.object({
   expectedGuestCount: z.number().int().min(0).max(1000).optional(),
 });
 
+// 沙龙时间校验 (create + update 共用):
+// - startAt 给出时, 不能早于当前时间
+// - endAt 与 startAt 同时给出时, endAt 不能早于 startAt
+// - update 为 partial, 不传 startAt / endAt 则跳过 (走原值, 不再校验)
+// - 只传 endAt 不传 startAt 时, 本层无 DB 上下文, 跳过; 已知限制, 不在 schema 层查 DB
+type SalonTimeCheck = { startAt?: string | null; endAt?: string | null };
+function checkSalonTimes(val: SalonTimeCheck, ctx: z.RefinementCtx) {
+  if (!val.startAt) return;
+  const startMs = Date.parse(val.startAt);
+  if (Number.isNaN(startMs)) return; // 格式错误已由 .datetime() 拦下
+  if (startMs < Date.now()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["startAt"],
+      message: "开始时间不能早于当前时间",
+    });
+  }
+  if (!val.endAt) return;
+  const endMs = Date.parse(val.endAt);
+  if (!Number.isNaN(endMs) && endMs < startMs) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["endAt"],
+      message: "结束时间不能早于开始时间",
+    });
+  }
+}
+
 /** 创建: title / startAt 必填; 可带首批会务 + 受邀者 */
 export const SalonCreateSchema = SalonWritableSchema.extend({
   title: z.string().min(1).max(100),
   startAt: z.string().datetime({ offset: true }),
   staff: z.array(StaffInputSchema).max(50).optional(),
   invitees: z.array(InviteeInputSchema).max(500).optional(),
-})
-  // 开始时间不能早于当前时间; 结束时间不能早于开始时间
-  .superRefine((val, ctx) => {
-    const startMs = Date.parse(val.startAt);
-    if (Number.isNaN(startMs)) return; // 格式错误已由 .datetime() 拦下
-    if (startMs < Date.now()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["startAt"],
-        message: "开始时间不能早于当前时间",
-      });
-    }
-    if (val.endAt) {
-      const endMs = Date.parse(val.endAt);
-      if (!Number.isNaN(endMs) && endMs < startMs) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["endAt"],
-          message: "结束时间不能早于开始时间",
-        });
-      }
-    }
-  });
+}).superRefine(checkSalonTimes);
 
-/** 更新: 全字段可选 (partial, 不含首批名单) */
-export const SalonUpdateSchema = SalonWritableSchema.partial();
+/** 更新: 全字段可选 (partial, 不含首批名单); 复用时间校验 */
+export const SalonUpdateSchema = SalonWritableSchema.partial().superRefine(
+  // partial 后 startAt 可能为 undefined; refine 签名已声明 startAt?: string | null
+  checkSalonTimes as (val: unknown, ctx: z.RefinementCtx) => void
+);
 
 export const InvitationCreateSchema = z.object({
   name: z.string().min(1).max(50),

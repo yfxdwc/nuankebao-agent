@@ -10,7 +10,7 @@
 // ============================================
 
 import { describe, it, expect } from "vitest";
-import { SalonCreateSchema } from "@/lib/salon/validation";
+import { SalonCreateSchema, SalonUpdateSchema } from "@/lib/salon/validation";
 
 const isoIn = (msFromNow: number) => new Date(Date.now() + msFromNow).toISOString();
 
@@ -82,5 +82,56 @@ describe("SalonCreateSchema — 时间校验", () => {
       const startAtIssues = res.error.issues.filter((i) => i.path[0] === "startAt");
       expect(startAtIssues.length).toBe(1);
     }
+  });
+});
+
+describe("SalonUpdateSchema — 时间校验 (partial)", () => {
+  it("patch 把 startAt 改到过去 → 报错", () => {
+    const res = SalonUpdateSchema.safeParse({
+      startAt: isoIn(-60_000),
+    });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues.some(
+        (i) => i.path[0] === "startAt" && /开始时间不能早于当前时间/.test(i.message)
+      )).toBe(true);
+    }
+  });
+
+  it("patch 同时给 startAt (未来) + endAt (比 startAt 早) → 报 endAt 错", () => {
+    const res = SalonUpdateSchema.safeParse({
+      startAt: isoIn(3_600_000),
+      endAt: isoIn(60_000),
+    });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues.some(
+        (i) => i.path[0] === "endAt" && /结束时间不能早于开始时间/.test(i.message)
+      )).toBe(true);
+    }
+  });
+
+  it("patch 不传 startAt / endAt → refine 跳过, 通过", () => {
+    const res = SalonUpdateSchema.safeParse({
+      title: "只改标题",
+      locationName: "新场地",
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it("patch 只传 endAt (无 startAt) → 已知限制: 跳过, 通过", () => {
+    // 仅 endAt 时 schema 层无 DB 上下文, 不校验 endAt 与原 startAt 的关系
+    const res = SalonUpdateSchema.safeParse({
+      endAt: isoIn(-86_400_000), // 哪怕过去也通过
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it("patch 把 startAt 改到合法未来 + endAt 改到之后 → 通过", () => {
+    const res = SalonUpdateSchema.safeParse({
+      startAt: isoIn(3_600_000),
+      endAt: isoIn(7_200_000),
+    });
+    expect(res.success).toBe(true);
   });
 });
