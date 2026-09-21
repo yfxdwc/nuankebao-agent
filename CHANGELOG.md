@@ -2,6 +2,114 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (拆栏: 推荐人 ≠ 点位父 + 脚本 `_env` 统一, 2026-09-21)
+
+> **主人原话**:
+> ①「**拆** → 加一栏 `placement_parent_id` 专门记"上层点位", 推荐人那栏从此只记推荐人。
+>   约半天: 一个小 migration + 改落位算法读新栏 + 一条冒烟。」
+> ②「**改** → 每个脚本第一行加一句 `import "./_env"` (1-2 行, 行为不变, 只是不再看 `NODE_ENV` 脸色)。」
+
+**A. 拆栏 (`placement_parent_id`)** — ADR-0014 §3.9
+
+`franchisee.referrer_id` 原先一栏干两份活, 两个后果: ① 管理员「协商处理改上层」为了不让新上层那条线
+"看着空、其实有人", 只能连带改 `referrer_id` → **改上层 = 篡改「谁推荐了她」**;
+② `placeNewFranchisee` 按 `referrer_id` 导航 → 「推荐人 ≠ 点位父」时把已占的位置判成空位
+→ **生成两条相同 `placement_path` 的节点**。
+
+- migration `0019_placement_parent_id.sql` (纯 additive): 加列 + `idx_franchisee_placement_parent` +
+  回填 (主口径「`placement_path` 去尾段 + 同 `root_id`」; path 断链的少数行沿用 `referrer_id` 兜底) +
+  `DO $$ ... RAISE EXCEPTION` 自检 (还有孤儿就 abort 整个 migration)。**全程不动 `referrer_id`** → down 无业务损失。
+  dev 库回填结果: 32 活节点 / 31 有点位父 / 根却有点位父 0 / 与 path 不一致 0
+- `placeNewFranchisee` 占位判定 + BFS 找子节点改读 `placement_parent_id`; 开头加**缺列保护**
+  (本树里还有 `path ≠ ''` 却 `placement_parent_id IS NULL` 的活节点 → 当场人话报错, 不静默产出重复位置)
+- 所有写点位的地方补新列, 并把推荐人记准: `createFranchisee` (`referrer_id` = 调用方给的推荐人,
+  **不再被 BFS fallback 改写**) · 三方确认 `create` 分支 (`referrer_id` = 发起人, `placement_parent_id` = 目标父) ·
+  `promote` 新根 (`null`) / 锚点挂靠 · `createRootForUser` (`null`) · `adminReparentNode`
+  (只改 `placement_parent_id` + `placement_side`; 返回值新增 **`referrerTouched: false`** 可断言不变量)
+- 用户可见 / 权限口径同步改读点位父: `GET /api/me` 的 `franchisee.referrer` (Flutter「我的上级」卡,
+  键名历史遗留) · `countDirectDownline` · `GET /api/franchisees?scope=mine_downline` ·
+  RBAC 的"直接下线/我的上级"; **推荐语义照旧读 `referrer_id`** (推荐树 / 图谱 `relation` 三级区分 /
+  `?referrerId=` 显式过滤) · `FranchiseeView` 新增 `placementParentId`
+- 新增巡检 `scripts/audit-placement-integrity.ts` (只读): ① 点位父列 ≠ path 推父 ② 非根缺点位父
+  ③ 根有点位父 ④ `side` ≠ path 末段 ⑤ `depth` ≠ 段数 ⑥ 同树内 path 重复; 另报"推荐人 ≠ 点位父"条数
+  (**这不是错**)。`--strict` 有不一致 → exit 1 (CI/冒烟用)
+- 冒烟 `scripts/smoke-admin-reparent.ts` 扩到 **44 项全过**: 新增 ⑫ (推荐人那侧满 → BFS 顺延到别人名下,
+  两栏本来就该不同; 强改上层后推荐人一个字没变) + ⑬ (全库巡检 `--strict`) +
+  ⑫-e (`GET /api/me`「我的上级」= 点位父, 不是推荐人)
+- ⚠️ **遗留一处待拍**: Flutter 加盟商详情页「上级加盟商」卡仍读 `RelationNode.metadata['referrerId']`
+  (`franchisee_detail_provider.dart`), 拆栏后应改读点位父 (需在 relation node payload 加 `placementParentId`
+  + 改 Flutter, 要重建 + 截图验证)。当前 dev 库两栏全等 → 现象未暴露
+
+**B. 脚本 `_env` 统一 (11 个脚本)**
+
+- 老的 `import { config as loadEnv } from "dotenv"; loadEnv({path:".env.local"});` 写法在 ESM 下无效
+  (import 声明提升 → `@/lib/db` 先求值, `DATABASE_URL` 还没进 `process.env`) → 只能先
+  `set -a && . ./.env.local && set +a` 才跑得起来
+- 11 个脚本统一改 `import "./_env";` 放**第一个 import**: `backfill-account-customer-link` /
+  `backfill-franchisee-customers` / `backfill-last-contact` / `backfill-placement-confirms` /
+  `cleanup-smoke-placement` / `ensure-admin` / `import-users` / `smoke-placement-confirm` /
+  `smoke-placement-rules` / `smoke-registration` / `smoke-signup` (行为不变, 只是不再看 `NODE_ENV` 脸色)
+
+**C. Flutter 收口 + 落位预览同口径 + `smoke-signup` 断言对齐 no_link**
+
+- **Flutter**: 详情页「上级加盟商」卡改读**点位父** (拆栏后它才代表"上层点位"):
+  `Franchisee` model 新增 `placementParentId` (`core/models/franchisee.dart`) →
+  `nodeToFranchisee` 读 `RelationNode.metadata['placementParentId']` →
+  `franchise_relation.dart` 的 `_toRelationNode` 带上该字段 (源 = `GET /api/franchisees/[id]` 的
+  `FranchiseeView.placementParentId`) → `franchisee_detail_page.dart` 卡片改读它
+- **落位预览同口径**: `getAvailablePosition()` (`/api/franchisees/me/available-position`) 的"这侧有没有人"
+  改读点位父 —— 与 `placeNewFranchisee` 的占位判定同一口径 (按 `referrer_id` 判会在两栏不同时把已占的当成空位)
+- **截图验证 (AGENTS §3 前端硬要求)**: 重建 `public/app` 后跑真 Flutter Web ——
+  baseline `#/franchisees/76`「上级加盟商 = 杨望」; 把 76 的 `referrer_id` 临时改成 79 (赵婉清) 后
+  `/api/franchisees/76` 返回 `referrerId=79 / placementParentId=75`, 页面**仍显示杨望** (且只请求了 `/api/franchisees/75`)
+  → 证明卡片读的是点位父; 随后已还原 (DB 复核 + `audit-placement-integrity --strict` ✅)
+- **`smoke-signup` 断言对齐 no_link** (ADR-0013 D4, 主人 2026-09-19 拍): 原断言「客户档案挂在推荐人名下
+  (`customer.referrer_id` = 推荐人档案)」与拍板矛盾 (那条是 `0f79c14` 留下的) → 改成
+  「`referrer_id` = **null** (no_link: 账号推荐关系 ≠ 客户图谱老带新)」; 该冒烟 **6/6 全过**
+  (这是本轮之前就红的一条, 与拆栏无关)
+
+**回归**: `audit-placement-integrity --strict` ✅ · `smoke-admin-reparent` 44/44 · `smoke-upline-promote` 36/36 ·
+`smoke-bootstrap-root` 13/13 · `smoke-placement-rules` 8/8 · `smoke-placement-confirm` ✅ ·
+`smoke-registration` 8/8 · `smoke-signup` 6/6 · `audit-orphan-nodes` ✅ · `vitest run` 255/255 ·
+`tsc --noEmit` ✅ · `pnpm db:compat` 0 error 0 warning · `flutter analyze` 4 条既有警告 (与本轮无关)
+
+---
+
+### Changed (APK 下载 / 二维码 公开化 — 给被推荐人扫码, 2026-09-21)
+
+> **主人原话**: 「app 不准备上应用商店, 需要让被推荐人方便下载 apk」
+
+- `GET /api/apk-download` 去掉登录保护 (本来强制 401, 被推荐人还没账号 = 二维码
+  形同摆设)。APK = Flutter AOT 编译产物, 无敏感数据; 带宽滥用走 CF Tunnel / nginx 限速
+- `GET /api/apk-qr` 同步公开 — 二维码内容是公开 URL, 无风险; 同时让 web admin /
+  营销页生成二维码不再依赖登录
+- 路由顶部加详细安全评估 (为什么公开 OK, 跟登录无关的限速链路)
+
+### Added (「我的 → 邀请被推荐人」区块, 2026-09-21)
+
+> 同上主人原话, 跟上条配套
+
+- `flutter_app/lib/screens/profile_page.dart::_InviteCard` 新区块 (紧挨「会员」——
+  跟推荐码同源"被推荐人接入"):
+  - 标题 "邀请被推荐人" + 大二维码 (`QrImage`, 180×180, 养生绿边框白底卡, 中老年扫码稳)
+  - 顶部提示 "扫码下载 App 后, 用你的推荐码注册 (双方各得 15 天会员)"
+  - 二维码下方版本 + 大小 (e.g. `v0.2.6 (7) · 22.2 MB`)
+  - 备用 "复制下载链接" 按钮 (二维码看不清 / 短信/微信文字渠道)
+- 所有账号可见 (admin / sales / 客服 / 加盟 / 免费), 无关会员状态
+- 复用公开化的 `QrImage` widget (原 `_QrImage`, 加 `size` 参数 + 提高 loading/error 边界)
+- 文档 `docs/api.md §13` 新增 `GET /api/apk-download` / `GET /api/apk-qr` 公开边界
+
+### Changed (关于与帮助: 移除冗余「检查更新」入口, 2026-09-21)
+
+> **主人原话**: 「当前版本与检查更新功能重复了, 留当前版本标签行就行」
+
+- `flutter_app/lib/screens/profile_page.dart::_AboutCard` 删除独立的
+  `ProfileTile(Icons.system_update_alt, '检查更新', ...)` 入口
+- `当前版本` 行 (`_VersionTile`) 本来 `onTap` 就调起同一个 `showUpdateSheet` —
+  保留并加上注释指明, 用户点版本号直接进检查更新弹层
+- 节省 1 行 tile + 跟"邀请被推荐人 → APK 下载二维码"逻辑更清晰
+  (下载 = 静态按钮, 检查更新 = 可点的版本号)
+
 ### Added (节点 ⇒ 账号 不变量 + 管理员「协商处理后强改上层」, 2026-09-21)
 
 > **主人原话**:

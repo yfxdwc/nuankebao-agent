@@ -10,8 +10,15 @@ class Franchisee {
   final String name;
   final String phone;
 
-  /// 推荐人 (null = root 顶级加盟商)
+  /// 推荐人 (null = root 顶级加盟商) —— 「谁把她拉进来的」
+  ///
+  /// ⚠ 与 [placementParentId] 是两件事 (拆栏 2026-09-21, ADR-0014 §3.9):
+  /// 「推荐人那侧满了 → BFS 顺延到别人名下」时两者可以不是同一个人
   final String? referrerId;
+
+  /// 点位父 (她的"上层点位") —— 「她挂在谁下面」= 详情页「上级加盟商」卡
+  /// (null = 树根, 没有上层)
+  final String? placementParentId;
 
   /// 位置 ('left' | 'right' | null=root)
   final String? placementSide;
@@ -35,6 +42,7 @@ class Franchisee {
     required this.name,
     required this.phone,
     this.referrerId,
+    this.placementParentId,
     this.placementSide,
     this.placementPath = '',
     this.placementDepth = 0,
@@ -51,6 +59,7 @@ class Franchisee {
       name: (json['name'] as String?) ?? '',
       phone: (json['phone'] as String?) ?? '',
       referrerId: json['referrerId']?.toString(),
+      placementParentId: json['placementParentId']?.toString(),
       placementSide: json['placementSide'] as String?,
       placementPath: (json['placementPath'] as String?) ?? '',
       placementDepth: (json['placementDepth'] as num?)?.toInt() ?? 0,

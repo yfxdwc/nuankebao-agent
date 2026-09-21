@@ -551,6 +551,9 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 }
 ```
 
+> ⚠ `franchisee.referrer` 键名是历史遗留 —— 它是 Flutter「我的上级」卡的数据源, 读的是
+> **点位父 `placement_parent_id`** (她挂在谁下面), **不是** `referrer_id` (推荐人)。见上「两栏口径」。
+
 **可空块** (客户端必须分块渲染, 不能假设一定有):
 
 | 字段 | null 的含义 |
@@ -660,6 +663,30 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 - `version` / `buildNumber` 来自 `flutter_app/pubspec.yaml` 的 `version:` (APK versionName 的真源)
 - `apk: null` = 服务器上没有可下载的包 (纯 web 部署), 客户端只显示当前版本
 - 客户端比对 `package_info_plus` 的本机版本 → 服务器更新才提示 (不做强制升级)
+
+### `GET /api/apk-download`
+**公开**下载 暖客宝 release APK (无需登录)。
+
+主人 2026-09-21 拍「app 不准备上应用商店, 需要让被推荐人方便下载 apk」——二维码
+被推荐人扫码时**还没账号**, 必须公开。详见路由文件顶部安全评估。
+
+- `Content-Type: application/vnd.android.package-archive`
+- `Content-Disposition: attachment; filename="nuankebao-release.apk"`
+- APK 发现规则: `NUANKEBAO_APK_PATH` 环境变量 (部署时显式指定) > 所有候选里 mtime 最新 (见 `src/lib/apk.ts` apkCandidates)
+- 404: 服务器上没有可下载的 APK (纯 web 部署 / 还没 build)
+
+### `GET /api/apk-qr`
+**公开**生成 APK 下载 URL 的二维码 (PNG / SVG / dataurl)。
+
+主人同日拍 — 跟 apk-download 同步去掉登录保护, 二维码内容是公开 URL, 生成过程
+无敏感数据。
+
+**Query**:
+- `url` (可选) — 要编码的 URL, 默认 `当前 host + /api/apk-download`
+- `format` — `png` (默认, 直接吐 image/png 字节流给 `<img>`) | `svg` (XML) | `dataurl` (JSON `{url, dataUrl}`)
+
+**响应** (默认 png):
+- `Content-Type: image/png`; 直接给 `<img src="/api/apk-qr">` / `<img src="/api/apk-qr?format=svg">` 用
 
 ---
 
@@ -801,13 +828,16 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
   "toParentFid": "137", "toParentName": "张姐",
   "side": "left", "newPath": "L.R.", "newDepth": 2,
   "subtreeSize": 3,             // 跟着一起搬的节点数 (含她自己)
+  "referrerTouched": false,     // 恒 false: 推荐人 (referrer_id) 一个字都没动
   "mergedTrees": false,         // true = 两棵树在这里合并 (把孤立的那棵挂到主树上)
   "rootCount": 3                // 改完之后全库树数量
 }
 ```
 
 **动什么**: 整棵子树 —— `placement_path` (新基路径 + 原子树相对后缀) / `placement_depth` (整体位移) /
-`root_id` (改宗); 顶层节点再加 `referrer_id` + `placement_side` (指向新上层 + 新线别) 与备注追加一行。
+`root_id` (改宗); 顶层节点再加 `placement_parent_id` + `placement_side` (指向新上层 + 新线别) 与备注追加一行。
+**不动 `referrer_id`** —— 改的是"她挂在谁下面"(结构), 不改写"谁把她拉进来的"(推荐关系);
+返回值带 `referrerTouched: false` (可断言的不变量)。见 ADR-0014 §3.9「拆栏」与下面「两栏口径」小节。
 `path` 变换**不是简单前缀拼接**: 顶层层节点换线 (A↔B) 时它自己那段要丢掉, 只有后代保留相对后缀。
 
 **拒绝情形** (全部 400, 文案是人话直接给管理员看):
@@ -830,8 +860,23 @@ Flutter 「我的」页首屏一次拉完, 只有一个 loading。
 **留痕**: `reason` 加密追加进 `franchisee.notes_encrypted` (`[日期 管理员改上层] 从 X → 「Y」的A线: 原因`)
 + `audit_log` (本次一并给 `franchisee` 表补上了审计触发器 —— 之前这张表没有)。
 
-**冒烟**: `npx tsx scripts/smoke-admin-reparent.ts` (35 项: 9 条拒绝路径 + 非根换上层 + 树根挂到别的树 +
-无关的第三棵树没被动过 + 图谱无重复行 + 留痕; 幂等自清理)
+**冒烟**: `npx tsx scripts/smoke-admin-reparent.ts` (44 项: 9 条拒绝路径 + 非根换上层 (推荐人原地不动) +
+树根挂到别的树 + 无关的第三棵树没被动过 + 图谱无重复行 + 留痕 + 推荐人≠点位父的落位/强改 +
+`/api/me` 口径 + 全库巡检 `--strict`; 幂等自清理)
+
+### 两栏口径: `referrer_id` (推荐人) vs `placement_parent_id` (点位父) — 2026-09-21 拍「拆」
+
+`GET /api/franchisees/[id]` (详情) 与 `GET /api/franchisees` (列表) 的每个 item 都带这两栏:
+Flutter 详情页「上级加盟商」卡读 `placementParentId`; `referrerId` 只用于"推荐人"语义的 UI。
+
+| 列 | 语义 | 读它的地方 |
+|---|---|---|
+| `referrer_id` | **推荐人** —— 谁把她拉进来的 | 推荐树 (`?mode=referrer`) · 图谱 `relation` 三级区分 · `GET /api/customers?referrerId=` 显式过滤 · `/api/franchisees?referrerId=` |
+| `placement_parent_id` | **点位父 (上层点位)** —— 她挂在谁下面 | 落位算法 (`placeNewFranchisee`) · 改上层 · `GET /api/me` 的 `franchisee.referrer` (= UI「我的上级」, 键名历史遗留) · `countDirectDownline` · `scope=mine_downline` · RBAC 直接下线/我的上级 |
+
+「推荐人那侧满了 → BFS 顺延到别人名下」时两栏**本来就不同** (不是脏数据)。一致性/巡检:
+`npx tsx scripts/audit-placement-integrity.ts [--strict]` —— 点位父列 ≡ `placement_path` 去尾段 + 同 `root_id`,
+外加 `side` / `depth` / 同树 path 唯一 6 项检查。`GET /api/franchisees` 的 item 也新增 `placementParentId` 字段。
 
 ---
 

@@ -78,6 +78,10 @@
   - **活跃目录** (v0.1.2 起): `flutter_app/lib/**` + `src/app/api/**` + `src/lib/**` + `src/middleware.ts` + `src/app/(auth)/login/**`
   - **冻结目录** (仅 P0 bug fix): `src/app/admin/**` + `src/components/business/**` (web admin 业务组件) + `src/components/admin/**`
 - ✅ **任务开始前必打 task-snapshot** → `bash scripts/task-snapshot.sh start <task-name>` (或依赖 `.pi/extensions/auto-task-snapshot.ts` 在第一条 user 消息自动打). 完整 SOP 见 §8.1. 改 / 加 ≥ 3 文件 或 跨域时**强制**先 snapshot.
+- ✅ **改 / 加 migration 后必跑巡检 + `--strict`** (2026-09-21 立) → 拆栏后点位结构有两处真相
+  (`placement_parent_id` 列 + `placement_path` 布局), 改过落位/改上层/建根后必跑
+  `npx tsx scripts/audit-placement-integrity.ts --strict` (不一致 → exit 1). 另: 脚本里读 env 一律
+  `import "./_env"` 放第一个 import (见 `scripts/_env.ts`), 不要用老的 `loadEnv()` 写法
 - ✅ **单点问题修一处后必全仓扫一遍** (2026-09-15 主人立) → 修一个具体 bug (如整页刷新的 `<a>`) 后, 必须全仓 grep 同类问题 (如所有 `<a href>` / `window.location` / `router.push` / `<form action>`), 确认无其他遗漏才 commit. 单点修复 = 必复发, 跟 §5 登录循环 w14 三次复发同根.
 - ✅ **改前端必起 dev server + 截图验证** (2026-09-15 主人立) → 任何 web admin / Next.js / Flutter web UI 改动, 必 `pnpm dev` 起服务 (port 先跑 `./tools/check-port.sh`) + 截图 (playwright / 浏览器) + 视觉验证, 不能只看 `tsc --noEmit` / `pnpm build` 就 commit. 详见 §5 w14 R12 puppeteer ≠ Flutter web UI 真行为 同根问题.
 
@@ -386,12 +390,24 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 - ✅ **不塞进三方确认状态机** (`placement-requests`): 三方确认的价值 = 三方都点头, 本功能的前提正是三方谈不拢;
   硬塞会给「单方即执行」开分支 (同建根 `POST /api/admin/users/[id]/root` 的理由)
 - ✅ **改一次动整棵子树**: `placement_path` / `placement_depth` / `root_id` (+ 顶层节点的
-  `referrer_id` / `placement_side`) —— 不是只改一行
+  `placement_parent_id` / `placement_side`) —— 不是只改一行
+- ✅ **拆栏终态 (主人 2026-09-21 拍「拆」, migration 0019)**: `referrer_id` = **推荐人** (谁把她拉进来的),
+  `placement_parent_id` = **点位父 / 上层点位** (她挂在谁下面) —— 两栏各记各的, **改上层绝不改写推荐人**:
+  - 落位算法 (`placeNewFranchisee`) 的占位判定 / BFS 一律读 `placement_parent_id`
+  - 「推荐人那侧满了 → BFS 顺延到别人名下」时两栏本来就该不同 (不是 bug)
+  - 结构口径 (`countDirectDownline` / `rbac` 直接下线 / `GET /api/me` 的「我的上级」) 都读点位父
+  - 巡检: `npx tsx scripts/audit-placement-integrity.ts --strict` (点位父列 ≡ path/side/depth + 同树 path 唯一;
+    改过点位/结构代码后必跑)
 - ✅ **`franchisee` 表必须有审计触发器** (`drizzle/audit_trigger.sql` 的 `franchisee_audit`;
   2026-09-21 补, 之前这张表一行审计都没有)
-- ⚠️ **已知取舍 (待拍)**: `franchisee.referrer_id` 同时是「推荐人」和「点位父」(旧遗留);
-  强改上层时 `referrer_id` 只能一起改 → 要只改点位父必须拆列 (`placement_parent_id`)。
-  详见 ADR-0014 §3.8.3
+- ✅ **两栏分家 (旧「已知取舍」已解决)**: 早先 `franchisee.referrer_id` 一栏干两份活 (推荐人 + 点位父),
+  强改上层只能连带改写「谁推荐了她」。主人 2026-09-21 拍「拆」→ 加 `placement_parent_id` 专记上层点位
+  (migration 0019, 纯 additive + 回填 + 自检 abort), `referrer_id` 从此只记推荐人。
+  - `adminReparentNode` 返回值带 **`referrerTouched: false`** (可断言的不变量), 冒烟已在断言
+  - 落位算法开头有**缺列保护**: 本树若有 `path ≠ ''` 却 `placement_parent_id IS NULL` 的活节点 → 当场人话报错
+  - ✅ Flutter 一并收口: 详情页「上级加盟商」卡读 `metadata['placementParentId']`
+    (relation payload + `Franchisee` model 都加了该字段); 落位预览 `getAvailablePosition` 同口径
+  - 详见 ADR-0014 §3.9
 
 ## §6.5 系统管理员账号 (长期保留, 主人 2026-09-19 拍)
 

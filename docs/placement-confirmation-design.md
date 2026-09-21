@@ -55,7 +55,7 @@
 
 | 能力 | 现状 |
 |---|---|
-| 二叉树结构 | ✅ `franchisee.referrer_id / placement_side / placement_path / placement_depth`（物化路径） |
+| 二叉树结构 | ✅ `franchisee.placement_parent_id / placement_side / placement_path / placement_depth`（物化路径）<br>⚠️ 本文写作时点位父还是用 `referrer_id` 记的, 2026-09-21 已拍「拆栏」→ 结构看 `placement_parent_id`, `referrer_id` 只记推荐人 (ADR-0014 §3.9) |
 | 子树归属 | ✅ 天然成立：查子树按 `placement_path LIKE 我的 path \|\| '%'` → 自动含整棵子树 |
 | 落位算法 | ⚠️ `placeNewFranchisee(referrerId, sideHint)` **只能落在推荐人自己的空位/BFS 更深** → **不能指定任意父节点** |
 | 移动节点 | ❌ 无（改位置 = 目前只能软删重新加） |

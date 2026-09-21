@@ -2,7 +2,8 @@
 // 自助注册 (凭推荐码) 冒烟 (dev only) — 主人 2026-09-19/20 拍
 //
 // 验: ① 注册成功 → 建了 user  ② 同时建了客户档案 (list 里能看到)
-//     ③ 客户档案是**普通客户** (is_seed=false)  ④ referrer_id 挂在**推荐人**名下
+//     ③ 客户档案是**普通客户** (is_seed=false)
+//     ④ referrer_id **不写** (no_link: 账号推荐关系 ≠ 客户图谱老带新 — ADR-0013 D4, 主人 2026-09-19 拍)
 //     ⑤ 手机号重复 → 409
 //
 // 跑: npx tsx scripts/smoke-signup.ts   (幂等, 跑完自己清理)
@@ -80,10 +81,12 @@ async function cleanup() {
     .from(customer)
     .where(and(eq(customer.phoneHash, refUser.phoneHash), isNull(customer.deletedAt)))
     .limit(1);
+  // ⚠ no_link (ADR-0013 D4): 推荐码**不写** customer.referrer_id ——
+  //   「账号/会员层的推荐关系」和「客户图谱的老带新」是两条线, 各自独立
   ck(
-    "客户档案挂在推荐人名下 (referrer_id = 推荐人客户档案)",
-    String(c?.referrerId ?? "") === String(refCustomer?.id ?? "x"),
-    `referrer_id=${c?.referrerId} 期望=${refCustomer?.id}`
+    "客户档案**不挂**推荐人名下 (referrer_id = null, no_link)",
+    c?.referrerId == null,
+    `referrer_id=${c?.referrerId ?? "null"} 推荐人客户档案=${refCustomer?.id ?? "无"} (故意不挂)`
   );
 
   // 走真实口径 (resolveCustomerType: 加盟 > 种子 > 普通); 新注册不是加盟 → 看 is_seed

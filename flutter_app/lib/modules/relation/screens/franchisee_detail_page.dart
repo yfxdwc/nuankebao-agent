@@ -60,9 +60,10 @@ class FranchiseeDetailPage extends ConsumerWidget {
         _buildHeader(context, ref, f),
         const SizedBox(height: 16),
 
-        // 上级信息
-        if (f.referrerId != null)
-          _referrerCard(context, ref, f.referrerId!),
+        // 上级信息 (「上级加盟商」= **点位父** placement_parent_id, 不是推荐人 referrer_id;
+        //   拆栏 2026-09-21 见 ADR-0014 §3.9)
+        if (f.placementParentId != null)
+          _referrerCard(context, ref, f.placementParentId!),
 
         // 位置信息
         _positionCard(f),
@@ -153,8 +154,9 @@ class FranchiseeDetailPage extends ConsumerWidget {
     );
   }
 
-  Widget _referrerCard(BuildContext context, WidgetRef ref, String referrerId) {
-    final asyncReferrer = ref.watch(franchiseeDetailProvider(referrerId));
+  /// 「上级加盟商」卡 —— 数据源 = **点位父** (调用方传 f.placementParentId)
+  Widget _referrerCard(BuildContext context, WidgetRef ref, String uplineFid) {
+    final asyncReferrer = ref.watch(franchiseeDetailProvider(uplineFid));
     return asyncReferrer.maybeWhen(
       data: (r) {
         return Card(

@@ -105,7 +105,10 @@ class FranchiseRelationSystem implements RelationSystem {
         name: f.name,
         metadata: {
           'phone': f.phone,
+          // 推荐人 (谁拉她进来的) —— 与下面「点位父」是两件事 (拆栏 2026-09-21)
           'referrerId': f.referrerId,
+          // 点位父 (她的上层点位) —— 详情页「上级加盟商」卡读它
+          'placementParentId': f.placementParentId,
           'placementSide': f.placementSide,
           'placementDepth': f.placementDepth,
           // fix-route (2026-09-17): 详情页「路径」一直显示 (顶级) — 这里漏映射了

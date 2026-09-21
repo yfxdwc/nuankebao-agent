@@ -51,7 +51,8 @@
 >
 > ① 的三道闸 + 存量清理 + seed 根因修复 → **ADR-0014 §3.7** / **AGENTS §6.7**
 > ② 的接口 / 子树搬迁 / 留痕 / Flutter 弹层 → **ADR-0014 §3.8** / **AGENTS §6.8** / `docs/api.md §15`
-> 冒烟: `scripts/smoke-admin-reparent.ts`（**35 项全过**）; 巡检修: `scripts/audit-orphan-nodes.ts`
+> 冒烟: `scripts/smoke-admin-reparent.ts`（**44 项全过**, 含拆栏那两条）; 巡检修: `scripts/audit-orphan-nodes.ts` +
+> `scripts/audit-placement-integrity.ts`（点位父列 ≡ path/side/depth, `--strict`）
 
 ### 还没做（下一步可选）
 
@@ -186,7 +187,7 @@ schema 里**没有存"这个节点属于哪棵树"**：`placement_path` 只在�
 
 ---
 
-## ⑦ `referrer_id` 双重语义必须拆列 (点位父 ≠ 推荐人) · ⚠️ 升级为"要做"（2026-09-21）
+## ⑦ `referrer_id` 双重语义必须拆列 (点位父 ≠ 推荐人) · ✅ **已落地 (2026-09-21, migration 0019)**
 
 > **背景**: `franchisee.referrer_id` 这一列现在**同时**承担两个角色:
 > ① 「推荐人」(Flutter 加盟商详情页把它显示成「推荐人」卡片)
@@ -198,14 +199,23 @@ schema 里**没有存"这个节点属于哪棵树"**：`placement_path` 只在�
 > 为了让新上层那条线不出现"看着空、其实有人"(→ 新节点 path 撞车), 强改上层时**只能把 `referrer_id`
 > 一起改**。后果 = 连带改写「谁推荐了她」这句话。原值在 `audit_log.changed_fields` 里可追, 但界面上已经错了。
 >
-> **拆法 (additive, 待主人拍)**:
-> 1. 加列 `franchisee.placement_parent_id` (nullable) + 索引; migration 用「path 去尾段 + 同 root_id」回填
-> 2. `placeNewFranchisee` / `slotTaken` / 子树判定改读 `placement_parent_id`
-> 3. `reparent` 只改 `placement_parent_id`, 不动 `referrer_id`
-> 4. Flutter 详情页「推荐人」继续读 `referrer_id`; 图谱/上层读 path (已经是了)
-> 5. 冒烟加一条: 强改上层后 `franchisee.referrer_id` **不变**
+> **拆法 (additive) —— 主人 2026-09-21 拍「拆」, 当天落地**:
+> 1. ✅ migration `0019_placement_parent_id.sql`: 加列 + 索引 + 回填 (「path 去尾段 + 同 root_id」为主口径,
+>    path 断链沿用 `referrer_id` 兜底) + `DO $$ ... RAISE EXCEPTION` 自检; **全程不动 `referrer_id`**
+> 2. ✅ `placeNewFranchisee` 占位判定 + BFS 子节点查找改读 `placement_parent_id`; 开头加缺列保护 (人话报错)
+> 3. ✅ `reparent` 只改 `placement_parent_id` (+ `placement_side`), 返回值带 `referrerTouched: false`
+> 4. ✅ 用户可见口径: `GET /api/me` 的「我的上级」/ `countDirectDownline` / `rbac` 直接下线 → 点位父;
+>    「推荐人」语义 (`getFranchiseeTree` / 图谱 `relation` / `?referrerId=` 显式过滤) 继续读 `referrer_id`
+> 5. ✅ 冒烟: `smoke-admin-reparent.ts` 44 项 (含「强改上层后 `referrer_id` 不变」+ 推荐人≠点位父的落位 +
+>    全库巡检 + `/api/me` 口径)
 >
-> **关联**: ADR-0014 §3.8.3 / §5 第 1 条; AGENTS §6.8
+> **新增巡检**: `npx tsx scripts/audit-placement-integrity.ts --strict` (6 类结构不一致 + 同树 path 唯一)
+>
+> **Flutter 收口 (同日完成)**: 详情页「上级加盟商」卡改读 `placementParentId`
+> (relation node payload 加字段 + `Franchisee` model 加字段 + 详情页改读; 已重建 Flutter web + 截图验证 ——
+> 把 `referrer_id` 临时改成别人, 卡片仍显示点位父)
+>
+> **关联**: ADR-0014 §3.9 / §5 第 1 条; AGENTS §6.8
 
 ## ⑧ 审计触发器覆盖不全 · 🔧 待补（2026-09-21）
 

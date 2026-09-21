@@ -415,6 +415,38 @@ async function main() {
   ck("⑫ 返回值 referrerTouched=false (可断言的不变量)", r3.referrerTouched === false, `referrerTouched=${r3.referrerTouched}`);
   ck("⑫ 账号也还绑着", (await node(fbFid))[0].isActive === true);
 
+  // ⑫-e 用户可见口径 (HTTP): 「我的上级」卡读的是**点位父**, 不是推荐人
+  //   数据源: GET /api/me 的 franchisee.referrer (键名历史遗留, 语义 = 我的上层点位)
+  const aliveMe = await fetch(`${BASE}/api/health`)
+    .then((r) => r.ok)
+    .catch(() => false);
+  if (!aliveMe) {
+    console.log(`⏭  ⑫ 「我的上级」= 点位父 跳过 (${BASE} 不可达, 未起 dev server)`);
+  } else {
+    const loginFb = await fetch(`${BASE}/api/auth/flutter-login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ identifier: P.FB, password: "Test1234" }),
+    });
+    const { sessionToken: fbToken } = (await loginFb.json()) as { sessionToken?: string };
+    if (!fbToken) {
+      ck("⑫ 取 FB 账号 session (验「我的上级」)", false, `login=${loginFb.status}`);
+    } else {
+      const meRes = await fetch(`${BASE}/api/me`, {
+        headers: { Cookie: `authjs.session-token=${fbToken}` },
+      });
+      const meBody = (await meRes.json()) as {
+        franchisee?: { referrer?: { id?: string; name?: string } | null } | null;
+      };
+      ck(
+        "⑫ GET /api/me「我的上级」= 点位父 A2a (不是推荐人 A2)",
+        meBody.franchisee?.referrer?.id === fidA2a.toString() &&
+          meBody.franchisee?.referrer?.id !== fidA2.toString(),
+        `parent=${fidA2a} referrer=${fidA2} api=${meBody.franchisee?.referrer?.id}`
+      );
+    }
+  }
+
   // ---- ⑪ 鉴权: 非管理员 403 (HTTP 段) ----
   const alive = await fetch(`${BASE}/api/health`)
     .then((r) => r.ok)

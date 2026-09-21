@@ -256,7 +256,7 @@ promote 里 A 就是 U 在 app 内**唯一的邻接已加盟节点** —— 正�
 | 契约 | `POST /api/admin/nodes/[fid]/reparent` `{ newParentFid, side, reason }` |
 | 鉴权 | `role=admin`, **服务端每次查库** (客户端藏按钮只是体验) |
 | 留痕 | `reason` **必填 2-200 字** → 追加到她的加密备注 (`[日期 管理员改上层] 从 X → Y 的A线: 原因`) + `audit_log` (本次同时给 `franchisee` 表补上了审计触发器 —— 之前这张表**一行审计都没有**) |
-| 动什么 | 整棵子树: `placement_path` / `placement_depth` / `root_id`; 顶层节点再加 `referrer_id` + `placement_side` |
+| 动什么 | 整棵子树: `placement_path` / `placement_depth` / `root_id`; 顶层节点再加 `placement_parent_id` + `placement_side` (**不动 `referrer_id`** —— 见 §3.9 拆栏) |
 | 硬拒 | 成环 (新上层在她自己下线里) / 那条线有人 / 她本来就在那 / 任一方没账号 / root_id 缺失 / 原因太短 |
 | 副作用 | **`mergedTrees=true` = 两棵树在这里合并** (把孤立的那棵挂到主树上), 返回值带合并后的树数量 |
 
@@ -265,20 +265,68 @@ promote 里 A 就是 U 在 app 内**唯一的邻接已加盟节点** —— 正�
 树根搬迁时旧 path 为空 → 后缀 = 全部 → 整棵树按原结构下降一层 (与 promote 同效)。
 另: SQL 里这个起始位必须显式 `::int`, 否则 PG 会挑中 `substring(text from text)` (正则版) → 匹配不上直接给 `NULL`。
 
-#### 3.8.3 已知取舍 (待主人拍)
+#### 3.8.3 当时的取舍 (已被 §3.9 拆栏解决)
 
-`franchisee.referrer_id` 在现 schema 里**同时**是「推荐人」和「点位父」(§5 第 1 条遗留):
-`placeNewFranchisee` 的槽位判定用它, Flutter 详情页把它显示成「推荐人」。
-强改上层时**只能一起改**, 否则新上层那条线会出现"看着空、其实有人"→ 新节点 path 撞车。
-要「只改点位父、不动推荐人」必须拆列 (`placement_parent_id`), 属 schema 变更 → 已记 backlog。
-原值不丢: `audit_log.changed_fields` 里有改前的 full row。
+落地这一版时 `franchisee.referrer_id` 还是「推荐人」+「点位父」共用一栏 (§5 第 1 条遗留),
+所以强改上层**只能连 `referrer_id` 一起改** (否则新上层那条线"看着空、其实有人"→ 新节点 path 撞车)。
+后果 = 改上层会篡改「谁推荐了她」。原值在 `audit_log.changed_fields` 里可追, 但界面上已经错了。
+-> 主人 2026-09-21 当场拍「**拆**」, 见下节。
+
+### 3.9 追加拍板: 拆栏 (`placement_parent_id`) —— 主人 2026-09-21
+
+> **主人原话**: 「**拆** → 加一栏 `placement_parent_id` 专门记"上层点位", 推荐人那栏从此只记推荐人。
+> 约半天: 一个小 migration + 改落位算法读新栏 + 一条冒烟。」
+
+**两栏分工 (此后固定)**
+
+| 列 | 语义 | 谁写 |
+|---|---|---|
+| `referrer_id` | **推荐人** —— 谁把她拉进来的 (业务关系) | 建号/落位时记一次, **此后任何结构改动都不再改写它** |
+| `placement_parent_id` | **点位父** (她的"上层点位") —— 她挂在谁下面 (结构关系) | 落位算法 (`createFranchisee` / 三方确认) + 认领上级 (promote) + 管理员强改上层 |
+
+**不拆会怎样 (两个真实 bug)**
+
+1. 管理员「协商处理改上层」为了让新上层那条线不出现"看着空、其实有人", 只能连带改 `referrer_id`
+   → **改上层 = 篡改「谁推荐了她」** (§3.8.3)。
+2. `placeNewFranchisee` 的"这个位置有没有人"按 `referrer_id` 判。而三方确认落位时
+   **发起人 (推荐人) ≠ 落位父** —— 于是落位父名下明明有人, 算法却看成空位 →
+   **生成两条相同 `placement_path` 的节点** (潜在撞车)。
+
+**改法 (纯 additive, ADR-0004)**
+
+- migration `0019_placement_parent_id.sql`: 加列 (nullable) + `idx_franchisee_placement_parent` +
+  回填 (「`placement_path` 去尾段 + 同 `root_id`」为主口径; path 断链的少数行沿用 `referrer_id` 兜底) +
+  `DO $$ ... RAISE EXCEPTION` 自检 (还有孤儿就 abort 整个 migration, 不许半吊子上线)。
+  **全程不动 `referrer_id`** → down 无业务损失
+- `placeNewFranchisee` 的占位判定 + BFS 找子节点都改读 `placement_parent_id`;
+  函数开头加**缺列保护** (本树里还有 `path ≠ ''` 却 `placement_parent_id IS NULL` 的活节点 → 当场人话报错,
+  而不是静默生成重复位置)
+- 所有写点位的地方补新列: `createFranchisee` (`referrer_id` = 调用方给的推荐人, 不再被 fallback 改写) ·
+  三方确认 `create` 分支 (`referrer_id` = 发起人, `placement_parent_id` = 目标父) · `promote` 新根 (`null`) 与
+  锚点挂靠 · `createRootForUser` (`null`) · `adminReparentNode` (`placement_parent_id` + `placement_side`, 删掉原来的 `referrerId` 写入)
+  - `ReparentResult` 新增 **`referrerTouched: boolean` (恒 `false`)** —— 把"不改写推荐人"变成可断言的不变量
+- **用户可见口径同步**: `GET /api/me` 的 `franchisee.referrer` (键名历史遗留, Flutter 渲染成
+  「我的上级」) 改读点位父; `countDirectDownline` / `listFranchisees(scope=mine_downline)` /
+  `rbac.franchiseeRbacFilter` 的"直接下线/我的上级"一并改读点位父 (结构口径), 显式按推荐人过滤的参数
+  (`referrerId`) 仍读 `referrer_id`
+- 新增巡检 `scripts/audit-placement-integrity.ts` (只读): 查 6 类不一致 ——
+  ① 点位父列 ≠ path 推出来的父 ② 非根缺点位父 ③ 根有点位父 ④ side ≠ path 末段 ⑤ depth ≠ 段数
+  ⑥ 同树内 path 重复; 另报"推荐人 ≠ 点位父"条数 (**这不是错**)。`--strict` 有不一致 → exit 1
+- 冒烟 `scripts/smoke-admin-reparent.ts` 扩到 **44 项**: 新增 ⑫ (推荐人那侧满 → BFS 顺延到别人名下;
+  此时两栏本来就该不同) + ⑬ (全库巡检 `--strict`) + ⑫-e (GET /api/me「我的上级」= 点位父, 不是推荐人)
+- **Flutter 收口**: 详情页「上级加盟商」卡改读点位父 (`RelationNode.metadata['placementParentId']` ←
+  `GET /api/franchisees/[id]`); 验证方式 = 临时把 `referrer_id` 改成别人 + 截图 (卡片仍显示点位父)
+
+**口径记住一句话**: 「谁推荐了她」和「她挂在谁下面」可以是两个人 —— 前者 `referrer_id`, 后者 `placement_parent_id`。
 
 ---
 
 ## 4. 影响
 
-- **migration**: `drizzle/0017_multi_root_promote.sql` + `drizzle/0018_placement_upline_fid.sql` (+ `down/`)
-- **schema**: `franchisee.root_id` + `idx_franchisee_root`; `franchise_placement_request.kind` 扩到
+- **migration**: `drizzle/0017_multi_root_promote.sql` + `drizzle/0018_placement_upline_fid.sql` +
+  `drizzle/0019_placement_parent_id.sql` (拆栏, 见 §3.9; 均带 `down/`)
+- **schema**: `franchisee.root_id` + `idx_franchisee_root`; **`franchisee.placement_parent_id`** +
+  `idx_franchisee_placement_parent`; `franchise_placement_request.kind` 扩到
   `create|unjoin|promote`; `franchise_placement_request.upline_fid` + `idx_placement_upline_fid`
 - **查询**: 5 处子树/归属判定加同树限定 (见 §2.1 表); 新增 `getPlacementUpline` / `getMyPendingPromoteRequest` /
   `freeSidesOf` / `roleFor(uplineFid)`
@@ -299,17 +347,27 @@ promote 里 A 就是 U 在 app 内**唯一的邻接已加盟节点** —— 正�
     → 填原因 → 提交); `AdminNode` 新增 `path` / `rootFid` (选候选上层时算子树与空位)
 - **冒烟**: `scripts/smoke-upline-promote.ts` (**36 项全过**) — 含"另一棵树没被动过"+"图谱不跨树"+
   "无重复行"+"认领无账号节点被拒"+"上级挑线"+"两棵树合并后 = 4 节点"
-- **冒烟**: `scripts/smoke-admin-reparent.ts` (**35 项全过**) — 9 条拒绝路径 + 非根换上层 (子树整体跟着走,
-  原线释放) + 树根挂到别的树 (两棵树合并, 树数量 -1, **无关的第三棵树一点没动**, 图谱无重复行) + 备注/审计留痕
-- **数据脚本**: `scripts/audit-orphan-nodes.ts` (巡检 / `--bind` 补账号 / `--prune` 软删无下线孤儿)
+- **冒烟**: `scripts/smoke-admin-reparent.ts` (**44 项全过**) — 9 条拒绝路径 + 非根换上层 (子树整体跟着走,
+  原线释放, **推荐人原地不动**) + 树根挂到别的树 (两棵树合并, 树数量 -1, **无关的第三棵树一点没动**,
+  图谱无重复行) + 备注/审计留痕 + 推荐人≠点位父的落位/强改 + 全库巡检 + `GET /api/me` 口径
+- **数据脚本**: `scripts/audit-orphan-nodes.ts` (巡检 / `--bind` 补账号 / `--prune` 软删无下线孤儿);
+  `scripts/audit-placement-integrity.ts` (点位父列 ≡ path/side/depth + 同树 path 唯一, `--strict` 供 CI/冒烟)
+- **脚本环境加载**: `scripts/_env.ts` —— `import "./_env"` 必须是脚本第一个 import (ESM 下 import 提升会让
+  老的 `loadEnv()` 写法在 `@/lib/db` 求值之后才跑); `scripts/` 下 18 个脚本已全部统一 (除 `_env.ts` 自己)
 - **DDL (非 migration)**: `drizzle/audit_trigger.sql` 补 `franchisee_audit` (幂等, 由 `pnpm db:migrate` 应用)
 
 ## 5. 风险 / 遗留
 
-- `referrer_id` **双重语义** (推荐人 vs 点位父节点) 依然存在 —— `admin-users` 图谱改用
-  `path 去尾段 + root_id` 后**不再依赖** `referrer_id` 当父节点, 但 `placeNewFranchisee` /
-  `getFranchiseeTree`(推荐树口径) 仍按 `referrer_id` 连。彻底拆字段属后续独立课题
-  (⚠ 已升级为**必须做**: 见 §3.8.3 —— 否则管理员改上层会连带改写"谁推荐了她"这句话)。
+- ~~`referrer_id` 双重语义 (推荐人 vs 点位父节点)~~ —— ✅ **已解决** (§3.9 拆栏, migration 0019):
+  点位算法/结构口径读 `placement_parent_id`, 推荐关系读 `referrer_id`。
+  仍在用 `referrer_id` 的地方都是**推荐语义** (推荐树 `getFranchiseeTree`、图谱 `relation` 三级区分、
+  `GET /api/customers?referrerId=` 显式过滤) —— 这是对的。
+  - ✅ **Flutter 侧已收口**: 加盟商详情页「上级加盟商」卡改读 `placementParentId`
+    (`franchisee_detail_page.dart` → `franchisee_detail_provider.dart::nodeToFranchisee` ←
+    `RelationNode.metadata['placementParentId']` ← `GET /api/franchisees/[id]` 的 `FranchiseeView.placementParentId`);
+    `Franchisee` model 新增同名字段; 真机/Web 截图验证: 把某节点的 `referrer_id` 临时改成别人,
+    卡片仍显示**点位父** (见 CHANGELOG 「拆栏」C 段)
+  - ✅ `getAvailablePosition` (落位预览) 的占位判定也改读点位父 —— 与落位算法同口径
 - **审计覆盖不全**: 本次只补了 `franchisee` 一张表的触发器; 库里还有若干表没有 `*_audit`
   (如 `customer` 有, 但字典/服务项等没有)。属独立课题。
 - promote **不做上限校验** (ADR-0011 层级不限); 极端"公司体系 30 层"会反复挪 path ——
@@ -324,5 +382,6 @@ promote 里 A 就是 U 在 app 内**唯一的邻接已加盟节点** —— 正�
 
 ## 7. 元数据
 
-- 拍板人: 主人 (2026-09-21; 同日第二轮补充 5 条 —— 见 §3.6)
-- 实施: 2026-09-21 (migration 0017/0018 + 5 处查询 + promote 状态机 + 图谱上层格 + 35 项冒烟)
+- 拍板人: 主人 (2026-09-21; 同日第二轮补充 5 条 —— 见 §3.6; 同日第三轮「拆栏」+「脚本 _env」—— 见 §3.9)
+- 实施: 2026-09-21 (migration 0017/0018/0019 + 6 处查询 + promote 状态机 + 图谱上层格 +
+  拆栏 (点位父列 + 巡检 + 44 项冒烟) + 18 个脚本统一 `_env`)

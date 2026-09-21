@@ -32,6 +32,7 @@ Franchisee nodeToFranchisee(RelationNode node) {
     name: node.name,
     phone: node.metadata['phone'] as String? ?? '',
     referrerId: node.metadata['referrerId'] as String?,
+    placementParentId: node.metadata['placementParentId'] as String?,
     placementSide: node.metadata['placementSide'] as String?,
     placementPath: node.metadata['placementPath'] as String? ?? '',
     placementDepth: (node.metadata['placementDepth'] as num?)?.toInt() ?? 0,

@@ -38,6 +38,8 @@ export interface FranchiseeView {
   name: string;
   phone: string;
   referrerId: string | null;
+  /** 点位父 (她的"上层点位"); 拆栏后与 referrerId 各记各的 (见 schema.ts) */
+  placementParentId: string | null;
   placementSide: PlacementSide | null;
   placementPath: string;
   placementDepth: number;
@@ -54,6 +56,7 @@ function toView(row: Franchisee): FranchiseeView {
     name: row.name,
     phone: decryptField(row.phoneEncrypted),
     referrerId: row.referrerId ? row.referrerId.toString() : null,
+    placementParentId: row.placementParentId ? row.placementParentId.toString() : null,
     placementSide: row.placementSide as PlacementSide | null,
     placementPath: row.placementPath,
     placementDepth: row.placementDepth,
@@ -875,6 +878,9 @@ function buildTree(
 /**
  * 获取推荐放置位置 (frontend preview)
  * 不实际写入, 只返回推荐位置 + fallback 标志
+ *
+ * ⚠ 是否占位按**点位父**列判 (拆栏后, 与 placeNewFranchisee 的槽位判定同口径) ——
+ *   按 referrer_id 判会在「推荐人 ≠ 点位父」时把已占的位置显示成空位.
  */
 export async function getAvailablePosition(
   referrerId: bigint
@@ -883,7 +889,7 @@ export async function getAvailablePosition(
     .select({ side: franchisee.placementSide })
     .from(franchisee)
     .where(
-      and(eq(franchisee.referrerId, referrerId), isNull(franchisee.deletedAt))
+      and(eq(franchisee.placementParentId, referrerId), isNull(franchisee.deletedAt))
     );
 
   return {
