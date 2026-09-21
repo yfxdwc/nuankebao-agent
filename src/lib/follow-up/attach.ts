@@ -10,11 +10,12 @@
 //   紧急度排序需要在"全部命中客户"上排序, 再切片分页 —— 当前实现是**内存排序**
 //   (上限 SAFETY_LIMIT 条)。客户量到万级时改为 SQL CASE 表达式 + 索引排序 (常量已抽在 urgency.ts)。
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { followUpTask } from "@/lib/db/schema";
 import { solarBirthdayWindow } from "@/lib/follow-up/birthday";
+import type { RepurchaseWindow } from "@/lib/follow-up/repurchase";
 import {
   computeUrgency,
   pickFollowUpTags,
@@ -48,6 +49,8 @@ export interface FollowUpBlock {
   nextDueAt: string | null;
   /** 标签 (免费档只有非会员标签) */
   tags: FollowUpTag[];
+  /** 复购窗口 (仅会员; 免费档为 null) */
+  repurchase: RepurchaseInfo | null;
   /** 以下仅会员 (非会员为 null → 不下发分数, 避免"半开"体验) */
   urgency: number | null;
   level: UrgencyResult["level"] | null;
@@ -55,11 +58,23 @@ export interface FollowUpBlock {
   reason: string | null;
 }
 
+export interface RepurchaseInfo {
+  /** 预计复购日 (窗口已开才非 null) */
+  windowOpenedAt: string | null;
+  /** 预计复购日 (不管到没到) */
+  expectedAt: string | null;
+  /** 历史平均到店间隔 (天) */
+  avgIntervalDays: number | null;
+  confidence: "high" | "medium" | "low";
+}
+
 export interface AttachOptions {
   isMember: boolean;
   now?: Date;
   /** 上一次互动类型 (电话/微信…), 由调用方按需补; 缺省 null */
   lastInteractionTypes?: Map<string, string>;
+  /** 复购窗口 (仅会员; 由 route 层 batchRepurchaseWindows 算好传进来) */
+  repurchaseWindows?: Map<string, RepurchaseWindow>;
 }
 
 /** 批量取「待办跟进任务」→ Map<customerId, dueAt[]> */
@@ -84,6 +99,28 @@ async function loadOpenTasks(customerIds: bigint[]): Promise<Map<string, Date[]>
   return out;
 }
 
+/** 批量取「最近一次互动类型」→ Map<customerId, type> (第二行文案「· 上次电话」用) */
+async function loadLastInteractionTypes(
+  customerIds: bigint[]
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (customerIds.length === 0) return out;
+  const rows = await db.execute<{ customer_id: string; type: string }>(sql`
+    SELECT customer_id, type
+    FROM (
+      SELECT customer_id, type,
+             ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at DESC) AS rn
+      FROM interaction
+      WHERE customer_id IN ${sql.raw(
+        `(${customerIds.map((id) => id.toString()).join(",")})`
+      )}
+    ) t
+    WHERE rn = 1
+  `);
+  for (const r of rows) out.set(String(r.customer_id), String(r.type));
+  return out;
+}
+
 /**
  * 给客户列表挂上 `followUp` 块 (原地返回新数组, 不 mutate 入参)
  * 入参 items 需要带 id / createdAt / customerType / lastInteraction* / lastVisit* / 生日字段
@@ -95,6 +132,9 @@ export async function attachFollowUp<T extends FollowUpUpdatable>(
   const now = opts.now ?? new Date();
   const ids = items.map((i) => BigInt(i.id));
   const tasks = await loadOpenTasks(ids);
+  // 调用方没传就自己查 (第二行「· 上次电话」需要; 不传则这个字段永远是 null)
+  const types =
+    opts.lastInteractionTypes ?? (await loadLastInteractionTypes(ids));
 
   return items.map((item) => {
     const dueAts = tasks.get(item.id) ?? [];
@@ -107,6 +147,8 @@ export async function attachFollowUp<T extends FollowUpUpdatable>(
     );
     // 生日提醒是会员功能 (ADR-0012): 非会员不参与紧急度/标签
     const birthdayForCalc = opts.isMember ? birthday : null;
+    // 复购窗口同理: 非会员不传 Map → 这里恒 null (天然不参与)
+    const rp = opts.isMember ? opts.repurchaseWindows?.get(item.id) ?? null : null;
 
     const result = computeUrgency({
       customerType: item.customerType,
@@ -115,14 +157,13 @@ export async function attachFollowUp<T extends FollowUpUpdatable>(
       lastVisitAt: item.lastVisitAt ?? null,
       openTaskDueAts: dueAts,
       birthday: birthdayForCalc,
-      // 复购窗口 (会员, P2 接 predictions); 先恒 null
-      repurchase: null,
+      repurchase: rp,
       now,
     });
 
     const allTags = pickFollowUpTags(result, {
       birthday: birthdayForCalc,
-      repurchase: null,
+      repurchase: rp,
     });
     const tags = opts.isMember ? allTags : allTags.filter((t) => !t.memberOnly);
 
@@ -132,12 +173,21 @@ export async function attachFollowUp<T extends FollowUpUpdatable>(
       lastContactAt: item.lastInteractionAt
         ? item.lastInteractionAt.toISOString()
         : null,
-      lastContactType: opts.lastInteractionTypes?.get(item.id) ?? null,
+      lastContactType: types.get(item.id) ?? null,
       daysSinceVisit: result.daysSinceVisit,
       lastVisitAt: item.lastVisitAt ? item.lastVisitAt.toISOString() : null,
       openTaskCount: dueAts.length,
       nextDueAt: sortedDue[0]?.toISOString() ?? null,
       tags,
+      repurchase:
+        rp == null
+          ? null
+          : {
+              windowOpenedAt: rp.windowOpenedAt?.toISOString() ?? null,
+              expectedAt: rp.expectedAt?.toISOString() ?? null,
+              avgIntervalDays: rp.avgIntervalDays,
+              confidence: rp.confidence,
+            },
       // 会员才下发分数/级别/理由 (非会员前端不显示紧急度, 但没有"半开"数据)
       urgency: opts.isMember ? result.score : null,
       level: opts.isMember ? result.level : null,

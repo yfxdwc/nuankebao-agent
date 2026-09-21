@@ -55,12 +55,22 @@ enum AppFontSize {
 class AppSettings {
   final AppFontSize fontSize;
 
-  const AppSettings({this.fontSize = AppFontSize.standard});
+  /// 每日跟进提醒 (本地通知; 主人 2026-09-20 拍 Q6)
+  ///   存本机而不是账号: 跟通知权限一样是"这台手机"的事 (换手机要重新授权)
+  final bool followUpReminder;
+
+  const AppSettings({
+    this.fontSize = AppFontSize.standard,
+    this.followUpReminder = false,
+  });
 
   double get fontScale => fontSize.scale;
 
-  AppSettings copyWith({AppFontSize? fontSize}) =>
-      AppSettings(fontSize: fontSize ?? this.fontSize);
+  AppSettings copyWith({AppFontSize? fontSize, bool? followUpReminder}) =>
+      AppSettings(
+        fontSize: fontSize ?? this.fontSize,
+        followUpReminder: followUpReminder ?? this.followUpReminder,
+      );
 }
 
 /// shared_preferences 实例 (main() 里 override)
@@ -76,6 +86,7 @@ final sharedPreferencesProvider = Provider<SharedPreferences>(
 );
 
 const _kFontSizeKey = 'settings.font_size';
+const _kFollowUpReminderKey = 'settings.follow_up_reminder';
 
 class SettingsNotifier extends Notifier<AppSettings> {
   @override
@@ -83,7 +94,17 @@ class SettingsNotifier extends Notifier<AppSettings> {
     final prefs = ref.watch(sharedPreferencesProvider);
     return AppSettings(
       fontSize: AppFontSize.fromName(prefs.getString(_kFontSizeKey)),
+      followUpReminder: prefs.getBool(_kFollowUpReminderKey) ?? false,
     );
+  }
+
+  /// 跟进提醒开关 (只写本机偏好; 真正的排程/权限在 profile_page 的开关里做)
+  Future<void> setFollowUpReminder(bool enabled) async {
+    if (state.followUpReminder == enabled) return;
+    state = state.copyWith(followUpReminder: enabled);
+    await ref
+        .read(sharedPreferencesProvider)
+        .setBool(_kFollowUpReminderKey, enabled);
   }
 
   Future<void> setFontSize(AppFontSize size) async {

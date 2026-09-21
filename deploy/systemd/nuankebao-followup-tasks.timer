@@ -1,0 +1,12 @@
+[Unit]
+Description=暖客宝 每日跟进任务生成 (07:00; 用户 08:30 提醒前就绪)
+
+[Timer]
+# 07:00 跑 —— 比本地提醒 (08:30) 早, 用户起床看到的就是最新待办
+OnCalendar=*-*-* 07:00:00
+Persistent=true
+AccuracySec=1min
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=暖客宝 每日跟进任务生成 (≥P1 且 7 天去重, 幂等)
+Documentation=file:///__PROJECT_DIR__/docs/follow-up-list-plan.md
+# 错开备份/快照 (凌晨那批), 而且必须**早于**用户早上打开 App 的时间:
+#   提醒条/待办页读的是 follow_up_task, 任务要先落库 (方案 §5 任务自动生成)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=%h/.config/nuankebao/paths.conf
+Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
+# run-with-log.sh: 同 backup.service (避免 StandardOutput 依赖不存在的目录)
+ExecStart=__PROJECT_DIR__/deploy/run-with-log.sh __DATABACKUPS_DIR__/logs/followup-tasks.log __PROJECT_DIR__/deploy/run-followup-tasks.sh
+SuccessExitStatus=0
+
+# 安全加固 (同 TD-010 A4 口径)
+NoNewPrivileges=yes
+PrivateTmp=yes

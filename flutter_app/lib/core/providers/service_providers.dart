@@ -5,12 +5,18 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../http/api_client.dart';
+import '../services/notifications/follow_up_reminder.dart';
 import '../services/api.dart';
 import '../models/customer.dart';
 import '../models/follow_up_info.dart';
 import '../models/dashboard.dart';
 import '../models/follow_up.dart';
 import '../models/me.dart';
+
+/// 跟进提醒 (本地通知; web = 空实现, 见 follow_up_reminder.dart 平台差异说明)
+final followUpReminderProvider = Provider<FollowUpReminder>(
+  (ref) => createFollowUpReminder(),
+);
 
 /// 全局 ApiClient 单例
 final apiClientProvider = Provider<ApiClient>((ref) {

@@ -2,6 +2,51 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Added (客户跟进引擎 P1 收尾 + P2 全部完成, 2026-09-21)
+
+> 方案: [docs/follow-up-list-plan.md](docs/follow-up-list-plan.md) (主人 2026-09-20 拍 8 项)
+> 本次把 **P1 剩余项 + P2 全部** 做完 → 主人原始需求 (客户列表集成跟进分析/推荐/提醒;
+> 名字右侧推荐标签; 排序以跟进紧急度为第一规则) 三段全部闭环。
+
+- **复购窗口接线 (P2, 会员)**: `src/lib/follow-up/repurchase.ts` 重构为**纯函数**
+  (`computeRepurchaseWindow`, 单测 9 条) + 一次 SQL 批量取到店日期 (`batchRepurchaseWindows`)。
+  route 层只给会员算 → `followUp.repurchase` + 名字右侧 `🔁复购窗口` 标签生效
+  (实测客户 #1: 平均 4 天到店 → 窗口已开, `reason` 带上「复购窗口已开 N 天」)
+- **客户详情「跟进分析」卡 (P1, 免费)**: 新端点 `GET /api/customers/[id]/follow-up-analysis`
+  + 纯函数 `src/lib/follow-up/analysis.ts` (单测 16 条) + Flutter 卡
+  (`modules/follow_up/widgets/follow_up_analysis_card.dart`, 放在 AI 区之前)。
+  指标: 近 30/90 天联系次数 · 平均联系间隔 (中位数) · 趋势 (变热/变冷/稳定) ·
+  到店规律 · 复购间隔中位数 · 未完成跟进任务 (逾期天数) + 一句话 headline
+- **每日提醒 systemd timer**: `nuankebao-followup-tasks.{service,timer}` (每日 07:00,
+  比用户 08:30 提醒早) + `deploy/run-followup-tasks.sh` 薄包装 (显式 source .env.local)。
+  已装到本机 (next run 07:02:45 UTC); `install-systemd.sh` 纳入 (13 个 unit)
+- **本地通知 (P2 免费)**: `flutter_local_notifications` + `flutter_timezone` + `timezone`;
+  每日 08:30 一条「今天有 N 位客户要跟进」→ 点击直达 `/follow-ups`。
+  「我的」→ 新增「提醒」卡开关 (权限被拒 → 开关不打开, 不假装成功)。
+  **web 预览站不受影响**: web 走条件 import 空实现 (`follow_up_reminder_stub.dart`),
+  因为 flutter_local_notifications 依赖 dart:io, 会炸 web build
+- **`followUp.lastContactType` 修复**: 之前 route 没传 `lastInteractionTypes` → 该字段
+  永远是 null, 客户行第二行「· 上次电话」是**死代码**。改为 attach 层自己批量查
+  (`loadLastInteractionTypes`, 一次 SQL window function)
+
+### Fixed (scripts/*.ts 环境变量加载失效 — 14 个脚本, 2026-09-21)
+
+- **现象**: `npx tsx scripts/<任意>.ts` → `Error: DATABASE_URL is not set`, 14 个脚本全中
+  (含本功能要用的 `refresh-follow-up-tasks.ts`) —— 之前"实测通过"其实是在手工 export 了
+  env 的 shell 里跑的
+- **根因**: `import { config } from "dotenv"; loadEnv(); import { db } from "@/lib/db";`
+  这个写法在 ESM 下**无效** —— import 声明会被提升到模块顶部, `@/lib/db` 先求值
+- **修法**: 新增 `scripts/_env.ts` (只做 dotenv 副作用), 把它放成脚本的**第一个 import**
+  (ESM 按源码顺序深度优先求值 → 一定先于读 env 的模块)。本次先修
+  `refresh-follow-up-tasks.ts`; 其余 13 个脚本同样的 1 行改法待主人拍 (改动机械但面广)
+
+### Docs
+
+- `docs/api.md`: `GET /api/customers` 补全 `type`/`sort` 参数 + `followUp` 块 + `summary`/`urgencyLocked`
+  契约; 新增 `GET /api/customers/[id]/follow-up-analysis`
+- `docs/follow-up-list-plan.md`: 状态 → P0/P1/P2 全部落地 (P3 列待拍项)
+
+
 ### Added (Flutter Web 预览自动重建守护, 2026-09-20)
 
 - 背景: 主人要「真正的实时最新预览地址」。`/app-preview` 吃静态 `public/app`, 不自动跟随源码;

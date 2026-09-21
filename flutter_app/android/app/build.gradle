@@ -15,7 +15,13 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "cn.nuankebao.app"
-    compileSdk = flutter.compileSdkVersion
+    // 固定 35 (不是 flutter.compileSdkVersion = 34):
+    //   flutter_local_notifications / flutter_timezone / flutter_plugin_android_lifecycle
+    //   在 Android SDK 35 上编译 → Flutter 3.24.5 的默认 compileSdk(34) 会一直告警
+    //   跟随插件升到 35 (compileSdk 向后兼容, 不影响 minSdk 行为)
+    //   targetSdk 仍跟 Flutter 默认 (= 不改运行时行为: Android 15 的 edge-to-edge 强制对
+    //   中老年为主的用户群是纯风险, 要单独评估再升)
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

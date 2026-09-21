@@ -233,3 +233,83 @@ class CustomerListResult {
     );
   }
 }
+
+/// 客户跟进分析 (详情页「跟进分析」卡; 方案 §7.1)
+///   后端 GET /api/customers/:id/follow-up-analysis
+///   客观指标**免费**; AI 解读是会员 (走既有 POST /api/ai/follow-up → `aiTipAvailable`)
+class FollowUpAnalysis {
+  /// 近 30 天联系次数 (今天起往前 30 个日历天)
+  final int contactLast30;
+  /// 近 90 天联系次数
+  final int contactLast90;
+  final int contactTotal;
+  /// 平均联系间隔 (中位数, 天); null = 联系少于 2 次
+  final int? avgContactIntervalDays;
+  final int? daysSinceLastContact;
+
+  /// warmer (变热) / colder (变冷) / steady (稳定) / unknown (还看不出)
+  final String trend;
+  final String trendText;
+
+  final int visitCount;
+  final int? avgVisitIntervalDays;
+  final DateTime? lastVisitAt;
+  final int? daysSinceLastVisit;
+  final int? medianRepurchaseIntervalDays;
+
+  final int pendingTasks;
+  final int overdueTasks;
+  final int? oldestOverdueDays;
+
+  /// 一句话总结 (免费层, 服务端纯规则拼的)
+  final String headline;
+  /// 有没有资格看 AI 解读 (会员)
+  final bool aiTipAvailable;
+
+  const FollowUpAnalysis({
+    this.contactLast30 = 0,
+    this.contactLast90 = 0,
+    this.contactTotal = 0,
+    this.avgContactIntervalDays,
+    this.daysSinceLastContact,
+    this.trend = 'unknown',
+    this.trendText = '',
+    this.visitCount = 0,
+    this.avgVisitIntervalDays,
+    this.lastVisitAt,
+    this.daysSinceLastVisit,
+    this.medianRepurchaseIntervalDays,
+    this.pendingTasks = 0,
+    this.overdueTasks = 0,
+    this.oldestOverdueDays,
+    this.headline = '',
+    this.aiTipAvailable = false,
+  });
+
+  factory FollowUpAnalysis.fromJson(Map<String, dynamic> json) {
+    return FollowUpAnalysis(
+      contactLast30: (json['contactLast30'] as num?)?.toInt() ?? 0,
+      contactLast90: (json['contactLast90'] as num?)?.toInt() ?? 0,
+      contactTotal: (json['contactTotal'] as num?)?.toInt() ?? 0,
+      avgContactIntervalDays: (json['avgContactIntervalDays'] as num?)?.toInt(),
+      daysSinceLastContact: (json['daysSinceLastContact'] as num?)?.toInt(),
+      trend: (json['trend'] as String?) ?? 'unknown',
+      trendText: (json['trendText'] as String?) ?? '',
+      visitCount: (json['visitCount'] as num?)?.toInt() ?? 0,
+      avgVisitIntervalDays: (json['avgVisitIntervalDays'] as num?)?.toInt(),
+      lastVisitAt: _parseDate(json['lastVisitAt']),
+      daysSinceLastVisit: (json['daysSinceLastVisit'] as num?)?.toInt(),
+      medianRepurchaseIntervalDays:
+          (json['medianRepurchaseIntervalDays'] as num?)?.toInt(),
+      pendingTasks: (json['pendingTasks'] as num?)?.toInt() ?? 0,
+      overdueTasks: (json['overdueTasks'] as num?)?.toInt() ?? 0,
+      oldestOverdueDays: (json['oldestOverdueDays'] as num?)?.toInt(),
+      headline: (json['headline'] as String?) ?? '',
+      aiTipAvailable: json['aiTipAvailable'] == true,
+    );
+  }
+
+  /// 趋势是好是坏 (给颜色用): 变热=好, 变冷=警示
+  bool get isColder => trend == 'colder';
+  bool get isWarmer => trend == 'warmer';
+}

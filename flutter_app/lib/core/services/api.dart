@@ -195,6 +195,13 @@ class CustomerService {
     return CustomerListResult.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// 客户跟进分析 (详情页「跟进分析」卡; 客观指标免费, aiTipAvailable = 会员能否看 AI 解读)
+  Future<FollowUpAnalysis> followUpAnalysis(String customerId) async {
+    final res =
+        await _dio.get('/customers/$customerId/follow-up-analysis');
+    return FollowUpAnalysis.fromJson(res.data as Map<String, dynamic>);
+  }
+
   /// 客户类型计数 (胶囊上的数量, 主人 2026-09-18 拍)
   /// GET /api/customers/stats → { all, franchisee, seed, normal }
   /// 口径与 list() 一致 (同名 search); 三类互斥穷尽 → 相加 == all

@@ -18,8 +18,8 @@
 // 定时: deploy/ 里可挂 systemd timer (每日 07:00), 与备份 timer 同一套机制
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+// ⚠ 必须是第一个 import: dotenv 的副作用要先于读 DATABASE_URL 的模块求值 (见 scripts/_env.ts)
+import "./_env";
 
 import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";

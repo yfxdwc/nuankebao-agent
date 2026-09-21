@@ -16,6 +16,7 @@ import {
   sortByUrgency,
   summarizeFollowUp,
 } from "@/lib/follow-up/attach";
+import { batchRepurchaseWindows } from "@/lib/follow-up/repurchase";
 
 const CreateCustomerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -114,10 +115,18 @@ export async function GET(request: NextRequest) {
     offset: needAll ? 0 : offset,
   });
 
-  // 2) 挂 followUp 块 (标签/天数; 分数仅会员)
-  let items = await attachFollowUp(result.items, { isMember: urgencySortOn });
+  // 2) 会员: 批量算复购窗口 (一次 SQL; 非会员不传 → 天然不参与, 不浪费查询)
+  const repurchaseWindows = urgencySortOn
+    ? await batchRepurchaseWindows(result.items.map((i) => BigInt(i.id)))
+    : undefined;
 
-  // 3) 会员: 按紧急度排序 + 内存分页; 非会员: 已由 SQL 排好
+  // 3) 挂 followUp 块 (标签/天数/复购; 分数与复购仅会员)
+  let items = await attachFollowUp(result.items, {
+    isMember: urgencySortOn,
+    repurchaseWindows,
+  });
+
+  // 4) 会员: 按紧急度排序 + 内存分页; 非会员: 已由 SQL 排好
   let total = result.total;
   let sortedAll: typeof items | null = null;
   if (effectiveSort === "urgency") {

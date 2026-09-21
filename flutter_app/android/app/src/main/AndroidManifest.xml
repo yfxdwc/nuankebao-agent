@@ -2,6 +2,13 @@
     <!-- ⚠️ 必须加: flutter 模板只在 debug/profile manifest 声明 INTERNET,
          release 包不声明就没网络权限, 所有请求直接 SocketException (W14 踩坑) -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 每日跟进提醒 (flutter_local_notifications, 主人 2026-09-20 拍 Q6):
+         POST_NOTIFICATIONS = Android 13+ 运行时通知权限 (App 里开开关时才要)
+         RECEIVE_BOOT_COMPLETED = 重启后重新排上"每天 08:30" (不装的话关机一次就再也不提醒)
+         ⚠ 故意**不加** SCHEDULE_EXACT_ALARM: 排程用 inexactAllowWhileIdle (见
+            follow_up_reminder_io.dart), 不给用户多要一道"精确闹钟"授权 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
         android:label="暖客宝"
         android:name="${applicationName}"
@@ -28,6 +35,21 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- 每日跟进提醒: 到点投递 + 开机后重排 (flutter_local_notifications 要求声明) -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false"/>
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

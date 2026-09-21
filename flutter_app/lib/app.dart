@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/http/api_client.dart';
+import 'core/providers/service_providers.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -35,6 +36,10 @@ class NuankeBaoApp extends ConsumerWidget {
         ),
       );
     };
+
+    // 点跟进提醒 → 待办页 (§5 L3: 通知直达 L2)
+    //   跟上面 402 提示一个套路: 回调只覆盖不叠加, 不依赖某个页面 context
+    ref.read(followUpReminderProvider).onTap = () => router.go('/follow-ups');
 
     return MaterialApp.router(
       title: '暖客宝',

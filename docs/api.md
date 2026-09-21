@@ -76,14 +76,21 @@ callbackUrl: string
 ## 3. 客户
 
 ### `GET /api/customers`
-客户列表 (分页 + 搜索)。
+客户列表 (分页 + 搜索 + 跟进紧急度排序)。
 
 **Query**:
 - `search` (可选): 按姓名/手机号搜索
-- `limit` (默认 20)
-- `offset` (默认 0)
+- `type` (可选): `all` / `franchisee` / `seed` / `normal` (非法值 → 400)
+- `sort` (默认 `urgency`): `urgency` 跟进紧急度 / `recent` 最近联系 / `new` 最近添加 / `name` 姓名
+  (非法值 → 400, 不静默降级)
+- `limit` (默认 20) · `offset` (默认 0)
 
-**响应**:
+> **跟进紧急度** (主人 2026-09-20 拍: 第一排序规则) 是**会员功能** (`ai.repurchase`):
+> 非会员请求 `urgency` → 后端自动降级为 `new` 并在响应里 `urgencyLocked: true`。
+> 排序口径只在服务端算一处 (`src/lib/follow-up/urgency.ts`, 纯函数 + 单测), 客户端不自己算分。
+> 详见 `docs/follow-up-list-plan.md` §3 / §6。
+
+**响应** (每项多一个 `followUp` 块):
 ```json
 {
   "items": [
@@ -97,12 +104,60 @@ callbackUrl: string
       "diseaseHistory": null,
       "notes": null,
       "createdAt": "2026-09-03T...",
-      "updatedAt": "2026-09-03T..."
+      "updatedAt": "2026-09-03T...",
+      "followUp": {
+        "daysSinceContact": 21,          // null = 从没联系过
+        "lastContactAt": "2026-08-29T...",
+        "lastContactType": "phone",      // 电话/微信/到店/节日问候
+        "daysSinceVisit": 5,
+        "lastVisitAt": "2026-09-14T...",
+        "openTaskCount": 1,
+        "nextDueAt": "2026-09-16T...",
+        "tags": [                        // 名字右侧标签, **最多 2 个** (1 动作 + 1 日历)
+          { "key": "overdue", "emoji": "🔥", "label": "该回访了",
+            "color": "danger", "hint": "跟进任务逾期 3 天", "memberOnly": false }
+        ],
+        "repurchase": null,              // 会员才有: { windowOpenedAt, expectedAt, avgIntervalDays, confidence }
+        "urgency": 87,                   // ↓ 以下 4 个键**仅会员** (非会员为 null)
+        "level": "p0",                   // p0 今天必须联系 → p4 休眠池
+        "levelLabel": "今天必须联系",
+        "reason": "已 21 天没联系 · 跟进任务逾期 3 天"
+      }
     }
   ],
-  "total": 1
+  "total": 1,
+  "sort": "urgency",                     // 实际生效的排序
+  "sortRequested": "urgency",
+  "urgencyLocked": false,                // true = 你请求了紧急度但没会员 → 已降级
+  "summary": { "dueToday": 3, "overdue": 1, "thisWeek": 5, "hibernating": 12, "total": 55 }
 }
 ```
+
+> `summary` 与 `repurchase` **仅会员**下发 (非会员响应里没有这两个键)。
+> 兼容: 老客户端不传 `sort` → 仍是紧急度排序 (新默认); 要旧行为显式传 `sort=new`。
+
+### `GET /api/customers/[id]/follow-up-analysis`
+客户详情页「跟进分析」卡的客观指标 (方案 §7.1)。**全部免费** (方案 §11)。
+
+**响应**:
+```json
+{
+  "contactLast30": 3, "contactLast90": 7, "contactTotal": 11,
+  "avgContactIntervalDays": 12,        // 中位数 (抗异常值); null = 联系少于 2 次
+  "daysSinceLastContact": 21,
+  "trend": "colder",                   // warmer / colder / steady / unknown
+  "trendText": "在变冷 (12 → 30 天)",
+  "visitCount": 5, "avgVisitIntervalDays": 14,
+  "lastVisitAt": "2026-09-14T...", "daysSinceLastVisit": 5,
+  "medianRepurchaseIntervalDays": 14,
+  "pendingTasks": 1, "overdueTasks": 1, "oldestOverdueDays": 3,
+  "headline": "已 21 天没联系 · 平均 12 天联系一次 · 1 条跟进任务逾期 3 天",
+  "aiTipAvailable": true                // 会员 → 前端可引导去看 AI 解读
+}
+```
+
+> AI 解读**不在本端点生成** (会长耗时 + 烧额度): 走既有 `POST /api/ai/follow-up`
+> (feature key `ai.follow_up`, 非会员 402)。本端点只回 `aiTipAvailable`。
 
 ### `GET /api/customers/[id]`
 客户详情。

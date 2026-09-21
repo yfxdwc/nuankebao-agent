@@ -23,6 +23,7 @@ import '../../../core/widgets/big_fab.dart';
 import '../widgets/ai_insight_cards.dart';
 import '../widgets/customer_activity_cards.dart';
 import '../widgets/customer_row.dart';
+import '../../follow_up/widgets/follow_up_analysis_card.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/franchise_chip.dart';
 import '../../../core/utils/birthday.dart';
@@ -1601,6 +1602,10 @@ class CustomerDetailPage extends ConsumerWidget {
 
         // 2) 被动养生记录 (含汇总: 共 N 次 / 最近到店)
         _buildWellnessSection(context, asyncRecords),
+        const SizedBox(height: 12),
+
+        // 2.5) 跟进分析 (客观指标; 主人 2026-09-20 拍 P1 §7.1) —— 先事实, 再 AI 解读
+        FollowUpAnalysisCard(customerId: customerId),
         const SizedBox(height: 12),
 
         // 3) AI 智能区 (主人 2026-09-18 拍: 复购预测 / 客户画像 / 跟进建议 / 效果分析)

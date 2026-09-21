@@ -41,6 +41,32 @@ void main() {
     expect(container.read(settingsProvider).fontScale, lessThan(1.0));
   });
 
+  test('跟进提醒: 默认关闭 (不打扰, 要用户主动开)', () async {
+    final container = await _containerWith({});
+    expect(container.read(settingsProvider).followUpReminder, isFalse);
+  });
+
+  test('跟进提醒: 开了 → 立即生效 + 落盘 (重开 App 还开着)', () async {
+    final container = await _containerWith({});
+    await container.read(settingsProvider.notifier).setFollowUpReminder(true);
+    expect(container.read(settingsProvider).followUpReminder, isTrue);
+
+    final prefs = await SharedPreferences.getInstance();
+    final reopened = ProviderContainer(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+    );
+    addTearDown(reopened.dispose);
+    expect(reopened.read(settingsProvider).followUpReminder, isTrue);
+
+    // 关掉也要落盘 (否则用户关了, 下次启动又自己开)
+    await reopened.read(settingsProvider.notifier).setFollowUpReminder(false);
+    final again = ProviderContainer(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+    );
+    addTearDown(again.dispose);
+    expect(again.read(settingsProvider).followUpReminder, isFalse);
+  });
+
   test('切换字号立即生效 + 落盘', () async {
     final container = await _containerWith({});
     await container

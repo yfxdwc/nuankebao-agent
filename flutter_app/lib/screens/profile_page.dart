@@ -125,6 +125,8 @@ class _ProfileBody extends ConsumerWidget {
         _StatsCard(profile: profile),
         profileSectionGap,
         const _DisplaySettingsCard(),
+
+        const _ReminderCard(),
         profileSectionGap,
         _AccountCard(profile: profile),
         profileSectionGap,
@@ -683,6 +685,105 @@ class _DisplaySettingsCardState extends ConsumerState<_DisplaySettingsCard> {
                     if (mounted) setState(() => _clearing = false);
                   }
                 },
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================
+// 4.5 提醒 (每日跟进本地通知; 主人 2026-09-20 拍 Q6)
+// ============================================
+// 开关语义: 开了就真排程, 关了真取消 —— 不做"假开关" (见本文件头部 §6 原则)
+//   开: 先要系统权限 (被拒 → 开关弹回 + 提示去系统设置, 不假装成功)
+//   数字: 用当前待办数 (pendingFollowUpsProvider, 免费档也有) —— 通知正文跟待办页一致
+//   保活: 待办数变了就重排 (见下面 ref.listen); 不常开 App 时数字会偏旧, 见 follow_up_reminder.dart
+
+class _ReminderCard extends ConsumerStatefulWidget {
+  const _ReminderCard();
+
+  @override
+  ConsumerState<_ReminderCard> createState() => _ReminderCardState();
+}
+
+class _ReminderCardState extends ConsumerState<_ReminderCard> {
+  bool _busy = false;
+
+  int get _dueCount => ref.read(pendingFollowUpsProvider).valueOrNull?.length ?? 0;
+
+  Future<void> _toggle(bool enabled) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final settings = ref.read(settingsProvider.notifier);
+    final reminder = ref.read(followUpReminderProvider);
+    try {
+      if (enabled) {
+        final granted = await reminder.requestPermission();
+        if (!granted) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('没有通知权限, 请在手机「设置 → 应用 → 暖客宝 → 通知」里打开',
+                  style: TextStyle(fontSize: AppTheme.fontMd)),
+              duration: Duration(seconds: 6),
+            ),
+          );
+          return; // 权限没给 → 开关保持关闭 (不假装打开)
+        }
+        await reminder.scheduleDaily(dueCount: _dueCount);
+      } else {
+        await reminder.cancel();
+      }
+      await settings.setFollowUpReminder(enabled);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('设置失败: $e',
+              style: const TextStyle(fontSize: AppTheme.fontMd)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final on = ref.watch(settingsProvider).followUpReminder;
+
+    // 待办数变了 (比如刚完成一条) → 重排, 让通知正文跟上
+    ref.listen(pendingFollowUpsProvider, (prev, next) {
+      final n = next.valueOrNull?.length;
+      if (n == null || !ref.read(settingsProvider).followUpReminder) return;
+      ref.read(followUpReminderProvider).scheduleDaily(dueCount: n);
+    });
+
+    return ProfileSection(
+      title: '提醒',
+      icon: Icons.notifications_active_outlined,
+      hint: '本机设置',
+      children: [
+        SwitchListTile(
+          value: on,
+          onChanged: _busy ? null : _toggle,
+          contentPadding: EdgeInsets.zero,
+          secondary: Icon(
+            on ? Icons.notifications_active : Icons.notifications_off_outlined,
+            color: on ? AppTheme.primary : AppTheme.textSecondary,
+          ),
+          title: const Text(
+            '每天 08:30 提醒跟进',
+            style: TextStyle(
+                fontSize: AppTheme.fontMd, fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            on
+                ? '到点提醒「今天要跟进谁」, 点开直达待办页'
+                : '打开后每天早上提醒一次, 不漏跟进',
+            style: const TextStyle(
+                fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+          ),
         ),
       ],
     );
