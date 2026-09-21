@@ -54,6 +54,17 @@ const List<_Option> _staffContactVisOptions = <_Option>[
   _Option('staff', '仅会务'),
 ];
 
+/// 常用会务角色 (快速预设); 不在列表里仍可手动输入自定义角色
+const List<String> kCommonStaffRoles = <String>[
+  '主持',
+  '讲师',
+  '摄影',
+  '后勤',
+  '礼仪',
+  '茶艺师',
+  '销售助理',
+];
+
 class _Option {
   final String value;
   final String label;
@@ -753,11 +764,34 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
             decoration: const InputDecoration(labelText: '手机号'),
           ),
           const SizedBox(height: 8),
+          // 常用角色快速预设 (点击填充到下方输入框, 仍可继续手动改)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: kCommonStaffRoles.map((r) {
+              return ActionChip(
+                label: Text(
+                  r,
+                  style: const TextStyle(fontSize: AppTheme.fontSm),
+                ),
+                onPressed: _saving
+                    ? null
+                    : () {
+                        row.staffRole.text = r;
+                        setState(() {});
+                      },
+                backgroundColor: AppTheme.bgWarm,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: row.staffRole,
             style: const TextStyle(fontSize: AppTheme.fontMd),
             decoration: const InputDecoration(
-                labelText: '角色', hintText: '如: 主持 / 讲师 / 摄影'),
+              labelText: '角色',
+              hintText: '点击上方预设或手动输入, 如: 副主持',
+            ),
           ),
         ],
       ),
@@ -826,11 +860,12 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                 const InputDecoration(labelText: '时间', hintText: '如: 14:00'),
           ),
           const SizedBox(height: 8),
+          _label('标题', required: true),
           TextField(
             controller: row.title,
             style: const TextStyle(fontSize: AppTheme.fontMd),
             decoration:
-                const InputDecoration(labelText: '标题', hintText: '如: 养生知识分享'),
+                const InputDecoration(hintText: '如: 养生知识分享'),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -1096,6 +1131,18 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
       _snack('结束时间不能早于开始时间');
       setState(() => _step = 1);
       return false;
+    }
+    // 会议日程: 填了任意字段的行必须有标题; 全空行视为无数据跳过
+    for (int i = 0; i < _agenda.length; i++) {
+      final a = _agenda[i];
+      final hasAny = a.start.text.trim().isNotEmpty ||
+          a.title.text.trim().isNotEmpty ||
+          a.desc.text.trim().isNotEmpty;
+      if (hasAny && a.title.text.trim().isEmpty) {
+        _snack('请填写第 ${i + 1} 条日程的标题');
+        setState(() => _step = 3);
+        return false;
+      }
     }
     if (!_isEdit) {
       for (final row in _staff) {
