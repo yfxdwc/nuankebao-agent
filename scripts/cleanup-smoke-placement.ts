@@ -7,8 +7,8 @@
 // 保留: 测试账号 (user) —— 主人/我下次还想演练三方确认时直接复用
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
 
 import { eq, inArray, or } from "drizzle-orm";
 import { db } from "@/lib/db";

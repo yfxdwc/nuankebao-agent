@@ -326,6 +326,7 @@ export async function createRootForUser(
         phoneEncrypted: target.phoneEncrypted,
         phoneHash: target.phoneHash,
         referrerId: null,
+        placementParentId: null, // 根 = 顶层, 没有点位父 (拆栏后由本列表达, 见 migration 0019)
         placementSide: null,
         placementPath: "",
         placementDepth: 0,

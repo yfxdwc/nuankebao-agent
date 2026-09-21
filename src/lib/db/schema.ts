@@ -78,7 +78,19 @@ export const franchisee = pgTable(
     phoneHash: text("phone_hash").notNull(),
 
     // 二叉树结构
+    //
+    // ⚠ 两栏分工 (主人 2026-09-21 拍"拆"):
+    //   referrerId        = **推荐人** —— 谁把她拉进来的 (业务关系; 此后不再被点位改动改写)
+    //   placementParentId = **点位父** (她的"上层点位") —— 她挂在谁下面 (结构关系)
+    //   历史: 2026-09-21 之前这两件事共用 referrer_id 一栏 →
+    //     ① 管理员"协商处理改上层"会连带改写"谁推荐了她"
+    //     ② placeNewFranchisee 按 referrer_id 导航 → 「推荐人 ≠ 点位父」时会把已被占的位置
+    //        判成空位 → 生成两条相同 path 的节点 (潜在撞车)
+    //   拆法: migration 0019 加本列 + 回填; 此后**点位算法只认本列**, 推荐关系只认 referrer_id。
+    //   `placementPath` / `placementDepth` 仍是布局用的反规范化缓存 (本列 ≡ path 去尾段),
+    //   两者一致性由 scripts/audit-placement-integrity.ts 巡检。
     referrerId: bigint("referrer_id", { mode: "bigint" }),
+    placementParentId: bigint("placement_parent_id", { mode: "bigint" }),
     placementSide: text("placement_side", { enum: ["left", "right"] }),
     placementPath: text("placement_path").notNull().default(""),
     placementDepth: integer("placement_depth").notNull().default(0),
@@ -114,6 +126,9 @@ export const franchisee = pgTable(
       table.phoneHash
     ),
     referrerIdx: index("idx_franchisee_referrer").on(table.referrerId),
+    placementParentIdx: index("idx_franchisee_placement_parent").on(
+      table.placementParentId
+    ),
     referrerSideIdx: index("idx_franchisee_referrer_side").on(
       table.referrerId,
       table.placementSide

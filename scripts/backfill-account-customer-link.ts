@@ -14,8 +14,8 @@
 //   npx tsx scripts/backfill-account-customer-link.ts --dry-run  # 只看会改什么
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
 
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";

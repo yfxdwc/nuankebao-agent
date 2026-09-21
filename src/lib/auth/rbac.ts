@@ -97,7 +97,7 @@ export function customerRbacFilter(ctx: RbacContext) {
  *
  * 简化策略: sales 看到:
  *   - 自己 (id = my_franchisee_id)
- *   - 直接下线 (referrer_id = my_franchisee_id)
+ *   - 直接下线 (placement_parent_id = my_franchisee_id, 拆栏后点位父列)
  *   - 直接上线的下线 (depth=2, 需要递归 - 用 materialized path LIKE)
  */
 export async function franchiseeRbacFilter(ctx: RbacContext) {
@@ -117,7 +117,7 @@ export async function franchiseeRbacFilter(ctx: RbacContext) {
   }
 
   // 我 + 我的下线 (≤3 层) + 我的上线 (简化: 1 层)
-  // depth 1: referrer_id = myFid
+  // depth 1: placement_parent_id = myFid
   // depth 2: path LIKE 'myPath.%.%'
   // depth 3: path LIKE 'myPath.%.%.%'
   // 简化为: 我 + 我直接下线 + 我的上线的下线 (depth ≤ 3)
@@ -130,10 +130,12 @@ export async function franchiseeRbacFilter(ctx: RbacContext) {
   // 多根 (B1): 子树判定必须同树; 少了它, 根用户 (path='') 会看见所有树的节点
   const myRootId = my?.rootId ?? myFid;
 
+  // ⚠ 结构口径用 **点位父** (`placement_parent_id`, 拆栏见 schema.ts):
+  //   我的直接下线 = 挂在我下面的人; 我的上级 = 我挂在谁下面 —— 与"推荐人"是两件事
   const conditions = [
     eq(franchisee.id, myFid),                 // 我自己
-    eq(franchisee.referrerId, myFid),        // 我的直接下线
-    eq(franchisee.id, sql`(SELECT referrer_id FROM franchisee WHERE id = ${myFid})`), // 我的上级
+    eq(franchisee.placementParentId, myFid),  // 我的直接下线
+    eq(franchisee.id, sql`(SELECT placement_parent_id FROM franchisee WHERE id = ${myFid})`), // 我的上级
   ];
 
   // 我的上级的下线 (depth=2)

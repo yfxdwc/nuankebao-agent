@@ -8,8 +8,8 @@
 // 跑: npx tsx scripts/smoke-signup.ts   (幂等, 跑完自己清理)
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
 
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";

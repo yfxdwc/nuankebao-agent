@@ -22,6 +22,9 @@
 // 关联: CHANGELOG 2026-09-18「客户类型真过滤 (图谱同口径)」
 // ============================================
 
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
+
 import { db } from "@/lib/db";
 import { customer, franchisee } from "@/lib/db/schema";
 import { isNull, eq } from "drizzle-orm";

@@ -112,6 +112,12 @@ export interface PlaceResult {
  *   3. 计算 placement_path / placement_depth
  *   4. INSERT franchisee
  *   5. 绑账号 (user.franchisee_id) + 落客户档案 + 自检绑定成功
+ *
+ * ⚠ 两栏分工 (主人 2026-09-21 拍"拆", migration 0019):
+ *   input.referrerId      → `referrer_id`         = **推荐人** (谁把她拉进来的, 照原样记)
+ *   placement.parentId    → `placement_parent_id` = **点位父** (实际落到的那个位子)
+ *   两者可以不是同一个人: 推荐人那侧满了 → BFS 顺延到别人名下 (fallback)。
+ *   老实现把 referrer_id 写成实际父节点 → "推荐关系"被落位算法改写。
  */
 export async function createFranchisee(
   input: CreateFranchiseeInput,
@@ -139,6 +145,7 @@ export async function createFranchisee(
     let newPath: string;
     let newDepth: number;
     let newReferrerId: bigint | null;
+    let newPlacementParentId: bigint | null;
     let newSide: PlacementSide | null;
     let newRootId: bigint | null;
 
@@ -153,7 +160,9 @@ export async function createFranchisee(
         throw new Error(`Referrer not found: ${placement.parentId}`);
       }
 
-      newReferrerId = placement.parentId;
+      // 推荐人 = 调用方指定的那个人 (不被 fallback 改写); 点位父 = 实际落到的位子
+      newReferrerId = input.referrerId;
+      newPlacementParentId = placement.parentId;
       newSide = placement.side;
       newPath = parent.placementPath + (placement.side === "left" ? "L." : "R.");
       newDepth = parent.placementDepth + 1;
@@ -161,6 +170,7 @@ export async function createFranchisee(
       newRootId = parent.rootId ?? parent.id;
     } else {
       newReferrerId = null;
+      newPlacementParentId = null;
       newSide = null;
       newPath = "";
       newDepth = 0;
@@ -173,6 +183,7 @@ export async function createFranchisee(
       phoneEncrypted: encryptField(input.phone),
       phoneHash: hashForLookup(input.phone),
       referrerId: newReferrerId,
+      placementParentId: newPlacementParentId,
       placementSide: newSide,
       placementPath: newPath,
       placementDepth: newDepth,
@@ -276,8 +287,10 @@ export async function listFranchisees(
       return { items: [], total: 0 };
     }
   } else if (scope === "mine_downline" && currentFranchiseeId) {
-    conditions.push(eq(franchisee.referrerId, currentFranchiseeId));
+    // 我的下线 = 结构口径 (谁挂在我下面) → 点位父列 (拆栏后; 见 schema.ts 两栏分工)
+    conditions.push(eq(franchisee.placementParentId, currentFranchiseeId));
   } else if (referrerId) {
+    // 显式按**推荐人**过滤 (API 的 referrerId 参数) → 照旧读 referrer_id
     conditions.push(eq(franchisee.referrerId, referrerId));
   }
 
@@ -1009,7 +1022,8 @@ export async function countDirectDownline(franchiseeId: bigint): Promise<{
     })
     .from(franchisee)
     .where(
-      and(eq(franchisee.referrerId, franchiseeId), isNull(franchisee.deletedAt))
+      // 直接下线 = **结构**口径 (谁挂在她下面) → 点位父列; 不是 referrer_id (推荐人)
+      and(eq(franchisee.placementParentId, franchiseeId), isNull(franchisee.deletedAt))
     )
     .groupBy(franchisee.placementSide);
 

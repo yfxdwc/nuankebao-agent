@@ -33,9 +33,8 @@
 //     -e ADMIN_PHONE=19957347866 -e ADMIN_NAME=管理员 migrate pnpm db:ensure-admin
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
-loadEnv();
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
 
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";

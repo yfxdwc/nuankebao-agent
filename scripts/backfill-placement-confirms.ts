@@ -9,8 +9,8 @@
 // 幂等: 同一 result_fid 已补录过就跳过 (可重复跑)
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
 
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";

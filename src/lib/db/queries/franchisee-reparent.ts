@@ -24,15 +24,13 @@
 //                          只有后代保留相对后缀
 //   - placement_depth  : 整棵子树 + (新父层号+1 - 原层号)
 //   - root_id          : 整棵子树改宗到新父所在的树 (多根合并 —— 两棵树在这里接上)
-//   - referrer_id / placement_side (仅顶层节点): 指向新上层 + 新线别
+//   - placement_parent_id / placement_side (仅顶层节点): 指向新上层 + 新线别
 //   - notes_encrypted  : 追加一行「谁在什么时候把谁改到哪 + 原因」(与建根同口径的留痕)
 //
-// ⚠ 已知取舍 (记 backlog, 等主人拍):
-//   现 schema 里 `franchisee.referrer_id` **同时**承担「推荐人」和「点位父」两个角色
-//   (`placeNewFranchisee` 的槽位判定用它; Flutter 加盟商详情页把它显示成「推荐人」)。
-//   强改上层时只能一起改 —— 否则新上层那条线会出现"看着空、其实有人"的路径撞车。
-//   要「只改点位父、不动推荐人」必须把两列拆开 (`placement_parent_id`), 属 schema 变更。
-//   好消息: 原值仍在 audit_log.changed_fields 里 (可追溯, 不是丢掉)。
+// ⚠ **不动 referrer_id** (推荐人) —— 这正是主人 2026-09-21 拍"拆栏"的目的:
+//   改的是"她挂在谁下面"(结构), 不该改写"谁把她拉进来的"(业务关系)。
+//   拆栏前两者共用一栏, 强改上层只能一起改 → 会篡改推荐关系;
+//   现在 `placement_parent_id` 专门记点位父 (migration 0019), `referrer_id` 原地不动。
 // ============================================
 
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -83,6 +81,12 @@ export interface ReparentResult {
   newDepth: number;
   /** 跟着一起动的节点数 (含她自己) */
   subtreeSize: number;
+  /**
+   * 她的「推荐人」有没有被这次操作改写 —— 恒为 false。
+   * ⚠ 显式返回 (而不是省掉) 是为了让冒烟/前端能断言这条不变量:
+   *   结构性改动 (挂到谁下面) **不允许**污染业务关系 (谁推荐了她)。
+   */
+  referrerTouched: boolean;
   /** 两棵树是否在这里合并了 (原 root ≠ 新 root) */
   mergedTrees: boolean;
   /** 改完之后全库的树数量 (前端一句人话: "现在共 N 棵树") */
@@ -244,7 +248,7 @@ export async function adminReparentNode(
       WHERE deleted_at IS NULL AND ${subtreeWhere}
     `);
 
-    // 顶层节点: 点位父 + 线别 (referrer_id 的双重角色见文件头 ⚠ 取舍)
+    // 顶层节点: 点位父 (新列) + 线别。**绝不碰 referrer_id** (推荐人, 见文件头)
     const [oldParent] = parentPathOf(move.placementPath) == null
       ? []
       : await tx
@@ -272,7 +276,7 @@ export async function adminReparentNode(
     await tx
       .update(franchisee)
       .set({
-        referrerId: parent.id,
+        placementParentId: parent.id,
         placementSide: input.side,
         notesEncrypted: encryptField(appendNote(currentNotes, noteLine)),
         updatedAt: sql`NOW()`,
@@ -295,6 +299,7 @@ export async function adminReparentNode(
       newPath: newBasePath,
       newDepth,
       subtreeSize: subtree.length,
+      referrerTouched: false,
       mergedTrees: moveRootId !== parentRootId,
       rootCount: roots.length,
     };

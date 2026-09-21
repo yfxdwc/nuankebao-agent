@@ -7,12 +7,12 @@
 //       ④ **节点 ⇒ 账号** (主人 2026-09-21 拍: 「要成为节点首先必需有账号」)
 //          → 给一个没注册过的人落位 = 拒 (事务回滚, 不留下无账号节点)
 //
-// 跑: set -a && . ./.env.local && set +a && npx tsx scripts/smoke-placement-rules.ts
+// 跑: npx tsx scripts/smoke-placement-rules.ts
 // 幂等: 用手机号 13900006666, 跑完自己清理
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
 
 import { and, eq, or, isNull as isNullF } from "drizzle-orm";
 import { db } from "@/lib/db";

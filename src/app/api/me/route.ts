@@ -113,9 +113,12 @@ export async function GET() {
 
   let franchisee = null;
   if (franchiseeRow) {
+    // ⚠ 这里的 `referrer` 键 (= Flutter「我的上级」卡) 读 **点位父** (`placement_parent_id`),
+    //   不是 `referrer_id` (推荐人) —— 拆栏后两者可以不是同一个人 (主人 2026-09-21 拍, migration 0019)。
+    //   键名是历史遗留 (Flutter 已按 `referrer` 反序列化), 语义 = 我的上层点位。
     const [referrer, downline] = await Promise.all([
-      franchiseeRow.referrerId
-        ? getFranchiseeById(BigInt(franchiseeRow.referrerId))
+      franchiseeRow.placementParentId
+        ? getFranchiseeById(BigInt(franchiseeRow.placementParentId))
         : Promise.resolve(null),
       countDirectDownline(franchiseeId as bigint),
     ]);

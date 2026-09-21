@@ -140,6 +140,7 @@ async function makeNoAccountNode(
       phoneEncrypted: encryptField(phone),
       phoneHash: hashForLookup(phone),
       referrerId: parentFid,
+      placementParentId: parentFid,
       placementSide: side,
       placementPath: basePath + (side === "left" ? "L." : "R."),
       placementDepth: baseDepth + 1,
@@ -167,6 +168,7 @@ async function makeNoAccountRoot(
       phoneEncrypted: encryptField(phone),
       phoneHash: hashForLookup(phone),
       referrerId: null,
+      placementParentId: null,
       placementSide: null,
       placementPath: "",
       placementDepth: 0,
@@ -225,7 +227,7 @@ async function main() {
       name: `${MARK}-假下线`,
       phoneEncrypted: encryptField(PH_FIX),
       phoneHash: hashForLookup(PH_FIX),
-      referrerId: fidA, placementSide: "left", placementPath: "L.", placementDepth: 1,
+      referrerId: fidA, placementParentId: fidA, placementSide: "left", placementPath: "L.", placementDepth: 1,
       rootId: fidA, isActive: true, createdBy: admin.id,
     })
     .returning({ id: franchisee.id });
@@ -240,7 +242,7 @@ async function main() {
       name: `${MARK}-O子节点`,
       phoneEncrypted: encryptField(PH_OCHILD),
       phoneHash: hashForLookup(PH_OCHILD),
-      referrerId: fidO, placementSide: "right", placementPath: "R.", placementDepth: 1,
+      referrerId: fidO, placementParentId: fidO, placementSide: "right", placementPath: "R.", placementDepth: 1,
       rootId: fidO, isActive: true, createdBy: admin.id,
     })
     .returning({ id: franchisee.id });

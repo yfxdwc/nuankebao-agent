@@ -11,8 +11,8 @@
 // 幂等: 用的是 MAX(明细表时间), 重复跑结果一致
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
 
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";

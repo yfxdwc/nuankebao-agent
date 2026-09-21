@@ -7,8 +7,8 @@
 // 幂等: 会先清掉自己上次造的测试数据 (手机号 13900009999 / 13900007777)
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
 
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -404,6 +404,7 @@ async function main() {
       phoneEncrypted: encryptField("13900003333"),
       phoneHash: hashForLookup("13900003333"),
       referrerId: BigInt(leafRows[0].id),
+      placementParentId: BigInt(leafRows[0].id),
       placementSide: "left",
       placementPath: tempParentPath + "L.",
       placementDepth: tempParentPath.split(".").filter(Boolean).length,

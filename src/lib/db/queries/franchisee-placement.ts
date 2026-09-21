@@ -745,7 +745,7 @@ export async function createPlacementRequest(
       input = {
         ...input,
         targetParentFid:
-          placementParent?.id ?? node.referrerId ?? parent.id,
+          placementParent?.id ?? node.placementParentId ?? parent.id,
         targetSide: (node.placementSide ?? "left") as "left" | "right",
       };
     } else {
@@ -1157,8 +1157,10 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
         name: raw.newName ?? "(未命名)",
         phoneEncrypted: raw.newPhoneEncrypted ?? "",
         phoneHash: raw.newPhoneHash ?? `pending:${raw.id}`,
-        // 推荐人 = 发起人 (设置者); 点位 = 目标父节点 + 方向
+        // 推荐人 = 发起人 (设置者, 谁把她拉进来的); 点位父 = 目标父节点 (她落在谁下面)
+        //   ⚠ 两者可以是两个人 (主人 2026-09-21 拍"拆栏"后各记各的)
         referrerId: raw.initiatorFid,
+        placementParentId: parent.id,
         placementSide: raw.targetSide,
         placementPath: newPath,
         placementDepth: newDepth,
@@ -1219,6 +1221,7 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
           phoneHash: raw.newPhoneHash ?? `pending:${raw.id}`,
           // 推荐关系: 沿锚点原来的推荐人 (根一般为 null) —— 新根不是把 A "推荐"进来的
           referrerId: anchor.referrerId,
+          placementParentId: null, // 新根 = 新树的顶层, 没有点位父
           placementSide: null,
           placementPath: "",
           placementDepth: 0,
@@ -1273,10 +1276,15 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
       WHERE root_id = ${oldRootId} AND deleted_at IS NULL
     `);
 
-    // 我的现根点位 = side; **不动 referrer_id** (Q5: 推荐关系不变, 点位父由 path 表达)
+    // 我的现根点位 = side; **不动 referrer_id** (Q5: 推荐关系不变)
+    //   点位父改由 `placement_parent_id` 记 (= 认领到的上级) —— 拆栏前只能靠 path 隐含表达
     await tx
       .update(franchisee)
-      .set({ placementSide: side, updatedAt: sql`NOW()` })
+      .set({
+        placementParentId: upline.id,
+        placementSide: side,
+        updatedAt: sql`NOW()`,
+      })
       .where(eq(franchisee.id, anchor.id));
 
     if (uplineIsNew) {

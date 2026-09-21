@@ -26,8 +26,8 @@
 //   - 密码 scrypt 哈希 (src/lib/auth/password.ts)
 // ============================================
 
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+// ⚠ 必须是第一个 import (见 scripts/_env.ts)
+import "./_env";
 
 import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";

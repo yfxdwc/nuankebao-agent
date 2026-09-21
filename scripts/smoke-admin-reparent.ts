@@ -14,8 +14,11 @@
 //   ⑤ 新上层那条线已经有人 → 拒
 //   ⑥ 本来就在那个位置 → 拒 (幂等, 不写假审计)
 //   ⑦ 任一方**没有账号** → 拒 (节点 ⇒ 账号 不变量)
+//   ⑫ **推荐人 (referrer_id) 与点位父 (placement_parent_id) 分家** (主人 2026-09-21 拍"拆"):
+//      - 落位时推荐人那侧满了 → BFS 顺延到别人名下 → 两栏**本来就该不同**
+//      - 管理员强改上层只动点位父, **绝不改写"谁推荐了她"** (referrerTouched=false)
 //   ⑧ 成功 (非根换上层): 她 + 她的**整棵子树** path/depth/root_id 一起改;
-//      原来的线**空出来**; referrer_id/placement_side 指向新上层
+//      原来的线**空出来**; placement_parent_id/placement_side 指向新上层, **referrer_id 不动**
 //   ⑨ 成功 (树根挂到别的树): 两棵树合并 — 整棵树 path 加基路径 + depth 下移 + 改宗;
 //      树数量 -1; **无关的第三棵树一点没动**; 图谱查询无重复节点行
 //   ⑩ 留痕: 备注追加一行 (可读) + audit_log 里 recorded 这次 change
@@ -40,7 +43,7 @@ import { decryptField, encryptField, hashForLookup } from "@/lib/crypto/field";
 import { createAccountWithProfile } from "@/lib/auth/registration";
 import { createRootForUser, listAdminNodes } from "@/lib/db/queries/admin-users";
 import { adminReparentNode } from "@/lib/db/queries/franchisee-reparent";
-import { getPlacementTree } from "@/lib/db/queries/franchisee";
+import { createFranchisee, getPlacementTree } from "@/lib/db/queries/franchisee";
 
 const BASE = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:3003";
 const MARK = "冒烟-强改上层";
@@ -64,6 +67,8 @@ const P = {
   ORPH: "13900009914",
   /** 无账号的孤儿节点 (树 B 的右子位, 验 ⑦ 新上层) */
   ORPH2: "13900009915",
+  /** 拆栏验证用: 推荐人那侧满了 → BFS 顺延到别人名下 (验 ⑫) */
+  FB: "13900009916",
 } as const;
 const ALL_PHONES = Object.values(P);
 
@@ -172,7 +177,9 @@ async function main() {
         name: u.name,
         phoneEncrypted: u.phoneEncrypted,
         phoneHash: u.phoneHash,
+        // 夹具: 推荐人 = 点位父 = parentFid —— 直插时这是"张姐自己把人放在她名下的位子"
         referrerId: parentFid,
+        placementParentId: parentFid,
         placementSide: side,
         placementPath: basePath + (side === "left" ? "L." : "R."),
         placementDepth: baseDepth + 1,
@@ -203,6 +210,7 @@ async function main() {
       phoneEncrypted: encryptField(P.ORPH2),
       phoneHash: hashForLookup(P.ORPH2),
       referrerId: rootB,
+      placementParentId: rootB,
       placementSide: "right",
       placementPath: "R.",
       placementDepth: 1,
@@ -224,6 +232,7 @@ async function main() {
       phoneEncrypted: encryptField(P.ORPH),
       phoneHash: hashForLookup(P.ORPH),
       referrerId: fidA1a,
+      placementParentId: fidA1a,
       placementSide: "right",
       placementPath: "L.L.R.",
       placementDepth: 3,
@@ -297,7 +306,12 @@ async function main() {
   ck("⑧ 顶层节点 path 换成新位置", m1.placementPath === "R.R.", `path=${m1.placementPath}`);
   ck("⑧ 顶层节点 depth 重算", m1.placementDepth === 2, `depth=${m1.placementDepth}`);
   ck("⑧ 顶层节点 root_id 不变 (同树内搬)", m1.rootId === rootA, `root=${m1.rootId}`);
-  ck("⑧ 顶层节点 referrer_id → 新上层", m1.referrerId === fidA2, `ref=${m1.referrerId}`);
+  ck("⑧ 顶层节点 placement_parent_id → 新上层", m1.placementParentId === fidA2, `parent=${m1.placementParentId}`);
+  ck(
+    "⑧ 顶层节点 referrer_id 原地不动 (拆栏: 改上层不篡改推荐人)",
+    m1.referrerId === fidA1,
+    `ref=${m1.referrerId} (推荐人是 A1)`
+  );
   ck("⑧ 顶层节点 placement_side → B线", m1.placementSide === "right", `${m1.placementSide}`);
   ck("⑧ 子树整体跟着走 (深度 +0, path 换前缀)", c1.placementPath === "R.R.R." && c1.placementDepth === 3, `path=${c1.placementPath} depth=${c1.placementDepth}`);
   ck("⑧ 子树 root_id 也对", c1.rootId === rootA, `root=${c1.rootId}`);
@@ -363,6 +377,44 @@ async function main() {
   const dup = allNodes.filter((n) => n.rootFid === rootA.toString()).length;
   ck("⑨ 管理端节点总览: A 树 12 行 (不多不少)", dup === 12, `rows=${dup}`);
 
+  // ===== ⑫ 拆栏验证: 推荐人 ≠ 点位父, 且强改上层不动推荐人 =====
+  // 场景 (现实里天天发生): 张姐 (A2) 把人推荐进来, 但她名下一层两个位子都满了
+  //   → 落位算法 BFS 顺延, 人实际落在她下线 (A2a) 名下。
+  //   拆栏前: referrer_id 被写成**实际父节点** (A2a) → "谁推荐了她"当场就错了。
+  //   拆栏后: referrer_id = A2 (推荐人), placement_parent_id = A2a (点位父)。
+  const uidFb = await account("FB顺延落位", P.FB);
+  const created = await createFranchisee(
+    { name: `${MARK}-FB顺延落位`, phone: P.FB, referrerId: fidA2, sideHint: "left" },
+    ctx,
+    admin.id
+  );
+  const fbFid = BigInt(created.id);
+  const [fb] = await node(fbFid);
+  ck(
+    "⑫ 落位: 推荐人那侧满了 → BFS 顺延到别人名下",
+    fb.placementParentId === fidA2a && fb.placementPath === "R.L.L.",
+    `parent=${fb.placementParentId} path=${fb.placementPath}`
+  );
+  ck(
+    "⑫ 推荐人栏 = 当初那位推荐人 (不是实际落位的父)",
+    fb.referrerId === fidA2 && fb.referrerId !== fb.placementParentId,
+    `referrer=${fb.referrerId} placementParent=${fb.placementParentId}`
+  );
+  const referrerBefore = fb.referrerId;
+
+  // 再把她强改上层 → 只该动点位父, 推荐人一个字都不能变
+  const r3 = await reparent({
+    moveFid: fbFid,
+    newParentFid: fidA2a,
+    side: "right",
+    reason: "冒烟: 拆栏后强改上层不该改写推荐人",
+  });
+  const [fb2] = await node(fbFid);
+  ck("⑫ 强改上层: 点位父改到新上层", fb2.placementParentId === fidA2a && fb2.placementPath === "R.L.R.", `parent=${fb2.placementParentId} path=${fb2.placementPath}`);
+  ck("⑫ 强改上层: **推荐人一个字没变**", fb2.referrerId === referrerBefore, `before=${referrerBefore} after=${fb2.referrerId}`);
+  ck("⑫ 返回值 referrerTouched=false (可断言的不变量)", r3.referrerTouched === false, `referrerTouched=${r3.referrerTouched}`);
+  ck("⑫ 账号也还绑着", (await node(fbFid))[0].isActive === true);
+
   // ---- ⑪ 鉴权: 非管理员 403 (HTTP 段) ----
   const alive = await fetch(`${BASE}/api/health`)
     .then((r) => r.ok)
@@ -395,6 +447,18 @@ async function main() {
         body: JSON.stringify({ newParentFid: String(fidA1a), side: "left", reason: "越权尝试" }),
       });
       ck("⑪ 非管理员 POST 强改上层 → 403", res.status === 403, `status=${res.status}`);
+    }
+  }
+
+  // ---- ⑬ 全库结构一致性: 点位父列 ≡ path 推出来的父 (拆栏前提, 一条都不能错) ----
+  {
+    const { execSync } = await import("node:child_process");
+    try {
+      execSync("npx tsx scripts/audit-placement-integrity.ts --strict", { stdio: "pipe" });
+      ck("⑬ 全库巡检: 点位父列 ≡ path / side / depth, 无重复位子", true);
+    } catch (e) {
+      const out = (e as { stdout?: Buffer }).stdout?.toString() ?? "";
+      ck("⑬ 全库巡检: 点位父列 ≡ path / side / depth, 无重复位子", false, out.split("\n").slice(-14).join(" / "));
     }
   }
 
