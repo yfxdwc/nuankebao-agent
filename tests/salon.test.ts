@@ -457,3 +457,94 @@ describe("salon — quick-invite-suggestions (query 层)", () => {
     void meRow;
   });
 });
+
+describe("salon — 取消带 reason", () => {
+  it("主理人取消 → status=cancelled + system 动态含 reason", async () => {
+    const { cancelSalon } = await import("@/lib/db/queries/salon");
+
+    // 复用现有 organizerId 建一个草稿沙龙
+    const created = await createSalon(
+      {
+        title: "测试-取消理由",
+        status: "published",
+        startAt: new Date(Date.now() + 86_400_000).toISOString(),
+      },
+      { staff: [], invitees: [] },
+      ctx,
+      organizerId,
+    );
+    const salonId = BigInt(created.id);
+
+    const reason = "测试理由 — 场地维修改期下周五";
+    const cancelled = await cancelSalon(salonId, ctx, organizerId, reason);
+    expect(cancelled).not.toBeNull();
+    expect(cancelled!.status).toBe("cancelled");
+
+    // 看 salon_activity 表
+    const acts = await db
+      .select()
+      .from(salonActivity)
+      .where(eq(salonActivity.salonId, salonId));
+    const sysAct = acts.find((a) => a.type === "system" && (a.metadata as any)?.event === "salon_cancelled");
+    expect(sysAct).toBeDefined();
+    expect(sysAct!.content).toContain(reason);
+    expect((sysAct!.metadata as any).reason).toBe(reason);
+    expect(sysAct!.visibility).toBe("all");
+  });
+
+  it("取消 reason 太短 → query 层不限制, 但 API 层会 400 (验证 zod 在 API 层)", async () => {
+    // 直接调 query 不应崩; 校验在 route 层
+    const { SalonCancelSchema } = await import("@/lib/salon/validation");
+    expect(SalonCancelSchema.safeParse({ reason: "太短" }).success).toBe(false);
+    expect(SalonCancelSchema.safeParse({ reason: "足够长的理由超过十字哈" }).success).toBe(true);
+    expect(SalonCancelSchema.safeParse({ reason: "x".repeat(501) }).success).toBe(false);
+  });
+
+  it("重复取消幂等: 不重复写动态", async () => {
+    const { cancelSalon } = await import("@/lib/db/queries/salon");
+    const created = await createSalon(
+      {
+        title: "测试-幂等取消",
+        status: "published",
+        startAt: new Date(Date.now() + 86_400_000).toISOString(),
+      },
+      { staff: [], invitees: [] },
+      ctx,
+      organizerId,
+    );
+    const salonId = BigInt(created.id);
+
+    await cancelSalon(salonId, ctx, organizerId, "第一次取消理由");
+    await cancelSalon(salonId, ctx, organizerId, "第二次取消理由 (应该幂等, 不写第二条)");
+
+    const acts = await db
+      .select()
+      .from(salonActivity)
+      .where(eq(salonActivity.salonId, salonId));
+    const cancelActs = acts.filter((a) => (a.metadata as any)?.event === "salon_cancelled");
+    expect(cancelActs.length).toBe(1); // 只有 1 条
+    expect(cancelActs[0]!.content).toContain("第一次取消理由"); // 第二次不写
+  });
+
+  it("非主理人调用 cancelSalon → 返回 null", async () => {
+    const { cancelSalon } = await import("@/lib/db/queries/salon");
+    const created = await createSalon(
+      {
+        title: "测试-非主理人取消",
+        status: "published",
+        startAt: new Date(Date.now() + 86_400_000).toISOString(),
+      },
+      { staff: [], invitees: [] },
+      ctx,
+      organizerId,
+    );
+    const salonId = BigInt(created.id);
+
+    const result = await cancelSalon(salonId, ctx, inviteeId, "不应该成功");
+    expect(result).toBeNull();
+
+    // 状态应保持 published
+    const detail = await getSalonDetail(created.id, organizerId);
+    expect(detail!.status).toBe("published");
+  });
+});

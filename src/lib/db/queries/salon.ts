@@ -1053,27 +1053,46 @@ export async function updateSalon(
   return getSalonDetail(salonId, userId);
 }
 
-/** 取消沙龙 (status=cancelled + 系统动态; 不删数据) */
+/**
+ * 取消沙龙 (status=cancelled + 系统动态; 不删数据)
+ *
+ * - 主理人才可取消
+ * - reason: 详细说明 (必填, 10-500 字), 写到 salon_activity.content (受邀者可见)
+ *   同时塞进 metadata.reason 方便前端结构化渲染 banner
+ * - 已 cancelled 的沙龙再调: 幂等返回现状
+ */
 export async function cancelSalon(
   salonId: bigint,
   ctx: AuditContext,
-  userId: bigint
+  userId: bigint,
+  reason: string
 ): Promise<SalonView | null> {
   const access = await loadAccess(salonId, userId);
   if (!access || !access.isOrganizer) return null;
 
   await withAuditContext(ctx, async (tx) => {
+    // 幂等: 已取消的沙龙不重复写动态
+    const [cur] = await tx
+      .select({ status: salon.status })
+      .from(salon)
+      .where(eq(salon.id, salonId))
+      .limit(1);
+    if (!cur) return;
+    if (cur.status === "cancelled") return;
+
     await tx
       .update(salon)
       .set({ status: "cancelled", updatedAt: new Date() })
       .where(eq(salon.id, salonId));
+    // 主理人取消 + 详细理由 → 落到 system 动态 (visibility=all, 受邀者都能看到)
+    // content 既给活动流展示, 也便于未来全文检索
     await tx.insert(salonActivity).values({
       salonId,
       authorUserId: userId,
       type: "system",
-      content: "沙龙已取消",
+      content: `沙龙已取消 — ${reason}`,
       visibility: "all",
-      metadata: { event: "salon_cancelled" },
+      metadata: { event: "salon_cancelled", reason },
     });
   });
 

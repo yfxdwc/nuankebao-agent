@@ -229,3 +229,11 @@ export const AttachmentCreateSchema = z.object({
   fileType: z.enum(["image", "file"]).optional(),
   visibility: SalonVisibilitySchema.optional(),
 });
+
+/**
+ * 取消沙龙: reason 必填且 10-500 字 (主理人写给受邀者的详细说明)
+ * 太短不严肃 (「不办了」); 太长像是写邮件, 应在沙龙内另外发公告
+ */
+export const SalonCancelSchema = z.object({
+  reason: z.string().min(10).max(500),
+});

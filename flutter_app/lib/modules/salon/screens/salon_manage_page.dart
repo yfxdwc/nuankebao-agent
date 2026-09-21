@@ -12,6 +12,7 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../providers/salon_providers.dart';
+import 'package:go_router/go_router.dart';
 
 class SalonManagePage extends ConsumerStatefulWidget {
   final String salonId;
@@ -24,6 +25,7 @@ class SalonManagePage extends ConsumerStatefulWidget {
 class _SalonManagePageState extends ConsumerState<SalonManagePage>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
+  bool _cancelling = false;
 
   @override
   void initState() {
@@ -49,6 +51,14 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
       appBar: AppBar(
         title: const Text('沙龙管理'),
         toolbarHeight: 64,
+        actions: [
+          // 取消沙龙: 主理人 + 未取消 状态 才显示
+          _CancelSalonAction(
+            salonId: widget.salonId,
+            busy: _cancelling,
+            onBusy: (v) => setState(() => _cancelling = v),
+          ),
+        ],
         bottom: TabBar(
           controller: _tab,
           indicatorSize: TabBarIndicatorSize.tab,
@@ -1050,5 +1060,117 @@ class _AssignQuotaDialogState extends ConsumerState<_AssignQuotaDialog> {
         content: Text(msg, style: const TextStyle(fontSize: AppTheme.fontMd)),
       ),
     );
+  }
+}
+
+// ============================================
+// 取消沙龙 (AppBar action + 详细说明弹层)
+// ============================================
+// 单独抽出来避免污染主 widget: 自己 watch salon 详情判断可见性 / 权限
+// ============================================
+
+class _CancelSalonAction extends ConsumerWidget {
+  final String salonId;
+  final bool busy;
+  final ValueChanged<bool> onBusy;
+  const _CancelSalonAction({
+    required this.salonId,
+    required this.busy,
+    required this.onBusy,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncSalon = ref.watch(salonDetailProvider(salonId));
+    final salon = asyncSalon.valueOrNull;
+    // 已取消的不显示; 非主理人不显示
+    final visible = salon != null &&
+        salon.viewer.isOrganizer &&
+        salon.status != SalonStatus.cancelled;
+    if (!visible) return const SizedBox.shrink();
+
+    return IconButton(
+      icon: const Icon(Icons.cancel_outlined, size: 28, color: AppTheme.danger),
+      tooltip: '取消沙龙',
+      onPressed: busy
+          ? null
+          : () => _showCancelDialog(context, ref),
+    );
+  }
+
+  Future<void> _showCancelDialog(BuildContext context, WidgetRef ref) async {
+    final reasonCtrl = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('取消沙龙', style: TextStyle(fontWeight: FontWeight.w600)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '取消后受邀者会在沙龙详情页看到这条说明, 请把原因写清楚。',
+                style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonCtrl,
+                maxLines: 4,
+                minLines: 3,
+                maxLength: 500,
+                decoration: const InputDecoration(
+                  labelText: '取消说明 (10-500 字)',
+                  hintText: '如: 场地临时维修, 改期到下周五同一时间',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('再想想'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+              onPressed: () {
+                if (reasonCtrl.text.trim().length < 10) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('至少写 10 个字, 让受邀者明白')),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('确认取消'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true || !context.mounted) return;
+    onBusy(true);
+    try {
+      final svc = ref.read(salonServiceProvider);
+      await svc.cancel(salonId, reason: reasonCtrl.text.trim());
+      ref.invalidate(salonDetailProvider(salonId));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('沙龙已取消, 受邀者会在详情页看到说明')),
+        );
+        // 回到详情页 (看 banner 效果)
+        context.go('/salons/$salonId');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('取消失败: $e')),
+        );
+      }
+    } finally {
+      onBusy(false);
+    }
   }
 }

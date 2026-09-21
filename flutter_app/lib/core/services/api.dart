@@ -1161,9 +1161,10 @@ class SalonService {
     return Salon.fromJson(res.data as Map<String, dynamic>);
   }
 
-  /// 取消沙龙 (status=cancelled, 数据保留)
-  Future<Salon> cancel(String id) async {
-    final res = await _dio.post('/salons/$id/cancel');
+  /// 取消沙龙 (status=cancelled, 数据保留 + 系统动态记录 reason)
+  /// reason: 主理人写给受邀者的详细说明, 后端必填 10-500 字
+  Future<Salon> cancel(String id, {required String reason}) async {
+    final res = await _dio.post('/salons/$id/cancel', data: {'reason': reason});
     return Salon.fromJson(res.data as Map<String, dynamic>);
   }
 

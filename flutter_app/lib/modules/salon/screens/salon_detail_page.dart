@@ -102,6 +102,10 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
         children: [
           _header(salon),
           const SizedBox(height: 12),
+          if (salon.status == SalonStatus.cancelled) ...[
+            _cancelledBanner(activities),
+            const SizedBox(height: 12),
+          ],
           if (isInvitee) ...[
             _myReplyCard(salon),
             const SizedBox(height: 12),
@@ -222,6 +226,62 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
   // ==========================================
   // 2) 我的回复 (仅受邀者)
   // ==========================================
+
+  Widget _cancelledBanner(List<SalonActivity> activities) {
+    // 找最近一条 salon_cancelled 系统动态, 拿 metadata.reason
+    String? reason;
+    for (final a in activities) {
+      if (a.type == 'system' &&
+          a.metadata != null &&
+          a.metadata!['event'] == 'salon_cancelled') {
+        reason = a.metadata!['reason'] as String? ?? a.content;
+        break;
+      }
+    }
+    if (reason == null || reason.isEmpty) {
+      reason = '主理人取消了这场沙龙';
+    }
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.danger.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.danger.withOpacity(0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.cancel_outlined,
+              size: 24, color: AppTheme.danger),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '沙龙已取消',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontMd,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.danger,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  reason,
+                  style: const TextStyle(
+                    fontSize: AppTheme.fontMd,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _myReplyCard(Salon salon) {
     final viewer = salon.viewer;
