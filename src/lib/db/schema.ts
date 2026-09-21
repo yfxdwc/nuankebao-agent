@@ -177,6 +177,12 @@ export const franchisePlacementRequest = pgTable(
     // kind=move / unjoin: 被移动 / 被解除的节点
     moveFid: bigint("move_fid", { mode: "bigint" }),
 
+    // kind=promote: 认领的**上级已在 app 里**时 → 他的现存节点 id (复用, 不新建副本)
+    //   主人 2026-09-21 拍: 「一个人已经在别的树里是节点, 可以被认领为我的上级,
+    //     前提是这个人的一层 2 个点位必需有空位」→ 两棵树在此合并 (同一系统不同枝上溯共同上层)
+    //   null = 上级不在 app 里 → 执行时才新建他的节点 (用 new_name/new_phone_*)
+    uplineFid: bigint("upline_fid", { mode: "bigint" }),
+
     // 目标点位 = 父节点 + 左/右
     //   promote: target_parent_fid = **锚点** (要被上移的现根节点 id), 不是"未来的父"
     targetParentFid: bigint("target_parent_fid", { mode: "bigint" }).notNull(),
@@ -208,6 +214,7 @@ export const franchisePlacementRequest = pgTable(
     initiatorIdx: index("idx_placement_initiator").on(table.initiatorFid),
     statusIdx: index("idx_placement_status").on(table.status, table.expiresAt),
     moveFidIdx: index("idx_placement_move_fid").on(table.moveFid),
+    uplineFidIdx: index("idx_placement_upline_fid").on(table.uplineFid),
   })
 );
 

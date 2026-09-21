@@ -512,9 +512,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 : '还没有加盟客户, 无法生成图谱',
             hint: isUnaffiliated
                 ? '当前账号未关联加盟关系, 无法查看加盟图谱'
-                : '普通 / 种子客户不参与图谱, 加入加盟后才显示',
-            onAction: () => context.push('/customers/new'),
-            actionLabel: '+ 添加客户',
+                : '图谱里只显示加盟客户 —— 在客户列表把普通客户转为加盟商后, 会自动出现在这里',
           );
         }
         // 预算搜索匹配数 (全树 O(n) 走一遍)

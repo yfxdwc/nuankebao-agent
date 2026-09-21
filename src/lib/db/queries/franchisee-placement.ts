@@ -80,6 +80,16 @@ export interface PlacementRequestView {
   confirms: PlacementConfirmView[];
   /** 执行结果: create/promote → 新节点 id; unjoin → 被解除的节点 id */
   resultFid: string | null;
+  /** promote: 认领的上级节点 id (已在 app 里时) / null = 上级是新人, 执行时才建 */
+  uplineFid: string | null;
+  /** promote: 上级节点名字 (承接 tooltip / 列表文案) */
+  uplineName: string | null;
+  /**
+   * promote: 上级**当前空着的**点位 (主人 2026-09-21 拍: 我在上级的 A/B 线由上级自己决定)。
+   * 上级是新人(还没节点) → 两条都空; 上级已有节点 → 看他的子位占用情况。
+   * 上级本人打开时按这个选项来挑线; 两条都空才能认领。
+   */
+  availableSides: ("left" | "right")[];
   /** 当前账号在这张单子里能确认的角色 (null = 旁观/无关) */
   myRole: PlacementConfirmerRole | null;
   myDecision: "approve" | "reject" | null;
@@ -120,6 +130,8 @@ interface RawRequest {
   newPhoneHash: string | null;
   /** unjoin 单: 要解除的加盟商节点 id (DB 列名历史遗留 move_fid; 语义 = 单子主体) */
   moveFid: bigint | null;
+  /** promote 单: 认领的上级**已在 app 里**时的现存节点 id (null = 新建) */
+  uplineFid: bigint | null;
   targetParentFid: bigint;
   targetSide: "left" | "right";
   resultFid: bigint | null;
@@ -147,6 +159,15 @@ function roleFor(
     (raw.kind === "create" || raw.kind === "promote") &&
     raw.newPhoneHash != null &&
     actor.phoneHash === raw.newPhoneHash
+  ) {
+    candidates.push("new_franchisee");
+  }
+  // promote 认领「已在 app 里的节点」: 上级本人可能没绑这个节点 (老 seed 节点),
+  //   但按 fid 认得更稳 (手机号只是弱约定)
+  if (
+    raw.kind === "promote" &&
+    raw.uplineFid != null &&
+    actor.fid === raw.uplineFid
   ) {
     candidates.push("new_franchisee");
   }
@@ -178,6 +199,7 @@ async function toViews(
     fids.add(r.initiatorFid.toString());
     fids.add(r.targetParentFid.toString());
     if (r.moveFid != null) fids.add(r.moveFid.toString());
+    if (r.uplineFid != null) fids.add(r.uplineFid.toString());
   }
   const names = new Map<string, string>();
   // ⚠ 必须走 exec (事务里传 tx): dev 的 postgres 池 max=1, 事务里用全局 db 会死锁
@@ -201,6 +223,39 @@ async function toViews(
         sql`, `
       )})`
     );
+
+  // promote 单: 逐个算上级当前空着的子位 (上级本人挑线用)
+  const uplineRows = new Map<
+    string,
+    { id: bigint; rootId: bigint | null; placementPath: string } | null
+  >();
+  for (const r of rows) {
+    if (r.kind !== "promote") continue;
+    if (r.uplineFid == null) {
+      uplineRows.set(r.id.toString(), null); // 上级是新人 → 两条都空
+      continue;
+    }
+    const [u] = await exec
+      .select({
+        id: franchisee.id,
+        rootId: franchisee.rootId,
+        placementPath: franchisee.placementPath,
+      })
+      .from(franchisee)
+      .where(
+        and(eq(franchisee.id, r.uplineFid), isNull(franchisee.deletedAt))
+      )
+      .limit(1);
+    uplineRows.set(r.id.toString(), u ?? null);
+  }
+  const availableSidesCache = new Map<string, ("left" | "right")[]>();
+  for (const r of rows) {
+    if (r.kind !== "promote") continue;
+    availableSidesCache.set(
+      r.id.toString(),
+      await freeSidesOf(exec, uplineRows.get(r.id.toString()) ?? null)
+    );
+  }
 
   return rows.map((r) => {
     const mine = confirms.filter((c) => c.requestId === r.id);
@@ -231,6 +286,10 @@ async function toViews(
       targetParentName: names.get(r.targetParentFid.toString()) ?? '?',
       targetSide: r.targetSide,
       resultFid: r.resultFid?.toString() ?? null,
+      uplineFid: r.uplineFid?.toString() ?? null,
+      uplineName:
+        r.uplineFid != null ? names.get(r.uplineFid.toString()) ?? '?' : null,
+      availableSides: availableSidesCache.get(r.id.toString()) ?? [],
       required: needed,
       confirms: mine.map((c) => ({
         role: c.confirmerRole as PlacementConfirmerRole,
@@ -316,6 +375,36 @@ async function slotTaken(
     )
     .limit(1);
   return row?.id ?? null;
+}
+
+/**
+ * 某个节点**当前空着的**子位 (promote 用: 上级得有空位才放得下我)
+ *   - 按 placement 口径: path + 'L.'/'R.' 且同樹 (不是 referrer_id)
+ *   - 节点是软删的 / 找不到 → 视为两条都空 (调用方自己保证语义)
+ */
+async function freeSidesOf(
+  exec: typeof db,
+  node: { id: bigint; rootId: bigint | null; placementPath: string } | null
+): Promise<("left" | "right")[]> {
+  if (!node) return ["left", "right"];
+  const rows = await exec
+    .select({ side: franchisee.placementSide, path: franchisee.placementPath })
+    .from(franchisee)
+    .where(
+      and(
+        eq(franchisee.rootId, node.rootId ?? node.id),
+        sql`${franchisee.placementPath} IN (${node.placementPath + "L."}, ${node.placementPath + "R."})`,
+        isNull(franchisee.deletedAt)
+      )
+    );
+  const taken = new Set(
+    rows.map((r) =>
+      r.path.endsWith("L.") && r.path.startsWith(node.placementPath)
+        ? "left"
+        : "right"
+    )
+  );
+  return (["left", "right"] as const).filter((sd) => !taken.has(sd));
 }
 
 /** 同树 + 在自己子树内? (path 前缀 + root_id 双条件; 多根下少了 root_id 会跨树误判) */
@@ -454,6 +543,8 @@ export async function createPlacementRequest(
     let newPhoneEncrypted: string | null = null;
     let newNotesEncrypted: string | null = null;
     let unjoinNodeId: bigint | null = null;
+    /** promote: 上级已在 app 里 → 直接复用他的节点 id (不新建副本) */
+    let uplineFid: bigint | null = null;
 
     if (input.kind === "create") {
       if (!input.newName || !input.newPhone) {
@@ -483,9 +574,15 @@ export async function createPlacementRequest(
         .limit(1);
       if (dup) throw new Error("该手机号已经是加盟商了");
     } else if (input.kind === "promote") {
-      // 向上认领上级 (主人 2026-09-21 拍 B2):
-      //   把现实里的**直接上级 U** 拉进 app → U 成为新根, 我这棵子树整体下降一层
-      //   校验: ① 我是根 (上面已查) ② U 手机号不能已经是加盟商 ③ 同一根不能有两张 pending 单
+      // 向上认领上级 (主人 2026-09-21 拍 B2 + 本次补充):
+      //   把现实里的**直接上级 U** 变成我上层。两种情形:
+      //     ① U 不在 app 里 → 执行时新建他的节点 (他成为新根, 我这棵树下降一层)
+      //     ② U **已在 app 里** (别的树/别的枝) → **复用他现有的节点**, 我这棵树挂到他的空位
+      //        (主人拍: 「一个人已经在别的树里是节点, 可以被认领为我的上级,
+      //          前提是这个人的一层 2 个点位必需有空位」→ 两棵树在此合并)
+      //   校验: ① 我是根 ② 不是我自己 ③ U 不能在我这棵树里 (会成环)
+      //         ④ U 必须已有账号 (确认要他本人点) ⑤ 上级/锚点各自只能有 1 张 pending
+      //   ⚠ 我在 U 的哪条线**不由我选** —— 由 U 本人在确认时决定 (拍板原话)
       if (!input.newName || !input.newPhone) {
         throw new Error("上级 姓名/手机号 必填");
       }
@@ -501,8 +598,8 @@ export async function createPlacementRequest(
         throw new Error("不能把自己认领为自己的上级 (必须是另一个人)");
       }
 
-      const [dup] = await tx
-        .select({ id: franchisee.id })
+      const [existing] = await tx
+        .select()
         .from(franchisee)
         .where(
           and(
@@ -511,9 +608,33 @@ export async function createPlacementRequest(
           )
         )
         .limit(1);
-      if (dup) throw new Error("该手机号已经是加盟商了");
 
-      const [pendingPromote] = await tx
+      if (existing) {
+        // 情形 ②: 认领已存在的节点 → 复用, 不新建副本
+        if (initiator != null && (existing.rootId ?? existing.id) === (initiator.rootId ?? initiator.id)) {
+          throw new Error("这位加盟商已经在您的加盟树里了, 不能认领为自己的上级 (会成环)");
+        }
+        const [uplineUser] = await tx
+          .select({ id: user.id })
+          .from(user)
+          .where(
+            and(eq(user.phoneHash, existing.phoneHash), eq(user.isActive, true))
+          )
+          .limit(1);
+        if (!uplineUser) {
+          throw new Error(
+            "这位加盟商还没有可登录的账号 —— 认领必须他本人在「加盟落位确认」里点同意, 请先让他注册登录"
+          );
+        }
+        // 他的两个点位必须还有空的 (否则没地方放我)
+        const free = await freeSidesOf(tx, existing);
+        if (free.length === 0) {
+          throw new Error("这位加盟商下面的两个点位都已经有人了, 暂时接不了");
+        }
+        uplineFid = existing.id;
+      }
+
+      const [pendingSameAnchor] = await tx
         .select({ id: franchisePlacementRequest.id })
         .from(franchisePlacementRequest)
         .where(
@@ -527,7 +648,29 @@ export async function createPlacementRequest(
           )
         )
         .limit(1);
-      if (pendingPromote) throw new Error("这个树根已有一张待确认的「认领上级」申请");
+      if (pendingSameAnchor) throw new Error("这个树根已有一张待确认的「认领上级」申请");
+
+      // 同一个上级同时只能有 1 张认领单 (避免两个枝同时抢他的空位)
+      const [pendingSameUpline] = await tx
+        .select({ id: franchisePlacementRequest.id })
+        .from(franchisePlacementRequest)
+        .where(
+          and(
+            eq(franchisePlacementRequest.kind, "promote"),
+            eq(franchisePlacementRequest.status, "pending"),
+            or(
+              eq(
+                franchisePlacementRequest.uplineFid,
+                uplineFid ?? BigInt(-1)
+              ),
+              eq(franchisePlacementRequest.newPhoneHash, newPhoneHash ?? "")
+            )!
+          )
+        )
+        .limit(1);
+      if (pendingSameUpline) {
+        throw new Error("已经有人正在认领这位上级, 等他确认完再试");
+      }
     } else if (input.kind === "unjoin") {
       // 解除加盟 (主人 2026-09-18 拍 Q3): 本人 + 上级 + 设置者三方确认;
       //   **有下线的节点不允许解除** (要先处理完下线)
@@ -624,6 +767,7 @@ export async function createPlacementRequest(
         newPhoneHash,
         newNotesEncrypted,
         moveFid: unjoinNodeId,
+        uplineFid,
         targetParentFid: input.targetParentFid,
         targetSide: input.targetSide,
         expiresAt,
@@ -669,6 +813,7 @@ export async function createPlacementRequest(
           newPhoneEncrypted: finalRow.newPhoneEncrypted,
           newPhoneHash: finalRow.newPhoneHash,
           moveFid: finalRow.moveFid,
+          uplineFid: finalRow.uplineFid,
           targetParentFid: finalRow.targetParentFid,
           targetSide: finalRow.targetSide,
           resultFid: finalRow.resultFid,
@@ -761,11 +906,19 @@ export async function getPlacementRequest(
 // 确认 / 拒绝
 // ============================================
 
+/**
+ * 三方之一拍板
+ *
+ * `side` 只有一种情况用得上 (主人 2026-09-21 拍): **promote 单里的上级本人** ——
+ *   「我在我的上级是处于 a线还是 b线由我的上级自己决定」→ 所以认领人发起时**不选线**,
+ *   由上级在同意这一步挑一个自己空着的点位。
+ */
 export async function decidePlacementRequest(
   requestId: bigint,
   actor: PlacementActor,
   decision: "approve" | "reject",
-  ctx: AuditContext
+  ctx: AuditContext,
+  side?: "left" | "right"
 ): Promise<PlacementRequestView> {
   await expireStaleRequests();
 
@@ -819,6 +972,49 @@ export async function decidePlacementRequest(
           decidedAt: sql`NOW()`,
         },
       });
+
+    // promote: 上级本人挑线 (「我在上级的 A线/B线 由上级自己决定」)
+    if (
+      decision === "approve" &&
+      raw.kind === "promote" &&
+      myRole === "new_franchisee"
+    ) {
+      const uplineNode =
+        raw.uplineFid == null
+          ? null
+          : ((
+              await tx
+                .select({
+                  id: franchisee.id,
+                  rootId: franchisee.rootId,
+                  placementPath: franchisee.placementPath,
+                })
+                .from(franchisee)
+                .where(
+                  and(
+                    eq(franchisee.id, raw.uplineFid),
+                    isNull(franchisee.deletedAt)
+                  )
+                )
+                .limit(1)
+            )[0] ?? null);
+      const free = await freeSidesOf(tx, uplineNode);
+      if (free.length === 0) {
+        throw new Error("您下面的两个点位都已经有人了, 接不下这位下线");
+      }
+      const chosen = side ?? (free.length === 1 ? free[0] : null);
+      if (chosen == null) {
+        throw new Error("请选择这位下线放在您的 A线 还是 B线");
+      }
+      if (!free.includes(chosen)) {
+        throw new Error("这条线已经有下线了, 请换一条");
+      }
+      await tx
+        .update(franchisePlacementRequest)
+        .set({ targetSide: chosen, updatedAt: sql`NOW()` })
+        .where(eq(franchisePlacementRequest.id, requestId));
+      raw.targetSide = chosen;
+    }
 
     if (decision === "reject") {
       await tx
@@ -1030,70 +1226,117 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
 
     createdOutcome = { createdPhoneHash: raw.newPhoneHash ?? null };
   } else if (raw.kind === "promote") {
-    // 向上认领 (主人 2026-09-21 拍 B2): 现根 A → 新根 U, A 整棵子树下降一层
-    //   1) 建 U (path='' depth=0; root_id 稍后自指)
-    //   2) 原树整体 path 加前缀 + depth+1 + root_id 迁到 U
-    //   3) A 的点位 = U 的 targetSide
-    const anchor = parent; // promote 里 target_parent_fid 存的是锚点 (现根)
+    // 向上认领 (主人 2026-09-21 拍 B2 + 补充): 让 U 成为我的上层。
+    // 两种情形统一成一件事 —— **把我这棵树挂到 U 的一个空位上**:
+    //   ① U 不在 app 里 (upline_fid = null) → 先建 U 的节点 (path='' depth=0) 再挂
+    //      → 等价于「U 成为新根, 我整棵树下降一层」
+    //   ② U 已在 app 里 (upline_fid) → **复用他现有的节点**, 直接挂到他的空位
+    //      → 两棵树在这里合并 (同一加盟系统上不同枝 → 上溯到共同上层)
+    // 我在 U 的哪条线 = raw.targetSide, **由 U 本人在确认时决定** (拍板原话)
+    const anchor = parent; // promote 里 target_parent_fid 存的是锚点 (我的现根)
     if (anchor.placementPath !== "") {
       throw new Error("锚点不是树根, 认领失败");
     }
     const oldRootId = anchor.rootId ?? anchor.id;
-    const prefix = raw.targetSide === "left" ? "L." : "R.";
+    const side: "left" | "right" = raw.targetSide === "right" ? "right" : "left";
 
-    const [upline] = await tx
-      .insert(franchisee)
-      .values({
-        name: raw.newName ?? "(未命名)",
-        phoneEncrypted: raw.newPhoneEncrypted ?? "",
-        phoneHash: raw.newPhoneHash ?? `pending:${raw.id}`,
-        // 推荐关系: 沿锚点原来的推荐人 (根一般为 null) —— 新根不是把 A "推荐"进来的
-        referrerId: anchor.referrerId,
-        placementSide: null,
-        placementPath: "",
-        placementDepth: 0,
-        rootId: null,
-        isActive: true,
-        notesEncrypted: null,
-        createdBy: raw.initiatorUserId,
-      })
-      .returning({ id: franchisee.id });
-    const uplineId = upline.id;
+    let upline: {
+      id: bigint;
+      rootId: bigint | null;
+      placementPath: string;
+      placementDepth: number;
+    };
+    let uplineIsNew = false;
 
-    // 整棵原树下降一层 + 改宗到新根
-    // ⚠ 必须限定 root_id = 原树 (多根: 不加这条会把别的树也一起搬走)
+    if (raw.uplineFid == null) {
+      const [created] = await tx
+        .insert(franchisee)
+        .values({
+          name: raw.newName ?? "(未命名)",
+          phoneEncrypted: raw.newPhoneEncrypted ?? "",
+          phoneHash: raw.newPhoneHash ?? `pending:${raw.id}`,
+          // 推荐关系: 沿锚点原来的推荐人 (根一般为 null) —— 新根不是把 A "推荐"进来的
+          referrerId: anchor.referrerId,
+          placementSide: null,
+          placementPath: "",
+          placementDepth: 0,
+          rootId: null,
+          isActive: true,
+          notesEncrypted: null,
+          createdBy: raw.initiatorUserId,
+        })
+        .returning({
+          id: franchisee.id,
+          rootId: franchisee.rootId,
+          placementPath: franchisee.placementPath,
+          placementDepth: franchisee.placementDepth,
+        });
+      upline = created;
+      uplineIsNew = true;
+    } else {
+      const [u] = await tx
+        .select({
+          id: franchisee.id,
+          rootId: franchisee.rootId,
+          placementPath: franchisee.placementPath,
+          placementDepth: franchisee.placementDepth,
+        })
+        .from(franchisee)
+        .where(and(eq(franchisee.id, raw.uplineFid), isNull(franchisee.deletedAt)))
+        .limit(1);
+      if (!u) throw new Error("要认领的上级节点已被删除, 认领失败");
+      if ((u.rootId ?? u.id) === oldRootId) {
+        throw new Error("这位加盟商已经在您的加盟树里了, 不能认领为自己的上级 (会成环)");
+      }
+      upline = u;
+    }
+
+    const uplineRootId = upline.rootId ?? upline.id;
+    const uplinePath = upline.placementPath;
+    const depthShift = upline.placementDepth + 1;
+    const newBasePath = uplinePath + (side === "left" ? "L." : "R.");
+
+    // 空位兜底 (确认期间可能被人抢了 / 上级本来满了)
+    const taken = await slotTaken(tx, uplineRootId, uplinePath, side);
+    if (taken) throw new Error("上级这条线已经有下线了, 认领失败");
+
+    // 我这棵树整体挂过去 (path 加基路径 + depth 整体下移 + 改宗到新树)
+    // ⚠ 必须限定 root_id = 我的树 (多根: 不加这条会把别的树也一起搬走)
     await tx.execute(sql`
       UPDATE franchisee
-      SET placement_path = ${prefix} || placement_path,
-          placement_depth = placement_depth + 1,
-          root_id = ${uplineId},
+      SET placement_path = ${newBasePath} || placement_path,
+          placement_depth = placement_depth + ${depthShift},
+          root_id = ${uplineRootId},
           updated_at = NOW()
       WHERE root_id = ${oldRootId} AND deleted_at IS NULL
     `);
 
-    // 锚点 (现根 A) 点位 = 新根的方向; **不动 referrer_id** (Q5: 推荐关系不变, 点位父由 path 表达)
+    // 我的现根点位 = side; **不动 referrer_id** (Q5: 推荐关系不变, 点位父由 path 表达)
     await tx
       .update(franchisee)
-      .set({ placementSide: raw.targetSide, updatedAt: sql`NOW()` })
+      .set({ placementSide: side, updatedAt: sql`NOW()` })
       .where(eq(franchisee.id, anchor.id));
 
-    // 新根自指 (INSERT 时没有 id)
-    await tx
-      .update(franchisee)
-      .set({ rootId: uplineId, updatedAt: sql`NOW()` })
-      .where(eq(franchisee.id, uplineId));
+    if (uplineIsNew) {
+      // 新节点: root_id 自指 (INSERT 时还没有 id)
+      await tx
+        .update(franchisee)
+        .set({ rootId: upline.id, updatedAt: sql`NOW()` })
+        .where(eq(franchisee.id, upline.id));
+    }
 
-    resultFid = uplineId;
-
+    // 上级的账号绑定 + 客户档案 (新节点必绑; 已有节点则补齐缺失的绑定, 他才能登录看自己这棵树)
     await linkAccountAndCustomer(tx, {
-      fid: uplineId,
+      fid: upline.id,
       phoneHash: raw.newPhoneHash,
       phoneEncrypted: raw.newPhoneEncrypted,
       name: raw.newName ?? "(未命名)",
       createdBy: raw.initiatorUserId,
     });
 
-    createdOutcome = { createdPhoneHash: raw.newPhoneHash ?? null };
+    resultFid = upline.id;
+    // 只有"新建了上级节点"才算新增了一个加盟商 → 才发推荐奖励; 复用已有节点不算
+    createdOutcome = { createdPhoneHash: uplineIsNew ? raw.newPhoneHash ?? null : null };
   } else if (raw.kind === "unjoin") {
     // 解除加盟: 软删加盟记录 (点位释放; 客户档案保留 → 客户退回 种子/普通 判定)
     if (raw.moveFid == null) throw new Error("unjoin 单缺节点 id");

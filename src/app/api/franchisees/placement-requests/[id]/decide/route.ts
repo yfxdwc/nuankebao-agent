@@ -1,5 +1,7 @@
 // POST /api/franchisees/placement-requests/:id/decide
-// 三方之一拍板: { decision: 'approve' | 'reject' }
+// 三方之一拍板: { decision: 'approve' | 'reject', side?: 'left' | 'right' }
+//   - side 只有 promote 单的**上级本人**需要传 (主人 2026-09-21 拍:
+//     「我在我的上级是处于 a线还是 b线由我的上级自己决定」→ 由上级挑自己空着的点位)
 //   - 全部 approve → 事务内执行落位 (新设/移动) 并把单子置 executed
 //   - 任一 reject  → 单子置 rejected, 点位预占释放, 不落位
 
@@ -28,20 +30,23 @@ export async function POST(
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 
-  let body: { decision?: string };
+  let body: { decision?: string; side?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
   const decision = body.decision === "reject" ? "reject" : "approve";
+  const side =
+    body.side === "left" || body.side === "right" ? body.side : undefined;
 
   try {
     const view = await decidePlacementRequest(
       BigInt(id),
       { userId: actor.userId, fid: actor.fid, phoneHash: actor.phoneHash },
       decision,
-      getAuditContextFromRequest(request, session)
+      getAuditContextFromRequest(request, session),
+      side
     );
     return NextResponse.json(view);
   } catch (error) {

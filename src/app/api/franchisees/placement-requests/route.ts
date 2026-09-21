@@ -3,8 +3,11 @@
 //
 // POST 发起: { kind: 'create'|'unjoin'|'promote', targetParentId, side, newName?, newPhone?, newNotes?, unjoinFid? }
 //   - unjoin (解除加盟): 传 kind='unjoin' + unjoinFid=要解除的节点; targetParentId/side 可省 (服务端按节点推)
-//   - promote (向上认领上级, 主人 2026-09-21 拍 B2): 传 kind='promote' + side + 上级 newName/newPhone;
-//     targetParentId 免传 —— 锚点 = 发起人自己的那个根 (服务端填). 双方确认 (我 + 上级本人)
+//   - promote (向上认领上级, 主人 2026-09-21 拍 B2): 传 kind='promote' + 上级 newName/newPhone;
+//     targetParentId / side 都免传 —— 锚点 = 发起人自己的那个根 (服务端填),
+//     **我在上级的 A线/B线 由上级本人在确认时决定** (拍板原话), 不由认领人提交。
+//     上级若已是 app 里的节点 → 复用他的节点 (两棵树合并); 否则执行时新建。
+//     双方确认 (我 + 上级本人)
 //   - ⚠ kind='move' (直接移动点位) 已下线 (主人 2026-09-19 拍): 点位变更必须先解除加盟再重新落位
 //     （老的 moveFid 字段名仍接受作为 unjoin 的兼容别名, 但 kind='move' 会被明确拒绝）
 //   - 发起人自动记 1 票 (设置者本人)
