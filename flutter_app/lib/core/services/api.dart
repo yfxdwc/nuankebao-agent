@@ -16,6 +16,7 @@ import '../models/dashboard.dart';
 import '../models/franchisee.dart';
 import '../models/placement_request.dart';
 import '../models/me.dart';
+import '../models/admin_user.dart';
 import '../models/salon.dart';
 import '../http/api_client.dart';
 
@@ -985,6 +986,41 @@ class BillingService {
 // ============================================
 // SystemService (版本 / 更新 / 网络自检)
 // ============================================
+
+/// 管理员 · 用户管理 (全部注册用户 + 加盟节点总览 + 建根)
+///   主人 2026-09-21 拍: 入口在「我的」(仅 admin 可见); 服务端每次重新判权
+class AdminUsersService {
+  final Dio _dio;
+  AdminUsersService(this._dio);
+
+  /// 全部注册用户 + 加盟节点 (含无账号节点) + 摘要
+  Future<AdminUsersOverview> overview() async {
+    final res = await _dio.get('/admin/users');
+    return AdminUsersOverview.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 建根 (Bootstrap Root): 把一个**已注册**账号设为根节点
+  ///   主人 2026-09-21 拍: 「建根 = 先有账号」—— 不新建账号, 只挂节点
+  Future<({bool ok, String message, int rootCount})> createRoot({
+    required String userId,
+    required String note,
+  }) async {
+    try {
+      final res = await _dio.post('/admin/users/$userId/root', data: {'note': note});
+      final data = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : {};
+      final count = (data['rootCount'] as num?)?.toInt() ?? 0;
+      return (
+        ok: true,
+        message: count > 1 ? '已建根 (现在共 $count 棵树)' : '已建根',
+        rootCount: count,
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final msg = data is Map ? data['error']?.toString() : null;
+      return (ok: false, message: msg ?? '建根失败, 请重试', rootCount: 0);
+    }
+  }
+}
 
 class SystemService {
   final Dio _dio;

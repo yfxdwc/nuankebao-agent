@@ -12,6 +12,7 @@ import '../models/follow_up_info.dart';
 import '../models/dashboard.dart';
 import '../models/follow_up.dart';
 import '../models/me.dart';
+import '../models/admin_user.dart';
 
 /// 跟进提醒 (本地通知; web = 空实现, 见 follow_up_reminder.dart 平台差异说明)
 final followUpReminderProvider = Provider<FollowUpReminder>(
@@ -70,6 +71,10 @@ final systemServiceProvider = Provider<SystemService>(
 final billingServiceProvider = Provider<BillingService>(
   (ref) => BillingService(ref.watch(dioProvider)),
 );
+final adminUsersServiceProvider = Provider<AdminUsersService>(
+  (ref) => AdminUsersService(ref.watch(dioProvider)),
+);
+
 final salonServiceProvider = Provider<SalonService>(
   (ref) => SalonService(ref.watch(dioProvider)),
 );
@@ -229,3 +234,9 @@ final placementToConfirmCountProvider = FutureProvider<int>((ref) async {
   final items = await svc.listPlacementRequests(scope: 'to_confirm');
   return items.length;
 });
+
+/// 管理员 · 用户管理总览 (全部注册用户 + 加盟节点)
+///   仅 admin 可见; 页面下拉刷新 / 建根成功后 invalidate 它
+final adminUsersProvider = FutureProvider.autoDispose<AdminUsersOverview>(
+  (ref) async => ref.watch(adminUsersServiceProvider).overview(),
+);

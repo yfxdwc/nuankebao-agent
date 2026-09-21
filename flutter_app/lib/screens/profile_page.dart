@@ -895,6 +895,16 @@ class _AboutCard extends ConsumerWidget {
             color: AppTheme.danger,
             onTap: () => context.push('/profile/admin'),
           ),
+        // 用户管理 (主人 2026-09-21 拍): 全部注册用户 + 加盟/未加盟 + 建根
+        //   同样只有 admin 看得见; 建根这种写操作服务端会再查一次 role
+        if (profile.user?.role == 'admin')
+          ProfileTile(
+            icon: Icons.people_alt_outlined,
+            title: '用户管理',
+            subtitle: '全部注册用户 · 加盟 / 未加盟 · 建根',
+            color: AppTheme.primary,
+            onTap: () => context.push('/profile/users'),
+          ),
         // 服务地址: 开发/排障可见 (生产用户看到 IP 只会困惑)
         if (kDebugMode)
           ProfileTile(

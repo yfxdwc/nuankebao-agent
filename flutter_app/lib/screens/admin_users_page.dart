@@ -1,0 +1,472 @@
+// ============================================
+// 用户管理 (管理员专用: 全部注册用户 · 列表 / 图谱)
+// ============================================
+// 主人 2026-09-21 拍:
+//   「管理员的『我的』页面增加一个页面入口 → 全部注册用户管理页, 可切换列表和图谱 2 种视图;
+//     图谱页要能显示 加盟 (接入了节点树的) / 未加盟 (独立节点);
+//     付费会员要在头像上有会员标识以作区分」
+//   「建根 = 先有账号, admin 能建根, 但要用户先注册」
+//
+// 为什么做在 APK 而不是 web admin: 同 admin_tools_page.dart —— web admin 冻结中
+//   (ADR-0005), 而建根/看人主人在手机上就要能做。
+// 权限: 入口只对 role=admin 显示 (客户端过滤); 服务端每个请求重新查 role。
+// ============================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../core/models/admin_user.dart';
+import '../core/providers/service_providers.dart';
+import '../core/theme/app_theme.dart';
+import '../core/widgets/empty_state.dart';
+import '../core/widgets/member_avatar.dart';
+import 'admin_users_graph.dart';
+
+class AdminUsersPage extends ConsumerStatefulWidget {
+  const AdminUsersPage({super.key});
+
+  @override
+  ConsumerState<AdminUsersPage> createState() => _AdminUsersPageState();
+}
+
+enum _View { list, graph }
+
+class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
+  _View _view = _View.list;
+  bool _viewInitialized = false;
+  String _busy = '';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // URL ?view=graph → 直接进图谱 (同客户页 /customers?view=graph 的口径; 也方便截图验证)
+    if (!_viewInitialized) {
+      if (GoRouterState.of(context).uri.queryParameters['view'] == 'graph') {
+        _view = _View.graph;
+      }
+      _viewInitialized = true;
+    }
+  }
+
+  Future<void> _refresh() async {
+    ref.invalidate(adminUsersProvider);
+    await ref.read(adminUsersProvider.future);
+  }
+
+  // ---------- 建根 ----------
+  Future<void> _buildRoot(AdminUser user) async {
+    final note = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final ctrl = TextEditingController();
+        return AlertDialog(
+          title: const Text('设为根节点'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '把「${user.name}」建成一棵新的加盟树的根节点。\n'
+                '根没有上级, 所以不需要三方确认 (后续节点照旧要走确认)。',
+                style: const TextStyle(fontSize: AppTheme.fontSm),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                maxLength: 60,
+                decoration: const InputDecoration(
+                  labelText: '为什么建这个根 (必填)',
+                  hintText: '如: 杭州西湖店 店长',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('建根'),
+            ),
+          ],
+        );
+      },
+    );
+    if (note == null || !mounted) return;
+    if (note.length < 2) {
+      _toast('请填一句建根原因 (审计要留痕)');
+      return;
+    }
+
+    setState(() => _busy = user.id);
+    final r = await ref
+        .read(adminUsersServiceProvider)
+        .createRoot(userId: user.id, note: note);
+    if (!mounted) return;
+    setState(() => _busy = '');
+    _toast(r.message);
+    if (r.ok) await _refresh();
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: const TextStyle(fontSize: AppTheme.fontSm)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // ---------- 详情弹层 ----------
+  void _showUserSheet(AdminUser u) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  MemberAvatar(
+                    avatarUrl: u.avatarUrl,
+                    name: u.name,
+                    size: 56,
+                    isMember: u.member.isMember,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          u.name,
+                          style: const TextStyle(
+                            fontSize: AppTheme.fontMd,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _memberText(u),
+                          style: TextStyle(
+                            fontSize: AppTheme.fontSm,
+                            color: u.member.isMember
+                                ? kMemberGold
+                                : AppTheme.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _kv('手机号', u.phoneMasked.isEmpty ? '—' : u.phoneMasked),
+              _kv('推荐码', u.referralCode ?? '—'),
+              _kv('账号角色', u.isAdmin ? '系统管理员' : '销售员'),
+              _kv('加盟状态', u.isJoined ? '已加盟 (节点 #${u.franchiseeId})' : '未加盟'),
+              _kv('注册时间', u.createdDate.isEmpty ? '—' : u.createdDate),
+              if (!u.isJoined) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _buildRoot(u);
+                    },
+                    icon: const Icon(Icons.park_outlined),
+                    label: const Text('设为根节点'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showNodeSheet(AdminNode n) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                n.name,
+                style: const TextStyle(
+                  fontSize: AppTheme.fontMd,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _kv('节点编号', '#${n.fid}'),
+              if (n.accountName != null) _kv('账号', n.accountName!),
+              _kv('位置', n.isRoot ? '根节点 (没有上级)' : '第 ${n.depth + 1} 层'),
+              _kv('会员', n.member ? '会员' : '免费'),
+              _kv('账号状态', n.hasAccount ? '有账号' : '无账号 (历史/脚本站的节点)'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _memberText(AdminUser u) {
+    if (u.member.permanent) return '管理员 · 永久会员';
+    if (!u.member.isMember) return '免费版';
+    final until = u.member.until;
+    if (until == null || until.length < 10) return '会员';
+    return '会员 · 有效至 ${until.substring(0, 10)}';
+  }
+
+  Widget _kv(String k, String v) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 76,
+              child: Text(
+                k,
+                style: const TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(v, style: const TextStyle(fontSize: AppTheme.fontSm)),
+            ),
+          ],
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(adminUsersProvider);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('用户管理'),
+        actions: [
+          IconButton(
+            tooltip: '刷新',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: async.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        // 403 (非管理员) 给一句人话, 不要笼统"网络不太好" —— 那会让人一直重试
+        error: (e, _) => e.toString().contains('403')
+            ? const EmptyState(
+                icon: Icons.lock_outline,
+                title: '只有管理员能看',
+                hint: '这个页面是系统管理员专用的',
+              )
+            : ErrorState(error: e, onRetry: _refresh),
+        data: (data) {
+          if (data.users.isEmpty) {
+            return const EmptyState(
+              icon: Icons.people_outline,
+              title: '还没有注册用户',
+              hint: '用户先注册, 你才能把他设为根节点',
+            );
+          }
+          final s = data.summary;
+          return Column(
+            children: [
+              _summaryBar(s),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: SegmentedButton<_View>(
+                  segments: const [
+                    ButtonSegment(
+                      value: _View.list,
+                      label: Text('列表', style: TextStyle(fontSize: AppTheme.fontSm)),
+                    ),
+                    ButtonSegment(
+                      value: _View.graph,
+                      label: Text('图谱', style: TextStyle(fontSize: AppTheme.fontSm)),
+                    ),
+                  ],
+                  selected: {_view},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (v) => setState(() => _view = v.first),
+                ),
+              ),
+              Expanded(
+                child: _view == _View.list
+                    ? _list(data)
+                    : AdminUsersGraph(
+                        data: data,
+                        onTapNode: _showNodeSheet,
+                        onTapUser: _showUserSheet,
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _summaryBar(AdminUsersSummary s) {
+    final parts = <String>[
+      '共 ${s.total} 人',
+      '加盟 ${s.joined}',
+      '未加盟 ${s.notJoined}',
+      '会员 ${s.members}',
+    ];
+    if (s.nodesWithoutAccount > 0) parts.add('树里 ${s.nodesWithoutAccount} 个无账号节点');
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        parts.join(' · '),
+        style: const TextStyle(
+          fontSize: AppTheme.fontSm,
+          color: AppTheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _list(AdminUsersOverview data) {
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView.separated(
+        itemCount: data.users.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, i) {
+          final u = data.users[i];
+          return InkWell(
+            onTap: () => _showUserSheet(u),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  MemberAvatar(
+                    avatarUrl: u.avatarUrl,
+                    name: u.name,
+                    size: 48,
+                    isMember: u.member.isMember,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                u.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: AppTheme.fontMd,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (u.isAdmin) ...[
+                              const SizedBox(width: 6),
+                              _chip('管理员', AppTheme.danger),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          [
+                            if (u.phoneMasked.isNotEmpty) u.phoneMasked,
+                            if (u.referralCode != null) '推荐码 ${u.referralCode}',
+                            if (u.createdDate.isNotEmpty) '注册 ${u.createdDate}',
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: AppTheme.fontXs,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _chip(
+                        u.isJoined ? '加盟' : '未加盟',
+                        u.isJoined ? AppTheme.primary : AppTheme.textSecondary,
+                      ),
+                      if (!u.isJoined)
+                        TextButton(
+                          onPressed: _busy == u.id ? null : () => _buildRoot(u),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            minimumSize: const Size(0, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: _busy == u.id
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text(
+                                  '设为根节点',
+                                  style: TextStyle(fontSize: AppTheme.fontXs),
+                                ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _chip(String text, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: AppTheme.fontXs,
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+}

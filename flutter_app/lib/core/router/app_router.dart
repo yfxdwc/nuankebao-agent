@@ -22,6 +22,7 @@ import '../../modules/relation/screens/placement_requests_page.dart';
 import '../../modules/follow_up/screens/follow_ups_page.dart';
 import '../../screens/about_page.dart';
 import '../../screens/admin_tools_page.dart';
+import '../../screens/admin_users_page.dart';
 import '../../screens/my_referrals_page.dart';
 import '../../screens/profile_page.dart';
 import '../../modules/wellness/screens/wellness_record_form_page.dart';
@@ -207,6 +208,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'admin',
                 name: 'profile-admin',
                 builder: (context, state) => const AdminToolsPage(),
+              ),
+              // 用户管理 (全部注册用户 + 加盟树; 主人 2026-09-21 拍)
+              //   入口只对 admin 显示 (客户端过滤); 服务端每个请求重新判 role → 403
+              GoRoute(
+                path: 'users',
+                name: 'profile-users',
+                builder: (context, state) => const AdminUsersPage(),
               ),
               // 我推荐的人 (B1: 推荐人确认好友; 防"码被转发后陌生人白嫖")
               GoRoute(
