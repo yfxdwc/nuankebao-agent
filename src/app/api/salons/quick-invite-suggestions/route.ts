@@ -42,9 +42,10 @@ export async function GET() {
         id: customer.id,
         name: customer.name,
         phoneEncrypted: customer.phoneEncrypted,
+        // ★ ID 化 (ADR-0016 D3): 只看已建客户里"也注册了账号"的 (走 user.customer_id)
         isMember: sql<boolean>`EXISTS (
           SELECT 1 FROM "user" u
-          WHERE u.phone_hash = ${customer.phoneHash} AND u.is_active = true
+          WHERE u.customer_id = ${customer.id} AND u.is_active = true
         )`,
       })
       .from(customer)

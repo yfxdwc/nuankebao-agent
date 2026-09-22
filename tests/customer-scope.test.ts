@@ -47,6 +47,10 @@ describe("customer-scope — 我的客户 = 归属我 ∪ 直推加盟", () => {
     );
     expect(q.sql).toContain("owner_id");
     expect(q.sql).toContain("placement_parent_id");
+    // ★ ADR-0016 D3: 身份连接只走 ID (u.customer_id / u.franchisee_id), 不再比手机号
+    expect(q.sql).toContain("u.customer_id");
+    expect(q.sql).toContain("u.franchisee_id");
+    expect(q.sql).not.toContain("phone_hash");
     // 结构判定读点位父, 不读推荐人/路径
     expect(q.sql).not.toContain("referrer_id");
     expect(q.sql).not.toContain("placement_path");

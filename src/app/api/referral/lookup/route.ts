@@ -29,11 +29,10 @@ import {
   isValidReferralCodeShape,
   normalizeReferralCode,
 } from "@/lib/billing/referral";
-import { memberFlagByPhoneHash } from "@/lib/billing/member-flag";
+import { memberFlagByUserId } from "@/lib/billing/member-flag";
 import { decryptField } from "@/lib/crypto/field";
 import { maskPhone } from "@/lib/utils";
 import { rateLimit, RateLimits, rateLimitResponse } from "@/lib/rate-limit";
-import { resolveViewerPhoneHash } from "@/lib/auth/viewer";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 
 export async function GET(request: NextRequest) {
@@ -83,8 +82,10 @@ export async function GET(request: NextRequest) {
     .where(and(eq(customer.phoneHash, owner.phoneHash), isNull(customer.deletedAt)))
     .limit(1);
 
-  const myPhoneHash = await resolveViewerPhoneHash(session.user.id);
-  const isSelf = myPhoneHash != null && myPhoneHash === owner.phoneHash;
+  // 自己查自己的码 → self
+  //   ★ ADR-0016 D3 (主人 2026-09-22): 比 **user id**, 不比手机号 hash ——
+  //     同号不同人时, "同号"不能当成"同一个人"
+  const isSelf = owner.id === userId;
 
   const claimState = isSelf
     ? "self"
@@ -112,7 +113,7 @@ export async function GET(request: NextRequest) {
     code,
     name: owner.name,
     phoneMasked: maskPhone(decryptField(owner.phoneEncrypted)),
-    isMember: await memberFlagByPhoneHash(owner.phoneHash),
+    isMember: await memberFlagByUserId(owner.id),
     customerId: profile?.id?.toString() ?? null,
     claimState,
   });

@@ -366,3 +366,50 @@ export async function createRootForUser(
     };
   });
 }
+
+// ============================================
+// 账号生命周期: 停用 / 启用 (ADR-0016 D7 初步机制, 主人 2026-09-22 拍)
+// ============================================
+// 口径 (先有骨架, 细节留待后期):
+//   - 停用 (user.is_active = false): 不能登录; **不删**客户档案、**不摘**加盟节点
+//   - 默认**不级联**: 危险动作要在 UI 里说清影响范围
+//   - guardrail: 不能停用自己; 不能停用**最后一个**在用的 admin
+//   - 审计: user 表挂了 audit 触发器 → 这次 UPDATE 自动进 audit_log (谁停的 + 改了什么)
+//
+// 为什么放在 admin-users.ts: 它就是"管理员对账号"的写入口 (与建根 createRootForUser 同处)。
+export async function setUserActiveStatus(input: {
+  userId: bigint;
+  isActive: boolean;
+  actorUserId: bigint;
+  ctx: AuditContext;
+}): Promise<{ name: string; isActive: boolean }> {
+  if (input.userId === input.actorUserId && !input.isActive) {
+    throw new Error("不能停用自己的账号 (换个人操作, 或先交出管理员)");
+  }
+
+  const [target] = await db
+    .select({ id: user.id, name: user.name, role: user.role, isActive: user.isActive })
+    .from(user)
+    .where(eq(user.id, input.userId))
+    .limit(1);
+  if (!target) throw new Error("账号不存在");
+
+  if (!input.isActive && target.role === "admin") {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(user)
+      .where(and(eq(user.role, "admin"), eq(user.isActive, true)));
+    if (Number(row?.n ?? 0) <= 1) {
+      throw new Error("不能停用最后一个管理员账号 (先设另一个管理员)");
+    }
+  }
+
+  await withAuditContext(input.ctx, async (tx) => {
+    await tx
+      .update(user)
+      .set({ isActive: input.isActive, updatedAt: sql`NOW()` })
+      .where(eq(user.id, input.userId));
+  });
+
+  return { name: target.name, isActive: input.isActive };
+}

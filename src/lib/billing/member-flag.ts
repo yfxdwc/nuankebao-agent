@@ -16,8 +16,9 @@
 //   不落库、不缓存任何 member 布尔值。每次读都按当前 member_until / role 现算 →
 //   充值转会员 / 到期掉会员, 下次拉列表或图谱就变, 不需要任何同步任务。
 
-import { sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { membership, user as userTable } from "@/lib/db/schema";
 
 /**
  * 单行判定 (纯函数, 单测用)
@@ -44,7 +45,7 @@ export function memberFlagOf(
  *
  * @param match 关联条件 (节点 → 账号), 二选一:
  *   - 加盟节点: sql`u.franchisee_id = ${franchisee.id}`
- *   - 客户档案: sql`u.phone_hash = ${customer.phoneHash}` (账号=客户, 见 ADR-0013)
+ *   - 客户档案: sql`u.customer_id = ${customer.id}` (★ ADR-0016 D3: 走 ID, 不走 phone_hash)
  *
  * 用 EXISTS 而不是 LEFT JOIN: 一个节点理论上可能挂多个账号 (脏数据) → JOIN 会把
  * 树/列表的行数变多 (节点重复), EXISTS 恒返回一行。NOW() 由库自己取, 不用应用时间。
@@ -59,14 +60,45 @@ export function memberExistsSql(match: SQL): SQL<boolean> {
 }
 
 /**
- * 单条判定: 这个手机号 hash 有没有「会员账号」 (create / get 单行场景)
+ * 单条判定: 这个**客户档案的账号**是不是会员 (create / get / update / claim 单行场景)
  *
- * 列表/图谱走 SQL 布尔列 (memberExistsSql 直接选出来); 单行场景没法在行里带列,
- * 所以把同一个表达式 SELECT 出来 —— 口径仍然只有 memberExistsSql 一处。
+ * ★ ID 化 (ADR-0016 D3, 主人 2026-09-22 拍「手机号不作为用户识别内容」):
+ *   走 `user.customer_id` 连接, 不再靠 phone_hash 相等猜"同一个人"。
+ * 列表/图谱走 SQL 布尔列 (memberExistsSql 直接选出来); 单行场景把同一个
+ * 表达式 SELECT 出来 —— 口径仍然只有 memberExistsSql 一处。
  */
-export async function memberFlagByPhoneHash(phoneHash: string): Promise<boolean> {
+export async function memberFlagByCustomerId(customerId: bigint): Promise<boolean> {
   const rows = await db.execute<{ m: boolean }>(
-    sql`SELECT ${memberExistsSql(sql`u.phone_hash = ${phoneHash}`)} AS m`
+    sql`SELECT ${memberExistsSql(sql`u.customer_id = ${customerId}`)} AS m`
   );
   return rows[0]?.m === true;
+}
+
+/**
+ * 单行客户档案的两面旗: ①有没有账号 (hasAccount, UI 区分"已注册用户/凭空建档") ②账号是不是会员
+ *   ADR-0016 D8 (主人 2026-09-22 拍「UI 上要有区别」) + D3 (走 ID, 不走手机号)
+ *   一次查询拿两个布尔, 避免单行详情页多一次往返。
+ */
+export async function customerFlagsByCustomerId(
+  customerId: bigint
+): Promise<{ hasAccount: boolean; isMember: boolean }> {
+  const rows = await db.execute<{ a: boolean; m: boolean }>(sql`
+    SELECT
+      EXISTS (SELECT 1 FROM "user" u WHERE u.customer_id = ${customerId}) AS a,
+      ${memberExistsSql(sql`u.customer_id = ${customerId}`)} AS m
+  `);
+  return { hasAccount: rows[0]?.a === true, isMember: rows[0]?.m === true };
+}
+
+/**
+ * 单条判定: 这个**账号**是不是会员 (已知 user id 时用; 例如按码查人)
+ */
+export async function memberFlagByUserId(userId: bigint): Promise<boolean> {
+  const [row] = await db
+    .select({ role: userTable.role, memberUntil: membership.memberUntil })
+    .from(userTable)
+    .leftJoin(membership, eq(membership.userId, userTable.id))
+    .where(eq(userTable.id, userId))
+    .limit(1);
+  return memberFlagOf(row?.role ?? null, row?.memberUntil ?? null);
 }

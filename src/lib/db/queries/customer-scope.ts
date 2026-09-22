@@ -29,11 +29,15 @@ export function directDownlineFranchiseeSql(
   viewerFranchiseeId: bigint | null
 ): SQL {
   if (viewerFranchiseeId === null) return sql`false`;
+  // ★ ID 化连接 (ADR-0016 D3/D4, 主人 2026-09-22 拍「手机号不作为用户识别内容」):
+  //   旧口径 `franchisee.phone_hash = customer.phone_hash` —— 同号不同人 / 改号会误判;
+  //   新口径走真连接: 客户的**账号** (user.customer_id) → 她的加盟节点 (user.franchisee_id)
   return sql`EXISTS (
-    SELECT 1 FROM ${franchisee}
-    WHERE ${franchisee.deletedAt} IS NULL
-      AND ${franchisee.phoneHash} = ${customer.phoneHash}
-      AND ${franchisee.placementParentId} = ${viewerFranchiseeId}
+    SELECT 1 FROM franchisee f
+    JOIN "user" u ON u.franchisee_id = f.id
+    WHERE f.deleted_at IS NULL
+      AND u.customer_id = ${customer.id}
+      AND f.placement_parent_id = ${viewerFranchiseeId}
   )`;
 }
 

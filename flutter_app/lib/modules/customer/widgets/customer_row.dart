@@ -276,6 +276,27 @@ class CustomerRow extends StatelessWidget {
         ),
         const SizedBox(width: 6),
       ],
+      // ★ 已注册用户标记 (ADR-0016 D8, 主人 2026-09-22 拍「UI 上要有区别」)
+      //   true = 她是 app 用户 (有账号) / 不显示 = 凭空建档的客户
+      if (customer.hasAccount) ...[
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryLight,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Text(
+            '已注册',
+            style: TextStyle(
+              // ⚠ 主题里必须显式给 color (AGENTS §5: 不给 = 真机白字)
+              color: AppTheme.primaryDark,
+              fontSize: AppTheme.fontXs,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+      ],
     ];
   }
 }

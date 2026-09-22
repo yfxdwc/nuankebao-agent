@@ -29,7 +29,7 @@ import { customerRbacFilter, type RbacContext } from "@/lib/auth/rbac";
 import { directDownlineFranchiseeSql } from "./customer-scope";
 import {
   memberExistsSql,
-  memberFlagByPhoneHash,
+  customerFlagsByCustomerId,
 } from "@/lib/billing/member-flag";
 
 // ============================================
@@ -68,11 +68,18 @@ export interface CustomerView {
   customerType: CustomerType;
   /**
    * 会员标识 (主人 2026-09-21 拍: 「会员在别人的列表里也要有明显标识」)
-   *   口径 = 同手机号的**账号**是不是会员 (账号=客户, ADR-0013; role='admin' 也算),
+   *   口径 = **关联账号**是不是会员 (账号=客户, ADR-0013; role='admin' 也算),
    *   见 src/lib/billing/member-flag.ts。没有账号的客户恒 false。
    *   ★ 每次查询现算 (不落库) → 充值 / 到期后下次拉列表即变, 无需同步任务
    */
   isMember: boolean;
+  /**
+   * ★ 这条档案**对应一个 app 账号**吗 (ADR-0016 D8, 主人 2026-09-22 拍「UI 上要有区别」)
+   *   true  = 她是已注册用户 (user.customer_id 指过来)
+   *   false = 凭空建档的客户 (还没注册 / 永远不会注册)
+   *   口径 = **ID** (user.customer_id), 不按手机号相等猜。
+   */
+  hasAccount: boolean;
   /** 上次联系 (互动记录; 跟进紧急度用, 主人 2026-09-20) */
   lastInteractionAt: Date | null;
   /** 上次到店 (养生记录; 跟进紧急度用) */
@@ -149,7 +156,8 @@ export function resolveCustomerType(
 function toView(
   row: Customer,
   isMyDownline: boolean = false,
-  isMember: boolean = false
+  isMember: boolean = false,
+  hasAccount: boolean = false
 ): CustomerView {
   return {
     id: row.id.toString(),
@@ -177,6 +185,7 @@ function toView(
     isSeed: row.isSeed,
     customerType: resolveCustomerType(row, isMyDownline),
     isMember,
+    hasAccount,
     lastInteractionAt: row.lastInteractionAt ?? null,
     lastVisitAt: row.lastVisitAt ?? null,
     createdAt: row.createdAt,
@@ -248,12 +257,13 @@ export interface ListCustomersOptions {
    */
   sort?: "urgency" | "recent" | "new" | "name";
   /**
-   * 当前登录者的手机号 hash —— 排掉**他自己的客户档案** (主人 2026-09-22):
-   *   建号即强制建档 → 每个账号有一条同手机号 customer 档案 (语义 = "她作为别人的客户"),
+   * 当前登录者自己的**客户档案 id** (user.customer_id) —— 排掉他自己那条 (主人 2026-09-22):
+   *   建号即强制建档 → 每个账号有一条自己的 customer 档案 (语义 = "她作为别人的客户"),
    *   那条不该出现在**她自己**的客户列表里。
+   * ★ ID 化 (ADR-0016 D3): 不再按手机号 hash 排除 (同号不同人会误伤)。
    * null / 缺省 = 不排除 (web admin 老调用方保持原样)
    */
-  excludePhoneHash?: string | null;
+  excludeCustomerId?: bigint | null;
   // W5 RBAC: 行级过滤上下文
   rbacCtx?: RbacContext;
 }
@@ -311,16 +321,78 @@ function resolveRemindDays(
 // CRUD
 // ============================================
 
+/**
+ * 手机号撞车 (同号提醒, ADR-0016 D5, 主人 2026-09-22 拍)
+ *
+ * 背景: 手机号**不是**身份锚 (唯一识别码是邀请码), 所以撞号**不静默合并**,
+ *   也不静默报 500 —— 停下来告诉操作人"这个号已经有档案", 让她决定:
+ *   · 用已有档案 → 走 `POST /api/customers/claim` (加为我的客户, 先到先得)
+ *   · 不是同一个人 → 换联系方式 (默认不允许同号两条档案; 见 ADR-0016 §4 fork)
+ */
+export class CustomerPhoneExistsError extends Error {
+  readonly existing: {
+    id: bigint;
+    name: string;
+    hasAccount: boolean;
+    ownerName: string | null;
+  };
+  constructor(existing: {
+    id: bigint;
+    name: string;
+    hasAccount: boolean;
+    ownerName: string | null;
+  }) {
+    const bits: string[] = [];
+    if (existing.hasAccount) bits.push("对方已注册 app");
+    if (existing.ownerName) bits.push(`已是 ${existing.ownerName} 的客户`);
+    super(
+      `该手机号已有客户档案: ${existing.name}` +
+        (bits.length > 0 ? ` (${bits.join("; ")})` : "") +
+        " —— 可用「加为我的客户」接过来, 或换一个联系方式"
+    );
+    this.name = "CustomerPhoneExistsError";
+    this.existing = existing;
+  }
+}
+
+/** 按手机号找已有档案 (带"是否已注册 / 归属谁"两项提醒信息) */
+export async function describeExistingCustomerByPhone(phoneHash: string): Promise<{
+  id: bigint;
+  name: string;
+  hasAccount: boolean;
+  ownerName: string | null;
+} | null> {
+  const [row] = await db
+    .select({
+      id: customer.id,
+      name: customer.name,
+      hasAccount: sql<boolean>`EXISTS (
+        SELECT 1 FROM "user" u WHERE u.customer_id = ${customer.id}
+      )`,
+      ownerName: user.name,
+    })
+    .from(customer)
+    .leftJoin(user, eq(user.id, customer.ownerId))
+    .where(and(eq(customer.phoneHash, phoneHash), isNull(customer.deletedAt)))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function createCustomer(
   input: CreateCustomerInput,
   ctx: AuditContext,
   createdBy: bigint,
   viewerFranchiseeId: bigint | null = null
 ): Promise<CustomerView> {
+  // ★ 同号提醒 (ADR-0016 D5): 撞号 = 停下问人 (而不是让唯一索引炸成 500)
+  const inputPhoneHash = hashForLookup(input.phone);
+  const dup = await describeExistingCustomerByPhone(inputPhoneHash);
+  if (dup) throw new CustomerPhoneExistsError(dup);
+
   const encryptedData: NewCustomer = {
     name: input.name,
     phoneEncrypted: encryptField(input.phone),
-    phoneHash: hashForLookup(input.phone),
+    phoneHash: inputPhoneHash,
     gender: input.gender,
     birthYear: input.birthYear,
     birthMonth: normalizeBirthPart(input.birthMonth, 1, 12),
@@ -355,10 +427,12 @@ export async function createCustomer(
   });
   // 新建客户可能同时是「我的下级加盟商」(同手机号有 franchisee 记录) → 类型一次算准
   // 会员标识同理: 这个手机号可能已经是会员账号 (建号即建档, ADR-0013)
+  const flags = await customerFlagsByCustomerId(row.id);
   return toView(
     row,
     await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
-    await memberFlagByPhoneHash(row.phoneHash)
+    flags.isMember,
+    flags.hasAccount
   );
 }
 
@@ -386,13 +460,14 @@ export async function getCustomerById(
     .where(conditions)
     .limit(1);
 
-  return row
-    ? toView(
-        row,
-        await isMyDirectDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.phoneHash),
-        await memberFlagByPhoneHash(row.phoneHash)
-      )
-    : null;
+  if (!row) return null;
+  const flags = await customerFlagsByCustomerId(row.id);
+  return toView(
+    row,
+    await isMyDirectDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.phoneHash),
+    flags.isMember,
+    flags.hasAccount
+  );
 }
 
 /**
@@ -403,13 +478,15 @@ export async function getCustomerById(
  *   那条档案的语义是「她作为**别人**的客户」(出现在她推荐人的列表里);
  *   但**她自己**的客户列表不该出现它 —— 否则客户列表第一条就是自己。
  *
- * 口径: 手机号 hash (user ↔ customer 的既有约定, 无 FK 列; 见 AGENTS §6.6)
+ * 口径 (ADR-0016 D3, 主人 2026-09-22 拍「手机号不作为用户识别内容」):
+ *   走 **ID** —— 排掉 `customer.id = 我的档案 id` (user.customer_id);
+ *   旧口径按 phone_hash 不等排除 —— 同号不同人会被误伤, 已废。
  * 返回 null = 没有可排除的 (未登录 / dev 空 session) → 不加条件 (老行为)
  */
 export function selfCustomerExclusionSql(
-  viewerPhoneHash: string | null | undefined
+  viewerCustomerId: bigint | null | undefined
 ): SQL | null {
-  return viewerPhoneHash ? ne(customer.phoneHash, viewerPhoneHash) : null;
+  return viewerCustomerId ? ne(customer.id, viewerCustomerId) : null;
 }
 
 /** 抽出来公用: 列表 / 计数的 WHERE 条件一致 (三者互斥穷尽才能相加==all) */
@@ -420,7 +497,7 @@ function buildCustomerConditions(options: ListCustomersOptions): SQL[] {
     conditions.push(isNull(customer.deletedAt));
   }
   // 自己不应该是自己的客户 (主人 2026-09-22): 排掉当前登录者自己的档案
-  const selfExclusion = selfCustomerExclusionSql(options.excludePhoneHash);
+  const selfExclusion = selfCustomerExclusionSql(options.excludeCustomerId);
   if (selfExclusion) {
     conditions.push(selfExclusion);
   }
@@ -472,7 +549,12 @@ export async function listCustomers(
         row: customer,
         isDownline: sql<boolean>`${directDownline}`,
         // 会员标识: 同手机号账号的会员状态 (EXISTS 子查询, 不产生重复行)
-        isMember: memberExistsSql(sql`u.phone_hash = ${customer.phoneHash}`),
+        // ★ ID 化 (ADR-0016 D3): 会员标识走 user.customer_id, 不再按手机号相等
+        isMember: memberExistsSql(sql`u.customer_id = ${customer.id}`),
+        // ★ 有没有账号 (ADR-0016 D8): UI 区分「已注册用户」vs「凭空建档的客户」
+        hasAccount: sql<boolean>`EXISTS (
+          SELECT 1 FROM "user" u WHERE u.customer_id = ${customer.id}
+        )`,
       })
       .from(customer)
       .where(whereClause)
@@ -493,7 +575,7 @@ export async function listCustomers(
 
   return {
     items: rows.map((r) =>
-      toView(r.row, r.isDownline === true, r.isMember === true)
+      toView(r.row, r.isDownline === true, r.isMember === true, r.hasAccount === true)
     ),
     total: count,
   };
@@ -535,10 +617,10 @@ export async function customerTypeCounts(options: {
   search?: string;
   viewerFranchiseeId?: bigint | null;
   /**
-   * 当前登录者的手机号 hash —— 与列表 / 概览同一口径排掉他自己的客户档案
-   * (主人 2026-09-22)。不传 = 不排除 (web admin 老调用方保持原样)。
+   * 当前登录者自己的客户档案 id —— 与列表 / 概览同一口径排掉他自己那条
+   * (ADR-0016 D3: ID 化)。不传 = 不排除 (web admin 老调用方保持原样)。
    */
-  excludePhoneHash?: string | null;
+  excludeCustomerId?: bigint | null;
   /**
    * 行级过滤上下文 (ADR-0015 步骤 1): 传了就跟列表**同一口径**
    * (归属我 ∪ 我的直推加盟); 不传 = 全库 (web admin 老调用方保持原样)
@@ -548,7 +630,7 @@ export async function customerTypeCounts(options: {
   const conditions = buildCustomerConditions({
     search: options.search,
     viewerFranchiseeId: options.viewerFranchiseeId,
-    excludePhoneHash: options.excludePhoneHash,
+    excludeCustomerId: options.excludeCustomerId,
     rbacCtx: options.rbacCtx,
   });
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -579,8 +661,12 @@ export async function updateCustomer(
 
   if (input.name !== undefined) updateData.name = input.name;
   if (input.phone !== undefined) {
+    const newPhoneHash = hashForLookup(input.phone);
+    // ★ 同号提醒 (ADR-0016 D5): 改成别人已用的号 → 停下问人 (排除自己这条)
+    const dup = await describeExistingCustomerByPhone(newPhoneHash);
+    if (dup && dup.id !== id) throw new CustomerPhoneExistsError(dup);
     updateData.phoneEncrypted = encryptField(input.phone);
-    updateData.phoneHash = hashForLookup(input.phone);
+    updateData.phoneHash = newPhoneHash;
   }
   if (input.gender !== undefined) updateData.gender = input.gender;
   if (input.birthYear !== undefined) updateData.birthYear = input.birthYear;
@@ -651,13 +737,14 @@ export async function updateCustomer(
       .returning();
   });
 
-  return row
-    ? toView(
-        row,
-        await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
-        await memberFlagByPhoneHash(row.phoneHash)
-      )
-    : null;
+  if (!row) return null;
+  const flags = await customerFlagsByCustomerId(row.id);
+  return toView(
+    row,
+    await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
+    flags.isMember,
+    flags.hasAccount
+  );
 }
 
 /**
@@ -706,7 +793,7 @@ export async function claimCustomerOwnership(
   viewerFranchiseeId: bigint | null = null
 ): Promise<ClaimCustomerResult> {
   const [me] = await db
-    .select({ phoneHash: user.phoneHash })
+    .select({ customerId: user.customerId })
     .from(user)
     .where(eq(user.id, claimantUserId))
     .limit(1);
@@ -719,19 +806,25 @@ export async function claimCustomerOwnership(
     .limit(1);
   if (!row) return { ok: false, code: "NOT_FOUND" };
 
-  // 不能把自己加为客户 (同一个人 = 同手机号 hash, AGENTS §6.6)
-  if (row.phoneHash === me.phoneHash) return { ok: false, code: "SELF" };
+  // 不能把自己加为客户 —— ★ ID 化 (ADR-0016 D3): 比"我的档案 id" (user.customer_id),
+  //   不再比手机号 hash (同号不同人会被误拦; 我自己 = 我自己那条档案)
+  if (me.customerId != null && row.id === me.customerId) {
+    return { ok: false, code: "SELF" };
+  }
 
   if (row.ownerId != null && row.ownerId !== claimantUserId) {
     return { ok: false, code: "OWNED_BY_OTHER" };
   }
 
-  const view = async (r: Customer) =>
-    toView(
+  const view = async (r: Customer) => {
+    const flags = await customerFlagsByCustomerId(r.id);
+    return toView(
       r,
       await isMyDirectDownlineFranchisee(viewerFranchiseeId, r.phoneHash),
-      await memberFlagByPhoneHash(r.phoneHash)
+      flags.isMember,
+      flags.hasAccount
     );
+  };
 
   // 已经是我的 → 幂等成功 (不重复写)
   if (row.ownerId === claimantUserId) {

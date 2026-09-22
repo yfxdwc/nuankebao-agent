@@ -45,6 +45,7 @@ mixin _$Customer {
 
   /// 客户头像 (主人 2026-09-18 拍): null = 默认首字 / 'preset:x' / '/uploads/x.jpg'
   /// 未知值一律当 null (UI 退回首字, 不渲染白框)
+// ignore: invalid_annotation_target
   @JsonKey(fromJson: _parseAvatarValue)
   String? get avatar => throw _privateConstructorUsedError;
   String? get notes => throw _privateConstructorUsedError;
@@ -59,6 +60,11 @@ mixin _$Customer {
   /// 优先级: 加盟 > 种子 > 普通 (加盟表派生 > is_seed > 默认)
   /// 老后端不返回该字段 → 默认 'normal'
   String get customerType => throw _privateConstructorUsedError;
+
+  /// ★ 这条档案对应一个 app 账号吗 (ADR-0016 D8, 主人 2026-09-22 拍「UI 上要有区别」):
+  ///   true = 她是已注册用户 (user.customer_id 指过来) / false = 凭空建档的客户
+  ///   老后端不返回 → 默认 false (退化成旧视觉, 不崩)
+  bool get hasAccount => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get updatedAt => throw _privateConstructorUsedError;
 
@@ -95,6 +101,7 @@ abstract class $CustomerCopyWith<$Res> {
       String? referrerId,
       bool isSeed,
       String customerType,
+      bool hasAccount,
       DateTime createdAt,
       DateTime updatedAt});
 }
@@ -131,6 +138,7 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
     Object? referrerId = freezed,
     Object? isSeed = null,
     Object? customerType = null,
+    Object? hasAccount = null,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -203,6 +211,10 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
           ? _value.customerType
           : customerType // ignore: cast_nullable_to_non_nullable
               as String,
+      hasAccount: null == hasAccount
+          ? _value.hasAccount
+          : hasAccount // ignore: cast_nullable_to_non_nullable
+              as bool,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -241,6 +253,7 @@ abstract class _$$CustomerImplCopyWith<$Res>
       String? referrerId,
       bool isSeed,
       String customerType,
+      bool hasAccount,
       DateTime createdAt,
       DateTime updatedAt});
 }
@@ -275,6 +288,7 @@ class __$$CustomerImplCopyWithImpl<$Res>
     Object? referrerId = freezed,
     Object? isSeed = null,
     Object? customerType = null,
+    Object? hasAccount = null,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -347,6 +361,10 @@ class __$$CustomerImplCopyWithImpl<$Res>
           ? _value.customerType
           : customerType // ignore: cast_nullable_to_non_nullable
               as String,
+      hasAccount: null == hasAccount
+          ? _value.hasAccount
+          : hasAccount // ignore: cast_nullable_to_non_nullable
+              as bool,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -380,6 +398,7 @@ class _$CustomerImpl implements _Customer {
       this.referrerId,
       this.isSeed = false,
       this.customerType = 'normal',
+      this.hasAccount = false,
       required this.createdAt,
       required this.updatedAt})
       : _healthTags = healthTags;
@@ -433,6 +452,7 @@ class _$CustomerImpl implements _Customer {
 
   /// 客户头像 (主人 2026-09-18 拍): null = 默认首字 / 'preset:x' / '/uploads/x.jpg'
   /// 未知值一律当 null (UI 退回首字, 不渲染白框)
+// ignore: invalid_annotation_target
   @override
   @JsonKey(fromJson: _parseAvatarValue)
   final String? avatar;
@@ -454,6 +474,13 @@ class _$CustomerImpl implements _Customer {
   @override
   @JsonKey()
   final String customerType;
+
+  /// ★ 这条档案对应一个 app 账号吗 (ADR-0016 D8, 主人 2026-09-22 拍「UI 上要有区别」):
+  ///   true = 她是已注册用户 (user.customer_id 指过来) / false = 凭空建档的客户
+  ///   老后端不返回 → 默认 false (退化成旧视觉, 不崩)
+  @override
+  @JsonKey()
+  final bool hasAccount;
   @override
   final DateTime createdAt;
   @override
@@ -461,7 +488,7 @@ class _$CustomerImpl implements _Customer {
 
   @override
   String toString() {
-    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, avatar: $avatar, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, avatar: $avatar, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, hasAccount: $hasAccount, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -496,6 +523,8 @@ class _$CustomerImpl implements _Customer {
             (identical(other.isSeed, isSeed) || other.isSeed == isSeed) &&
             (identical(other.customerType, customerType) ||
                 other.customerType == customerType) &&
+            (identical(other.hasAccount, hasAccount) ||
+                other.hasAccount == hasAccount) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -523,6 +552,7 @@ class _$CustomerImpl implements _Customer {
         referrerId,
         isSeed,
         customerType,
+        hasAccount,
         createdAt,
         updatedAt
       ]);
@@ -562,6 +592,7 @@ abstract class _Customer implements Customer {
       final String? referrerId,
       final bool isSeed,
       final String customerType,
+      final bool hasAccount,
       required final DateTime createdAt,
       required final DateTime updatedAt}) = _$CustomerImpl;
 
@@ -605,6 +636,7 @@ abstract class _Customer implements Customer {
 
   /// 客户头像 (主人 2026-09-18 拍): null = 默认首字 / 'preset:x' / '/uploads/x.jpg'
   /// 未知值一律当 null (UI 退回首字, 不渲染白框)
+// ignore: invalid_annotation_target
   @override
   @JsonKey(fromJson: _parseAvatarValue)
   String? get avatar;
@@ -624,6 +656,12 @@ abstract class _Customer implements Customer {
   /// 老后端不返回该字段 → 默认 'normal'
   @override
   String get customerType;
+
+  /// ★ 这条档案对应一个 app 账号吗 (ADR-0016 D8, 主人 2026-09-22 拍「UI 上要有区别」):
+  ///   true = 她是已注册用户 (user.customer_id 指过来) / false = 凭空建档的客户
+  ///   老后端不返回 → 默认 false (退化成旧视觉, 不崩)
+  @override
+  bool get hasAccount;
   @override
   DateTime get createdAt;
   @override

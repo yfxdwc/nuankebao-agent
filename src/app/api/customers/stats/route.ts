@@ -16,7 +16,7 @@ import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { customerTypeCounts } from "@/lib/db/queries/customer";
 import { getRbacContextForSession } from "@/lib/auth/rbac";
-import { resolveViewerPhoneHash } from "@/lib/auth/viewer";
+import { resolveViewerCustomerId } from "@/lib/auth/viewer";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   const counts = await customerTypeCounts({
     search,
     viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
-    excludePhoneHash: await resolveViewerPhoneHash(session?.user?.id),
+    excludeCustomerId: await resolveViewerCustomerId(session?.user?.id),
     rbacCtx,
   });
 

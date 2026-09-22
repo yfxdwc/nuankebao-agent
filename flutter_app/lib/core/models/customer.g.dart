@@ -28,6 +28,7 @@ _$CustomerImpl _$$CustomerImplFromJson(Map<String, dynamic> json) =>
       referrerId: json['referrerId'] as String?,
       isSeed: json['isSeed'] as bool? ?? false,
       customerType: json['customerType'] as String? ?? 'normal',
+      hasAccount: json['hasAccount'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -51,6 +52,7 @@ Map<String, dynamic> _$$CustomerImplToJson(_$CustomerImpl instance) =>
       'referrerId': instance.referrerId,
       'isSeed': instance.isSeed,
       'customerType': instance.customerType,
+      'hasAccount': instance.hasAccount,
       'createdAt': instance.createdAt.toIso8601String(),
       'updatedAt': instance.updatedAt.toIso8601String(),
     };

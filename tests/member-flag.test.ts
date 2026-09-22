@@ -18,7 +18,8 @@ import { customer, franchisee, membership, user } from "@/lib/db/schema";
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
 import {
   memberExistsSql,
-  memberFlagByPhoneHash,
+  memberFlagByCustomerId,
+  memberFlagByUserId,
   memberFlagOf,
 } from "@/lib/billing/member-flag";
 import { grantDays } from "@/lib/billing/entitlements";
@@ -239,12 +240,16 @@ describe("memberExistsSql (查询层 SQL) 与口径一致 + 实时翻转", () =>
     expect(await customerMemberFlag(cidMember)).toBe(false);
   });
 
-  it("单条判定 (详情页 / 新建客户响应): 同手机号账号是会员 → true", async () => {
+  it("单条判定 (详情页 / 新建客户响应): 走 ID, 不走手机号 (ADR-0016 D3)", async () => {
     await setMemberUntil(uidMember, new Date(Date.now() + 86400_000));
-    expect(await memberFlagByPhoneHash(hashForLookup(PHONE_MEMBER))).toBe(true);
-    expect(await memberFlagByPhoneHash(hashForLookup(PHONE_FREE))).toBe(false);
-    // 没有账号的手机号 → false (不炸)
-    expect(await memberFlagByPhoneHash(hashForLookup("13900002199"))).toBe(false);
+    // 客户档案侧: user.customer_id 连接
+    expect(await memberFlagByCustomerId(cidMember)).toBe(true);
+    expect(await memberFlagByCustomerId(cidFree)).toBe(false);
+    // 账号侧: 直接比 user id
+    expect(await memberFlagByUserId(uidMember)).toBe(true);
+    expect(await memberFlagByUserId(uidFree)).toBe(false);
+    // 不存在的 id → false (不炸)
+    expect(await memberFlagByUserId(BigInt(999999))).toBe(false);
   });
 
   it("管理员账号 (没充值) → true (角色即规则)", async () => {

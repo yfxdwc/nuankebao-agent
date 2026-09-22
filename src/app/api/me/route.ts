@@ -36,7 +36,7 @@ import {
   countDirectDownline,
 } from "@/lib/db/queries/franchisee";
 import { getStatsOverview, type StatsOverview } from "@/lib/db/queries/dashboard";
-import { resolveViewerPhoneHash } from "@/lib/auth/viewer";
+import { resolveViewerCustomerId } from "@/lib/auth/viewer";
 import { maskPhone } from "@/lib/utils";
 import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
 import { ensureReferralCode, getMembershipView } from "@/lib/billing/entitlements";
@@ -169,7 +169,7 @@ export async function GET() {
     // ⚠ 必须与客户列表同口径 (ADR-0015 步骤 1):
     //   行级过滤 = 归属我 ∪ 我的直推加盟 (角色真相源 = DB) + 排掉自己的档案 (主人 2026-09-22)
     stats = await getStatsOverview(await getRbacContext(userId, role), {
-      excludePhoneHash: await resolveViewerPhoneHash(session?.user?.id),
+      excludeCustomerId: await resolveViewerCustomerId(session?.user?.id),
     });
   }
 

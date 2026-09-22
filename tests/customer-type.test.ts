@@ -45,12 +45,13 @@ describe("queries/customer — resolveCustomerType", () => {
 });
 
 // ============================================
-// 「自己不应该是自己的客户」排除条件 (主人 2026-09-22)
+// 「自己不应该是自己的客户」排除条件 (主人 2026-09-22; ADR-0016 D3 已 ID 化)
 // ============================================
-// 背景: 建号即强制建档 (AGENTS §6.6) → 每个账号有一条同手机号 customer 档案,
-//       语义是"她作为别人的客户"; 但**她自己**的客户列表/图谱/概览不该出现它。
-// 口径: 按 phone_hash 排除 (user ↔ customer 的既有约定, 无 FK 列)。
-// 边界: 未登录 / 无手机号 → 返回 null = 不加条件 = 老行为 (web admin 不传也不变)。
+// 背景: 建号即强制建档 (AGENTS §6.6) → 每个账号有一条自己的 customer 档案,
+//       语义是"她作为别人的客户"; 但**她自己**的客户列表/概览不该出现它。
+// 口径: **ID** —— customer.id = 我的档案 id (user.customer_id)。
+//       ⚠ 旧口径按 phone_hash 排除已废 (ADR-0016: 手机号不是身份, 同号不同人会误伤)。
+// 边界: 未登录 / admin 无档案 → 返回 null = 不加条件 = 老行为 (web admin 不传也不变)。
 
 import { PgDialect } from "drizzle-orm/pg-core";
 import {
@@ -61,19 +62,19 @@ import {
 const dialect = new PgDialect();
 
 describe("queries/customer — selfCustomerExclusionSql", () => {
-  it("有手机号 hash → 产出「phone_hash <> $1」条件并带参", () => {
-    const cond = selfCustomerExclusionSql("hash-of-me");
+  it("有我的档案 id → 产出「customer.id <> $1」条件并带参 (ID 化)", () => {
+    const cond = selfCustomerExclusionSql(BigInt(736));
     expect(cond).not.toBeNull();
     const q = dialect.sqlToQuery(cond!);
     expect(q.sql).toContain("<>");
-    expect(q.sql).toContain("phone_hash");
-    expect(q.params).toEqual(["hash-of-me"]);
+    expect(q.sql).toContain("id");
+    expect(q.sql).not.toContain("phone_hash"); // ADR-0016 D3: 手机号不再是身份
+    expect(q.params).toEqual([736n]);
   });
 
-  it("null / undefined / 空串 → 不加条件 (不排除任何行)", () => {
+  it("null / undefined → 不加条件 (不排除任何行)", () => {
     expect(selfCustomerExclusionSql(null)).toBeNull();
     expect(selfCustomerExclusionSql(undefined)).toBeNull();
-    expect(selfCustomerExclusionSql("")).toBeNull();
   });
 });
 
@@ -84,10 +85,14 @@ describe("queries/customer — selfCustomerExclusionSql", () => {
 // 图谱 tab 才显示全子树 → 两者故意不同口径, 列表加盟数 ≤ 图谱加盟节点数。
 
 describe("queries/customer — myDirectDownlineFranchiseeSql", () => {
-  it("走点位父 (placement_parent_id), 不再用子树前缀匹配 (placement_path)", () => {
+  it("走点位父 (placement_parent_id) + ID 连接 (u.customer_id), 不再用手机号/子树前缀", () => {
     const cond = myDirectDownlineFranchiseeSql(BigInt(75));
     const q = dialect.sqlToQuery(cond);
     expect(q.sql).toContain("placement_parent_id");
+    // ★ ADR-0016 D3: 「同一个人」只认 ID (账号↔档案 customer_id / 账号↔节点 franchisee_id)
+    expect(q.sql).toContain("u.customer_id");
+    expect(q.sql).toContain("u.franchisee_id");
+    expect(q.sql).not.toContain("phone_hash");
     // 旧子树口径的特征是 placement_path LIKE —— 必须彻底不再出现
     expect(q.sql).not.toContain("placement_path");
     expect(q.params).toContain(75n);

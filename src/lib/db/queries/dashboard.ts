@@ -82,8 +82,8 @@ export interface StatsOverview extends DashboardStats {
 
 export async function getStatsOverview(
   ctx: RbacContext | null,
-  /** 当前登录者的手机号 hash → 排掉他自己的客户档案 (与客户列表同口径, 主人 2026-09-22) */
-  opts: { excludePhoneHash?: string | null } = {}
+  /** 当前登录者自己的客户档案 id → 排掉他自己那条 (与客户列表同口径; ADR-0016 D3 ID 化) */
+  opts: { excludeCustomerId?: bigint | null } = {}
 ): Promise<StatsOverview> {
   const now = new Date();
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -92,8 +92,8 @@ export async function getStatsOverview(
   const nextStr = nextMonth.toISOString().split("T")[0];
 
   const filter = ctx ? customerRbacFilter(ctx) : undefined;
-  const selfExclusion = opts.excludePhoneHash
-    ? ne(customer.phoneHash, opts.excludePhoneHash)
+  const selfExclusion = opts.excludeCustomerId
+    ? ne(customer.id, opts.excludeCustomerId)
     : undefined;
   // 三个条件取 AND: 未软删 + (可选) RBAC + (可选) 排掉自己
   const customerScope = and(isNull(customer.deletedAt), filter, selfExclusion);

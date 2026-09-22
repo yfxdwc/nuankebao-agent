@@ -7,6 +7,7 @@ import {
   getCustomerById,
   updateCustomer,
   softDeleteCustomer,
+  CustomerPhoneExistsError,
 } from "@/lib/db/queries/customer";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 import { hasFeatureAccess } from "@/lib/billing/guard";
@@ -92,6 +93,24 @@ export async function PATCH(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
     }
+    // ★ 同号提醒 (ADR-0016 D5, 主人 2026-09-22 拍): 手机号已有档案 → 409 + 结构化提示
+    //   (前端据此弹"用已有档案/加为我的客户", 不静默建第二条、也不炸 500)
+    if (error instanceof CustomerPhoneExistsError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "PHONE_EXISTS",
+          existing: {
+            customerId: error.existing.id.toString(),
+            name: error.existing.name,
+            hasAccount: error.existing.hasAccount,
+            ownerName: error.existing.ownerName,
+          },
+        },
+        { status: 409 }
+      );
+    }
+
     // 头像白名单等业务校验错误 → 400 (把原因透给客户端, 不吞成 500)
     if (error instanceof Error && error.message.startsWith("头像值不合法")) {
       return NextResponse.json({ error: error.message }, { status: 400 });

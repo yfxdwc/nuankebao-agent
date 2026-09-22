@@ -39,6 +39,10 @@ class Customer with _$Customer {
     /// 优先级: 加盟 > 种子 > 普通 (加盟表派生 > is_seed > 默认)
     /// 老后端不返回该字段 → 默认 'normal'
     @Default('normal') String customerType,
+    /// ★ 这条档案对应一个 app 账号吗 (ADR-0016 D8, 主人 2026-09-22 拍「UI 上要有区别」):
+    ///   true = 她是已注册用户 (user.customer_id 指过来) / false = 凭空建档的客户
+    ///   老后端不返回 → 默认 false (退化成旧视觉, 不崩)
+    @Default(false) bool hasAccount,
     required DateTime createdAt,
     required DateTime updatedAt,
   }) = _Customer;

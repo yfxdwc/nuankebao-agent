@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
-import { resolveViewerFranchiseeId, resolveViewerPhoneHash } from "@/lib/auth/viewer";
+import { resolveViewerCustomerId, resolveViewerFranchiseeId } from "@/lib/auth/viewer";
 import { getRbacContextForSession } from "@/lib/auth/rbac";
 import { z } from "zod";
 import {
   listCustomers,
   createCustomer,
+  CustomerPhoneExistsError,
 } from "@/lib/db/queries/customer";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 import { hasFeatureAccess } from "@/lib/billing/guard";
@@ -106,14 +107,14 @@ export async function GET(request: NextRequest) {
   const rbacCtx = await getRbacContextForSession(session);
 
   // viewer 身份: ① franchiseeId (「加盟」类型判定, 与 RBAC 同一次查询带出)
-  //              ② phoneHash (排掉自己的客户档案)
+  //              ② customerId (排掉自己那条客户档案; ADR-0016 D3 走 ID, 不走手机号)
   //   主人 2026-09-22: 「新用户注册后, 客户列表里出现了自己的信息, 自己不应该是自己的客户」
-  const viewerPhoneHash = await resolveViewerPhoneHash(session?.user?.id);
+  const viewerCustomerId = await resolveViewerCustomerId(session?.user?.id);
   const listOptions = {
     search,
     type: parsedType.success ? parsedType.data : undefined,
     viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
-    excludePhoneHash: viewerPhoneHash,
+    excludeCustomerId: viewerCustomerId,
     rbacCtx,
   };
 
@@ -194,6 +195,23 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+    }
+    // ★ 同号提醒 (ADR-0016 D5, 主人 2026-09-22 拍): 手机号已有档案 → 409 + 结构化提示
+    //   (前端据此弹"用已有档案/加为我的客户", 不静默建第二条、也不炸 500)
+    if (error instanceof CustomerPhoneExistsError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "PHONE_EXISTS",
+          existing: {
+            customerId: error.existing.id.toString(),
+            name: error.existing.name,
+            hasAccount: error.existing.hasAccount,
+            ownerName: error.existing.ownerName,
+          },
+        },
+        { status: 409 }
+      );
     }
     console.error("[POST /api/customers]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
