@@ -1,19 +1,21 @@
 // ============================================
-// RBAC 行级过滤 (Plan W5)
-// 根据 session.user.role 返回 SQL 过滤条件
+// RBAC 行级过滤 (Plan W5 + ADR-0015 步骤 1)
+// 根据 user.role (DB 为真相源) 返回 SQL 过滤条件
 // - admin: 全网 (返回 undefined, 不加过滤)
-// - manager: 本店 (managed store_ids 列表)
-// - sales: 自己 (created_by = me OR 默认 store_id = my store)
+// - manager: 本店 (managed store_ids 列表) —— ⚠ store 已冻结 (ADR-0015 Q8), 待 Phase 3 重定义
+// - sales: 「我的客户」= 归属我 (customer.owner_id = 我) ∪ 我的直推加盟 (点位父 = 我)
+//          (ADR-0015 Q2, 主人 2026-09-22 拍)
 //
 // 边界: CHARTER §3.6 + §3.1 红线
 //   - 行级过滤不能完全靠应用层, 必须配合审计日志
-//   - sales 看不到其他 sales 的客户 (除非同店)
+//   - sales 看不到别人的客户 (旧口径 "除非同店" 已随门店维度冻结而废)
 //   - manager 不能跨店看数据 (RBAC §3.6 红线)
 // ============================================
 
 import { db } from "@/lib/db";
 import { user, storeStaff, customer, franchisee } from "@/lib/db/schema";
 import { eq, inArray, or, and, isNull, sql } from "drizzle-orm";
+import { myCustomerScopeSql } from "@/lib/db/queries/customer-scope";
 
 export type UserRole = "admin" | "manager" | "sales";
 
@@ -22,6 +24,11 @@ export interface RbacContext {
   role: UserRole;
   defaultStoreId: bigint | null;
   managedStoreIds: bigint[];
+  /**
+   * 我的加盟节点 id (user.franchisee_id; 未加盟 = null)
+   *   —— 「我的客户」口径的"直推加盟"半边 (ADR-0015 Q2); 同一次查询带出, 不额外往返
+   */
+  franchiseeId: bigint | null;
 }
 
 /**
@@ -38,15 +45,20 @@ export async function getRbacContext(
   sessionUserId: bigint,
   sessionRole?: string | null,
 ): Promise<RbacContext> {
-  // 一次查询同时取 role + defaultStoreId (别拆两次往返)
+  // 一次查询同时取 role + defaultStoreId + franchiseeId (别拆多次往返)
   const [u] = await db
-    .select({ role: user.role, defaultStoreId: user.defaultStoreId })
+    .select({
+      role: user.role,
+      defaultStoreId: user.defaultStoreId,
+      franchiseeId: user.franchiseeId,
+    })
     .from(user)
     .where(eq(user.id, sessionUserId))
     .limit(1);
 
   const role: UserRole = u?.role ?? ((sessionRole as UserRole) || "sales");
   const defaultStoreId = u?.defaultStoreId ?? null;
+  const franchiseeId = u?.franchiseeId ?? null;
 
   // 查 managed store_ids (如果是 manager)
   let managedStoreIds: bigint[] = [];
@@ -68,30 +80,36 @@ export async function getRbacContext(
     role,
     defaultStoreId,
     managedStoreIds,
+    franchiseeId,
   };
 }
 
 /**
  * 返回 customer 表的查询过滤条件
- * - admin: 无过滤
- * - manager: store_id IN managed_store_ids
- * - sales: created_by = me OR (store_id = my default_store AND store_id IS NOT NULL)
- *   (老数据 store_id NULL 兼容, Q1-A 决策)
+ * - admin: 无过滤 (全网)
+ * - manager: store_id IN managed_store_ids (⚠ store 冻结 —— 见下方注释)
+ * - sales: 「我的客户」= 归属我 ∪ 我的直推加盟 (ADR-0015 Q2; 口径唯一真相源
+ *          = queries/customer-scope.ts, 与列表 / 计数 / 概览共用)
  */
 export function customerRbacFilter(ctx: RbacContext) {
   if (ctx.role === "admin") return undefined;
 
   if (ctx.role === "manager") {
-    if (ctx.managedStoreIds.length === 0) return eq(customer.id, sql`0`); // 无店 = 看不到任何
+    // ⚠ store / staff 已冻结 (ADR-0015 Q8, 0 行): 本分支保留旧行为
+    //   (无店 → 看不到任何), "manager 视角" 待 Phase 3 多店台账重新定义。
+    //   现网无 manager 账号, 不影响实际行为。
+    if (ctx.managedStoreIds.length === 0) return eq(customer.id, sql`0`);
     return inArray(customer.storeId, ctx.managedStoreIds);
   }
 
-  // sales: 自己创建的 OR 同店
-  const conditions = [eq(customer.createdBy, ctx.userId)];
-  if (ctx.defaultStoreId != null) {
-    conditions.push(eq(customer.storeId, ctx.defaultStoreId));
-  }
-  return or(...conditions)!;
+  // sales (主人 2026-09-22 拍「全按建议」):
+  //   旧口径 created_by = 我 OR store_id = 我的店 已废 ——
+  //     created_by → owner_id (ADR-0015 Q11: 建档 ≠ 归属)
+  //     store_id   → 直推加盟 (Q8 门店维度冻结; 结构口径 = 点位父, AGENTS §6.8)
+  return myCustomerScopeSql({
+    ownerUserId: ctx.userId,
+    franchiseeId: ctx.franchiseeId,
+  });
 }
 
 /**

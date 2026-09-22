@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { resolveViewerFranchiseeId, resolveViewerPhoneHash } from "@/lib/auth/viewer";
+import { getRbacContext } from "@/lib/auth/rbac";
 import { z } from "zod";
 import {
   listCustomers,
@@ -99,17 +100,24 @@ export async function GET(request: NextRequest) {
       : "new"
     : requestedSort!;
 
-  // viewer 身份: ① franchiseeId (「加盟」类型判定) ② phoneHash (排掉自己的客户档案)
+  // RBAC 行级过滤 (ADR-0015 步骤 1, 主人 2026-09-22 拍):
+  //   「我的客户」= 归属我 (owner_id) ∪ 我的直推加盟 (点位父 = 我)
+  //   角色真相源 = DB (getRbacContext; session.role 只兜底)
+  const rbacCtx = await getRbacContext(
+    session?.user?.id ? BigInt(session.user.id) : BigInt(0),
+    (session?.user as { role?: string } | undefined)?.role
+  );
+
+  // viewer 身份: ① franchiseeId (「加盟」类型判定, 与 RBAC 同一次查询带出)
+  //              ② phoneHash (排掉自己的客户档案)
   //   主人 2026-09-22: 「新用户注册后, 客户列表里出现了自己的信息, 自己不应该是自己的客户」
-  const [viewerFranchiseeId, viewerPhoneHash] = await Promise.all([
-    resolveViewerFranchiseeId(session?.user?.id),
-    resolveViewerPhoneHash(session?.user?.id),
-  ]);
+  const viewerPhoneHash = await resolveViewerPhoneHash(session?.user?.id);
   const listOptions = {
     search,
     type: parsedType.success ? parsedType.data : undefined,
-    viewerFranchiseeId,
+    viewerFranchiseeId: rbacCtx.franchiseeId,
     excludePhoneHash: viewerPhoneHash,
+    rbacCtx,
   };
 
   // 1) 取数据: 紧急度排序要在"命中全集"上排序再切片 (见 attach.ts 规模说明)

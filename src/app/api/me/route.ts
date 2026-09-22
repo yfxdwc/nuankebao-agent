@@ -27,7 +27,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
-import { type UserRole } from "@/lib/auth/rbac";
+import { getRbacContext, type UserRole } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { user as userTable, store as storeTable } from "@/lib/db/schema";
 import {
@@ -166,8 +166,9 @@ export async function GET() {
   // userId = 0 (dev 空 session) → 没有「我」, 不查统计, 明确给 null 让客户端隐藏这块
   let stats: StatsOverview | null = null;
   if (userId > BigInt(0)) {
-    // ⚠ 必须与客户列表同口径: 排掉自己的客户档案 (主人 2026-09-22)
-    stats = await getStatsOverview(null, {
+    // ⚠ 必须与客户列表同口径 (ADR-0015 步骤 1):
+    //   行级过滤 = 归属我 ∪ 我的直推加盟 (角色真相源 = DB) + 排掉自己的档案 (主人 2026-09-22)
+    stats = await getStatsOverview(await getRbacContext(userId, role), {
       excludePhoneHash: await resolveViewerPhoneHash(session?.user?.id),
     });
   }
