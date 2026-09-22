@@ -24,6 +24,7 @@ import { customer } from "@/lib/db/schema";
 import { decryptField } from "@/lib/crypto/field";
 import { requireUserId, handleRouteError } from "@/lib/salon/route-helpers";
 import { getFranchiseeIdByUserId, getUplineAncestors } from "@/lib/db/queries/franchisee";
+import { hasAccountSql } from "@/lib/db/queries/customer-scope";
 
 const MAX_CUSTOMER_SUGGESTIONS = 50;
 const MAX_ANCESTOR_LEVELS = 3;
@@ -42,11 +43,8 @@ export async function GET() {
         id: customer.id,
         name: customer.name,
         phoneEncrypted: customer.phoneEncrypted,
-        // ★ ID 化 (ADR-0016 D3): 只看已建客户里"也注册了账号"的 (走 user.customer_id)
-        isMember: sql<boolean>`EXISTS (
-          SELECT 1 FROM "user" u
-          WHERE u.customer_id = ${customer.id} AND u.is_active = true
-        )`,
+        // ★ ID 化 (ADR-0016 D3/D8): 只看已建客户里"也注册了账号"的 (走 user.customer_id)
+        isMember: hasAccountSql,
       })
       .from(customer)
       .where(

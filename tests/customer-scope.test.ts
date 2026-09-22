@@ -15,12 +15,17 @@
 //   4. admin 不过滤 (全森林); 未加盟 sales 的直推半边恒 false
 
 import { describe, it, expect } from "vitest";
+import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { db } from "@/lib/db";
+import { customer } from "@/lib/db/schema";
 import {
   directDownlineFranchiseeSql,
+  hasAccountSql,
   myCustomerScopeSql,
   ownedByUserSql,
 } from "@/lib/db/queries/customer-scope";
+import { memberExistsSql } from "@/lib/billing/member-flag";
 import { customerRbacFilter, type RbacContext } from "@/lib/auth/rbac";
 
 const dialect = new PgDialect();
@@ -109,5 +114,39 @@ describe("rbac.customerRbacFilter — 行级过滤入口", () => {
     );
     expect(some.sql).toContain("store_id");
     expect(some.params).toEqual([7n]);
+  });
+});
+
+// ============================================
+// SQL 渲染陷阱回归守卫 (2026-09-22 灌演示数据时踩到)
+// ============================================
+// drizzle 在 select 里会把**内联 sql 模板**的列引用渲染成**裸列名** (`"id"`),
+// 子查询里会被解析成 `u.id` → 语义变成 `u.customer_id = u.id` → **恒 false**。
+// 凡是"外层表的列"出现在子查询里, 必须显式写表限定 (`"customer"."id"`)。
+//
+// 症状: 「已注册」标恒 false / 上行节点的会员标恒 false (API 返回值全错但不报错)。
+describe("SQL 渲染: 子查询里的外层列必须带表名", () => {
+  // ⚠ 必须把 `row: customer` 一起选上 —— 这才是**真实列表查询**的形状
+  //   (drizzle 是否给列加表限定, 取决于该表有没有出现在 select 里)
+  const render = (field: unknown): string =>
+    db.select({ row: customer, x: field as never }).from(customer).toSQL().sql;
+
+  it('hasAccountSql → "customer"."id" (不出现裸 "id")', () => {
+    const sqlText = render(hasAccountSql);
+    expect(sqlText).toContain('"customer"."id"');
+    expect(sqlText).not.toMatch(/u\.customer_id\s*=\s*"id"/);
+  });
+
+  it('directDownlineFranchiseeSql → 按生产用法 (外层包 sql 模板) 渲染后仍限定', () => {
+    // 生产代码就是这么包的: `sql<boolean>`${directDownline}`` (listCustomers)
+    const sqlText = render(sql`${directDownlineFranchiseeSql(BigInt(75))}`);
+    expect(sqlText).toContain('"customer"."id"');
+    expect(sqlText).toContain("placement_parent_id");
+    expect(sqlText).not.toMatch(/u\.customer_id\s*=\s*"id"/);
+  });
+
+  it('memberExistsSql(外层列) → 限定 (会员标不恒 false)', () => {
+    const sqlText = render(memberExistsSql(sql`u.customer_id = ${customer.id}`));
+    expect(sqlText).toContain('"customer"."id"');
   });
 });

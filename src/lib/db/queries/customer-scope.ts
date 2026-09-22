@@ -41,6 +41,18 @@ export function directDownlineFranchiseeSql(
   )`;
 }
 
+/**
+ * 「这条客户档案有对应账号吗」= UI 区分"已注册用户 / 凭空建档的客户" (ADR-0016 D8)
+ *
+ * ⚠⚠ **必须显式写表限定** (`"customer"."id"`), 不能插值 `${customer.id}`:
+ *   drizzle 在 select 里把内联 sql 模板的列引用渲染成**裸列名** `"id"`,
+ *   子查询里会被解析成 `u.id` → 语义变成 `u.customer_id = u.id` → **恒 false**。
+ *   (2026-09-22 灌演示数据时实测踩到; tests/customer-scope.test.ts 有回归守卫)
+ */
+export const hasAccountSql = sql<boolean>`EXISTS (
+  SELECT 1 FROM "user" u WHERE u.customer_id = "customer"."id"
+)`;
+
 /** 「这条客户档案归我」= 归属人 (customer.owner_id) 是我 */
 export function ownedByUserSql(ownerUserId: bigint): SQL {
   return sql`${customer.ownerId} = ${ownerUserId}`;

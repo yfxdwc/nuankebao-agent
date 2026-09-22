@@ -26,7 +26,7 @@ import {
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
 import { customerRbacFilter, type RbacContext } from "@/lib/auth/rbac";
-import { directDownlineFranchiseeSql } from "./customer-scope";
+import { directDownlineFranchiseeSql, hasAccountSql } from "./customer-scope";
 import {
   memberExistsSql,
   customerFlagsByCustomerId,
@@ -366,9 +366,7 @@ export async function describeExistingCustomerByPhone(phoneHash: string): Promis
     .select({
       id: customer.id,
       name: customer.name,
-      hasAccount: sql<boolean>`EXISTS (
-        SELECT 1 FROM "user" u WHERE u.customer_id = ${customer.id}
-      )`,
+      hasAccount: hasAccountSql,
       ownerName: user.name,
     })
     .from(customer)
@@ -551,10 +549,8 @@ export async function listCustomers(
         // 会员标识: 同手机号账号的会员状态 (EXISTS 子查询, 不产生重复行)
         // ★ ID 化 (ADR-0016 D3): 会员标识走 user.customer_id, 不再按手机号相等
         isMember: memberExistsSql(sql`u.customer_id = ${customer.id}`),
-        // ★ 有没有账号 (ADR-0016 D8): UI 区分「已注册用户」vs「凭空建档的客户」
-        hasAccount: sql<boolean>`EXISTS (
-          SELECT 1 FROM "user" u WHERE u.customer_id = ${customer.id}
-        )`,
+        // ★ 有没有账号 (ADR-0016 D8): 单一真相源 customer-scope.ts::hasAccountSql
+        hasAccount: hasAccountSql,
       })
       .from(customer)
       .where(whereClause)

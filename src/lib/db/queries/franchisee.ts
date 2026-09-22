@@ -938,10 +938,9 @@ export async function getUplineAncestors(
       name: franchisee.name,
       phoneEncrypted: franchisee.phoneEncrypted,
       placementDepth: franchisee.placementDepth,
-      isMember: sql<boolean>`EXISTS (
-        SELECT 1 FROM "user" u
-        WHERE u.franchisee_id = ${franchisee.id} AND u.is_active = true
-      )`,
+      // ★ 口径修正 (2026-09-22): 这里叫 isMember 却写着"有 active 账号" → 显示成假会员;
+      //   改用统一口径 memberExistsSql (role=admin 或 member_until > now)
+      isMember: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
     })
     .from(franchisee)
     .where(
