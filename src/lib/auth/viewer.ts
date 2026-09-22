@@ -31,6 +31,31 @@ export async function resolveViewerFranchiseeId(
   }
 }
 
+/**
+ * session → 当前登录者的**手机号 hash** (账号 ↔ 客户档案的关联约定)
+ *
+ * 用途: 客户列表 / 客户图谱 / 数据概览要排掉「自己的客户档案」
+ *   (自己不应该是自己的客户, 主人 2026-09-22 拍)。
+ *   口径与 AGENTS §6.6 一致: 同手机号 = 同一个人。
+ *
+ * 边界: 未登录 (dev 空 session) / 账号没手机号 / id 是脏数据 → null (调用方不排除任何行)
+ */
+export async function resolveViewerPhoneHash(
+  sessionUserId: string | undefined
+): Promise<string | null> {
+  if (!sessionUserId) return null;
+  try {
+    const [u] = await db
+      .select({ phoneHash: user.phoneHash })
+      .from(user)
+      .where(eq(user.id, BigInt(sessionUserId)))
+      .limit(1);
+    return u?.phoneHash ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ============================================
 // 落位「三方确认」用身份 (主人 2026-09-18 拍)
 // ============================================

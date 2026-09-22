@@ -36,6 +36,7 @@ import {
   countDirectDownline,
 } from "@/lib/db/queries/franchisee";
 import { getStatsOverview, type StatsOverview } from "@/lib/db/queries/dashboard";
+import { resolveViewerPhoneHash } from "@/lib/auth/viewer";
 import { maskPhone } from "@/lib/utils";
 import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
 import { ensureReferralCode, getMembershipView } from "@/lib/billing/entitlements";
@@ -165,7 +166,10 @@ export async function GET() {
   // userId = 0 (dev 空 session) → 没有「我」, 不查统计, 明确给 null 让客户端隐藏这块
   let stats: StatsOverview | null = null;
   if (userId > BigInt(0)) {
-    stats = await getStatsOverview(null);
+    // ⚠ 必须与客户列表同口径: 排掉自己的客户档案 (主人 2026-09-22)
+    stats = await getStatsOverview(null, {
+      excludePhoneHash: await resolveViewerPhoneHash(session?.user?.id),
+    });
   }
 
   // ---- 会员状态 + 我的推荐码 (ADR-0012) ----

@@ -42,3 +42,33 @@ describe("queries/customer — resolveCustomerType", () => {
     expect([...CUSTOMER_TYPES]).toEqual(["franchisee", "seed", "normal"]);
   });
 });
+
+// ============================================
+// 「自己不应该是自己的客户」排除条件 (主人 2026-09-22)
+// ============================================
+// 背景: 建号即强制建档 (AGENTS §6.6) → 每个账号有一条同手机号 customer 档案,
+//       语义是"她作为别人的客户"; 但**她自己**的客户列表/图谱/概览不该出现它。
+// 口径: 按 phone_hash 排除 (user ↔ customer 的既有约定, 无 FK 列)。
+// 边界: 未登录 / 无手机号 → 返回 null = 不加条件 = 老行为 (web admin 不传也不变)。
+
+import { PgDialect } from "drizzle-orm/pg-core";
+import { selfCustomerExclusionSql } from "@/lib/db/queries/customer";
+
+const dialect = new PgDialect();
+
+describe("queries/customer — selfCustomerExclusionSql", () => {
+  it("有手机号 hash → 产出「phone_hash <> $1」条件并带参", () => {
+    const cond = selfCustomerExclusionSql("hash-of-me");
+    expect(cond).not.toBeNull();
+    const q = dialect.sqlToQuery(cond!);
+    expect(q.sql).toContain("<>");
+    expect(q.sql).toContain("phone_hash");
+    expect(q.params).toEqual(["hash-of-me"]);
+  });
+
+  it("null / undefined / 空串 → 不加条件 (不排除任何行)", () => {
+    expect(selfCustomerExclusionSql(null)).toBeNull();
+    expect(selfCustomerExclusionSql(undefined)).toBeNull();
+    expect(selfCustomerExclusionSql("")).toBeNull();
+  });
+});

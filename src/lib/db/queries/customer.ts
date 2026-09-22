@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/schema";
 import {
   eq,
+  ne,
   isNull,
   and,
   not,
@@ -281,6 +282,13 @@ export interface ListCustomersOptions {
    *   recent  = 最近联系 / new = 最近添加 (默认, 老行为) / name = 姓名
    */
   sort?: "urgency" | "recent" | "new" | "name";
+  /**
+   * 当前登录者的手机号 hash —— 排掉**他自己的客户档案** (主人 2026-09-22):
+   *   建号即强制建档 → 每个账号有一条同手机号 customer 档案 (语义 = "她作为别人的客户"),
+   *   那条不该出现在**她自己**的客户列表里。
+   * null / 缺省 = 不排除 (web admin 老调用方保持原样)
+   */
+  excludePhoneHash?: string | null;
   // W5 RBAC: 行级过滤上下文
   rbacCtx?: RbacContext;
 }
@@ -410,12 +418,34 @@ export async function getCustomerById(
     : null;
 }
 
+/**
+ * 「自己不应该是自己的客户」—— 排掉**当前登录者自己的客户档案**
+ *
+ * 背景 (主人 2026-09-22 报 + 拍):
+ *   建号即强制建档 (AGENTS §6.6) → 每个账号都有一条**同手机号**的 customer 档案。
+ *   那条档案的语义是「她作为**别人**的客户」(出现在她推荐人的列表里);
+ *   但**她自己**的客户列表不该出现它 —— 否则客户列表第一条就是自己。
+ *
+ * 口径: 手机号 hash (user ↔ customer 的既有约定, 无 FK 列; 见 AGENTS §6.6)
+ * 返回 null = 没有可排除的 (未登录 / dev 空 session) → 不加条件 (老行为)
+ */
+export function selfCustomerExclusionSql(
+  viewerPhoneHash: string | null | undefined
+): SQL | null {
+  return viewerPhoneHash ? ne(customer.phoneHash, viewerPhoneHash) : null;
+}
+
 /** 抽出来公用: 列表 / 计数的 WHERE 条件一致 (三者互斥穷尽才能相加==all) */
 function buildCustomerConditions(options: ListCustomersOptions): SQL[] {
   const { search, includeDeleted = false, type, rbacCtx, viewerFranchiseeId } = options;
   const conditions: SQL[] = [];
   if (!includeDeleted) {
     conditions.push(isNull(customer.deletedAt));
+  }
+  // 自己不应该是自己的客户 (主人 2026-09-22): 排掉当前登录者自己的档案
+  const selfExclusion = selfCustomerExclusionSql(options.excludePhoneHash);
+  if (selfExclusion) {
+    conditions.push(selfExclusion);
   }
   if (search) {
     const phoneHash = hashForLookup(search);
@@ -685,11 +715,20 @@ export interface CustomerGraphNode {
  *   - 已软删客户过滤掉
  */
 export async function getCustomerReferralGraph(
-  options: { rbacCtx?: RbacContext; limit?: number } = {}
+  options: {
+    rbacCtx?: RbacContext;
+    limit?: number;
+    /** 当前登录者的手机号 hash → 排掉他自己的客户档案 (与列表同口径, 主人 2026-09-22) */
+    excludePhoneHash?: string | null;
+  } = {}
 ): Promise<CustomerGraphNode[]> {
   const { rbacCtx, limit = 1000 } = options;
 
   const conditions: SQL[] = [isNull(customer.deletedAt)];
+  const selfExclusion = selfCustomerExclusionSql(options.excludePhoneHash);
+  if (selfExclusion) {
+    conditions.push(selfExclusion);
+  }
   if (rbacCtx) {
     const rbacFilter = customerRbacFilter(rbacCtx);
     if (rbacFilter) {

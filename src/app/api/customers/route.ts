@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
-import { resolveViewerFranchiseeId } from "@/lib/auth/viewer";
+import { resolveViewerFranchiseeId, resolveViewerPhoneHash } from "@/lib/auth/viewer";
 import { z } from "zod";
 import {
   listCustomers,
@@ -99,11 +99,17 @@ export async function GET(request: NextRequest) {
       : "new"
     : requestedSort!;
 
-  const viewerFranchiseeId = await resolveViewerFranchiseeId(session?.user?.id);
+  // viewer 身份: ① franchiseeId (「加盟」类型判定) ② phoneHash (排掉自己的客户档案)
+  //   主人 2026-09-22: 「新用户注册后, 客户列表里出现了自己的信息, 自己不应该是自己的客户」
+  const [viewerFranchiseeId, viewerPhoneHash] = await Promise.all([
+    resolveViewerFranchiseeId(session?.user?.id),
+    resolveViewerPhoneHash(session?.user?.id),
+  ]);
   const listOptions = {
     search,
     type: parsedType.success ? parsedType.data : undefined,
     viewerFranchiseeId,
+    excludePhoneHash: viewerPhoneHash,
   };
 
   // 1) 取数据: 紧急度排序要在"命中全集"上排序再切片 (见 attach.ts 规模说明)

@@ -16,6 +16,7 @@ import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { getCustomerReferralGraph } from "@/lib/db/queries/customer";
 import { getRbacContext } from "@/lib/auth/rbac";
+import { resolveViewerPhoneHash } from "@/lib/auth/viewer";
 
 export async function GET() {
   const session = await auth();
@@ -44,7 +45,9 @@ export async function GET() {
     rbacCtx = undefined;
   }
 
-  const nodes = await getCustomerReferralGraph({ rbacCtx });
+  // 自己不应该是自己的客户 (主人 2026-09-22): 图谱同样排掉当前登录者自己的客户档案
+  const viewerPhoneHash = await resolveViewerPhoneHash(session?.user?.id);
+  const nodes = await getCustomerReferralGraph({ rbacCtx, excludePhoneHash: viewerPhoneHash });
 
   return NextResponse.json({
     nodes,

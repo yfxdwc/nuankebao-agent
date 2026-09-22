@@ -2,6 +2,31 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (客户列表出现「自己」— 自己的客户档案不进自己的列表, 2026-09-22)
+
+> **主人原话**: 「先核实并修复: 新用户注册后, 其客户列表中出现了自己的信息, 自己不应该是自己的客户」
+
+**根因** — 建号即强制建档 (AGENTS §6.6 / ADR-0013) 让每个账号都有一条**同手机号** customer 档案
+(那条档案的语义 = 「她作为**别人**的客户」, 该出现在她推荐人的列表里); 但客户列表 / 图谱 / 概览
+都没有「排掉自己」的条件 → 新用户注册后, 客户列表第一条就是自己 (dev 实测: 账号 13900008801 的列表
+返回自己 customer 641)。
+
+**修法** — 统一按手机号 hash 口径 (`user ↔ customer` 既有约定, 无 FK 列) 加一条排除条件, 三处同口径:
+
+- `src/lib/db/queries/customer.ts`: 新增导出纯函数 `selfCustomerExclusionSql(phoneHash)`
+  (null/空 → 返回 null = 老行为), `listCustomers` / `getCustomerReferralGraph` 接受
+  `excludePhoneHash`; 列表与 `count` 共用同一条 WHERE → `total` 同步正确
+- `src/lib/auth/viewer.ts`: 新增 `resolveViewerPhoneHash(sessionUserId)` (未登录 / 无手机号 / 脏 id → null)
+- `src/lib/db/queries/dashboard.ts`: `getStatsOverview(ctx, { excludePhoneHash })` 同口径
+  (否则列表 47 条 / 概览 48 条)
+- 三处 route 传参: `GET /api/customers` · `GET /api/customers/graph` · `GET /api/me`
+- 刻意**不动** web admin 冻结目录 (`src/app/admin/customers/page.tsx` 不传 = 老行为)
+
+**验证** — ① 单测 `tests/customer-type.test.ts` 新增 2 例 (有 hash → `phone_hash <> $1` 带参; null → 无条件)
+② dev 端到端: 账号 13900008801 的 `GET /api/customers` total 由 2 → **1** (自己那条消失),
+`/api/customers/graph` 自己的节点消失, `/api/me` `customerCount = 1` 与列表 total 自洽;
+新注册账号 13900008802 的列表不含自己
+
 ### Changed (拆栏: 推荐人 ≠ 点位父 + 脚本 `_env` 统一, 2026-09-21)
 
 > **主人原话**:

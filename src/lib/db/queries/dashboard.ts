@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { customer, wellnessRecord, followUpTask, interaction } from "@/lib/db/schema";
-import { isNull, sql, eq, and, gte, lt } from "drizzle-orm";
+import { isNull, sql, eq, ne, and, gte, lt } from "drizzle-orm";
 import { customerRbacFilter, type RbacContext } from "@/lib/auth/rbac";
 
 // ============================================
@@ -71,7 +71,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 //   否则客户列表写 47 条、「数据概览」写 6 条, 主人一眼以为数字坏了 (2026-09-18 拍)。
 //   等客户列表接了行级过滤 (rbac.ts 里的 TODO 完结), 这里把 ctx 传进去即可 —— SQL 已经写好。
 //
-// 边界: 软删客户 (deleted_at) 一律不计入
+// 边界: 软删客户 (deleted_at) 一律不计入; **当前登录者自己的客户档案也不计入**
+//   (自己不应该是自己的客户, 主人 2026-09-22 —— 必须与客户列表同一口径,
+//    否则列表 47 条 / 概览 48 条, 主人一眼以为数字坏了)
 
 export interface StatsOverview extends DashboardStats {
   /** 本月新建档的客户数 */
@@ -79,7 +81,9 @@ export interface StatsOverview extends DashboardStats {
 }
 
 export async function getStatsOverview(
-  ctx: RbacContext | null
+  ctx: RbacContext | null,
+  /** 当前登录者的手机号 hash → 排掉他自己的客户档案 (与客户列表同口径, 主人 2026-09-22) */
+  opts: { excludePhoneHash?: string | null } = {}
 ): Promise<StatsOverview> {
   const now = new Date();
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -88,7 +92,11 @@ export async function getStatsOverview(
   const nextStr = nextMonth.toISOString().split("T")[0];
 
   const filter = ctx ? customerRbacFilter(ctx) : undefined;
-  const customerScope = and(isNull(customer.deletedAt), filter);
+  const selfExclusion = opts.excludePhoneHash
+    ? ne(customer.phoneHash, opts.excludePhoneHash)
+    : undefined;
+  // 三个条件取 AND: 未软删 + (可选) RBAC + (可选) 排掉自己
+  const customerScope = and(isNull(customer.deletedAt), filter, selfExclusion);
 
   const [
     [{ customerCount }],
