@@ -237,7 +237,7 @@
 | 看别人的**图谱** | 客户页图谱 tab 每个节点 (含「我」) | `GET /api/franchisees/me/tree` · `/api/franchisees/:id/children` → `member` |
 | 图谱图例 | 节点下方一行「👑 会员 N 位 · 金环 + 👑 = 会员」 | 前端按树里 `member` 计数 (无会员则不占地方) |
 | 看别人的**列表** | 客户列表行头像 | `GET /api/customers` → `items[].isMember` |
-| (预留) 客户推荐图 | `/api/customers/graph` 节点 `member` | 同上口径 |
+| ~~(预留) 客户推荐图~~ | ~~`/api/customers/graph` 节点 `member`~~ | ❌ 端点已删 (ADR-0015 Q4, 2026-09-22) |
 
 **「实时同步」怎么做到的 (关键设计)**:
 - 不落库、不缓存任何 member 布尔值: 每次查询用 **EXISTS 子查询现算**

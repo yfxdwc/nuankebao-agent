@@ -386,7 +386,10 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 > ADR-0015 共 16 项决策全部按建议通过; 下面对应条目里标 🔄 的是**已拍板但代码未落**。
 
 - ✅ **一个自然人 = 一个手机号 hash** (加密手机号): 账号面 `user` / 客户面 `customer` / 结构面 `franchisee`
-  都只是她的**可选面**, 不是三个独立的人。真连接只有 `user.franchisee_id` (已有) + `user.customer_id` (🔄 Q7, additive)
+  都只是她的**可选面**, 不是三个独立的人。真连接 = `user.franchisee_id` + `user.customer_id`
+  (migration 0021 ✅, additive) + 约定 `phone_hash`
+- ✅ **巡检/修复**: `npx tsx scripts/audit-subject-integrity.ts [--fix]`
+  (七项: 孤儿推荐码 / 无账号节点 / 缺档案 / 列连接缺失 / 列连接漂移 / 归属悬空 / 节点手机号漂移)
 - ✅ **任何「谁的谁」的判定, 只允许读唯一真相源那一列, 禁止交叉** (Q3):
 
   | 问题 | 唯一真相源 |
@@ -394,7 +397,7 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   | 谁把我带进 app (发会员天数/推荐奖励) | `referral_reward` |
   | 我挂在谁下面 (图谱 / 落位 / 上下级可见性) | `franchisee.placement_parent_id` |
   | 谁把我拉进加盟 (业务展示, **不参与任何判定**) | `franchisee.referrer_id` |
-  | 客户「老带新」 | ❌ **废弃** (死链路, Q4) |
+  | 客户「老带新」 | ❌ **废弃** (死链路已删, Q4) |
 
 - ✅ **推荐码 ≠ 关系 (禁令)**: 推荐码职责 = **身份唯一性识别** + **推荐奖励凭证** + 建号必填;
   用我的码注册的人**不会**自动成为我的下级/下线 (Q10);

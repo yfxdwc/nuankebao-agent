@@ -27,15 +27,22 @@
 
 **验证**
 - `tsc --noEmit` 过; Vitest **182 passed** (新增 `customer-scope.test.ts` 8 例 SQL 漂移守卫)
-- **E2E 真实 HTTP × 3 组**: ①归属 (A 建客户 → A=1 / B=0 / admin=1; 胶囊与概览同步)
+- **E2E 真实 HTTP**: ①归属 (A 建客户 → A=1 / B=0 / admin=1; 胶囊与概览同步)
   ②越权 (B GET/PATCH/DELETE 全 404, 数据未篡改; A 全 200; 无 session 仍 200 = dev 不误伤)
-  ③claim (B 声明 200 → 重复 alreadyMine → A 抢 409 → 本人 400 SELF; audit_log 留痕)
-- 冒烟: `smoke-signup` **8/8** (加 owner=null/建档人=本人) · `smoke-registration` **10/10** (admin 豁免建档)
-- Flutter: `analyze` 改动文件 0 issue; `flutter test` **132 passed** (含 5 个页面级 widget 测试)
-- ⚠️ **未做真机验收** (AGENTS §5 要求) —— 待主人真机确认 UI
+  ③claim (200 / 幂等 / 409 / SELF; audit_log 留痕) ④lookup (claimable / self / 400 / found=false)
+  ⑤上游 (depth=4 用户 → `uplines` 3 条, 列表 = 我 + 3 上层)
+- 冒烟: `smoke-signup` **11/11** (含 source=self_signup + 确认前无权益 + 确认后 15 天)
+  · `smoke-registration` **12/12** (含 `user.customer_id` 落值 + admin 豁免建档)
+  · `audit-subject-integrity.ts --check` **七项全通过** (dev 存量已清零)
+- Flutter: `analyze` 改动文件 0 issue; `flutter test` **137 passed** (含 5 个页面级 widget 测试)
+- ⚠️ **未做真机验收** (AGENTS §5 要求) —— 待主人真机确认 UI (图谱 3 格 / 推荐页按钮 / 表单识别)
 
-**剩余 (ADR-0015 §7)**: 步骤 4 (用户图谱上行 3 层直系) · 步骤 5 (关系边废弃 Q4 + 建号合并
-+ `user.customer_id` Q7) · 步骤 6 (存量修复 Q16 + 文档收口)
+**当前状态**: ADR-0015 的 16 项决策**已全部落地** (步骤 0-6)。存量: dev 巡检七项全过
+(修复了 254 条孤儿推荐码 + 33 个缺档账号)。
+
+**遗留 (下一批, 不在本 ADR 范围)**:
+- `/api/dashboard/stats` 无 RBAC (Flutter 无 watcher / web admin 冻结) → 封掉或接同口径
+- 3 个 dev 节点手机号漂移 (node 75/90/91 ← 账号 1/3/5, smoke 测试残留)
 
 ### Fixed (字号档位 chip 文字在真机 APK 上发白、看不见, 2026-09-22)
 

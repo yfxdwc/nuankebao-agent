@@ -78,6 +78,12 @@ callbackUrl: string
 ### `GET /api/customers`
 客户列表 (分页 + 搜索 + 跟进紧急度排序)。
 
+> **可见范围 (ADR-0015 Q2, 主人 2026-09-22 拍)**: 「我的客户」= **归属我的人**
+> (`customer.owner_id` = 我) **∪ 我的直推加盟** (点位父 = 我的加盟节点)。
+> admin 不过滤 (全网); 口径单一真相源 = `src/lib/db/queries/customer-scope.ts`
+> (列表 / 胶囊计数 / `/api/me` 概览 / 行级过滤四处共用)。
+> ⚠ dev `DEV_SKIP_AUTH=1` 且无 session → 无身份 → 不做行级过滤 (与老行为一致)。
+
 **Query**:
 - `search` (可选): 按姓名/手机号搜索
 - `type` (可选): `all` / `franchisee` / `seed` / `normal` (非法值 → 400)
@@ -172,12 +178,46 @@ callbackUrl: string
 
 **响应**: `CustomerView` (同 list 项)
 
-### `GET /api/customers/graph`
-客户推荐关系图 (客户页图谱数据源)。节点 `{ id, name, referrerId, member }`, 边由 `referrerId` 派生。
+### `GET /api/customers/graph` ❌ 已删除 (ADR-0015 Q4, 2026-09-22)
+客户推荐关系图是**死链路** (零调用方), 已按主人拍板废弃。
+「谁带来谁」看两处: `referral_reward` (账号推荐, 发会员天数) /
+`franchisee.placement_parent_id` (点位父, 图谱与可见性)。
+`customer.referrer_id` 列保留仅为存量 (ADR-0004 禁 DROP), 新代码不要读写。
 
-- `referrerId`: 推荐人 `customer.id`, `null` = 根/孤儿
-- `member` (2026-09-21 加): 该客户同手机号账号是不是会员 (口径同列表的 `isMember`)
-- 手机号 / 健康数据**不返回** (PII 最小化); 上限 1000 节点
+### `POST /api/customers/claim`
+把一位**已注册用户**加为我的客户 (归属声明, ADR-0015 Q11/Q12/Q15)。
+
+**Body**: `{ "customerId": "697" }`
+
+**规则 (先到先得)**:
+| 情况 | 响应 |
+|---|---|
+| 归属为空 (`owner_id IS NULL`) | `200 { ok: true, alreadyMine: false, customer }` |
+| 已经是我的客户 | `200 { ok: true, alreadyMine: true }` (幂等, 不重复写) |
+| 已归属别人 | `409 { code: "OWNED_BY_OTHER" }` (不做抢单) |
+| 自己 | `400 { code: "SELF" }` (自己不应该是自己的客户) |
+| 不存在 / 已软删 | `404 { code: "NOT_FOUND" }` |
+
+必须登录; 写操作自动进 `audit_log` (customer 触发器)。
+
+### `GET /api/referral/lookup?code=XXXXXX`
+按**推荐码**查人 (推荐码 = 身份唯一性识别码, ADR-0015 Q10)。
+
+**响应** (最小字段, 不外泄完整手机号 / 健康数据):
+```json
+{
+  "found": true,
+  "code": "ABC123",
+  "name": "张三",
+  "phoneMasked": "139****1234",
+  "isMember": false,
+  "customerId": "697",
+  "claimState": "claimable"          // claimable | mine | others | no_profile | self
+}
+```
+- 码不存在 → `200 { found: false, code }` (不是错误)
+- 格式不对 → 400; 超过 **10 次/分钟/用户** → 429 (防枚举)
+- 每次命中写一条 `audit_log` (`table=referral_code, operation=lookup`)
 
 ### `POST /api/customers`
 创建客户。

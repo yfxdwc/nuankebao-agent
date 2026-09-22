@@ -404,8 +404,8 @@ user.phone_hash  ~~~~ 约定 ~~~~  franchisee.phone_hash ← 同上
 | 2 | 归属模型 (Q11/Q12/Q15): migration additive + 回填 + 冲突规则 | 1 | 中 | ✅ 2026-09-22 (Q15 冲突规则随步骤 3 claim 接口落地) |
 | 3 | 推荐码身份查询接口 (Q10) + 「我推荐的人」加客户 + 新建客户填码 | 2 | 中 | ✅ 2026-09-22 |
 | 4 | 图谱上行 3 层 (Q13) | 0 | 小 | ✅ 2026-09-22 |
-| 5 | 关系边废弃 (Q4) + 建号合并 + `user.customer_id` (Q7) | 2 | 中 | ⏳ |
-| 6 | 存量大扫除 (Q16) + 文档收口 (AGENTS §6.6 / api.md / Flutter README) | 1-5 | 小 | ⏳ |
+| 5 | 关系边废弃 (Q4) + 建号合并 + `user.customer_id` (Q7) | 2 | 中 | ✅ 2026-09-22 |
+| 6 | 存量大扫除 (Q16) + 文档收口 (AGENTS §6.6 / api.md / Flutter README) | 1-5 | 小 | ✅ 2026-09-22 |
 
 > ⚠ **顺序不能反**: 没做步骤 0 就接过滤 = admin 被打死。
 
@@ -444,4 +444,8 @@ user.phone_hash  ~~~~ 约定 ~~~~  franchisee.phone_hash ← 同上
   ✅ 步骤 2 (migration 0020 `customer.owner_id` + 写路径拆栏 + Q5 admin 豁免建档) ·
   ✅ IDOR 补丁 (`/api/customers/[id]` 读改删同口径校验) ·
   ✅ 步骤 3 (lookup + claim 接口 + Flutter 两条添加路径) ·
-  ✅ 步骤 4 (图谱上行 3 层直系) — 均 2026-09-22
+  ✅ 步骤 4 (图谱上行 3 层直系) ·
+  ✅ 步骤 5 (Q4 死链路已删 + 建号合并 + migration 0021 `user.customer_id`) ·
+  ✅ 步骤 6 (`scripts/audit-subject-integrity.ts` 巡检/修复 + 文档收口) — 均 2026-09-22
+
+> **本 ADR 的 16 项决策已全部落地**。后续若新增业务面 (门店/多租户), 从这里重新评估, 不要改成"各写各的"。

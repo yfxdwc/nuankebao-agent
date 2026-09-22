@@ -94,14 +94,14 @@
 
 ---
 
-## ④ 死代码: 客户推荐图 (`CustomerGraphView`) · ⏳ 待拍板删（2026-09-21）
+## ④ 死代码: 客户推荐图 (`CustomerGraphView`) · ✅ 已删 (2026-09-22, ADR-0015 Q4)
 
-> `flutter_app/lib/modules/customer/widgets/customer_graph_view.dart` (517 行) +
+> `flutter_app/lib/modules/customer/widgets/customer_graph_view.dart` +
 > `myCustomerGraphProvider` + `GET /api/customers/graph` **无人调用**（客户页「图谱」tab 画的是
 > 加盟树 `franchise_tree_painter.dart`，路径完全不同）。
-> 本次会员标识任务顺手给 `/api/customers/graph` 的节点加了 `member` 字段（保持口径一致），
-> 但**没有**给这个 dead widget 画 UI —— 免得美化一段没人看的代码。
-> **待拍板**: 删（`git rm` 3 处 + `docs/api.md` 对应小节）还是留作未来「客户推荐关系」视图的基础。
+> **2026-09-22 主人拍「废弃」已删**: 上述三处 + `CustomerGraphNode`/`CustomerGraph` 模型 +
+> 新建客户表单的「选择推荐人」均移除; `customer.referrer_id` 列保留仅为存量 (ADR-0004)。
+> 「谁带来谁」看: `referral_reward` (账号推荐) / `franchisee.placement_parent_id` (点位父)。
 
 ---
 
