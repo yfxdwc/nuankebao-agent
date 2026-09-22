@@ -439,7 +439,9 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 > **主人原话**: 「无账号节点为什么要存在? 不能禁止/消除无账号节点吗, **要成为节点首先必需有账号**。」
 
 - ✅ **唯一口径** = `src/lib/db/queries/franchisee-account.ts`
-  - 新建节点前必过 `requireAccountForNode(tx, phoneHash)` (没有 active 账号 → 抛人话错误, 事务回滚)
+  - 新建节点前必过 `resolveNodeAccount(tx, { referralCode, phoneHash })` —— **优先按邀请码找账号**
+    (ADR-0016 D1/P6; 找到后节点姓名/手机号直接取自账号); 没有 active 账号 → 抛人话错误, 事务回滚
+    (`requireAccountForNode` 降级为存量兼容: 只给手机号时用)
   - 建完必过 `assertNodeHasAccount(tx, fid)` (兜脏数据 / 并发停用; 失败即回滚)
   - 三条建节点路径都已接入: `createFranchisee` (老 `POST /api/franchisees`) / 三方确认 `create` / `promote`
 - ✅ **注册自愈** (`adoptOrphanNodeForNewAccount`, 在 `registration.ts` 建号事务内):

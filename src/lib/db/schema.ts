@@ -185,6 +185,10 @@ export const franchisePlacementRequest = pgTable(
 
     // kind=create: 新加盟商资料 (三方确认通过后才真正 insert franchisee)
     newName: text("new_name"),
+    // ★ 她对应的**账号** (ADR-0016 D1/P6, migration 0022): 落位/建节点按邀请码找到的账号
+    //   用途: ① 执行时按 id 校验账号可用 (不再靠手机号 hash) ② 「本人确认」按 id 认人
+    //   null = 存量单 (建表时还没有这列) → 退回 new_phone_hash 兜底
+    newUserId: bigint("new_user_id", { mode: "bigint" }),
     newPhoneEncrypted: text("new_phone_encrypted"),
     newPhoneHash: text("new_phone_hash"),
     newNotesEncrypted: text("new_notes_encrypted"),

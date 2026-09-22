@@ -155,6 +155,13 @@
       "when": 1790166000000,
       "tag": "0021_user_customer_id",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790173200000,
+      "tag": "0022_placement_new_user_id",
+      "breakpoints": true
     }
   ]
 }

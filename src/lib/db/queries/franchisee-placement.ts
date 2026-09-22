@@ -36,6 +36,8 @@ import { rewardReferrerOnFranchisee } from "@/lib/billing/entitlements";
 import {
   assertNodeHasAccount,
   requireAccountForNode,
+  requireAccountForUserId,
+  resolveNodeAccount,
   linkAccountAndCustomer,
 } from "./franchisee-account";
 
@@ -129,6 +131,8 @@ interface RawRequest {
   initiatorFid: bigint;
   initiatorUserId: bigint;
   newName: string | null;
+  /** ★ 她对应的账号 (ADR-0016 D1/P6, migration 0022); null = 存量单 → 退回 phone hash */
+  newUserId: bigint | null;
   newPhoneEncrypted: string | null;
   newPhoneHash: string | null;
   /** unjoin 单: 要解除的加盟商节点 id (DB 列名历史遗留 move_fid; 语义 = 单子主体) */
@@ -158,12 +162,13 @@ function roleFor(
   ) {
     candidates.push("new_franchisee");
   }
-  if (
-    (raw.kind === "create" || raw.kind === "promote") &&
-    raw.newPhoneHash != null &&
-    actor.phoneHash === raw.newPhoneHash
-  ) {
-    candidates.push("new_franchisee");
+  if (raw.kind === "create" || raw.kind === "promote") {
+    // ★ ID 化 (ADR-0016 D3/P6): 比 userId; 存量单 (new_user_id 为空) 退回手机号 hash
+    const isNewPerson =
+      raw.newUserId != null
+        ? actor.userId === raw.newUserId
+        : raw.newPhoneHash != null && actor.phoneHash === raw.newPhoneHash;
+    if (isNewPerson) candidates.push("new_franchisee");
   }
   // promote 认领「已在 app 里的节点」: 上级本人可能没绑这个节点 (老 seed 节点),
   //   但按 fid 认得更稳 (手机号只是弱约定)
@@ -345,6 +350,12 @@ export interface CreatePlacementRequestInput {
   /** kind=create */
   newName?: string;
   newPhone?: string;
+  /**
+   * ★ 她的**邀请码** (ADR-0016 D1/P6, 主人 2026-09-22 拍「落位/建节点改成按邀请码找账号」)
+   *   给了码 → 按码找账号, 姓名/手机号直接取自账号 (不用手输, 也不会漂);
+   *   没给码 → 存量兼容: 按 newPhone 的手机号 hash 找。
+   */
+  newReferralCode?: string;
   newNotes?: string;
   /** kind=move / unjoin: 被移动 / 被解除的节点 */
   /** unjoin: 要解除的加盟商节点 id */
@@ -542,6 +553,8 @@ export async function createPlacementRequest(
       if (pendingSame) throw new Error("该点位已有待确认的落位申请 (预占中)");
     }
 
+    let newUserId: bigint | null = null;
+    let newName: string | null = null;
     let newPhoneHash: string | null = null;
     let newPhoneEncrypted: string | null = null;
     let newNotesEncrypted: string | null = null;
@@ -550,18 +563,21 @@ export async function createPlacementRequest(
     let uplineFid: bigint | null = null;
 
     if (input.kind === "create") {
-      if (!input.newName || !input.newPhone) {
-        throw new Error("新加盟商 姓名/手机号 必填");
-      }
-      newPhoneHash = hashForLookup(input.newPhone);
-      newPhoneEncrypted = encryptField(input.newPhone);
+      // ★ P6 (ADR-0016 D1): 优先按**邀请码**找账号; 姓名/手机号直接取自账号
+      //   (操作人不用手输 → 顺带消灭了"节点手机号漂移"这一类问题)
+      const resolved = await resolveNodeAccount(tx, {
+        referralCode: input.newReferralCode ?? null,
+        phoneHash: input.newPhone ? hashForLookup(input.newPhone) : null,
+      });
+      newUserId = resolved.userId;
+      newName = resolved.name || (input.newName ?? "");
+      newPhoneHash = resolved.phoneHash;
+      newPhoneEncrypted = encryptField(resolved.phone);
       newNotesEncrypted = input.newNotes ? encryptField(input.newNotes) : null;
 
       // 主人 2026-09-19: 用户不能给自己设置成加盟用户 (哪怕他是管理员)
-      if (
-        input.initiatorPhoneHash != null &&
-        input.initiatorPhoneHash === newPhoneHash
-      ) {
+      //   ★ ID 化 (ADR-0016 D3): 比 userId, 不再比手机号 hash (同号会误判)
+      if (resolved.userId === input.initiatorUserId) {
         throw new Error("不能给自己设置加盟 (必须由其他已加盟用户或系统管理员设置)");
       }
 
@@ -586,18 +602,19 @@ export async function createPlacementRequest(
       //   校验: ① 我是根 ② 不是我自己 ③ U 不能在我这棵树里 (会成环)
       //         ④ U 必须已有账号 (确认要他本人点) ⑤ 上级/锚点各自只能有 1 张 pending
       //   ⚠ 我在 U 的哪条线**不由我选** —— 由 U 本人在确认时决定 (拍板原话)
-      if (!input.newName || !input.newPhone) {
-        throw new Error("上级 姓名/手机号 必填");
-      }
-      newPhoneHash = hashForLookup(input.newPhone);
-      newPhoneEncrypted = encryptField(input.newPhone);
+      // ★ P6 (ADR-0016 D1): 认领的上级同样按**邀请码**找账号 (存量兼容: 手机号)
+      const resolved = await resolveNodeAccount(tx, {
+        referralCode: input.newReferralCode ?? null,
+        phoneHash: input.newPhone ? hashForLookup(input.newPhone) : null,
+      });
+      newUserId = resolved.userId;
+      newName = resolved.name || (input.newName ?? "");
+      newPhoneHash = resolved.phoneHash;
+      newPhoneEncrypted = encryptField(resolved.phone);
       newNotesEncrypted = input.newNotes ? encryptField(input.newNotes) : null;
 
-      // 用户不能把自己认领成自己的上级 (跟 create 同一条硬规则)
-      if (
-        input.initiatorPhoneHash != null &&
-        input.initiatorPhoneHash === newPhoneHash
-      ) {
+      // 用户不能把自己认领成自己的上级 (★ ID 化: 比 userId)
+      if (resolved.userId === input.initiatorUserId) {
         throw new Error("不能把自己认领为自己的上级 (必须是另一个人)");
       }
 
@@ -765,7 +782,8 @@ export async function createPlacementRequest(
         status: isAdmin ? "executed" : "pending",
         initiatorFid,
         initiatorUserId: input.initiatorUserId,
-        newName: input.newName ?? null,
+        newName: newName ?? input.newName ?? null,
+        newUserId,
         newPhoneEncrypted,
         newPhoneHash,
         newNotesEncrypted,
@@ -813,6 +831,7 @@ export async function createPlacementRequest(
           initiatorFid: finalRow.initiatorFid,
           initiatorUserId: finalRow.initiatorUserId,
           newName: finalRow.newName,
+          newUserId: finalRow.newUserId,
           newPhoneEncrypted: finalRow.newPhoneEncrypted,
           newPhoneHash: finalRow.newPhoneHash,
           moveFid: finalRow.moveFid,
@@ -1149,7 +1168,12 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
     //   (执行末段的 assertNodeHasAccount 是兜底自检 —— 那条报错会带一个其实不存在的节点 id,
     //    给用户看不好, 所以能提前判的都提前判)
     if (raw.newPhoneHash && !raw.newPhoneHash.startsWith("pending:")) {
-      await requireAccountForNode(tx, raw.newPhoneHash);
+      // ★ P6 (ADR-0016 D1): 有 new_user_id 就按账号 id 校验 (手机号只是存量兜底)
+      if (raw.newUserId != null) {
+        await requireAccountForUserId(tx, raw.newUserId);
+      } else if (raw.newPhoneHash != null) {
+        await requireAccountForNode(tx, raw.newPhoneHash);
+      }
     }
     const [inserted] = await tx
       .insert(franchisee)
@@ -1211,7 +1235,12 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
     if (raw.uplineFid == null) {
       // 认领的上级还没进 app → 要给他建节点 → 他必须已有账号 (节点 ⇒ 账号)
       if (raw.newPhoneHash && !raw.newPhoneHash.startsWith("pending:")) {
+        // ★ P6 (ADR-0016 D1): 有 new_user_id 就按账号 id 校验 (手机号只是存量兜底)
+      if (raw.newUserId != null) {
+        await requireAccountForUserId(tx, raw.newUserId);
+      } else if (raw.newPhoneHash != null) {
         await requireAccountForNode(tx, raw.newPhoneHash);
+      }
       }
       const [created] = await tx
         .insert(franchisee)

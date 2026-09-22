@@ -1084,8 +1084,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   ///   —— 跟老规则"父节点 == 设置者 → 双方"是同一条 (U 就是我 app 里的邻接点)。
   ///   老的三方确认往下生长的方案**完全不变**。
   Future<void> _showClaimUplineDialog() async {
+    // ★ P6 (ADR-0016 D1, 主人 2026-09-22 拍): 按**邀请码**找账号 (手机号不再作为识别依据)
+    final codeCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
     final submitted = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1109,16 +1110,22 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: nameCtrl,
+                  controller: codeCtrl,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
-                  decoration: const InputDecoration(labelText: '上级姓名 *'),
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: '上级的邀请码 *',
+                    helperText: '6 位字母数字 —— 她的唯一识别码 (手机号不再作为识别依据)',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextField(
-                  controller: phoneCtrl,
+                  controller: nameCtrl,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: '上级手机号 *'),
+                  decoration: const InputDecoration(
+                    labelText: '称呼 (可选)',
+                    helperText: '留空就用她账号里的真实姓名',
+                  ),
                 ),
               ],
             ),
@@ -1136,21 +1143,21 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       ),
     );
     final name = nameCtrl.text.trim();
-    final phone = phoneCtrl.text.trim();
+    final code = codeCtrl.text.trim().toUpperCase();
+    codeCtrl.dispose();
     nameCtrl.dispose();
-    phoneCtrl.dispose();
     if (submitted != true) return;
-    if (name.isEmpty || !RegExp(r'^1[3-9]\d{9}$').hasMatch(phone)) {
+    if (!RegExp(r'^[A-Z0-9]{6}$').hasMatch(code)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('姓名 / 手机号 填对再提交')),
+        const SnackBar(content: Text('请填上级的 6 位邀请码')),
       );
       return;
     }
     try {
       final req = await ref.read(franchiseeServiceProvider).claimUpline(
-            newName: name,
-            newPhone: phone,
+            newReferralCode: code,
+            newName: name.isEmpty ? null : name,
           );
       if (!mounted) return;
       ref.invalidate(placementToConfirmCountProvider);
@@ -1243,8 +1250,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   /// 提交后**不立即生效**: 需要 设置者(我) + 新加盟商本人 + 新位置上级 三方确认
   /// (若上级 == 我 → 双方); 72h 未确认自动失效; 期间点位预占
   Future<void> _showAddDownlineDialog(FranchiseeTreeNode parent) async {
+    // ★ P6 (ADR-0016 D1): 按**邀请码**找账号
+    final codeCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
     var side = 'left';
     final submitted = await showDialog<bool>(
       context: context,
@@ -1277,16 +1285,22 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: nameCtrl,
+                  controller: codeCtrl,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
-                  decoration: const InputDecoration(labelText: '姓名 *'),
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: '她的邀请码 *',
+                    helperText: '6 位字母数字 —— 她的唯一识别码 (手机号不再作为识别依据)',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextField(
-                  controller: phoneCtrl,
+                  controller: nameCtrl,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: '手机号 *'),
+                  decoration: const InputDecoration(
+                    labelText: '称呼 (可选)',
+                    helperText: '留空就用她账号里的真实姓名',
+                  ),
                 ),
               ],
             ),
@@ -1305,14 +1319,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       ),
     );
     final name = nameCtrl.text.trim();
-    final phone = phoneCtrl.text.trim();
+    final code = codeCtrl.text.trim().toUpperCase();
+    codeCtrl.dispose();
     nameCtrl.dispose();
-    phoneCtrl.dispose();
     if (submitted != true) return;
-    if (name.isEmpty || !RegExp(r'^1[3-9]\d{9}$').hasMatch(phone)) {
+    if (!RegExp(r'^[A-Z0-9]{6}$').hasMatch(code)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('姓名 / 手机号 填对再提交')),
+        const SnackBar(content: Text('请填她的 6 位邀请码')),
       );
       return;
     }
@@ -1320,8 +1334,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       await ref.read(franchiseeServiceProvider).createPlacementRequest(
             targetParentId: parent.id,
             side: side,
-            newName: name,
-            newPhone: phone,
+            newReferralCode: code,
+            newName: name.isEmpty ? null : name,
           );
       if (!mounted) return;
       ref.invalidate(placementToConfirmCountProvider);
@@ -3540,14 +3554,62 @@ Customer c,
     ),
   );
   if (target == null || !context.mounted) return;
+
+  // ★ P6 (ADR-0016 D1, 主人 2026-09-22 拍): 落位按**邀请码**找账号 —— 先问她本人要码
+  //   (她必须已注册 app; 没注册就让她先注册, 再回来发展)
+  final codeCtrl = TextEditingController();
+  final code = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('发展「${c.name}」为加盟商',
+          style: const TextStyle(fontSize: AppTheme.fontLg)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '节点必须对应一个已注册账号 (她的邀请码 = 唯一识别码)。\n'
+            '还没注册? 先请她注册, 再回来发展。',
+            style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: codeCtrl,
+            style: const TextStyle(fontSize: AppTheme.fontMd),
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: '她的邀请码 *',
+              helperText: '6 位字母数字',
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(null),
+          child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+        ),
+        FilledButton(
+          onPressed: () {
+            final v = codeCtrl.text.trim().toUpperCase();
+            Navigator.of(ctx).pop(RegExp(r'^[A-Z0-9]{6}$').hasMatch(v) ? v : null);
+          },
+          child: const Text('提交', style: TextStyle(fontSize: AppTheme.fontMd)),
+        ),
+      ],
+    ),
+  );
+  codeCtrl.dispose();
+  if (code == null || !context.mounted) return;
+
   try {
     final req = await ref
         .read(franchiseeServiceProvider)
         .createPlacementRequest(
           targetParentId: target.parentId,
           side: target.side,
+          newReferralCode: code,
           newName: c.name,
-          newPhone: c.phone,
         );
     if (!context.mounted) return;
     ref.invalidate(placementToConfirmCountProvider);

@@ -3,6 +3,10 @@
 // Plan F1 + ADR-0006 边界: 纯展示, 不算钱
 
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { referralCode } from "@/lib/db/schema";
+import { normalizeReferralCode } from "@/lib/billing/referral";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { z } from "zod";
@@ -18,10 +22,16 @@ import { hashForLookup } from "@/lib/crypto/field";
 
 const CreateFranchiseeSchema = z.object({
   name: z.string().min(1).max(100),
-  phone: z.string().regex(/^1[3-9]\d{9}$/, "手机号格式错误"),
+  // ★ P6 (ADR-0016 D1, 主人 2026-09-22 拍): 找账号的 handle = **邀请码**;
+  //   手机号变成可选 (给了码就按码找, 姓名/手机号取自账号)
+  referralCode: z.string().min(1).max(20).optional(),
+  phone: z.string().regex(/^1[3-9]\d{9}$/, "手机号格式错误").optional(),
   referrerId: z.string().regex(/^\d+$/).optional().transform((v) => v ? BigInt(v) : undefined),
   sideHint: z.enum(["left", "right"]).optional(),
   notes: z.string().max(500).optional(),
+}).refine((v) => !!v.referralCode || !!v.phone, {
+  message: "请填对方的邀请码 (或存量兼容: 手机号)",
+  path: ["referralCode"],
 });
 
 export async function GET(request: NextRequest) {
@@ -97,8 +107,24 @@ export async function POST(request: NextRequest) {
         );
       }
       // 不能给自己设置加盟 (管理员也不行)
-      const selfPhoneHash = hashForLookup(input.phone);
-      if (actor.phoneHash != null && actor.phoneHash === selfPhoneHash) {
+      //   ★ P6 (ADR-0016 D3): 有邀请码时按**账号**判 (比 user id), 手机号只是存量兜底
+      const isSelfByCode =
+        !!input.referralCode &&
+        (await (async () => {
+          const mine = await db
+            .select({ code: referralCode.code })
+            .from(referralCode)
+            .where(eq(referralCode.userId, actor.userId))
+            .limit(1);
+          return mine[0]?.code === normalizeReferralCode(input.referralCode);
+        })());
+      const selfPhoneHash = input.phone ? hashForLookup(input.phone) : null;
+      const isSelfByPhone =
+        !input.referralCode &&
+        selfPhoneHash != null &&
+        actor.phoneHash != null &&
+        actor.phoneHash === selfPhoneHash;
+      if (isSelfByCode || isSelfByPhone) {
         return NextResponse.json(
           { error: "不能给自己设置加盟 (必须由其他已加盟用户或系统管理员设置)" },
           { status: 400 }

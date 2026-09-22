@@ -464,6 +464,8 @@ class FranchiseeService {
     required String targetParentId,
     required String side,
     String? newName,
+    /// ★ P6 (ADR-0016 D1): 优先按**邀请码**找账号 (后端从账号带出姓名/手机号)
+    String? newReferralCode,
     String? newPhone,
     String? newNotes,
     String? unjoinFid,
@@ -474,6 +476,7 @@ class FranchiseeService {
       'targetParentId': targetParentId,
       'side': side,
       if (newName != null) 'newName': newName,
+      if (newReferralCode != null) 'newReferralCode': newReferralCode,
       if (newPhone != null) 'newPhone': newPhone,
       if (newNotes != null) 'newNotes': newNotes,
       if (unjoinFid != null) 'unjoinFid': unjoinFid,
@@ -489,16 +492,20 @@ class FranchiseeService {
   ///     → 由上级本人在同意那一步挑一条自己空着的线
   ///   - 不需要 targetParentId: 锚点 = 我自己那个根 (服务端填)
   Future<PlacementRequest> claimUpline({
-    required String newName,
-    required String newPhone,
+    /// 姓名可省 (后端按邀请码从账号带出真名)
+    String? newName,
+    /// ★ P6 (ADR-0016 D1): 按**邀请码**找账号 (主口径)
+    String? newReferralCode,
+    String? newPhone,
     String? newNotes,
   }) async {
     final res = await _dio.post('/franchisees/placement-requests', data: {
       'kind': 'promote',
       // ⚠ 后端 promote 不读 targetParentId (锚点=发起人自己); 传 0 只为兼容校验
       'targetParentId': '0',
-      'newName': newName,
-      'newPhone': newPhone,
+      if (newName != null) 'newName': newName,
+      if (newReferralCode != null) 'newReferralCode': newReferralCode,
+      if (newPhone != null) 'newPhone': newPhone,
       if (newNotes != null) 'newNotes': newNotes,
     });
     return PlacementRequest.fromJson(res.data as Map<String, dynamic>);

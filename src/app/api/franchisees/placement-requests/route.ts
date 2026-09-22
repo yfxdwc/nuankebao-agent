@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
     targetParentId?: string;
     side?: string;
     newName?: string;
+    /** ★ P6 (ADR-0016 D1): 优先按**邀请码**找账号 (给了码 → 姓名/手机号取自账号) */
+    newReferralCode?: string;
     newPhone?: string;
     newNotes?: string;
     unjoinFid?: string;
@@ -100,6 +102,7 @@ export async function POST(request: NextRequest) {
           : BigInt(0), // unjoin: 服务端会用节点自己的位置覆盖
         targetSide: side,
         newName: body.newName,
+        newReferralCode: body.newReferralCode,
         newPhone: body.newPhone,
         newNotes: body.newNotes,
         unjoinFid:

@@ -23,7 +23,8 @@ import { logger } from "@/lib/errors";
 import {
   assertNodeHasAccount,
   linkAccountAndCustomer,
-  requireAccountForNode,
+
+  resolveNodeAccount,
 } from "./franchisee-account";
 import { franchiseeRbacFilter, type RbacContext } from "@/lib/auth/rbac";
 import { memberExistsSql } from "@/lib/billing/member-flag";
@@ -70,7 +71,14 @@ function toView(row: Franchisee): FranchiseeView {
 
 export interface CreateFranchiseeInput {
   name: string;
-  phone: string;
+  /** 存量兼容入口; 新流程给 referralCode 即可 (§ADR-0016 P6) */
+  phone?: string;
+  /**
+   * ★ 她的**邀请码** (ADR-0016 D1/P6, 主人 2026-09-22 拍「建节点改成按邀请码找账号」)
+   *   给了码 → 按码找账号, 节点姓名/手机号直接取自账号 (与入参不一致以账号为准);
+   *   没给码 → 存量兼容: 按 phone 的手机号 hash 找。
+   */
+  referralCode?: string;
   referrerId?: bigint; // null = root (仅 master admin 可)
   sideHint?: PlacementSide; // 决策 3C: 推荐人手选
   notes?: string;
@@ -127,9 +135,20 @@ export async function createFranchisee(
   ctx: AuditContext,
   createdBy: bigint
 ): Promise<FranchiseeView> {
+  /** 事务外发奖励用 (事务内解析出的账号手机号 hash) */
+  let rewardPhoneHash: string | null = null;
   const view = await withAuditContext(ctx, async (tx) => {
     // 0. 节点必须对应一个账号 (主人 2026-09-21 拍)
-    await requireAccountForNode(tx, hashForLookup(input.phone));
+    //    ★ P6 (ADR-0016 D1): 优先按**邀请码**找; 账号的姓名/手机号直接用作节点资料
+    //    (手输的 name/phone 只在没有账号资料时兜底 → 顺带消灭节点手机号漂移)
+    const account = await resolveNodeAccount(tx, {
+      referralCode: input.referralCode ?? null,
+      phoneHash: input.phone ? hashForLookup(input.phone) : null,
+    });
+    const nodeName = account.name || input.name;
+    const nodePhone = account.phone || input.phone || "";
+    const nodePhoneHash = account.phoneHash;
+    rewardPhoneHash = nodePhoneHash; // 传给事务外 (发推荐奖励用)
 
     // 1. 找位置
     let placement: PlaceResult;
@@ -182,9 +201,9 @@ export async function createFranchisee(
 
     // 3. INSERT franchisee
     const encryptedData: NewFranchisee = {
-      name: input.name,
-      phoneEncrypted: encryptField(input.phone),
-      phoneHash: hashForLookup(input.phone),
+      name: nodeName,
+      phoneEncrypted: encryptField(nodePhone),
+      phoneHash: nodePhoneHash,
       referrerId: newReferrerId,
       placementParentId: newPlacementParentId,
       placementSide: newSide,
@@ -218,7 +237,7 @@ export async function createFranchisee(
       fid: newFranchiseeRow.id,
       phoneHash: newFranchiseeRow.phoneHash,
       phoneEncrypted: newFranchiseeRow.phoneEncrypted,
-      name: input.name,
+      name: nodeName,
       createdBy,
     });
     // 节点 ⇒ 账号 不变量: 建完必须真绑上 (没有 → 回滚)
@@ -231,7 +250,9 @@ export async function createFranchisee(
   //   为什么不放事务里: grantDays 自己开事务 (不可嵌套); 奖励失败也不能回滚落位
   try {
     const { exitRewardIfReferral } = await import("@/lib/billing/entitlements");
-    await exitRewardIfReferral({ newFranchiseePhoneHash: hashForLookup(input.phone) });
+    if (rewardPhoneHash) {
+      await exitRewardIfReferral({ newFranchiseePhoneHash: rewardPhoneHash });
+    }
   } catch (e) {
     logger.error("billing: referral reward failed (ignored)", {}, e);
   }
