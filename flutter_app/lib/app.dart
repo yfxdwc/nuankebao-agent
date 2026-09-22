@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,17 +7,36 @@ import 'core/http/api_client.dart';
 import 'core/providers/service_providers.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/router/app_router.dart';
+import 'core/telemetry/usage_providers.dart';
 import 'core/theme/app_theme.dart';
 
 /// 全局 SnackBar 通道 (402 会员提示用; 不依赖任何页面 context)
 final GlobalKey<ScaffoldMessengerState> _messengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-class NuankeBaoApp extends ConsumerWidget {
+class NuankeBaoApp extends ConsumerStatefulWidget {
   const NuankeBaoApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NuankeBaoApp> createState() => _NuankeBaoAppState();
+}
+
+class _NuankeBaoAppState extends ConsumerState<NuankeBaoApp> {
+  @override
+  void initState() {
+    super.initState();
+    // 用量采集 (主人 2026-09-22 拍: 内部工具强制开启; 实际只在 release native 生效)
+    //   首帧后启动: 不阻塞冷启动; dev / web 由 usageTelemetryEnabled() 自动关闭
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        ref.read(usageServiceProvider).start(ref.read(dioProvider)),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     final settings = ref.watch(settingsProvider);
 

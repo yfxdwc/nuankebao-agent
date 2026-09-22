@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/models/dictionaries.dart';
 import '../../../core/providers/service_providers.dart';
+import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../widgets/rating_slider.dart';
@@ -154,8 +155,10 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     try {
       if (widget.recordId != null) {
         await ref.read(wellnessRecordServiceProvider).update(widget.recordId!, data);
+        ref.read(usageServiceProvider).track('record_edit');
       } else {
         await ref.read(wellnessRecordServiceProvider).create(data);
+        ref.read(usageServiceProvider).track('record_create');
       }
       if (!mounted) return;
       ref.invalidate(customerWellnessRecordsProvider(_effectiveCustomerId!));
@@ -204,6 +207,8 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   WellnessPhotoUploader(
                     existingUrls: _photoUrls,
                     onChanged: (urls) => setState(() => _photoUrls = urls),
+                    onPhotoUploaded: () =>
+                        ref.read(usageServiceProvider).track('record_photo_taken'),
                   ),
                   const SizedBox(height: 32),
                   BigButton(

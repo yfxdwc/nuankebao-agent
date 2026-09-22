@@ -4,6 +4,7 @@
 // 中老年易用: 字号 18pt+ / 按钮 64pt+ / FAB 80pt / 行高 80pt
 // ============================================
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,7 @@ import 'dart:math' as math;
 import '../../../core/models/franchisee.dart';
 import '../../../core/services/api.dart' show ReferralLookup;
 import '../../../core/providers/service_providers.dart';
+import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/big_button.dart';
@@ -85,6 +87,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 
   final _searchController = TextEditingController();
   String _search = '';
+  /// 搜索埋点去抖 (打字 800ms 后才记一次, 不逐字母上报)
+  Timer? _searchTrackTimer;
   _CustomerFilter _filter = _CustomerFilter.all;
 
   /// 排序 = 产品内部规则, **不做用户选择** (主人 2026-09-21 拍):
@@ -144,6 +148,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 
   @override
   void dispose() {
+    _searchTrackTimer?.cancel();
     _searchController.dispose();
     _graphTransformController.dispose();
     super.dispose();
@@ -258,6 +263,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 setState(() => _search = v);
                 // 图谱默认只显示局部, 搜索命中节点往往在屏外 → 自动挪到屏幕中心
                 if (_viewMode == _CustomerViewMode.graph) _focusOnSearchMatch(v);
+                // 用量: 停止输入 800ms 后记一次 (只记长度, 不记关键词 — 红线§4.4.5)
+                _searchTrackTimer?.cancel();
+                _searchTrackTimer = Timer(const Duration(milliseconds: 800), () {
+                  if (v.trim().isEmpty) return;
+                  if (!mounted) return;
+                  ref.read(usageServiceProvider).track('customer_search',
+                      props: {'keywordLen': v.trim().length});
+                });
               },
             ),
           ),
@@ -2210,7 +2223,7 @@ class CustomerDetailPage extends ConsumerWidget {
                     icon: Icons.phone,
                     label: '打电话',
                     compact: true,
-                    onTap: () => _callCustomer(context, c.phone),
+                    onTap: () => _callCustomer(context, ref, c.phone),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -2383,7 +2396,9 @@ class CustomerDetailPage extends ConsumerWidget {
   }
 
   /// 拨号 (tel:) — web 不支持时给提示, 不崩
-  Future<void> _callCustomer(BuildContext context, String phone) async {
+  Future<void> _callCustomer(
+      BuildContext context, WidgetRef ref, String phone) async {
+    ref.read(usageServiceProvider).track('customer_call');
     final uri = Uri(scheme: 'tel', path: phone);
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -2992,8 +3007,10 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       };
       if (widget.customerId != null) {
         await ref.read(customerServiceProvider).update(widget.customerId!, data);
+        ref.read(usageServiceProvider).track('customer_edit');
       } else {
         await ref.read(customerServiceProvider).create(data);
+        ref.read(usageServiceProvider).track('customer_create', props: {'source': 'form'});
       }
       if (!mounted) return;
       ref.invalidate(customersProvider);

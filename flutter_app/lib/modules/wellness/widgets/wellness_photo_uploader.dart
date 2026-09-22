@@ -17,11 +17,15 @@ class WellnessPhotoUploader extends StatefulWidget {
   /// 照片变更回调（已上传 URL 列表）
   final ValueChanged<List<String>> onChanged;
 
+  /// 成功上传一张照片后回调 (用量埋点: record_photo_taken)
+  final VoidCallback? onPhotoUploaded;
+
   final int maxPhotos;
 
   const WellnessPhotoUploader({
     super.key,
     required this.onChanged,
+    this.onPhotoUploaded,
     this.existingUrls = const [],
     this.maxPhotos = 6,
   });
@@ -72,6 +76,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
         _uploading = false;
       });
       widget.onChanged(_urls);
+      widget.onPhotoUploaded?.call();
     } catch (e) {
       setState(() => _uploading = false);
       if (!mounted) return;

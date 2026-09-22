@@ -11,6 +11,8 @@ import 'package:intl/intl.dart';
 
 import '../../../core/models/follow_up.dart';
 import '../../../core/providers/service_providers.dart';
+import '../../../core/telemetry/usage_events.dart' show UsageEntityType;
+import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import 'ai_insight_cards.dart' show BigActionButton;
@@ -109,6 +111,10 @@ Future<void> showAddFollowUpSheet(
                             const SnackBar(content: Text('跟进任务已创建')),
                           );
                         }
+                        ref.read(usageServiceProvider).track(
+                              'follow_up_create',
+                              props: {'source': 'customer_detail'},
+                            );
                         ref.invalidate(
                             customerFollowUpTasksProvider(customerId));
                       } catch (e) {
@@ -150,6 +156,11 @@ class _CustomerFollowUpSectionState
     setState(() => _completingId = t.id);
     try {
       await ref.read(followUpServiceProvider).complete(t.id);
+      ref.read(usageServiceProvider).track(
+            'follow_up_done',
+            entityType: UsageEntityType.followUp,
+            entityId: t.id,
+          );
       if (!mounted) return;
       // invalidate → 列表重拉 (provider 驱动, 不用本地 state)
       ref.invalidate(customerFollowUpTasksProvider(widget.customerId));

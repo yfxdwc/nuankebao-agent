@@ -12,6 +12,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/auth_provider.dart';
+import '../telemetry/usage_navigator_observer.dart';
+import '../telemetry/usage_providers.dart';
 import '../../modules/auth/screens/login_screen.dart';
 import '../../modules/auth/screens/register_screen.dart';
 import '../../modules/customer/screens/customers_page.dart';
@@ -55,9 +57,12 @@ String? resolveAuthRedirect({
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
+  // screen_view 自动埋点 (全路由覆盖; dev/web 不采集, 见 usage_service.dart)
+  final telemetry = ref.watch(usageServiceProvider);
 
   return GoRouter(
     initialLocation: '/login',
+    observers: [UsageNavigatorObserver(telemetry)],
     // fix-route (2026-09-17): 未知路由兜底 — 以前直接抛 GoException 红屏,
     // 现在给一个「页面不存在 + 回客户页」的友好页 (缺路由时不再吓到主人/销售)
     errorBuilder: (context, state) => Scaffold(

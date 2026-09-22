@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/salon.dart';
 import '../../../core/providers/service_providers.dart';
+import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../providers/salon_providers.dart';
@@ -309,6 +310,8 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
             notes: notes.isEmpty ? null : notes,
           );
       invalidateSalon(widget.ref, widget.salon.id);
+      widget.ref.read(usageServiceProvider).track('salon_rsvp',
+          props: {'status': _apiValueOf(status)});
       if (!mounted) return;
       navigator.pop();
       messenger.showSnackBar(

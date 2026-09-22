@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/models/salon.dart';
 import '../../../core/providers/service_providers.dart';
+import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../providers/salon_providers.dart';
@@ -1325,6 +1326,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         saved = await svc.update(widget.salonId!, _buildPayload(status));
       } else {
         saved = await svc.create(_buildPayload(status));
+        ref.read(usageServiceProvider).track('salon_create');
       }
       if (!mounted) return;
       invalidateSalon(ref, saved.id);

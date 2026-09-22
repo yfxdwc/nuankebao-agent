@@ -15,8 +15,36 @@ import 'package:flutter/services.dart';
 
 import '../../../core/models/ai_insight.dart';
 import '../../../core/providers/service_providers.dart';
+import '../../../core/telemetry/usage_events.dart' show AiCard;
+import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import 'customer_activity_cards.dart' show showAddFollowUpSheet;
+
+// ============================================
+// 用量埋点 helper (主人 2026-09-22: 用真实数据回答「AI 卡片到底有没有人点」)
+// ============================================
+
+void _trackAiClick(WidgetRef ref, String card, {bool regenerate = false}) {
+  ref.read(usageServiceProvider).track(
+        regenerate ? 'ai_regenerate' : 'ai_generate_click',
+        props: {'card': card},
+      );
+}
+
+void _trackAiResult(
+  WidgetRef ref,
+  String card, {
+  required bool ok,
+  required int ms,
+}) {
+  ref.read(usageServiceProvider).track(
+        'ai_generate_result',
+        props: {'card': card},
+        success: ok,
+        durationMs: ms,
+        errorCode: ok ? null : 'generate_failed',
+      );
+}
 
 // ============================================
 // 复购预测 (自动加载, 不烧 AI)
@@ -41,7 +69,9 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool manual = false}) async {
+    if (manual) _trackAiClick(ref, AiCard.repurchase);
+    final sw = Stopwatch()..start();
     setState(() {
       _loading = true;
       _error = null;
@@ -51,8 +81,16 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
           .read(aiServiceProvider)
           .repurchasePrediction(widget.customerId);
       if (mounted) setState(() => _data = d);
+      if (manual) {
+        _trackAiResult(ref, AiCard.repurchase,
+            ok: true, ms: sw.elapsedMilliseconds);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
+      if (manual) {
+        _trackAiResult(ref, AiCard.repurchase,
+            ok: false, ms: sw.elapsedMilliseconds);
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -68,12 +106,12 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
       trailing: IconButton(
         icon: const Icon(Icons.refresh, size: 22),
         tooltip: '重新计算',
-        onPressed: _loading ? null : _load,
+        onPressed: _loading ? null : () => _load(manual: true),
       ),
       child: _loading
           ? const _AiLoading('正在算复购周期...')
           : _error != null
-              ? _AiError(message: _error!, onRetry: _load)
+              ? _AiError(message: _error!, onRetry: () => _load(manual: true))
               : _data == null
                   ? const _AiHint('暂无数据')
                   : _buildResult(_data!),
@@ -194,7 +232,9 @@ class _AiProfileCardState extends ConsumerState<AiProfileCard> {
   bool _loading = false;
   String? _error;
 
-  Future<void> _generate() async {
+  Future<void> _generate({bool regenerate = false}) async {
+    _trackAiClick(ref, AiCard.profile, regenerate: regenerate);
+    final sw = Stopwatch()..start();
     setState(() {
       _loading = true;
       _error = null;
@@ -202,8 +242,12 @@ class _AiProfileCardState extends ConsumerState<AiProfileCard> {
     try {
       final d = await ref.read(aiServiceProvider).profileInsight(widget.customerId);
       if (mounted) setState(() => _data = d);
+      _trackAiResult(ref, AiCard.profile,
+          ok: true, ms: sw.elapsedMilliseconds);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
+      _trackAiResult(ref, AiCard.profile,
+          ok: false, ms: sw.elapsedMilliseconds);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -221,17 +265,17 @@ class _AiProfileCardState extends ConsumerState<AiProfileCard> {
           : IconButton(
               icon: const Icon(Icons.refresh, size: 22),
               tooltip: '重新生成',
-              onPressed: _loading ? null : _generate,
+              onPressed: _loading ? null : () => _generate(regenerate: true),
             ),
       child: _loading
           ? const _AiLoading('AI 正在总结客户画像...')
           : _error != null
-              ? _AiError(message: _error!, onRetry: _generate)
+              ? _AiError(message: _error!, onRetry: () => _generate())
               : _data == null
                   ? _GenerateButton(
                       label: '生成客户画像',
                       icon: Icons.auto_awesome,
-                      onTap: _generate,
+                      onTap: () => _generate(),
                     )
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,7 +326,9 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
 
   static const _reasonOptions = ['好久没来了', '想约她到店', '生日/节日问候', '该复购了'];
 
-  Future<void> _generate([String? reason]) async {
+  Future<void> _generate([String? reason, bool regenerate = false]) async {
+    _trackAiClick(ref, AiCard.followUp, regenerate: regenerate);
+    final sw = Stopwatch()..start();
     setState(() {
       _loading = true;
       _error = null;
@@ -293,8 +339,12 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
           .read(aiServiceProvider)
           .followUpInsight(widget.customerId, reason: _reason);
       if (mounted) setState(() => _data = d);
+      _trackAiResult(ref, AiCard.followUp,
+          ok: true, ms: sw.elapsedMilliseconds);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
+      _trackAiResult(ref, AiCard.followUp,
+          ok: false, ms: sw.elapsedMilliseconds);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -312,7 +362,7 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
           : IconButton(
               icon: const Icon(Icons.refresh, size: 22),
               tooltip: '重新生成',
-              onPressed: _loading ? null : () => _generate(_reason),
+              onPressed: _loading ? null : () => _generate(_reason, true),
             ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -425,7 +475,9 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
   bool _loading = false;
   String? _error;
 
-  Future<void> _generate() async {
+  Future<void> _generate({bool regenerate = false}) async {
+    _trackAiClick(ref, AiCard.effect, regenerate: regenerate);
+    final sw = Stopwatch()..start();
     setState(() {
       _loading = true;
       _error = null;
@@ -433,8 +485,12 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
     try {
       final d = await ref.read(aiServiceProvider).effectAnalysis(widget.customerId);
       if (mounted) setState(() => _data = d);
+      _trackAiResult(ref, AiCard.effect,
+          ok: true, ms: sw.elapsedMilliseconds);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
+      _trackAiResult(ref, AiCard.effect,
+          ok: false, ms: sw.elapsedMilliseconds);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -452,17 +508,17 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
           : IconButton(
               icon: const Icon(Icons.refresh, size: 22),
               tooltip: '重新分析',
-              onPressed: _loading ? null : _generate,
+              onPressed: _loading ? null : () => _generate(regenerate: true),
             ),
       child: _loading
           ? const _AiLoading('AI 正在分析疗程效果...')
           : _error != null
-              ? _AiError(message: _error!, onRetry: _generate)
+              ? _AiError(message: _error!, onRetry: () => _generate())
               : _data == null
                   ? _GenerateButton(
                       label: '分析效果',
                       icon: Icons.timeline,
-                      onTap: _generate,
+                      onTap: () => _generate(),
                     )
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

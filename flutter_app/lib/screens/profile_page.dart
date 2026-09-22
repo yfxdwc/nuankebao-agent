@@ -29,6 +29,7 @@ import '../core/models/me.dart';
 import '../core/providers/auth_provider.dart';
 import '../core/providers/service_providers.dart';
 import '../core/providers/settings_provider.dart';
+import '../core/telemetry/usage_providers.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/empty_state.dart';
 import '../core/widgets/franchise_chip.dart';
@@ -1200,6 +1201,7 @@ class _LogoutButton extends ConsumerWidget {
     ).then((ok) async {
       if (ok != true) return;
       await ref.read(authProvider.notifier).logout();
+      ref.read(usageServiceProvider).track('logout');
       if (!context.mounted) return;
       context.go('/login');
     });

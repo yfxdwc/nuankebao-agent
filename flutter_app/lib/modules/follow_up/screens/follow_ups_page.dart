@@ -14,6 +14,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/models/follow_up.dart';
 import '../../../core/providers/service_providers.dart';
+import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state.dart';
 
@@ -28,6 +29,7 @@ final pendingFollowUpsProvider =
     FutureProvider<List<FollowUpTodo>>((ref) async {
   final tasks = await ref.read(followUpServiceProvider).list(status: 'pending');
   final list = await ref.read(customerServiceProvider).list(limit: 200);
+  ref.read(usageServiceProvider).track('follow_up_list_view');
   final nameById = {for (final r in list.items) r.customer.id: r.customer.name};
   final todos = tasks
       .map((t) => FollowUpTodo(
@@ -172,6 +174,7 @@ class FollowUpsPage extends ConsumerWidget {
           ElevatedButton(
             onPressed: () async {
               await ref.read(followUpServiceProvider).complete(t.id);
+              ref.read(usageServiceProvider).track('follow_up_done');
               ref.invalidate(pendingFollowUpsProvider);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(

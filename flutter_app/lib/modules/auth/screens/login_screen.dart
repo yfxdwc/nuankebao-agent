@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/http/api_client.dart';
+import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// 登录页 (2026-09-19 P2: 手机号+验证码 → 账号/手机号 + 密码)
@@ -36,10 +37,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final password = _passwordController.text;
     if (identifier.isEmpty) {
       _showError('请输入账号或手机号');
+      ref.read(usageServiceProvider).track('login_fail',
+          errorCode: 'missing_identifier',
+          props: {'reason': 'missing_identifier'});
       return;
     }
     if (password.isEmpty) {
       _showError('请输入密码');
+      ref.read(usageServiceProvider).track('login_fail',
+          errorCode: 'missing_password',
+          props: {'reason': 'missing_password'});
       return;
     }
 
@@ -51,12 +58,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
       final state = ref.read(authProvider);
       if (state.error != null) {
+        ref.read(usageServiceProvider).track('login_fail',
+            errorCode: 'auth_error', props: {'reason': 'auth_error'});
         if (mounted) _showError(state.error!);
       } else if (state.isLoggedIn) {
+        ref.read(usageServiceProvider).track('login_success');
         // fix-route: /dashboard 已删 (router 只留 客户/我的 两 tab) → 登录后回客户页
         if (mounted) context.go('/customers');
       }
     } catch (e) {
+      ref.read(usageServiceProvider).track('login_fail',
+          errorCode: 'network_error', props: {'reason': 'network_error'});
       if (mounted) _showError('登录异常: $e');
     } finally {
       if (mounted) setState(() => loading = false);
