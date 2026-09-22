@@ -52,6 +52,16 @@ import { claimCustomerOwnership, createCustomer } from "@/lib/db/queries/custome
 import { createInteraction } from "@/lib/db/queries/interaction";
 import { createWellnessRecord } from "@/lib/db/queries/wellness-record";
 import { grantDays } from "@/lib/billing/entitlements";
+import {
+  cancelSalon,
+  createActivity,
+  createGuest,
+  createSalon,
+  rsvpSalon,
+  updateGuest,
+  upsertQuota,
+} from "@/lib/db/queries/salon";
+import { salon } from "@/lib/db/schema";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const RESET = process.argv.includes("--reset");
@@ -171,6 +181,13 @@ async function reset(adminId: bigint): Promise<void> {
     await db.execute(sql.raw(`DELETE FROM franchise_placement_confirm WHERE confirmer_fid IN (${fids.join(",")})`));
     await db.execute(sql.raw(`DELETE FROM franchisee WHERE id IN (${fids.join(",")})`));
   }
+  // 沙龙 (标题带「演示-」的全部一起清)
+  await db.execute(sql.raw(`DELETE FROM salon_guest WHERE salon_id IN (SELECT id FROM salon WHERE title LIKE '${TAG_PREFIX}%')`));
+  await db.execute(sql.raw(`DELETE FROM salon_activity WHERE salon_id IN (SELECT id FROM salon WHERE title LIKE '${TAG_PREFIX}%')`));
+  await db.execute(sql.raw(`DELETE FROM salon_quota WHERE salon_id IN (SELECT id FROM salon WHERE title LIKE '${TAG_PREFIX}%')`));
+  await db.execute(sql.raw(`DELETE FROM salon_invitation WHERE salon_id IN (SELECT id FROM salon WHERE title LIKE '${TAG_PREFIX}%')`));
+  await db.execute(sql.raw(`DELETE FROM salon WHERE title LIKE '${TAG_PREFIX}%'`));
+
   await db.execute(sql.raw(`DELETE FROM referral_reward WHERE referrer_user_id IN ${uList} OR referee_user_id IN ${uList}`));
   await db.execute(sql.raw(`DELETE FROM referral_code WHERE user_id IN ${uList}`));
   await db.execute(sql.raw(`DELETE FROM entitlement_grant WHERE user_id IN ${uList}`));
@@ -437,6 +454,217 @@ async function main(): Promise<void> {
     }
   }
   ok(`养生记录: ${wellnessCount} 条`);
+
+  // ── ⑥ 沙龙 (邀约 / 带约 / 名额 / 动态) ──
+  log("\n⑥ 沙龙");
+  const day = 86400_000;
+  const iso = (offsetDays: number, hour = 14) => {
+    const d = new Date(Date.now() + offsetDays * day);
+    d.setHours(hour, 0, 0, 0);
+    return d.toISOString();
+  };
+  const staffOf = (u: SeedUser, staffRole: string) => ({
+    name: u.name,
+    phone: u.phone,
+    staffRole,
+  });
+  const inviteeOf = (u: SeedUser, expectedGuestCount = 0) => ({
+    name: u.name,
+    phone: u.phone,
+    expectedGuestCount,
+  });
+
+  // 幂等: 标题已存在 → 整套沙龙数据跳过 (沙龙没有唯一键, 重复跑会造重复)
+  const [existingSalon] = await db
+    .select({ id: salon.id })
+    .from(salon)
+    .where(sql`${salon.title} LIKE ${TAG_PREFIX + "%"}`)
+    .limit(1);
+  if (existingSalon) {
+    ok("沙龙数据已存在, 跳过 (要重建先 --reset)");
+  } else {
+
+  // 6.1 已办完的茶话会 (有到店/未到 + 带约 + 名额 + 动态)
+  const past = await createSalon(
+    {
+      title: `${TAG_PREFIX}秋季养生茶话会`,
+      subtitle: "老客户答谢 + 秋冬调理分享",
+      description: "围炉煮茶, 聊秋冬养肺; 现场可体验肩颈理疗。",
+      status: "finished",
+      startAt: iso(-3, 14),
+      endAt: iso(-3, 17),
+      locationName: "城南店 二楼茶室",
+      address: "城南路 88 号",
+      themeTags: ["养生", "答谢", "茶话会"],
+      cateringMealType: "茶点",
+    },
+    {
+      staff: [staffOf(ownerPool[1], "接待"), staffOf(ownerPool[2], "主持")],
+      invitees: [
+        inviteeOf(ownerPool[3], 3),
+        inviteeOf(ownerPool[4], 2),
+        inviteeOf(ownerPool[5], 2),
+        inviteeOf(ownerPool[6]),
+        inviteeOf(ownerPool[7]),
+      ],
+    },
+    ctx,
+    ownerPool[0].id
+  );
+  // 两个人的回复 (接受 / 待定)
+  await rsvpSalon(BigInt(past.id), ownerPool[3].id, { status: "accepted" }, ctx);
+  await rsvpSalon(BigInt(past.id), ownerPool[4].id, { status: "tentative" }, ctx);
+  // 带约: 受邀者自己报客人 (brought_by = 受邀者)
+  const pastGuests = [
+    { by: ownerPool[3], name: "赵素芬", relation: "邻居", status: "attended" as const },
+    { by: ownerPool[3], name: "钱大姐", relation: "老同学", status: "attended" as const },
+    { by: ownerPool[3], name: "孙秀英", relation: "广场舞伴", status: "absent" as const },
+    { by: ownerPool[4], name: "李凤兰", relation: "同事", status: "attended" as const },
+    { by: ownerPool[4], name: "周桂香", relation: "亲戚", status: "attended" as const },
+    { by: ownerPool[5], name: "吴春梅", relation: "邻居", status: "absent" as const },
+  ];
+  let guestSeq = 0;
+  for (const g of pastGuests) {
+    const guest = await createGuest(
+      BigInt(past.id),
+      {
+        name: `${TAG_PREFIX}${g.name}`,
+        phone: String(13933300000 + ++guestSeq),
+        relation: g.relation,
+        status: g.status,
+      },
+      ctx,
+      g.by.id
+    );
+    if (guest && g.status === "attended") {
+      await updateGuest(
+        BigInt(past.id),
+        BigInt(guest.id),
+        { actualAttended: true },
+        ctx,
+        g.by.id
+      );
+    }
+  }
+  // 名额 (主理人给两位带约主力定目标)
+  await upsertQuota(
+    BigInt(past.id),
+    { assignedToUserId: ownerPool[3].id.toString(), quotaValue: 3, note: "带 3 位新朋友" },
+    ctx,
+    ownerPool[0].id
+  );
+  await upsertQuota(
+    BigInt(past.id),
+    { assignedToUserId: ownerPool[4].id.toString(), quotaValue: 2, note: "带 2 位老客户" },
+    ctx,
+    ownerPool[0].id
+  );
+  // 动态: 公告 + 留言
+  await createActivity(
+    BigInt(past.id),
+    { type: "announcement", content: "茶水已备好, 记得带上保温杯~", visibility: "all" },
+    ctx,
+    ownerPool[0].id
+  );
+  await createActivity(
+    BigInt(past.id),
+    { type: "comment", content: "我带两位姐妹一起来, 麻烦留个靠窗的位置", visibility: "all" },
+    ctx,
+    ownerPool[3].id
+  );
+
+  // 6.2 报名中的体验课 (待回复 + 带约待核 + 名额)
+  const upcoming = await createSalon(
+    {
+      title: `${TAG_PREFIX}肩颈调理体验课`,
+      subtitle: "40 分钟肩颈放松 + 手法体验",
+      description: "限 12 人, 现场一对一评估肩颈。",
+      status: "published",
+      startAt: iso(5, 10),
+      endAt: iso(5, 12),
+      registrationDeadlineAt: iso(3, 18),
+      locationName: "城东店 理疗室",
+      themeTags: ["体验课", "肩颈"],
+    },
+    {
+      invitees: [
+        inviteeOf(ownerPool[20], 2),
+        inviteeOf(ownerPool[21], 1),
+        inviteeOf(ownerPool[22]),
+        inviteeOf(standalone[0]),
+        inviteeOf(standalone[1]),
+      ],
+    },
+    ctx,
+    ownerPool[19].id
+  );
+  await createGuest(
+    BigInt(upcoming.id),
+    {
+      name: `${TAG_PREFIX}郑秀珍`,
+      phone: String(13933300090 + ++guestSeq),
+      relation: "朋友",
+      status: "pending",
+    },
+    ctx,
+    ownerPool[19].id
+  );
+  await createGuest(
+    BigInt(upcoming.id),
+    {
+      name: `${TAG_PREFIX}王丽华`,
+      phone: String(13933300090 + ++guestSeq),
+      relation: "邻居",
+      status: "pending",
+    },
+    ctx,
+    ownerPool[20].id
+  );
+  await upsertQuota(
+    BigInt(upcoming.id),
+    { assignedToUserId: ownerPool[20].id.toString(), quotaValue: 2 },
+    ctx,
+    ownerPool[19].id
+  );
+  await createActivity(
+    BigInt(upcoming.id),
+    { type: "announcement", content: "报名截止前请确认时间, 名额有限先到先得", visibility: "all" },
+    ctx,
+    ownerPool[19].id
+  );
+
+  // 6.3 草稿 (仅主理人可见)
+  await createSalon(
+    {
+      title: `${TAG_PREFIX}会员答谢晚宴`,
+      status: "draft",
+      startAt: iso(10, 18),
+      locationName: "待定",
+    },
+    { invitees: [inviteeOf(ownerPool[8]), inviteeOf(ownerPool[9])] },
+    ctx,
+    ownerPool[0].id
+  );
+
+  // 6.4 已取消 (带原因)
+  const cancelled = await createSalon(
+    {
+      title: `${TAG_PREFIX}户外踏青活动`,
+      subtitle: "公园徒步 + 野餐",
+      status: "published",
+      startAt: iso(7, 9),
+      locationName: "城市公园 北门",
+    },
+    {
+      invitees: [inviteeOf(ownerPool[21]), inviteeOf(ownerPool[22])],
+    },
+    ctx,
+    ownerPool[19].id
+  );
+  await cancelSalon(BigInt(cancelled.id), ctx, ownerPool[19].id, "天气转凉, 改期再约");
+
+  ok(`沙龙: 4 场 (已办完/报名中/草稿/已取消) + 带约客人 ${guestSeq} 位 + 名额 + 动态`);
+  } // end 沙龙幂等块
 
   // ── 汇总 ──
   const [cnt] = await db.execute<{ u: number; c: number; f: number }>(sql`

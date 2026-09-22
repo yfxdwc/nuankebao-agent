@@ -44,6 +44,22 @@
 - `/api/dashboard/stats` 无 RBAC (Flutter 无 watcher / web admin 冻结) → 封掉或接同口径
 - 3 个 dev 节点手机号漂移 (node 75/90/91 ← 账号 1/3/5, smoke 测试残留)
 
+### Added (dev 演示数据 · 沙龙样本, 2026-09-22)
+
+**主人**: 「补」
+
+`scripts/seed-demo-data.ts` 新增 **Part ⑥ 沙龙** (幂等: 标题已存在则整套跳过):
+- **4 场活动**, 覆盖全部关键状态: 已办完(`finished`, 含到店核对) / 报名中(`published`) /
+  草稿(`draft`, 仅主理人可见) / 已取消(带原因)
+- **5+5 受邀者** (演示用户 + 2 位非 app 外部人) + **2 会务** (接待/主持)
+- **8 位带约客人** (brought_by = 受邀者本人): 4 到店 (`actualAttended`) / 2 未到 / 2 待核
+- **名额** 3 条 (主理人给带约主力定目标) + **动态** (公告/留言/系统消息, 自动累计 33 条)
+- **同步清理由**: `--reset` 会连沙龙 5 张表一起清
+
+**验证** (真实 API): 主理人列表 2 场 (draft+finished)、counts `invitedTotal 5 / staff 2 / expectedGuests 7 /
+guestRegistered 6 / guestAttended 4`、受邀者能看邀请并 RSVP、`/guests|invitations|quotas|activities`
+四端点数据齐全; 二次运行确认**幂等**(无重复)。
+
 ### Added (dev 演示数据: 一整套"以人为本"的样本, 2026-09-22)
 
 > **主人原话**: 「开发环境中为系统管理员创建完整的客户、图谱、加盟节点, 创建足够多的测试用户和客户」
