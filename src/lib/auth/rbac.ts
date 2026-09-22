@@ -16,6 +16,7 @@ import { db } from "@/lib/db";
 import { user, storeStaff, customer, franchisee } from "@/lib/db/schema";
 import { eq, inArray, or, and, isNull, sql } from "drizzle-orm";
 import { myCustomerScopeSql } from "@/lib/db/queries/customer-scope";
+import { isAuthSkipped } from "./skip-auth";
 
 export type UserRole = "admin" | "manager" | "sales";
 
@@ -82,6 +83,27 @@ export async function getRbacContext(
     managedStoreIds,
     franchiseeId,
   };
+}
+
+/**
+ * 路由便捷入口: session → RBAC 上下文
+ *
+ * - **dev skip-auth 且无 session** (没有"我"): 返回 `undefined` = **不做行级过滤**
+ *   —— 没有身份就不存在"我的客户"口径; 与 ADR-0015 步骤 1 之前的 dev 行为一致
+ *   (双门闸保护: NODE_ENV != production && DEV_SKIP_AUTH=1)
+ * - 其余 (含生产): 一律 `getRbacContext` (角色真相源 = DB)
+ */
+export async function getRbacContextForSession(
+  session:
+    | { user?: { id?: string; role?: string } | null }
+    | null
+    | undefined
+): Promise<RbacContext | undefined> {
+  if (isAuthSkipped() && !session?.user?.id) return undefined;
+  return getRbacContext(
+    session?.user?.id ? BigInt(session.user.id) : BigInt(0),
+    session?.user?.role
+  );
 }
 
 /**

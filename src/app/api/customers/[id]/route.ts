@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
-import { resolveViewerFranchiseeId } from "@/lib/auth/viewer";
+import { customerRbacFilter, getRbacContextForSession } from "@/lib/auth/rbac";
 import { z } from "zod";
 import {
   getCustomerById,
@@ -46,8 +46,14 @@ export async function GET(
   }
 
   const { id } = await params;
-  const viewerFranchiseeId = await resolveViewerFranchiseeId(session?.user?.id);
-  const customer = await getCustomerById(BigInt(id), { viewerFranchiseeId });
+  // IDOR 修复 (ADR-0015 步骤 1 收尾): 「我的客户」以外的 id 一律当**不存在** (404)
+  //   口径与列表完全相同 (owner_id = 我 ∪ 直推加盟); admin / dev skip-auth 无身份 → 不过滤
+  const rbacCtx = await getRbacContextForSession(session);
+  const scope = rbacCtx ? customerRbacFilter(rbacCtx) : undefined;
+  const customer = await getCustomerById(BigInt(id), {
+    viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
+    scope,
+  });
   if (!customer) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -72,12 +78,12 @@ export async function PATCH(
     const input = UpdateCustomerSchema.parse(body);
 
     const ctx = getAuditContextFromRequest(request, session);
-    const customer = await updateCustomer(
-      BigInt(id),
-      input,
-      ctx,
-      await resolveViewerFranchiseeId(session?.user?.id)
-    );
+    // IDOR 修复: 不属于我的客户 → 影响 0 行 → 404 (不泄露存在性)
+    const rbacCtx = await getRbacContextForSession(session);
+    const customer = await updateCustomer(BigInt(id), input, ctx, {
+      viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
+      scope: rbacCtx ? customerRbacFilter(rbacCtx) : undefined,
+    });
 
     if (!customer) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -107,7 +113,13 @@ export async function DELETE(
 
   const { id } = await params;
   const ctx = getAuditContextFromRequest(request, session);
-  const success = await softDeleteCustomer(BigInt(id), ctx);
+  // IDOR 修复: 不属于我的客户 → 影响 0 行 → 404
+  const rbacCtx = await getRbacContextForSession(session);
+  const success = await softDeleteCustomer(
+    BigInt(id),
+    ctx,
+    rbacCtx ? customerRbacFilter(rbacCtx) : undefined
+  );
 
   if (!success) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

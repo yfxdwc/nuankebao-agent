@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { resolveViewerFranchiseeId, resolveViewerPhoneHash } from "@/lib/auth/viewer";
-import { getRbacContext } from "@/lib/auth/rbac";
+import { getRbacContextForSession } from "@/lib/auth/rbac";
 import { z } from "zod";
 import {
   listCustomers,
@@ -102,11 +102,8 @@ export async function GET(request: NextRequest) {
 
   // RBAC 行级过滤 (ADR-0015 步骤 1, 主人 2026-09-22 拍):
   //   「我的客户」= 归属我 (owner_id) ∪ 我的直推加盟 (点位父 = 我)
-  //   角色真相源 = DB (getRbacContext; session.role 只兜底)
-  const rbacCtx = await getRbacContext(
-    session?.user?.id ? BigInt(session.user.id) : BigInt(0),
-    (session?.user as { role?: string } | undefined)?.role
-  );
+  //   角色真相源 = DB; dev skip-auth 无身份 → undefined = 不过滤 (老行为)
+  const rbacCtx = await getRbacContextForSession(session);
 
   // viewer 身份: ① franchiseeId (「加盟」类型判定, 与 RBAC 同一次查询带出)
   //              ② phoneHash (排掉自己的客户档案)
@@ -115,7 +112,7 @@ export async function GET(request: NextRequest) {
   const listOptions = {
     search,
     type: parsedType.success ? parsedType.data : undefined,
-    viewerFranchiseeId: rbacCtx.franchiseeId,
+    viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
     excludePhoneHash: viewerPhoneHash,
     rbacCtx,
   };

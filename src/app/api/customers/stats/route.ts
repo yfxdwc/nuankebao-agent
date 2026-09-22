@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { customerTypeCounts } from "@/lib/db/queries/customer";
-import { getRbacContext } from "@/lib/auth/rbac";
+import { getRbacContextForSession } from "@/lib/auth/rbac";
 import { resolveViewerPhoneHash } from "@/lib/auth/viewer";
 
 export async function GET(request: NextRequest) {
@@ -28,14 +28,12 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") ?? undefined;
 
   // 行级过滤 (ADR-0015 步骤 1): 胶囊计数必须与列表同口径, 否则"筛出来的比胶囊写的多"
-  const rbacCtx = await getRbacContext(
-    session?.user?.id ? BigInt(session.user.id) : BigInt(0),
-    (session?.user as { role?: string } | undefined)?.role
-  );
+  //   dev skip-auth 无身份 → undefined = 不过滤 (老行为)
+  const rbacCtx = await getRbacContextForSession(session);
 
   const counts = await customerTypeCounts({
     search,
-    viewerFranchiseeId: rbacCtx.franchiseeId,
+    viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
     excludePhoneHash: await resolveViewerPhoneHash(session?.user?.id),
     rbacCtx,
   });

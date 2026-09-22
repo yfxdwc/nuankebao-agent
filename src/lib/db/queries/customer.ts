@@ -364,11 +364,21 @@ export async function createCustomer(
 
 export async function getCustomerById(
   id: bigint,
-  options?: { includeDeleted?: boolean; viewerFranchiseeId?: bigint | null }
+  options?: {
+    includeDeleted?: boolean;
+    viewerFranchiseeId?: bigint | null;
+    /**
+     * 行级过滤 (ADR-0015 步骤 1/IDOR 修复): 不是「我的客户」→ 当不存在 (404)
+     *   undefined = 不过滤 (admin / dev skip-auth 无身份)
+     */
+    scope?: SQL | undefined;
+  }
 ): Promise<CustomerView | null> {
-  const conditions = options?.includeDeleted
-    ? eq(customer.id, id)
-    : and(eq(customer.id, id), isNull(customer.deletedAt));
+  const conditions = and(
+    eq(customer.id, id),
+    options?.includeDeleted ? undefined : isNull(customer.deletedAt),
+    options?.scope
+  );
 
   const [row] = await db
     .select()
@@ -562,8 +572,9 @@ export async function updateCustomer(
   id: bigint,
   input: UpdateCustomerInput,
   ctx: AuditContext,
-  viewerFranchiseeId: bigint | null = null
+  options?: { viewerFranchiseeId?: bigint | null; scope?: SQL | undefined }
 ): Promise<CustomerView | null> {
+  const viewerFranchiseeId = options?.viewerFranchiseeId ?? null;
   const updateData: Partial<NewCustomer> = { updatedAt: new Date() };
 
   if (input.name !== undefined) updateData.name = input.name;
@@ -638,7 +649,14 @@ export async function updateCustomer(
     return await tx
       .update(customer)
       .set(updateData)
-      .where(and(eq(customer.id, id), isNull(customer.deletedAt)))
+      .where(
+        and(
+          eq(customer.id, id),
+          isNull(customer.deletedAt),
+          // IDOR 防护: 不属于我可见范围的客户 → 影响 0 行 → 路由层 404
+          options?.scope
+        )
+      )
       .returning();
   });
 
@@ -656,13 +674,17 @@ export async function updateCustomer(
  */
 export async function softDeleteCustomer(
   id: bigint,
-  ctx: AuditContext
+  ctx: AuditContext,
+  /** 行级过滤 (IDOR 防护); undefined = 不过滤 (admin / dev skip-auth) */
+  scope?: SQL | undefined
 ): Promise<boolean> {
   const result = await withAuditContext(ctx, async (tx) => {
     return await tx
       .update(customer)
       .set({ deletedAt: new Date() })
-      .where(and(eq(customer.id, id), isNull(customer.deletedAt)))
+      .where(
+        and(eq(customer.id, id), isNull(customer.deletedAt), scope)
+      )
       .returning({ id: customer.id });
   });
   return result.length > 0;
