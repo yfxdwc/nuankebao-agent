@@ -184,9 +184,16 @@
 - [ ] user 表加 `default_store_id` (sales 默认门店)
 
 **W5 不允许** (本红线):
-- ❌ 直接 `WHERE 1=1` 返回所有客户给前端 (必须有 store_id 过滤)
+- ❌ 直接 `WHERE 1=1` 返回所有客户给前端
+  (必须有**归属**过滤 —— 主人 2026-09-22 拍, ADR-0015 Q2/Q8: **门店维度冻结**,
+   「我的客户」= 归属我的人 ∪ 我的直推加盟; store_id 过滤不再是唯一口径)
 - ❌ 销售员能查 `follow_up_task` 中 `assigned_to != self.id` 的任务
 - ❌ 店长跨店查 (manager.role 只能看 own_store)
+
+> **⚠️ 冻结 (主人 2026-09-22 拍, ADR-0015 Q8)**: `store` / `staff` / `store_staff` 三表
+> **0 行、暂停使用** —— 客户归属**不带门店维度**; 多店台账推迟到 Phase 3 (SaaS 多租户)。
+> 列已就位 (`customer.store_id` / `user.default_store_id`) 但不再作为行级过滤依据。
+> 角色真相源 = `user.role` (DB), 见 ADR-0015 实施步骤 0 (2026-09-22)。
 
 ---
 
