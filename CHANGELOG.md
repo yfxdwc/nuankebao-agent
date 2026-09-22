@@ -2,6 +2,41 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Changed (主体模型落地: 建档≠归属 + 「我的客户」口径 + 推荐码识别, 2026-09-22, ADR-0015 步骤 0-3)
+
+> **主人原话**: 「当前的客户体系和 app 用户体系还是有不够清晰明确的区分和关系。我们需要先**彻底理清楚这个底层**。」
+> **拍板**: 「**全按建议**」—— ADR-0015 (v2, ✅ Accepted) 16 项决策全部通过。
+
+**落地 (共 6 个 commit)**
+- **步骤 0** `108ff15`: JWT/session 补 `role` + RBAC 角色以 **DB 为真相源**
+  (修「session 无 role → 管理员被当 sales 过滤 → 加盟列表空」的阻塞项; 老 token 自愈)
+- **步骤 2** `9d8ed78`: migration **0020 `customer.owner_id`** (纯 additive + 回填 + 自检 abort + down.sql)
+  —— **建档 ≠ 归属**; 手工建档 owner=建档人, 建号/导入/落位建档 owner=NULL (建号**不自动**归属推荐人);
+  停止写死链路 `customer.referrer_id`; **admin 豁免建档** (Q5, customerId=null)
+- **步骤 1** `4d119be`: 「我的客户」= **归属我 (owner_id) ∪ 我的直推加盟 (点位父=我)**
+  —— 列表 / 胶囊计数 / `/api/me` 概览**四处同口径** (单一真相源 `queries/customer-scope.ts`);
+  修 **CHARTER §3.6 红线违反**: 此前 `/api/customers` 不传 rbacCtx = **全库客户人手可见**
+- **IDOR 补丁** `8285665`: `/api/customers/[id]` 的 GET/PATCH/DELETE 同口径校验 → 范围外 404
+  (修「凭 id 读/改/删别人的客户」); dev skip-auth 无身份 → 不过滤 (老行为不误伤)
+- **步骤 3 后端** `0aaa442`: `GET /api/referral/lookup` (按码查人: 姓名+打码手机号+会员+
+  **限流 10/分 + audit_log 留痕** + 最小字段) + `POST /api/customers/claim`
+  (先到先得: 空→成功 / 已是我→幂等 / 别人→409 / 自己→400 / 不存在→404);
+  「我推荐的人」payload 加 `customerId` + `claimState`
+- **步骤 3 UI** `d2c5de1`: Flutter 两条添加路径 —— ①推荐页「加为我的客户」按钮
+  ②新建客户填推荐码 → 识别 → 预填姓名/隐藏手机号 → 保存走 claim (不重复建档)
+
+**验证**
+- `tsc --noEmit` 过; Vitest **182 passed** (新增 `customer-scope.test.ts` 8 例 SQL 漂移守卫)
+- **E2E 真实 HTTP × 3 组**: ①归属 (A 建客户 → A=1 / B=0 / admin=1; 胶囊与概览同步)
+  ②越权 (B GET/PATCH/DELETE 全 404, 数据未篡改; A 全 200; 无 session 仍 200 = dev 不误伤)
+  ③claim (B 声明 200 → 重复 alreadyMine → A 抢 409 → 本人 400 SELF; audit_log 留痕)
+- 冒烟: `smoke-signup` **8/8** (加 owner=null/建档人=本人) · `smoke-registration` **10/10** (admin 豁免建档)
+- Flutter: `analyze` 改动文件 0 issue; `flutter test` **132 passed** (含 5 个页面级 widget 测试)
+- ⚠️ **未做真机验收** (AGENTS §5 要求) —— 待主人真机确认 UI
+
+**剩余 (ADR-0015 §7)**: 步骤 4 (用户图谱上行 3 层直系) · 步骤 5 (关系边废弃 Q4 + 建号合并
++ `user.customer_id` Q7) · 步骤 6 (存量修复 Q16 + 文档收口)
+
 ### Fixed (字号档位 chip 文字在真机 APK 上发白、看不见, 2026-09-22)
 
 > **主人原话**: 「apk安装后的应用中，显示与存储区块中，字体选择标签的文字颜色太淡，根本看不清，
