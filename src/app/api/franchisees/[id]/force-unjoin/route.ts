@@ -24,9 +24,13 @@ export async function POST(
   }
 
   // admin 才允许强删
+  // 2026-09-22 (ADR-0015 步骤 0): getRbacContext 以 DB role 为准,
+  //   修掉「session 没有 role → admin 恒被当 sales → 403」的老 bug。
   const userId = session?.user?.id ? BigInt(session.user.id) : BigInt(0);
-  const role = (session?.user as { role?: string } | undefined)?.role ?? "sales";
-  const rbac = await getRbacContext(userId, role);
+  const rbac = await getRbacContext(
+    userId,
+    (session?.user as { role?: string } | undefined)?.role
+  );
   if (rbac.role !== "admin") {
     return NextResponse.json(
       { error: "只有 admin 可以强删加盟关系" },

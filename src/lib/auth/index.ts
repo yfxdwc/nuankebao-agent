@@ -34,11 +34,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const u = await verifyCredentials(identifier, password);
         if (!u) return null;
 
+        // role 一并带出 (2026-09-22 ADR-0015 步骤 0): config.ts 的 jwt callback
+        //   会把它写进 token → session.user.role 可用 (老版只带 id/name/phone)。
         return {
           id: u.id,
           name: u.name,
           phone: u.phone,
-        } as { id: string; name: string; phone?: string };
+          role: u.role,
+        } as { id: string; name: string; phone?: string; role?: string };
       },
     }),
   ],

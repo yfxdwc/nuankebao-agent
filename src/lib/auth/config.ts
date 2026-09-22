@@ -64,6 +64,12 @@ export const authConfig = {
       const u = user as any;
       if (u) {
         t.phone = u.phone;
+        // 角色写进 JWT (2026-09-22, ADR-0015 实施步骤 0)
+        //   在此之前 session 只塞了 id/phone → 下游 `session.user.role` 恒 undefined
+        //   → 管理员被当 sales 过滤 (加盟列表直接空) / 「我的客户」无法接行级过滤。
+        //   ⚠ 真相源仍是 DB: getRbacContext 每次查库取 role, 本字段只作兜底
+        //   (老 token / user 行查不到); 提权降权立即生效, 不用重新登录。
+        t.role = u.role;
       }
       return t;
     },
@@ -72,6 +78,7 @@ export const authConfig = {
       if (session.user) {
         session.user.id = token.sub ?? "";
         (session.user as any).phone = (token as any).phone as string | undefined;
+        (session.user as any).role = (token as any).role as string | undefined;
       }
       return session;
     },

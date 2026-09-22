@@ -65,6 +65,11 @@ export async function POST(request: NextRequest) {
 
   let sub: string | null = null;
   let displayName = "";
+  // 2026-09-22 (ADR-0015 步骤 0): session 补 role/phone
+  //   之前 token 只有 { sub, name } → 下游 session.user.role 恒 undefined
+  //   → 管理员被当 sales 过滤。phone 仅作展示兜底 (查 phone_hash 都走 DB)。
+  let phone: string | undefined;
+  let role: string | undefined;
 
   if (anyUser && legacyCode) {
     // 兼容旧预览 bundle (密码框上线前的前端): 码 123456 + 免密切号
@@ -83,6 +88,7 @@ export async function POST(request: NextRequest) {
     }
     sub = row.id.toString();
     displayName = row.name;
+    role = row.role;
   } else if (anyUser && process.env.DEV_LOGIN_ANY_PASSWORD && password === process.env.DEV_LOGIN_ANY_PASSWORD) {
     // 多账号预览: 共享 dev 密码切任意已存在用户 (仅 dev; 生产 404)
     const row = await findActiveUserByIdentifier(identifier);
@@ -94,6 +100,7 @@ export async function POST(request: NextRequest) {
     }
     sub = row.id.toString();
     displayName = row.name;
+    role = row.role;
   } else {
     // 主路径: 真实账号 + 密码校验 (含限流)
     const u = await verifyCredentials(identifier, password);
@@ -105,6 +112,8 @@ export async function POST(request: NextRequest) {
     }
     sub = u.id;
     displayName = u.name;
+    phone = u.phone;
+    role = u.role;
   }
 
   // 生成同 Auth.js 格式的 JWT (让 Next.js middleware auth() 能认)
@@ -113,7 +122,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "AUTH_SECRET not set" }, { status: 500 });
   }
   const token = await jwtEncode({
-    token: { sub, name: displayName },
+    token: { sub, name: displayName, phone, role },
     secret,
     salt: "authjs.session-token",
     maxAge: SESSION_TOKEN_TTL_SECONDS,

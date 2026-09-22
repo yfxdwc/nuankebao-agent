@@ -41,8 +41,12 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") ?? "20");
   const offset = parseInt(searchParams.get("offset") ?? "0");
 
-  // W5 RBAC
-  const rbacCtx = await getRbacContext(userId, (session?.user as any)?.role ?? 'sales');
+  // W5 RBAC (2026-09-22 ADR-0015 步骤 0): 角色由 getRbacContext 从 DB 读,
+  //   session.user.role 只作兜底 (老 JWT 没该字段) → 管理员不再被当 sales 过滤。
+  const rbacCtx = await getRbacContext(
+    userId,
+    (session?.user as { role?: string } | undefined)?.role
+  );
 
   // 查 currentFranchiseeId (用于 scope=mine_*)
   let currentFranchiseeId: bigint | undefined;

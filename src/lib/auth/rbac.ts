@@ -26,21 +26,26 @@ export interface RbacContext {
 
 /**
  * 从 session 提取 RBAC 上下文
+ *
+ * 角色真相源 = **数据库** (`user.role`); 参数里的 sessionRole 只作兜底:
+ *   - 老 JWT (2026-09-22 ADR-0015 步骤 0 之前签发) 里没有 role 字段
+ *   - user 行查不到 (防 500; 理论上不会)
+ * 顺带收益: 提权 / 降权立即生效, 不用等用户重新登录。
+ *
  * 如果 store 关系没找到, 降级为 sales 视角 (只看自己)
  */
 export async function getRbacContext(
   sessionUserId: bigint,
-  sessionRole: string,
+  sessionRole?: string | null,
 ): Promise<RbacContext> {
-  const role = (sessionRole as UserRole) || "sales";
-
-  // 查 user.default_store_id
+  // 一次查询同时取 role + defaultStoreId (别拆两次往返)
   const [u] = await db
-    .select({ defaultStoreId: user.defaultStoreId })
+    .select({ role: user.role, defaultStoreId: user.defaultStoreId })
     .from(user)
     .where(eq(user.id, sessionUserId))
     .limit(1);
 
+  const role: UserRole = u?.role ?? ((sessionRole as UserRole) || "sales");
   const defaultStoreId = u?.defaultStoreId ?? null;
 
   // 查 managed store_ids (如果是 manager)

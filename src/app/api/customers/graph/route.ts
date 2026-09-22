@@ -25,14 +25,12 @@ export async function GET() {
   }
 
   // RBAC 上下文 (sales/manager/admin 三种视角过滤)
-  // 已知问题: rbac.getRbacContext 查 user.default_store_id, 但 W5 RBAC 字段
-  //   尚未 migration (schema.ts 有, DB 没有). 这是 W1 之前的预埋 bug,
-  //   不在本次任务范围. 这里 try/catch 降级为无 rbacCtx, 等 W5 RBAC 上线时
-  //   移除降级逻辑.
-  // 注: Auth.js session.user.role 也未配置 (W5 才会加 JWT role 字段),
-  //   默认降级 sales (rbacCtx 内部也 fallback)
+  // 2026-09-22 (ADR-0015 步骤 0): session 已补 role, getRbacContext 以 DB role 为准
+  //   (老 JWT 无 role 字段也能自愈)。
+  // ⚠ 本路由是 ADR-0015 Q4 拍定要**废弃**的客户图谱死链路 (零调用方),
+  //   保留期间只做最小维护; 删除随步骤 5。
   const sessionUserId = session?.user?.id ? BigInt(session.user.id) : BigInt(0);
-  const sessionRole = (session?.user as { role?: string } | undefined)?.role ?? "sales";
+  const sessionRole = (session?.user as { role?: string } | undefined)?.role;
   let rbacCtx;
   try {
     rbacCtx = await getRbacContext(sessionUserId, sessionRole);
