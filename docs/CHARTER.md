@@ -1,8 +1,8 @@
 # CHARTER.md — 暖客宝 项目元宪法 (Meta-Constitution)
 
-**版本**: v0.1.4
+**版本**: v0.1.5
 **生效日期**: 2026-09-05
-**修订日期**: 2026-09-13 (v0.1.4 — 双域细化 + 底座模块化, 详见 §4 + ADR-0007 + ADR-0008)
+**修订日期**: 2026-09-22 (v0.1.5 — web admin 解冻 + 用量域, 详见 §4.4 + ADR-0017)
 **维护者**: mm7 主人 (虾王,飞书 ou_b7dc078b75aa76960a16252688dbe6f9)
 **变更权**: 主人拍板
 **派生层**: 操作层 → [`AGENTS.md`](../../AGENTS.md)
@@ -260,6 +260,7 @@
 | **跟进域** | 跟进任务 / 话术 / 提醒 | `follow_ups`, `reminders` | `/api/follow-ups/*` |
 | **关系域** ★ | 客户/加盟/分销等节点关系 (v0.1.3 新增) | `relations`, `relation_nodes` | `/api/relations/*` |
 | **AI 域** | Copilot / 跟进建议 / 话术生成 | `ai_prompts`, `ai_runs` | `/api/ai/*` |
+| **用量域** ★ | 真实用户使用数据采集 / 分析 (v0.1.5 新增) | `usage_event` | `/api/usage/*`, `/api/admin/usage/*` |
 | **认证域** | 手机号验证码 / 角色 | `auth_users`, `auth_sessions` | `/api/auth/*` |
 
 ### 4.3 模块化规则 (v0.1.3 新增)
@@ -279,66 +280,77 @@
 - 默认实现: `FranchiseRelationSystem implements RelationSystem`
 - 未来切换: 主人想换「分销」「会员等级」「上下级」等关系系统时, 新建 `XxxRelationSystem implements RelationSystem`, 改 `relationSystemProvider` 默认值, **调用方零改动**
 
-### 4.4 Mobile-Only 阶段章程 (v0.1.2 拍板)
+### 4.4 Web 域开发章程 — 已解冻 (v0.1.5, 2026-09-22 拍板)
 
-> **背景**: W2-3 阶段 Flutter 移动端 + Next.js admin web 双线并行, 但主人 2026-09-07 拍板: **接下来开发只做移动端, web 端服务等移动端开发完成后再补**。
-> **配套**: [`ADR-0005`](adr/0005-mobile-only-phase.md) + AGENTS.md §3 同步策略
+> **历史**: 2026-09-07 主人拍板 mobile-only (v0.1.2): web admin freeze-keep + flutter-only-sync,
+> 解冻条件 master-decide (`ADR-0005`)。
+>
+> **2026-09-22 主人拍板**: 「"web admin 冻结中"这是个错误, 需要解冻结。新模块接入 web admin。」
+> → **解冻落地**, 详见 [`ADR-0017`](adr/0017-web-admin-unfreeze.md)。
+> 旧 freeze-keep / flutter-only-sync / 误判处理表作废, 保留于 ADR-0005 历史文档。
 
-**4.4.1 web admin 状态 — freeze-keep (冻结但保持运行)**
+**4.4.1 web admin 状态 — 活跃**
 
 | 状态项 | 规则 |
 |---|---|
-| 代码 | 保留, 不删除 (`src/app/admin/` 全部保留) |
-| 部署 | 照常运行, 不下线 (现有 `/admin/*` 路由继续服务) |
-| 新 UI 功能 | ❌ **冻结** — 不加新页面 / 新交互 / 新组件 |
-| 修 bug | ⚠️ **仅 P0** (登录失败 / 数据丢失 / 安全洞) — P1/P2 推迟到 web 解冻后 |
-| Schema-driven UI 改动 | ✅ 允许 — 例如 backend API 改了, web admin 调用失败的修, 不算新功能 |
-| git commit | 默认应只动 Flutter 目录; web admin 改动只允许出现在 P0 fix commit |
+| 代码 | ✅ 活跃 — 可加新页面 / 新交互 / 新组件 |
+| 部署 | 照常运行 (现有 `/admin/*` 路由继续服务) |
+| 新 UI 功能 | ✅ 允许 — 管理与分析类新功能优先落 web admin (报表 / 用量 / 审计 / 导入) |
+| 修 bug | ✅ 正常修 (P0/P1/P2 均可) |
+| 存量页面 | ⚠️ 不做大规模重构 — 解冻 ≠ 重做 web admin (ADR-0017 第 4 条) |
 
-**4.4.2 backend / schema 同步策略 — flutter-only-sync**
+**4.4.2 backend / schema 同步策略 — 双线同步 (flutter + web)**
 
-| 改动类型 | Flutter service 必同步 | web admin client |
+| 改动类型 | Flutter service | web admin client |
 |---|---|---|
-| Drizzle schema 变更 (CHARTER §3.5 红线) | ✅ 必同步 (生成 freezed model + service 方法) | ⏸️ 暂停, 解冻时一次性 catch-up |
-| API endpoint 新增 / 修改 | ✅ 必同步 (Dio API client + service) | ⏸️ 暂停, 解冻时一次性 catch-up |
-| 字段加密规则变化 | ✅ 必同步 (service 层加解密) | ⏸️ 暂停 (web 解冻时同步) |
-| API 错误格式变化 | ✅ 必同步 | ⏸️ 暂停 |
-| AI / 业务逻辑层 | ✅ 必同步 (如有 Flutter 调用) | ⏸️ 暂停 |
+| Drizzle schema 变更 (CHARTER §3.5 红线) | ✅ 必同步 (freezed model + service 方法) | ✅ 必同步 (`pnpm type-check` 必须过) |
+| API endpoint 新增 / 修改 | ✅ 必同步 (Dio API client + service) | ✅ 必同步 |
+| 字段加密规则变化 | ✅ 必同步 (service 层加解密) | ✅ 必同步 |
+| API 错误格式变化 | ✅ 必同步 | ✅ 必同步 |
 
-**注意**: "暂停"≠ "永远不同步"。web 解冻时, web admin client (含类型 / 调用) 需做一次性 catch-up sync (主人拍板时间 + 工作量估时另开)。
+**4.4.3 功能归口 (解冻后不变的边界)**
 
-**4.4.3 解冻条件 — master-decide**
-
-- **无预定义里程碑**: 不绑定 W6 / 功能对齐 / 测试通过
-- **解冻触发**: 主人在某次 ask_user 中明确说「移动端 OK, 解冻 web」才解冻
-- **解冻前检查清单** (主人 / agent 共解, 不强制): Flutter 12 screen 在真机跑过 / 销售愿意用 / AI Copilot 可用
+- **销售侧功能** (录入 / 拍照 / 跟进 / 客户详情) → 仍以 Flutter APK 为主 (apk-first, §4.3 不变)
+- **管理与分析功能** (报表 / 导入 / 审计 / 用量 / 团队管理) → web admin 为主
+- 不要求两边功能对齐; 同一功能不强制双端都做 (ADR-0017 第 1 条)
 
 **4.4.4 当前 active 的目录**
 
 ```
 ✅ 活跃 (可改):
-  - flutter_app/lib/**          ← Flutter 移动端 (主战场)
-  - src/app/api/**              ← Backend Route Handlers (Flutter 消费; web client 同步暂停 §4.4.2)
+  - flutter_app/lib/**          ← Flutter 移动端 (销售侧主战场)
+  - src/app/api/**              ← Backend Route Handlers (两域共享)
   - src/lib/**                  ← 业务逻辑 / 加密 / 审计 / DB
-  - src/middleware.ts
-  - src/app/(auth)/login/**     ← 登录页 (Flutter + Web 共用, 改需 Flutter 同步)
-
-❄ 冻结 (仅 P0 bug fix):
-  - src/app/admin/**            ← Web admin 16 个页面
-  - src/components/business/**  ← Web admin 业务组件 (12 个)
+  - src/app/admin/**            ← Web admin (含新增 /admin/usage)
+  - src/components/business/**  ← Web admin 业务组件
   - src/components/admin/**     ← Sidebar / topbar / bottom-tab
-  - src/app/admin/download/**   ← APK 下载页 (依赖 Flutter 构建产物, 仅维护)
+  - src/components/ui/**        ← 基础组件
+  - src/app/(auth)/login/**     ← 登录页 (Flutter + Web 共用)
+  - src/middleware.ts
+
+❄ 仍冻结 (独立机制, 不受本次解冻影响):
+  - preview framework 9 路径 (docs/adr/0009 + AGENTS §9)
 ```
 
-**4.4.5 误判处理**
+**4.4.5 用量域红线 (usage_event, v0.1.5 新增)**
 
-| 误判场景 | 处理 |
+| 红线 | 规则 |
 |---|---|
-| 「这个表单 web 改下很快」 | ❌ 拒绝. 改 Flutter, 即使 web 同步停更 |
-| 「这个 bug 只有 web 触发」 | ⚠️ 评估 P0 级别. P0 改, 其他攒到解冻 |
-| 「这个新功能 web 加了, Flutter 也加」 | ❌ 拒绝. 只加 Flutter |
-| 「API 改了, web 那边类型不匹配编译挂了」 | ⚠️ **这个要修**. 算 schema-driven UI 改动, 不算新功能 |
-| 主人明确说「这个 web 也要」 | ✅ 听主人的. 但 commit message 标注「override §4.4 freeze」 |
+| 采集对象 | 真实用户 (release APK); dev / web preview 不采集 (污染数据) |
+| 采集内容 | 只允许 ID / 枚举 / 计数 / 时长 — ❌ 不采姓名 / 手机号 / 疾病史 / 养生内容 / 自由文本 |
+| 第三方 | ❌ 不接 Firebase / GA / Sentry 等云端分析 — 数据只落自有 PG |
+| 开关 | 内部工具**强制开启** (主人 2026-09-22 拍) |
+| 保留期 | 原始事件 **180 天**后删 (可配 `USAGE_RETENTION_DAYS`), 聚合可长期 |
+| 查看 | /admin/usage (admin only); 原始事件只经服务器脚本读, API 只出聚合 |
+
+**4.4.6 误判处理**
+
+| 场景 | 处理 |
+|---|---|
+| 「这条改 Flutter 还是 web?」 | 销售侧 → Flutter; 管理/分析侧 → web; 拿不准按 ADR-0017 第 1 条 (单一入口即可) |
+| 「web 那边类型不匹配编译挂了」 | ✅ 必须修 — 双线同步 (本表 §4.4.2) |
+| 「顺手把 web admin 整页重构了」 | ❌ 拒绝 — 解冻 ≠ 重做 (ADR-0017 第 4 条) |
+| 「新功能两边都加一遍」 | ⚠️ 非必须 — 避免双线精力分散, 单一入口优先 |
 
 ### 4.5 双域功能清单与协作关系 (v0.1.4 细化, ADR-0008)
 
@@ -527,7 +539,8 @@
 | v0.1.1 | 2026-09-05 | 已废 | 去除 sales-ai 过度借鉴 (8 项),见 §10.2 |
 | v0.1.2 | 2026-09-07 | 已废 | Mobile-only 阶段: web admin freeze-keep + flutter-only-sync + master-decide 解冻,见 §4.4 + ADR-0005 |
 | v0.1.3 | 2026-09-13 | **生效** | 底座 + 模块化插件架构: APK 域分 `core/` 底座 + `modules/` 业务模块 / WEB 域分 WEB 底座 + `dev-modules/` 文档化视图 / 客户/加盟关系抽 `RelationSystem` 接口 / 9 阶段渐进迁移,见 §4 + ADR-0007 |
-| v0.1.4 | 2026-09-13 | 生效中 | 双域功能清单与协作关系细化: §4.5 加双域细化节 (主人 ask 澄清: 两域共存, 不是切换) + 引用 ADR-0008 (11 节, 400 行) |
+| v0.1.4 | 2026-09-13 | 已废 | 双域功能清单与协作关系细化: §4.5 加双域细化节 (主人 ask 澄清: 两域共存, 不是切换) + 引用 ADR-0008 (11 节, 400 行) |
+| v0.1.5 | 2026-09-22 | **生效中** | web admin 解冻 (结束 mobile-only) + 用量域: §4.4 重写 (freeze-keep → 活跃, flutter-only-sync → 双线同步, 加 §4.4.5 用量域红线) / §4.2 加用量域行; 配套 ADR-0017 |
 
 ### 10.2 变更记录
 
@@ -538,6 +551,7 @@
 | 2026-09-07 | v0.1.2 | 修订 | mm7 主人拍板 | Mobile-only 阶段: §4.3 后端同步 auto-both → flutter-only-sync / 新增 §4.4 freeze-keep + master-decide 解冻 / §7 W2-3 / W4 重点调整; 配套 ADR-0005 |
 | 2026-09-13 | v0.1.3 | 修订 | mm7 主人拍板 | 底座 + 模块化插件架构: §4 重写 (五大业务域 → 双域 + 底座 + 模块化插件) / §4.1 加架构图 (APK 域 vs WEB 域) / §4.2 业务域横向贯穿说明 / §4.3 模块化规则 (★ 客户/加盟关系 RelationSystem 接口) / §4.4 保留 v0.1.2 Mobile-Only / §10.3 加 ADR-0007 触发项; 配套 ADR-0007 |
 | 2026-09-13 | v0.1.4 | 修订 | mm7 主人拍板 | 双域功能清单与协作关系细化: §4.5 新加 (APK 域 7 业务模块功能 + WEB 域按路径分组 + 两域关系 + 协作场景 4 个 + 冻结 vs 活跃对照表) + 引用 ADR-0008 (11 节, 400 行); 配套 ADR-0008 |
+| 2026-09-22 | v0.1.5 | 修订 | mm7 主人拍板 | web admin 解冻: 主人拍板「"web admin 冻结中"这是个错误，需要解冻结。新模块接入 web admin。」→ §4.4 重写 (freeze-keep → 活跃 / flutter-only-sync → 双线同步 / 新增 §4.4.5 用量域红线) + §4.2 加用量域 + 首个模块 usage analytics; 配套 ADR-0017 (部分 Supersede ADR-0005) |
 
 ### 10.3 待办
 

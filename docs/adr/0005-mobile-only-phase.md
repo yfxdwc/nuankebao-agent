@@ -1,7 +1,7 @@
 # ADR-0005: Mobile-Only 阶段 (web admin 冻结 + flutter-only-sync)
 
 **日期**: 2026-09-07
-**状态**: ✅ Accepted (主人 ask_user 拍板)
+**状态**: ⚠️ Superseded (部分) — freeze-keep + flutter-only-sync 段已被 [ADR-0017](./0017-web-admin-unfreeze.md) (2026-09-22) 取代; 本 ADR 保留作为历史决策记录
 **决策者**: 主人 (虾王)
 **影响范围**: 整个 frontend 策略 + Phase 1 实施节奏 + 后续 git commit 模式
 **对应元宪法**: [`CHARTER.md`](../CHARTER.md) §4.4 (v0.1.2) + §10.2 变更记录

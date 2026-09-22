@@ -5,6 +5,15 @@
 
 ---
 
+## ⓪ web admin 解冻 (2026-09-22 已拍板落地, ADR-0017)
+
+- ✅ `src/app/admin/**` / `src/components/business/**` / `src/components/admin/**` 恢复活跃
+- ✅ backend / schema 双线同步 (Flutter + web admin 同批更新, `pnpm type-check` 必过)
+- ⚠️ 解冻 ≠ 重做: 存量页面不做大规模重构
+- 功能归口: 销售侧 Flutter / 管理分析侧 web admin (不要求对齐)
+
+---
+
 ## ① 原始加盟节点启动（Bootstrap Root）· ✅ 已落地（2026-09-21）
 
 > **主人 2026-09-20 问**: 「一个新的团队或加盟树开始时，没有加盟者，也就没人能创建并放置加盟节点。

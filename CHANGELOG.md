@@ -2,6 +2,31 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — web admin 解冻 + 真实用户使用数据采集模块 (2026-09-22)
+
+> **主人拍板**: ①「"web admin 冻结中"这是个错误，需要解冻结。新模块接入 web admin」
+> ② 同意模式 = 内部工具强制开启 ③ 保留期 = 原始事件 180 天后删 ④ 范围 = 4 片全做
+
+**治理 (L0)**
+- **web admin 解冻** (ADR-0017, 部分 Supersede ADR-0005): `src/app/admin/**` /
+  `src/components/{admin,business}/**` 恢复活跃; backend / schema 恢复**双线同步**;
+  CHARTER → **v0.1.5** (§4.4 重写 + §4.2 加用量域 + §4.4.5 用量红线) / AGENTS §3+§4+§7 同步 /
+  ADR-0008 §6 冻结表更新 / ADR-INDEX 更新
+
+**用量模块 (4 片全做)**
+- Slice 1 后端: migration **0023 usage_event** (纯 additive + down.sql) + `POST /api/usage/events`
+  (auth + 限流 + 词表校验 + props 白名单 + 手机号 regex 兜底 + 幂等) + `src/lib/usage/` 词表/清洗
+- Slice 2 Flutter 底座: `core/telemetry/` (内存+prefs 队列 / 生命周期刷盘 / 路由 observer / 错误捕获;
+  **release APK 才采集**, dev/web 不污染数据; 内部工具强制开启, 无开关)
+- Slice 3 事件接线: 客户 / 养生 / 跟进 / AI 卡片 / 登录 / 沙龙关键事件
+- Slice 4 分析与查看: `GET /api/admin/usage/*` (admin only, 只出聚合) + **/admin/usage** 页
+  (web admin 解冻后首个新页面) + `scripts/usage-report.ts` + `scripts/usage-retention.ts` (180 天)
+
+**验证** (待补): `pnpm db:compat` / `pnpm db:migrate` / `pnpm type-check` / `pnpm test:run` /
+`flutter analyze` + `flutter test` / dev server + 截图
+
+---
+
 ### Changed (主体模型落地: 建档≠归属 + 「我的客户」口径 + 推荐码识别, 2026-09-22, ADR-0015 步骤 0-3)
 
 > **主人原话**: 「当前的客户体系和 app 用户体系还是有不够清晰明确的区分和关系。我们需要先**彻底理清楚这个底层**。」

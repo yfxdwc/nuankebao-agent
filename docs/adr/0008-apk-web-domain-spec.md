@@ -307,21 +307,25 @@ src/
 
 ---
 
-## 6. 冻结 vs 活跃 (per CHARTER §4.4 mobile-only)
+## 6. 冻结 vs 活跃 (per CHARTER §4.4)
+
+> ⚠️ **2026-09-22 更新 (ADR-0017)**: web admin 已解冻, 下表 `/admin/*` 由 ❄ 冻结 改为 ✅ 活跃。
+> 本节保留两列 (现状 + 历史) 供回溯。
 
 | 路径 / 模块 | 状态 | 说明 |
 |---|---|---|
-| WEB /admin/* | ❄ 冻结 (v0.1.2) | 销售员产品 admin web (mobile-only 阶段) |
+| WEB /admin/* | ✅ 活跃 (2026-09-22 解冻, ADR-0017) | 销售员产品 admin web; 解冻前为 ❄ 冻结 (v0.1.2) |
 | WEB /admin/dev/* | ✅ 活跃 (v0.1.3, v0.1.4 迁入 admin) | 主人开发工具 (master-decide 集成到 admin 侧栏) |
 | WEB /app-preview | ✅ 活跃 (v0.1.3) | Flutter web 预览 |
 | WEB /login | ✅ 活跃 | Flutter + Web 共用 |
 | WEB /api/* | ✅ 活跃 | 后端 API (两域共享) |
-| APK modules/* | ✅ 活跃 | 7 模块 (auth / customer / wellness / follow_up / presentation / relation / meeting) |
+| APK modules/* | ✅ 活跃 | 7 模块 (auth / customer / wellness / follow_up / presentation / relation / salon) |
 
-**冻结规则** (per CHARTER §4.4.1):
-- /admin 不加新页面 / 新交互 / 新组件
-- /admin 仅 P0 bug fix
-- /admin schema-driven UI 改动允许 (API 改, web admin 跟进, 不算新功能)
+**解冻后规则** (per CHARTER §4.4 v0.1.5 + ADR-0017):
+- /admin 可加新页面 / 新交互 / 新组件 (管理与分析功能为主)
+- backend / schema 双线同步: Flutter + web admin 同批更新, `pnpm type-check` 必过
+- 解冻 ≠ 重做: 存量页面不做大规模重构
+- /app-preview 仍属 preview framework 冻结 (ADR-0009, 独立机制)
 
 **活跃规则** (per v0.1.3 + 本 ADR):
 - /dev 主人自用, 不算 admin 冻结范围
@@ -347,7 +351,7 @@ src/
 - ✅ 主人 v0.1.3 已拍板
 - ✅ 简单, 部署明确
 - ✅ 后端 API 共享, 数据一致
-- ⚠ WEB 域 /admin 冻结 (历史遗留), 不能改产品 admin
+- ⚠ WEB 域 /admin 已解冻 (2026-09-22, ADR-0017), 恢复管理与分析功能开发
 
 ### 候选 B: 拆 monorepo (APK + WEB 各独立仓库)
 

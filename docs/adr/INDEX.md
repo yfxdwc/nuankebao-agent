@@ -9,6 +9,7 @@
 
 | # | 标题 | 状态 | 拍板日期 | 关键决策 |
 |---|---|---|---|---|
+| 0017 | [web admin 解冻 (结束 mobile-only, 恢复双线开发)](./0017-web-admin-unfreeze.md) | ✅ Accepted | 2026-09-22 | 主人: 「"web admin 冻结中"这是个错误，需要解冻结」→ `src/app/admin/**` 全部恢复活跃; backend/schema 双线同步 (`pnpm type-check` 必过); 解冻 ≠ 重做; 首个模块 = usage analytics (migration 0023 + `/admin/usage`); 部分 Supersede ADR-0005 |
 | 0016 | [身份锚与同号识别 —— 邀请码是唯一识别码, 手机号只是联系方式](./0016-identity-anchor.md) | ✅ Accepted | 2026-09-22 | 唯一识别码 = **邀请码** (手机号不是身份); 系统内部连接一律走 ID (`user.customer_id` / `user.franchisee_id`); 同号 → 识别提醒 (不静默合并); 沙龙客人归带来人 (不加转化入口); 同号不允许两条档案 (定案); 生命周期初步机制 (停用/软删/退出图谱 + admin 入口); UI 区分「已注册」vs「凭空建档」 |
 | 0015 | [主体模型 —— 人 / 账号 / 客户 / 节点 (消歧 + 单一真相源)](./0015-subject-model.md) | ✅ Accepted | 2026-09-22 | 主人「系统视角 / 用户视角」口径入档: 充值/免费用户 + 6 位推荐码=身份识别; 图谱可见性 (系统=全森林, 用户=自枝全部下层 + 上 3 层直系); 4 条边分工 (推荐码关系不表达关系); 客户归属 = 建档 vs 归属分离 (Q11); 「我的客户」= 归属 ∪ 直推; 废弃 `customer.referrer_id`; 落 `user.customer_id` (additive) |
 | 0013 | [账号 = 客户 (建号即强制建档) + 推荐码必填](./0013-account-customer-binding.md) | ✅ Accepted | 2026-09-19 | 唯一建号入口 `createAccountWithProfile`; 非 admin 必须有推荐码; 推荐码**不写** `customer.referrer_id` (no_link); 存量补齐 7/7 + 0 无推荐人 |
@@ -18,7 +19,7 @@
 | 0008 | [APK 域 + WEB 域功能清单与协作关系](./0008-apk-web-domain-spec.md) | ✅ Accepted | 2026-09-13 | 两域共存 (不是 dev↔prod 切换); 共享后端 API; WEB 域 production mode 永久 |
 | 0007 | [底座 + 模块化插件架构](./0007-modular-architecture.md) | ✅ Accepted | 2026-09-13 | APK 域分 `core/` 底座 + `modules/` 业务模块; WEB 域 `dev-modules/` 文档化视图; ★ RelationSystem 接口 |
 | 0006 | [加盟体系 + 合规边界](./0006-franchise-boundary.md) | ✅ Accepted (2026-09-18 补写) | 2026-09-18 | 关系展示/客户维护定位; 红线 = 无金额字段 + 不团队计酬; 层级深度本身非风险 |
-| 0005 | [Mobile-Only 阶段 (web admin freeze-keep + flutter-only-sync)](./0005-mobile-only-phase.md) | ✅ Accepted | 2026-09-07 | web admin 冻结, 仅 P0 fix; backend 改动只同步 Flutter service |
+| 0005 | [Mobile-Only 阶段 (web admin freeze-keep + flutter-only-sync)](./0005-mobile-only-phase.md) | ⚠️ Superseded (部分, 2026-09-22 解冻, ADR-0017) | 2026-09-07 | web admin 冻结, 仅 P0 fix; backend 改动只同步 Flutter service |
 | 0004 | [Schema 演进红线](./0004-schema-evolution.md) | ✅ Accepted | 2026-09-05 | 6 个绝对禁止的 migration 模式 (DROP/RENAME/ALTER TYPE 无 USING 等); CI `tools/check-migration-compat.sh` |
 | 0003 | [Flutter 开发工作流](./0003-flutter-dev-workflow.md) | ✅ Accepted | 2026-09-04 | Flutter + Android Studio + USB 真机 + 自动 hot reload |
 | 0002 | [数据模型](./0002-data-model.md) | ✅ Accepted | 2026-09-03 | 13 表 + 字段加密 (pgcrypto) + 5 审计触发器 |

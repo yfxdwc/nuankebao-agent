@@ -70,13 +70,14 @@
 - ✅ **选端口前先检测** → 跑 `./tools/check-port.sh [PORT]` 确认空闲，避免撞主人其他项目
 - ✅ **改了端口的 commit 必须经过 pre-commit hook** → `tools/pre-commit-port-check.sh` (安装: `ln -s ../../tools/pre-commit-port-check.sh .git/hooks/pre-commit`)
 - ✅ **改 / 加 migration 前必跑 `pnpm db:compat`** → 检查 DROP / RENAME / ALTER TYPE 无 USING / SET NOT NULL 无 DEFAULT 等禁止模式。CI `db-compat` job 失败 = PR 阻断。详见 CHARTER §3.5 + ADR-0004
-- ✅ **前端同步策略 (mobile-only, v0.1.2 主人拍, 2026-09-07)**:
-  - **销售侧功能 (录入/拍照/跟进/客户详情)** → **只做 Flutter APK** (`flutter_app/`), 不再做 web admin 同名功能
-  - **Backend / API 改动** → **flutter-only-sync** = Flutter service 必同步 + web admin client 暂停同步 (类型/调用解冻时一次性 catch-up)
-  - **纯管理功能 (报表/导入/审计/团队管理)** → **web 解冻前不开发** (CHARTER §4.4 freeze-keep)
-  - **拍板来源**: 主人 2026-09-07 ask_user 三项决定: (1) web 命运 = freeze-keep (2) 解冻条件 = master-decide (3) backend 同步 = flutter-only-sync. 详见 CHARTER §4.4 + ADR-0005
-  - **活跃目录** (v0.1.2 起): `flutter_app/lib/**` + `src/app/api/**` + `src/lib/**` + `src/middleware.ts` + `src/app/(auth)/login/**`
-  - **冻结目录** (仅 P0 bug fix): `src/app/admin/**` + `src/components/business/**` (web admin 业务组件) + `src/components/admin/**`
+- ✅ **前端同步策略 (web admin 已解冻, v0.1.5 主人拍, 2026-09-22, ADR-0017)**:
+  - **销售侧功能 (录入/拍照/跟进/客户详情)** → **仍以 Flutter APK 为准** (`flutter_app/`), 不必做 web 同名功能 (apk-first 不变)
+  - **管理与分析功能 (报表/导入/审计/用量/团队管理)** → **web admin 为主** (`src/app/admin/**`), 不必做 Flutter 同名页
+  - **Backend / API / schema 改动** → **双线同步** = Flutter service 必同步 + web admin client 同批更新, `pnpm type-check` 必须过 (flutter-only-sync 作废)
+  - **不要求两边功能对齐**: 同一功能单一入口即可 (ADR-0017 第 1 条); 解冻 ≠ 重做存量 web 页面
+  - **拍板来源**: 主人 2026-09-22 原话「"web admin 冻结中"这是个错误, 需要解冻结。新模块接入 web admin。」详见 CHARTER §4.4 + ADR-0017 (部分 Supersede ADR-0005)
+  - **活跃目录** (v0.1.5 起): `flutter_app/lib/**` + `src/app/api/**` + `src/lib/**` + `src/middleware.ts` + `src/app/(auth)/login/**` + `src/app/admin/**` + `src/components/{admin,business,ui}/**`
+  - **仍冻结** (独立机制, 与本次解冻无关): preview framework 9 路径 (AGENTS §9 + ADR-0009)
 - ✅ **任务开始前必打 task-snapshot** → `bash scripts/task-snapshot.sh start <task-name>` (或依赖 `.pi/extensions/auto-task-snapshot.ts` 在第一条 user 消息自动打). 完整 SOP 见 §8.1. 改 / 加 ≥ 3 文件 或 跨域时**强制**先 snapshot.
 - ✅ **改 / 加 migration 后必跑巡检 + `--strict`** (2026-09-21 立) → 拆栏后点位结构有两处真相
   (`placement_parent_id` 列 + `placement_path` 布局), 改过落位/改上层/建根后必跑
@@ -137,19 +138,20 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 ├── src/                        ← Next.js (WEB 域 = 脚手架)
 │   ├── app/
 │   │   ├── (auth)/login/       ← ✅ 活跃 (登录页, Flutter + Web 共用)
-│   │   ├── (admin)/            ← ❄ 冻结 (web admin, §4.4.1 仅 P0 fix)
-│   │   ├── api/                ← ✅ 活跃 (Route Handlers, Flutter 消费)
+│   │   ├── admin/              ← ✅ 活跃 (web admin, 2026-09-22 解冻 ADR-0017)
+│   │   ├── api/                ← ✅ 活跃 (Route Handlers, 两域共享; 含 api/usage + api/admin/usage)
 │   │   ├── app-preview/        ← ✅ 活跃 (dev-modules/flutter-preview)
 │   │   └── preview/            ← ✅ 活跃 (dev-modules/flutter-preview)
 │   ├── components/
 │   │   ├── ui/                 ← ✅ 活跃 (dev-modules/ui-kit)
-│   │   ├── business/           ← ❄ 冻结 (web admin 业务组件 12 个)
-│   │   ├── admin/              ← ❄ 冻结 (sidebar/topbar/bottom-tab)
+│   │   ├── business/           ← ✅ 活跃 (web admin 业务组件; 含 usage-dashboard)
+│   │   ├── admin/              ← ✅ 活跃 (sidebar/topbar/bottom-tab)
 │   │   ├── auth/               ← ✅ 活跃 (login-form, Flutter 同步)
 │   │   └── preview/            ← ✅ 活跃 (dev-modules/flutter-preview)
 │   ├── lib/                    ← ✅ 活跃 (共享后端业务逻辑)
 │   │   ├── db/                 ← Drizzle schema + migrations
 │   │   ├── ai/                 ← MiniMax wrapper + prompt 模板
+│   │   ├── usage/              ← 用量事件词表 + 清洗/校验 (v0.1.5)
 │   │   ├── crypto/             ← pgcrypto 字段加密封装
 │   │   ├── auth/               ← Auth.js 配置
 │   │   └── audit/              ← 审计日志封装
@@ -285,8 +287,8 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 - ❌ **migration 不向后兼容** —— `DROP COLUMN` / `DROP TABLE` / `RENAME` / `ALTER COLUMN TYPE` 无 `USING` 全部阻断 (CI 跑 `tools/check-migration-compat.sh`)。详见 CHARTER §3.5 + ADR-0004
 - ❌ **migration NOT NULL 列不加 DEFAULT** —— 老 APK INSERT 失败 = W3 必崩。加 DEFAULT 或 nullable
 - ❌ **删破坏性 migration 不写 down.sql** —— 跑挂后无回滚 = 主人手工处理。`drizzle/down/<同名>.sql` 必带 (CHARTER §3.5)
-- ❌ **mobile-only 阶段加 web admin 新功能** (v0.1.2 起, CHARTER §4.4) —— 即使「顺手改下很快」也不行. 销售侧功能默认 Flutter, web 解冻前不在 `src/app/admin/` 加新页面/新交互. Schema-driven 调用修可 (`§4.4.5` 第 3 行). 主人 override 例外
-- ❌ **mobile-only 阶段同步 web admin client 类型/调用** —— backend / schema 改动后, Flutter service 必同步 (修 freezed model + service 方法), web admin client 的类型/调用更新暂停, 解冻时一次性 catch-up. 但要保证 web admin 现有功能不被打挂 (=§4.4.1 schema-driven UI 改动)
+- ❌ ~~**mobile-only 阶段加 web admin 新功能** (v0.1.2 起, CHARTER §4.4)~~ —— **已作废 (2026-09-22 解冻, ADR-0017)**: web admin 恢复活跃, 管理与分析类新功能优先落 `/admin/*`; 销售侧功能仍以 Flutter 为准 (apk-first 不变)
+- ❌ ~~**mobile-only 阶段同步 web admin client 类型/调用**~~ —— **已作废 (2026-09-22 解冻, ADR-0017)**: 恢复双线同步, backend / schema 改动后 Flutter + web admin 同批更新, `pnpm type-check` 必过
 - ❌ **贴告示 ≠ 修复 (登录循环 w14 第三次复发, 2026-09-11)** — 在登录按钮上方加 banner 解释“为什么不能点”，不等于阻止了循环。**修法 = 让触发条件物理上不发生** (pointer-events:none / 服务端拦截 / API disable / 重构为不可能调用)，不是“让人自觉”。w14 第一次（R4 单点修）和第三次（加 banner）都犯这个错。详见 `docs/login-failure-triage.md §0` DoD。
   - ⚠ **主人 override (2026-09-12, CHANGELOG [0.4.1])**: /app-preview 完全删除 blockIframe 机制, iframe 永远可点. Banner 降级为纯 informational (sky 蓝, 恢复 dismiss 按钮). R12 登录循环改用其他方式 (puppeteer 拦截 / middleware / API disable, 待实施). 后果: iframe 里点登录 = 必崩循环. 主人拍接受这个风险. **此变更仅限 /app-preview, 不要外推到其他登录场景**. 后续补: post-mortem + AGENTS.md §5 沉淈特例条目.
 - ❌ **修一个根因就 commit (登录循环 w14 三次复发, 2026-09-11)** — R1-R12 共 12 个已知根因（详见 `docs/login-failure-triage.md §2`）。任何登录 / auth / 拦截器 / middleware / Flutter web 相关改动，**必须全 12 项过一遍验证**，不能“修了 R4 就 commit, R6 下次再说”。单点修复 = 必复发。CI 阻断（待补 §6 checklist）。
@@ -527,18 +529,18 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 - [x] **W1 实施完成** (2026-09-03) — 30+ 文件, 详见 `docs/w1-implementation.md`
 - [x] **备份脚手架内置** (2026-09-08) — `deploy/` 完整备份栈 + 6 个 systemd timer 已装已启. 详见 `deploy/README.md` §10 + `dev-domain-backup` SOP
 - [x] **项目改名** BBT → 暖客宝 (2026-09-05) — 详见 CHANGELOG [0.2.0]
-- [ ] **W2-3: 数据模型 + Flutter 移动端 + 字段加密 + 审计** (mobile-only 双线并行→单线 Flutter, CHARTER §4.4)
+- [ ] **W2-3: 数据模型 + Flutter 移动端 + 字段加密 + 审计** (web admin 已解冻, 双线同步, CHARTER §4.4 v0.1.5)
   - Drizzle schema 完整化 (CHARTER §3.5 红线)
   - Flutter 12 screen 真机验收 + native 验证 (拍照 / SQLite / 推送)
-  - flutter-only-sync (web client 暂停同步)
-  - Web admin `src/app/admin/**` 不动 (仅 P0 bug fix)
-- [ ] **W4: Flutter 移动端报表 + 内测** (web admin 报表后补, 等解冻)
+  - schema / API 改动双线同步 (Flutter + web admin, `pnpm type-check` 必过)
+  - ✅ **用量采集模块已落地** (2026-09-22): migration 0023 + `/api/usage/events` + `/admin/usage` + Flutter `core/telemetry/`
+- [ ] **W4: Flutter 移动端报表 + 内测** (web admin 报表已解冻, 可并行)
 - [ ] W5-6: 部署自有服务器 + 备份 SOP + Flutter APK 销售内测
-  - ⏰ **W6 内测通过** (Flutter 移动端 1-2 真用户日常用) — 是 web 解冻的**候选参考**, 但**不强制触发解冻** (master-decide, CHARTER §4.4.3)
-  - ⏰ **主人手动拍板解冻**: ask_user 中明确说「移动端 OK, 解冻 web」才解冻
-  - ⏰ 解冻后回头修订 `docs/CHARTER.md` §4 域边界 (AI 域细化 + 实际边界图),见 CHARTER §10.3.1
-- [ ] Phase 2: AI Copilot (MiniMax API) — Flutter 优先
-- [ ] Phase 3: SaaS 化 (多租户) — web admin 解冻后并行
+  - ⏰ 用量数据 (`/admin/usage` + `scripts/usage-report.ts`) 是 W6 拍板的真实依据 (而非回忆)
+  - ✅ **web admin 已解冻** (2026-09-22 主人拍板, ADR-0017) — 后续按 §4.4 v0.1.5 双线同步开发
+  - ⏰ 回头修订 `docs/CHARTER.md` §4 域边界 (AI 域细化 + 实际边界图),见 CHARTER §10.3.1
+- [ ] Phase 2: AI Copilot (MiniMax API) — 销售侧 Flutter 优先; 用量模块提供真实使用数据支撑决策
+- [ ] Phase 3: SaaS 化 (多租户) — 解冻后 web 与 Flutter 并行
 
 ## §8. 任务级快照 SOP (CHARTER §7 治本 + 借鉴 sales-ai W8)
 
