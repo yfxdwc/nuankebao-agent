@@ -82,6 +82,9 @@ export const RateLimits = {
   upload: { windowMs: 60 * 60_000, max: 20 },
   // 报表: 30 次 / 分钟 / 用户
   report: { windowMs: 60_000, max: 30 },
+  // 推荐码查人 (身份识别, ADR-0015 Q10): 10 次 / 分钟 / 用户
+  //   防枚举: 32^6 空间 + 限流 → 暴力遍历不可行
+  referralLookup: { windowMs: 60_000, max: 10 },
 } as const satisfies Record<string, LimitRule>;
 
 /**

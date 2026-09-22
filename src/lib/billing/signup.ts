@@ -206,6 +206,13 @@ export async function registerWithReferral(opts: {
 // 推荐人确认 / 驳回
 // ============================================
 
+/** 「我推荐的人」行的归属状态 (ADR-0015 Q11/Q12/Q15, 主人 2026-09-22 拍) */
+export type ReferralClaimState =
+  | "claimable" // 无归属 → 可加为我的客户
+  | "mine" // 已经是我的客户
+  | "others" // 已归属别人 (先到先得, 不能抢)
+  | "no_profile"; // 对方无客户档案 (admin 豁免建档 Q5)
+
 /** 推荐人待确认 / 已确认列表 (「我的」页"好友"入口用) */
 export async function listMyReferrals(
   referrerUserId: bigint
@@ -217,6 +224,10 @@ export async function listMyReferrals(
   /** 'admin' | 'self_signup' (见 schema 注释: pending 的两种含义靠它区分) */
   source: string;
   createdAt: string;
+  /** 被推荐人的客户档案 id (建号即建档 §6.6; admin 豁免 = null) */
+  customerId: string | null;
+  /** 能否「加为我的客户」→ Flutter 按钮渲染依据 */
+  claimState: ReferralClaimState;
 }>> {
   const rows = await db
     .select({
@@ -226,9 +237,19 @@ export async function listMyReferrals(
       createdAt: referralReward.createdAt,
       name: userTable.name,
       phoneEncrypted: userTable.phoneEncrypted,
+      // 客户档案 (左连接: admin 豁免建档 → customerId = null, 行仍要出现)
+      customerId: customer.id,
+      ownerId: customer.ownerId,
     })
     .from(referralReward)
     .innerJoin(userTable, eq(userTable.id, referralReward.refereeUserId))
+    .leftJoin(
+      customer,
+      and(
+        eq(customer.phoneHash, userTable.phoneHash),
+        isNull(customer.deletedAt)
+      )
+    )
     .where(eq(referralReward.referrerUserId, referrerUserId))
     .orderBy(referralReward.createdAt);
 
@@ -243,6 +264,15 @@ export async function listMyReferrals(
     // 'admin' = 管理员代建(已生效, 无需推荐人操作) / 'self_signup' = 等推荐人确认
     source: r.source,
     createdAt: r.createdAt.toISOString(),
+    customerId: r.customerId?.toString() ?? null,
+    claimState:
+      r.customerId == null
+        ? "no_profile"
+        : r.ownerId == null
+          ? "claimable"
+          : r.ownerId === referrerUserId
+            ? "mine"
+            : "others",
   }));
 }
 

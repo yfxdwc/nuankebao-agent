@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import {
   customer,
   franchisee,
+  user,
   type Customer,
   type NewCustomer,
 } from "@/lib/db/schema";
@@ -688,6 +689,82 @@ export async function softDeleteCustomer(
       .returning({ id: customer.id });
   });
   return result.length > 0;
+}
+
+// ============================================
+// 归属声明 (claim) —— 「把其他用户加为我的客户」的唯一写路径
+// ============================================
+// 主人 2026-09-22 拍 (ADR-0015 Q11/Q12/Q15):
+//   - 建号只建档 (owner_id = NULL), 推荐人在「我推荐的人」页 / 新建客户填推荐码 → **显式**声明归属
+//   - 冲突规则 (Q15): **先到先得** → 已有归属 (别人) = 明确报错, 不做抢单
+//   - 不能把自己加为客户 (「自己不应该是自己的客户」)
+//   - 并发: UPDATE ... WHERE owner_id IS NULL (原子占位); 0 行 = 被别人先占了
+//   - 审计: customer 表挂了 audit 触发器 → 这次 UPDATE 自动进 audit_log
+export type ClaimCustomerFailure =
+  | "NOT_FOUND" // 客户不存在 / 已软删 / 我不存在
+  | "SELF" // 不能把自己加为客户
+  | "OWNED_BY_OTHER"; // 已有归属 (先到先得)
+
+export type ClaimCustomerResult =
+  | { ok: true; alreadyMine: boolean; customer: CustomerView }
+  | { ok: false; code: ClaimCustomerFailure };
+
+export async function claimCustomerOwnership(
+  customerId: bigint,
+  claimantUserId: bigint,
+  ctx: AuditContext,
+  viewerFranchiseeId: bigint | null = null
+): Promise<ClaimCustomerResult> {
+  const [me] = await db
+    .select({ phoneHash: user.phoneHash })
+    .from(user)
+    .where(eq(user.id, claimantUserId))
+    .limit(1);
+  if (!me) return { ok: false, code: "NOT_FOUND" };
+
+  const [row] = await db
+    .select()
+    .from(customer)
+    .where(and(eq(customer.id, customerId), isNull(customer.deletedAt)))
+    .limit(1);
+  if (!row) return { ok: false, code: "NOT_FOUND" };
+
+  // 不能把自己加为客户 (同一个人 = 同手机号 hash, AGENTS §6.6)
+  if (row.phoneHash === me.phoneHash) return { ok: false, code: "SELF" };
+
+  if (row.ownerId != null && row.ownerId !== claimantUserId) {
+    return { ok: false, code: "OWNED_BY_OTHER" };
+  }
+
+  const view = async (r: Customer) =>
+    toView(
+      r,
+      await isMyDirectDownlineFranchisee(viewerFranchiseeId, r.phoneHash),
+      await memberFlagByPhoneHash(r.phoneHash)
+    );
+
+  // 已经是我的 → 幂等成功 (不重复写)
+  if (row.ownerId === claimantUserId) {
+    return { ok: true, alreadyMine: true, customer: await view(row) };
+  }
+
+  // 原子声明: 只在归属仍为空时写入 (并发抢单 → 0 行)
+  const [updated] = await withAuditContext(ctx, async (tx) => {
+    return await tx
+      .update(customer)
+      .set({ ownerId: claimantUserId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(customer.id, customerId),
+          isNull(customer.ownerId),
+          isNull(customer.deletedAt)
+        )
+      )
+      .returning();
+  });
+  if (!updated) return { ok: false, code: "OWNED_BY_OTHER" };
+
+  return { ok: true, alreadyMine: false, customer: await view(updated) };
 }
 
 // ============================================
