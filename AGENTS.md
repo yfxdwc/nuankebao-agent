@@ -308,6 +308,21 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   详见 CHANGELOG (2026-09-22) + `flutter_app/test/chip_label_color_test.dart` + `flutter_app/lib/core/theme/app_theme.dart` chipTheme 注释。
 
 
+
+- ❌ **拍「公开」之前先答「auth 保护什么」三问 (2026-09-21 apk-download 拍板)** — 想去掉 `auth()` 之前必答: ① 这端点返回的东西没登录也能看到/猜到吗 ② 真正敏感的数据/能力在哪 ③ 带宽滥用归谁管 (Cloudflare Tunnel / nginx 限速)。全答 "是/在哪/Cloudflare" → 公开可; 否则加 auth。**反面教材**: 惯性「什么接口都加登录」= 形式主义, 把推荐二维码形同摆设 (被推荐人还没账号扫码必然 401 → 主人 2026-09-21 拍"app 不准备上应用商店, 需要让被推荐人方便下载 apk" = 去 auth 的根因)。同根: §5 "贴告示 ≠ 修复" — "看起来保护了" ≠ 真的保护了。涉及端点: `src/app/api/apk-download/route.ts` + `src/app/api/apk-qr/route.ts` 公开化 (commit `bc8ca42`)。
+
+- ❌ **pre-commit freeze hook 阻断 ≠ 默认 `--no-verify` 绕过 (2026-09-21 public/app/ 撞 preview-framework-freeze)** — 看到「🚫 Preview Framework Guard」阻断 banner 先停手, **先问「这文件本来就不该在 git 里吧?」**:
+  - `public/app/` 在 9 个冻结路径里 = Flutter web 编译产物, 本质不该跟踪
+  - build artifact = docker build 拷 working dir 进镜像 = git 不 track 也照样部署 (`deploy/prod-deploy.sh` 用 working dir 上下文)
+  - **修法 = `git restore --staged <files>` + 留 working dir**, 不用 bypass, 不写 commit, deploy 仍生效
+  - `--no-verify` 仅在「主人拍板要动 preview framework 本身」时用 (AGENTS §9.2), 图省事 = 复发温床。涉及路径: AGENTS §9.1 冻结清单第 9 项 + `tools/pre-commit-preview-guard.sh` 头部注释。
+
+- ❌ **APK 分发走 volume mount, 不靠 commit 不靠 rebuild image (2026-09-21/22 两次 prod-deploy 后沉淀)** — Flutter 重 build 出新 APK 在 `flutter_app/build/app/outputs/flutter-apk/app-release.apk`, 但 prod `/api/apk-download` 服务的是容器内 `/app/public/downloads/NUANKEBAO-release.apk`:
+  - `docker-compose.prod.yml` 挂 `./data/prod/downloads:/app/public/downloads:ro` (host → container)
+  - `src/lib/apk.ts::apkCandidates()` 列 7 个候选, env > mtime 排序选最新 (md5 缓存按 mtime 失效)
+  - **修法 = `cp flutter_app/build/app/outputs/flutter-apk/app-release.apk data/prod/downloads/NUANKEBAO-release.apk`**, 立即生效 (无需重 build 镜像 / 重启容器)
+  - 验证: `curl /api/apk-download | md5sum` 应等于 `md5sum data/prod/downloads/NUANKEBAO-release.apk`
+  - 反模式: 把 APK 编进 docker 镜像 = 每次发版都重 build 镜像 (90s+); commit APK 进 git = APK 不是源码 = 不该跟踪。同根: §5 "migration NOT NULL 列不加 DEFAULT" — 把运行时产物当部署真相。
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
 > **历史**:
