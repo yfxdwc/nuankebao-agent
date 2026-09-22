@@ -12,7 +12,7 @@ import {
   getFranchiseeIdByUserId,
   getFranchiseeTree,
   getPlacementTree,
-  getPlacementUpline,
+  getUplineAncestors,
 } from "@/lib/db/queries/franchisee";
 import {
   getMyPendingPromoteRequest,
@@ -70,10 +70,20 @@ export async function GET(request: NextRequest) {
     tree && mode === "placement"
       ? await listPendingPlacementsUnder(fid)
       : [];
-  // 上层点位 (主人 2026-09-21 拍): 图谱在「我」上面画的那一格 —— 有人画人, 没人画虚位;
-  //   我发起的认领单还在 pending → 前端显示「待她确认」
-  const upline =
-    tree && mode === "placement" ? await getPlacementUpline(fid) : null;
+  // 上层点位 (ADR-0015 Q13, 主人 2026-09-22 拍 「上行最多 3 层直系」):
+  //   - uplines: 由近到远最多 3 个祖先 (新客户端画 3 格)
+  //   - upline:  uplines[0] (兼容老客户端: 旧字段 = 直接上层)
+  //   - 我是树根 → 两个都是空 (前端画「上层 · 虚位以待」)
+  const ancestors =
+    tree && mode === "placement" ? await getUplineAncestors(fid, 3) : [];
+  const uplines = ancestors.map((a) => ({
+    id: a.id,
+    name: a.name,
+    level: a.level,
+    side: a.side,
+    depth: a.depth,
+    member: a.isMember,
+  }));
   const uplineRequest =
     tree && mode === "placement" ? await getMyPendingPromoteRequest(fid) : null;
   if (!tree) {
@@ -83,7 +93,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ...tree,
     ...(pendingPlacements.length > 0 ? { pendingPlacements } : {}),
-    upline,
+    upline: uplines[0] ?? null,
+    uplines,
     uplineRequest,
   });
 }

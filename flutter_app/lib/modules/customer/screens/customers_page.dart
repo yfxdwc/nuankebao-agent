@@ -485,130 +485,164 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     );
   }
 
-  /// 图谱最上方「上层点位」那一格 (主人 2026-09-21 拍)
+  /// 图谱最上方「上层点位」链 (ADR-0015 Q13, 主人 2026-09-22 拍「上行最多 3 层直系」)
   ///
-  ///   口径 (主人原话): 「上层」= **点位父**, 不一定是推荐码提供人; 每个用户有且只有一个。
-  ///   - 后端给了 upline → 有人 (她在别的树里也算, 认领后两棵树就并成一棵)
+  ///   口径 (主人原话): 「上层」= **点位父**, 不一定是推荐码提供人。
+  ///   - 后端给 `uplines` (由近到远, 最多 3 个) → 每层画一格 (单线直上; 最远在上)
+  ///   - 我是树根 (上层空着) → 一格虚线「上层 · 虚位以待」→ 点它去认领
   ///   - 我发起的认领单还 pending → 虚线「待她确认」
-  ///   - 我是树根 (上层空着) → 虚线「上层 · 虚位以待」→ 点它去认领
   ///   ⚠ 上层一旦有人就不可撤换 (联系系统管理员协商处理); 所以这里**没有**换上层入口
-  UplineCap? _uplineCapOf(FranchiseeTreeNode tree) {
-    if (tree.id == '0' || tree.name == '未加盟') return null;
-    final up = tree.upline;
-    if (up != null) {
-      return UplineCap(
-        node: FranchiseeTreeNode(
-          id: up.id,
-          name: up.name,
-          // ⚠ side 不往节点上放: painter 会在圆下再画一次「A线/B线」标签, 而那一行的位置
-          //   正好压在「我」的圆上 (而且我自己的节点下面已经标了我在她的哪条线) → 只留在弹层里说
-          placementSide: null,
-          placementDepth: up.depth,
-          relation: FranchiseeRelation.upline,
-          children: const [],
-          member: up.member,
-        ),
-      );
+  List<UplineCap> _uplineCapsOf(FranchiseeTreeNode tree) {
+    if (tree.id == '0' || tree.name == '未加盟') return const [];
+    if (tree.uplines.isNotEmpty) {
+      // 邻居顺序 = 近 → 远; 画布上最远在最上 (布局时按 index 倒序定位)
+      return tree.uplines
+          .map(
+            (up) => UplineCap(
+              node: FranchiseeTreeNode(
+                id: up.id,
+                name: up.name,
+                // ⚠ side 不往节点上放: painter 会在圆下再画一次「A线/B线」标签, 而那一行的位置
+                //   正好压在「我」的圆上 (而且我自己的节点下面已经标了我在她的哪条线) → 只留在弹层里说
+                placementSide: null,
+                placementDepth: up.depth,
+                relation: FranchiseeRelation.upline,
+                children: const [],
+                member: up.member,
+              ),
+            ),
+          )
+          .toList();
     }
     // 不是树根却没有上层 → 数据异常 (父节点被删), 不画, 免得误导
-    if (tree.placementSide != null) return null;
+    if (tree.placementSide != null) return const [];
     final req = tree.uplineRequest;
     if (req != null) {
-      return UplineCap(
+      return [
+        UplineCap(
+          node: FranchiseeTreeNode(
+            id: '__upline_slot__',
+            name: '「${req.newName ?? "上级"}」· 待她确认',
+            placementSide: null,
+            placementDepth: -1,
+            relation: FranchiseeRelation.upline,
+            children: const [],
+          ),
+          ghost: true,
+          hint: '点此查看确认进度',
+        ),
+      ];
+    }
+    return [
+      UplineCap(
         node: FranchiseeTreeNode(
           id: '__upline_slot__',
-          name: '「${req.newName ?? "上级"}」· 待她确认',
+          name: '上层 · 虚位以待',
           placementSide: null,
           placementDepth: -1,
           relation: FranchiseeRelation.upline,
           children: const [],
         ),
         ghost: true,
-        hint: '点此查看确认进度',
-      );
-    }
-    return UplineCap(
-      node: FranchiseeTreeNode(
-        id: '__upline_slot__',
-        name: '上层 · 虚位以待',
-        placementSide: null,
-        placementDepth: -1,
-        relation: FranchiseeRelation.upline,
-        children: const [],
+        hint: '点此认领一位上级',
       ),
-      ghost: true,
-      hint: '点此认领一位上级',
-    );
+    ];
   }
 
-  /// 布局 + 上层格: 整棵树整体下移一层, 空出来的最上层放「上层点位」
+  /// 布局 + 上层链: 整棵树整体下移 N 层, 空出来的最上面 N 层放上层格
+  ///   caps 顺序 = 近 → 远; 画布上最远在最上 (index 越大越靠上)
   ///
   /// 为什么不下移不显示、也不把上层塞进布局算法:
   ///   塞进去 = 我这棵树会被当成上层的一条腿 (A线或B线), 整棵树被算歪到一侧;
-  ///   下移一层 = 我的子树保持原来的双主线形状, 上面顶一格, 视觉最稳。
-  TreeLayoutResult _layoutWithUpline(FranchiseeTreeNode tree, UplineCap? cap) {
+  ///   下移 N 层 = 我的子树保持原来的双主线形状, 上面顶 N 格, 视觉最稳。
+  TreeLayoutResult _layoutWithUpline(
+    FranchiseeTreeNode tree,
+    List<UplineCap> caps,
+  ) {
     final base = TreeLayout.compute(tree, maxDepth: _graphLayoutMaxDepth);
-    if (cap == null) return base;
+    if (caps.isEmpty) return base;
     final rootPos = base.positions[tree.id];
     if (rootPos == null) return base;
+    final n = caps.length;
+    final capPositions = <String, Offset>{};
+    for (var i = 0; i < n; i++) {
+      // i=0 (最近) 紧贴「我」上方; i=n-1 (最远) 在最上
+      capPositions[caps[i].node.id] = Offset(
+        rootPos.dx,
+        rootPos.dy + (n - 1 - i) * TreeLayout.levelHeight,
+      );
+    }
     final positions = <String, Offset>{
       for (final e in base.positions.entries)
-        e.key: e.value + const Offset(0, TreeLayout.levelHeight),
-      cap.node.id: Offset(rootPos.dx, TreeLayout.padding + TreeLayout.nodeRadius),
+        e.key: e.value + Offset(0, n * TreeLayout.levelHeight),
+      ...capPositions,
     };
     return TreeLayoutResult(
       positions: positions,
-      columns: {...base.columns, cap.node.id: 0},
-      depths: {...base.depths, cap.node.id: 0},
+      columns: {...base.columns, for (final c in caps) c.node.id: 0},
+      depths: {
+        ...base.depths,
+        for (var i = 0; i < n; i++) caps[i].node.id: i,
+      },
       spineIds: base.spineIds,
       aLineIds: base.aLineIds,
       bLineIds: base.bLineIds,
       leftColumns: base.leftColumns,
       rightColumns: base.rightColumns,
-      contentHeight: base.contentHeight + TreeLayout.levelHeight,
+      contentHeight: base.contentHeight + n * TreeLayout.levelHeight,
       columnPitch: base.columnPitch,
       canvasSize: Size(
         base.canvasSize.width,
-        base.canvasSize.height + TreeLayout.levelHeight,
+        base.canvasSize.height + n * TreeLayout.levelHeight,
       ),
     );
   }
 
-  /// 上层格点击区: 虚位 → 认领; 待确认 → 「待我确认」页; 有人 → 她的信息
+  /// 上层格点击区: 虚位 → 认领; 待确认 → 「待我确认」页; 有人 → 她的信息 (每层各自可点)
   List<Widget> _buildUplineCapHitarea(
     FranchiseeTreeNode tree,
     Map<String, Offset> positions,
   ) {
-    final cap = _uplineCapOf(tree);
-    if (cap == null) return const [];
-    final center = positions[cap.node.id];
-    if (center == null) return const [];
+    final caps = _uplineCapsOf(tree);
+    if (caps.isEmpty) return const [];
     final radius = TreeLayout.nodeRadius;
     return [
-      Positioned(
-        left: center.dx - radius,
-        top: center.dy - radius,
-        width: radius * 2,
-        height: radius * 2 + 52,
-        child: Semantics(
-          button: true,
-          label: cap.ghost ? '上层点位 ${cap.node.name}, 点击认领上级' : '我的上层 ${cap.node.name}',
-          child: GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              _onTapUplineCap(tree);
-            },
-            behavior: HitTestBehavior.opaque,
-            child: const SizedBox.expand(),
+      for (final cap in caps)
+        if (positions[cap.node.id] != null)
+          Positioned(
+            left: positions[cap.node.id]!.dx - radius,
+            top: positions[cap.node.id]!.dy - radius,
+            width: radius * 2,
+            height: radius * 2 + 52,
+            child: Semantics(
+              button: true,
+              label: cap.ghost
+                  ? '上层点位 ${cap.node.name}, 点击认领上级'
+                  : '我的上层 ${cap.node.name}',
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  _onTapUplineCap(tree, cap);
+                },
+                behavior: HitTestBehavior.opaque,
+                child: const SizedBox.expand(),
+              ),
+            ),
           ),
-        ),
-      ),
     ];
   }
 
-  /// 点上层格
-  Future<void> _onTapUplineCap(FranchiseeTreeNode tree) async {
-    final up = tree.upline;
+  /// 从上层链里按节点 id 取那一位 (点哪格开哪位的弹层)
+  FranchiseeUpline? _uplineByNodeId(FranchiseeTreeNode tree, String id) {
+    for (final u in tree.uplines) {
+      if (u.id == id) return u;
+    }
+    return null;
+  }
+
+  /// 点上层格 (每层各自可点; cap.node.id = 那一层的节点 id)
+  Future<void> _onTapUplineCap(FranchiseeTreeNode tree, UplineCap cap) async {
+    final up = _uplineByNodeId(tree, cap.node.id);
     if (up != null) {
       // 有人: 只给看信息 (上层不可撤换, 没有「换掉」按钮)
       await showModalBottomSheet<void>(
@@ -698,9 +732,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 
         // 双主线「对碰」布局: 两条主线平行直下, 侧枝往外侧展开
         // ADR-0011: 层数不限 → 布局深度给足, 实际节点由懒加载合并进来
-        // 上层点位 (主人 2026-09-21 拍): 在「我」正上方留一格 (整树下移一层)
-        final uplineCap = _uplineCapOf(tree);
-        final layout = _layoutWithUpline(tree, uplineCap);
+        // 上层点位链 (ADR-0015 Q13, 主人 2026-09-22 拍): 在「我」正上方留 N 格 (整树下移 N 层)
+        final uplineCaps = _uplineCapsOf(tree);
+        final layout = _layoutWithUpline(tree, uplineCaps);
         final canvasSize = layout.canvasSize;
         final positions = layout.positions;
         final searchMatchedIds = searchQuery.isEmpty
@@ -874,9 +908,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                           TreeLayout.padding + TreeLayout.nodeRadius);
                   _graphViewport = viewport;
                   _graphRootCenter = rootCenter;
-                  _graphUplineCapCenter = uplineCap == null
+                  // 聚焦用: 最远那格的中心 (包含全部上层格 → 全部可见)
+                  _graphUplineCapCenter = uplineCaps.isEmpty
                       ? null
-                      : positions[uplineCap.node.id];
+                      : positions[uplineCaps.last.node.id];
                   _graphContentHeight = layout.contentHeight;
 
                   // 树结构变了 (画布尺寸变) → 重算初始视图
@@ -954,10 +989,13 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                                             root: tree,
                                             positions: positions,
                                             columns: layout.columns,
-                                            uplineCap: uplineCap,
-                                            uplineCapCenter: uplineCap == null
-                                                ? null
-                                                : positions[uplineCap.node.id],
+                                            uplineCaps: uplineCaps,
+                                            uplineCapCenters: {
+                                              for (final c in uplineCaps)
+                                                if (positions[c.node.id] != null)
+                                                  c.node.id:
+                                                      positions[c.node.id]!,
+                                            },
                                             scale: scale,
                                             columnPitch: layout.columnPitch,
                                             pendingPlacements:
@@ -1562,7 +1600,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     final hit = _firstMatchNode(tree, lower);
     if (hit == null) return;
     final center =
-        _layoutWithUpline(tree, _uplineCapOf(tree)).positions[hit.id];
+        _layoutWithUpline(tree, _uplineCapsOf(tree)).positions[hit.id];
     if (center == null) return;
     setState(() {
       _graphTransformController.value = Matrix4.identity()

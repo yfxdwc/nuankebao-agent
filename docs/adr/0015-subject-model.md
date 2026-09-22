@@ -403,7 +403,7 @@ user.phone_hash  ~~~~ 约定 ~~~~  franchisee.phone_hash ← 同上
 | 1 | 客户列表接行级过滤 + 「我的客户」口径 (Q2) | 0 | 中 (+单测) | ✅ 2026-09-22 |
 | 2 | 归属模型 (Q11/Q12/Q15): migration additive + 回填 + 冲突规则 | 1 | 中 | ✅ 2026-09-22 (Q15 冲突规则随步骤 3 claim 接口落地) |
 | 3 | 推荐码身份查询接口 (Q10) + 「我推荐的人」加客户 + 新建客户填码 | 2 | 中 | ✅ 2026-09-22 |
-| 4 | 图谱上行 3 层 (Q13) | 0 | 小 | ⏳ |
+| 4 | 图谱上行 3 层 (Q13) | 0 | 小 | ✅ 2026-09-22 |
 | 5 | 关系边废弃 (Q4) + 建号合并 + `user.customer_id` (Q7) | 2 | 中 | ⏳ |
 | 6 | 存量大扫除 (Q16) + 文档收口 (AGENTS §6.6 / api.md / Flutter README) | 1-5 | 小 | ⏳ |
 
@@ -443,4 +443,5 @@ user.phone_hash  ~~~~ 约定 ~~~~  franchisee.phone_hash ← 同上
 - **实施进度**: ✅ 步骤 0 (session.role) · ✅ 步骤 1 (我的客户 = 归属 ∪ 直推 + 列表/计数/概览接过滤) ·
   ✅ 步骤 2 (migration 0020 `customer.owner_id` + 写路径拆栏 + Q5 admin 豁免建档) ·
   ✅ IDOR 补丁 (`/api/customers/[id]` 读改删同口径校验) ·
-  ✅ 步骤 3 (lookup + claim 接口 + Flutter 两条添加路径) — 均 2026-09-22
+  ✅ 步骤 3 (lookup + claim 接口 + Flutter 两条添加路径) ·
+  ✅ 步骤 4 (图谱上行 3 层直系) — 均 2026-09-22

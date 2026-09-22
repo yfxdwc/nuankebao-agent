@@ -213,7 +213,13 @@ class FranchiseeTreeNode {
 
   /// 我的「上层点位」(只有返回树的根节点有; 见 [FranchiseeUpline])
   ///   null = 上层虚位以待 (我是树根, 可以去认领一位上级进来)
+  ///   ⚠ 兼容旧字段; 新代码用 [uplines] (上 3 层)
   final FranchiseeUpline? upline;
+
+  /// 上层直系链 (ADR-0015 Q13, 主人 2026-09-22 拍「上行最多 3 层直系」)
+  ///   由近到远 (level 1 = 直接上层); 我是树根 = 空列表
+  ///   老后端只返回单条 `upline` → 退化为 `[upline]` (长度 1), 不崩
+  final List<FranchiseeUpline> uplines;
 
   /// 我发起的认领上级单 (还在等上级本人确认) — 只有根节点有
   final UplineRequest? uplineRequest;
@@ -237,6 +243,7 @@ class FranchiseeTreeNode {
     this.pendingPlacements = const [],
     this.member = false,
     this.upline,
+    this.uplines = const [],
     this.uplineRequest,
   });
 
@@ -260,6 +267,21 @@ class FranchiseeTreeNode {
       upline: json['upline'] == null
           ? null
           : FranchiseeUpline.fromJson(json['upline'] as Map<String, dynamic>),
+      // 新字段 uplines (上 3 层); 老后端没有 → 用单条 upline 退化 (长度 1)
+      uplines: (() {
+        final raw = json['uplines'];
+        if (raw is List && raw.isNotEmpty) {
+          return raw
+              .whereType<Map<String, dynamic>>()
+              .map(FranchiseeUpline.fromJson)
+              .toList();
+        }
+        final single = json['upline'];
+        if (single is Map<String, dynamic>) {
+          return [FranchiseeUpline.fromJson(single)];
+        }
+        return const <FranchiseeUpline>[];
+      })(),
       uplineRequest: json['uplineRequest'] == null
           ? null
           : UplineRequest.fromJson(
@@ -288,6 +310,8 @@ class FranchiseeTreeNode {
       member: member,
       // ★ 同 pendingPlacements 的教训: copyWith 漏带 → 懒加载拷贝根节点后整格消失
       upline: upline,
+      // ★ 同上: 上 3 层直系链必须一起带 (漏了 = 懒加载后只剩 1 层旧字段)
+      uplines: uplines,
       uplineRequest: uplineRequest,
     );
   }

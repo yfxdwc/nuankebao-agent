@@ -135,15 +135,11 @@ export function customerRbacFilter(ctx: RbacContext) {
 }
 
 /**
- * franchisee 表的过滤条件
- * - admin: 无
+ * franchisee 表的过滤条件 (ADR-0015 Q13, 主人 2026-09-22 拍「全按建议」)
+ * - admin: 无 (全森林 + 未接入)
  * - manager: 不限 (manager 实际不查 franchisee, 但兜底)
- * - sales: 自己 + 上下级 (≤3 层, depth-based 过滤)
- *
- * 简化策略: sales 看到:
- *   - 自己 (id = my_franchisee_id)
- *   - 直接下线 (placement_parent_id = my_franchisee_id, 拆栏后点位父列)
- *   - 直接上线的下线 (depth=2, 需要递归 - 用 materialized path LIKE)
+ * - sales: 我 + **我的枝全部下层** + **上 3 层直系**
+ *   (多根语义: 必须以 root_id 限定同树, 否则根用户 path='' 会串到别的树)
  */
 export async function franchiseeRbacFilter(ctx: RbacContext) {
   if (ctx.role === "admin" || ctx.role === "manager") return undefined;
@@ -161,11 +157,7 @@ export async function franchiseeRbacFilter(ctx: RbacContext) {
     return eq(franchisee.id, sql`0`);
   }
 
-  // 我 + 我的下线 (≤3 层) + 我的上线 (简化: 1 层)
-  // depth 1: placement_parent_id = myFid
-  // depth 2: path LIKE 'myPath.%.%'
-  // depth 3: path LIKE 'myPath.%.%.%'
-  // 简化为: 我 + 我直接下线 + 我的上线的下线 (depth ≤ 3)
+  // 我的 path / root (子树与祖判定都要用)
   const [my] = await db
     .select({ path: franchisee.placementPath, rootId: franchisee.rootId })
     .from(franchisee)
@@ -175,26 +167,56 @@ export async function franchiseeRbacFilter(ctx: RbacContext) {
   // 多根 (B1): 子树判定必须同树; 少了它, 根用户 (path='') 会看见所有树的节点
   const myRootId = my?.rootId ?? myFid;
 
-  // ⚠ 结构口径用 **点位父** (`placement_parent_id`, 拆栏见 schema.ts):
-  //   我的直接下线 = 挂在我下面的人; 我的上级 = 我挂在谁下面 —— 与"推荐人"是两件事
+  // 我 + 我整棵子树 + **上 3 层直系** (ADR-0015 Q13, 主人 2026-09-22 拍「全按建议」)
+  //   旧口径: 我 + 直接下线 + 上级(1 层) + 子树 → 上层看不到第 2/3 层直系
+  //   ⚠ 结构口径用 **点位父** (`placement_parent_id`, 拆栏见 schema.ts):
+  //     我的直接下线 = 挂在我下面的人; 我的上层 = 我挂在谁下面 —— 与"推荐人"是两件事
   const conditions = [
-    eq(franchisee.id, myFid),                 // 我自己
-    eq(franchisee.placementParentId, myFid),  // 我的直接下线
-    eq(franchisee.id, sql`(SELECT placement_parent_id FROM franchisee WHERE id = ${myFid})`), // 我的上级
+    eq(franchisee.id, myFid), // 我自己
+    eq(franchisee.placementParentId, myFid), // 我的直接下线
   ];
 
-  // 我的上级的下线 (depth=2)
-  if (myPath) {
-    // 任意以 myPath 开头的: 表示在我的子树里
-    // 但更精确: referrer = my_referrer, depth <= 3
-    // 简化: 包括所有 path LIKE 'myPath%' 但 depth - my_depth <= 3
-    // 这里我们用 placement_path LIKE myPath% 覆盖子树
+  // 上层直系 (最多 3 层): 沿 path 去尾 → 祖先 path 集合 (近 → 远), 同树内 path 唯一
+  const ancestorPaths = uplineAncestorPaths(myPath, 3);
+  if (ancestorPaths.length > 0) {
     conditions.push(
-      sql`(${franchisee.rootId} = ${myRootId} AND ${franchisee.placementPath} LIKE ${myPath + "%"})`
+      and(
+        sql`${franchisee.rootId} IS NOT DISTINCT FROM ${myRootId}`,
+        inArray(franchisee.placementPath, ancestorPaths)
+      )!
     );
   }
 
+  // 我的枝 (全部下层, 不限层):
+  //   - 非根: path 前缀匹配 (myPath + '%')
+  //   - 根 (myPath=''): 整棵树 = 我的子树 —— 旧代码这里 if(myPath) 把根用户漏了,
+  //     根用户只看得到 2 层邻居 (ADR-0015 Q13 要求「自己所在枝的下层全部」)
+  conditions.push(
+    myPath
+      ? sql`(${franchisee.rootId} IS NOT DISTINCT FROM ${myRootId} AND ${franchisee.placementPath} LIKE ${myPath + "%"})`
+      : sql`${franchisee.rootId} IS NOT DISTINCT FROM ${myRootId}`
+  );
+
   return or(...conditions)!;
+}
+
+/**
+ * 沿 placement_path 向上取 N 层祖先的 path (由近到远; 不含自己)
+ *   例: 'L.R.' + N=3 → ['L.', '', ] (只有 2 层就停)
+ *   与 queries/franchisee.ts::getUplineAncestors 同一算法 (那边在函数内联了一份)
+ */
+function uplineAncestorPaths(myPath: string, maxLevels: number): string[] {
+  const out: string[] = [];
+  let cur = myPath;
+  for (let i = 0; i < maxLevels; i++) {
+    const segs = cur.split(".").filter(Boolean);
+    if (segs.length === 0) break; // 已经是根 → 没有更高层
+    segs.pop();
+    const parent = segs.length === 0 ? "" : segs.join(".") + ".";
+    out.push(parent);
+    cur = parent;
+  }
+  return out;
 }
 
 /**

@@ -472,11 +472,12 @@ class FranchiseTreePainter extends CustomPainter {
   /// 子树内「待确认」的落位点位 (三方确认工作流; 画成虚线虚位)
   final List<PendingPlacement> pendingPlacements;
 
-  /// 最上方「上层点位」那一格 (主人 2026-09-21 拍; null = 不画)
-  final UplineCap? uplineCap;
+  /// 最上方「上层点位」链 (ADR-0015 Q13, 主人 2026-09-22 拍「上行最多 3 层直系」)
+  ///   顺序 = 近 → 远 (index 0 = 直接上层); 空 = 不画
+  final List<UplineCap> uplineCaps;
 
-  /// 上层格的中心 (画布坐标; 页面已把 tree 整体下移一层, 这一格在原来根的位置)
-  final Offset? uplineCapCenter;
+  /// 各上层格的中心 (node.id → 画布坐标; 页面已把 tree 整体下移 N 层)
+  final Map<String, Offset> uplineCapCenters;
 
   FranchiseTreePainter({
     required this.root,
@@ -485,8 +486,8 @@ class FranchiseTreePainter extends CustomPainter {
     this.scale = 1.0,
     this.columnPitch = TreeLayout.columnWidth,
     this.pendingPlacements = const [],
-    this.uplineCap,
-    this.uplineCapCenter,
+    this.uplineCaps = const [],
+    this.uplineCapCenters = const {},
     this.searchMatchedIds,
     this.currentUserId,
     this.selectedNodeId,
@@ -571,24 +572,28 @@ class FranchiseTreePainter extends CustomPainter {
     // 待确认虚位 (主人 2026-09-18 拍): 虚线圆 + 「待确认」, 在最上层
     _drawPendingGhosts(canvas, size);
 
-    // 上层点位 (主人 2026-09-21 拍): 最上面那一格 + 连到「我」的线
-    _drawUplineCap(canvas);
+    // 上层点位链 (ADR-0015 Q13): 每一格 + 连到下一格的线
+    _drawUplineCaps(canvas);
   }
 
-  /// 上层点位那一格
-  void _drawUplineCap(Canvas canvas) {
-    final cap = uplineCap;
-    final center = uplineCapCenter;
-    if (cap == null || center == null) return;
-    final myRoot = positions[root.id];
-
+  /// 上层点位链 (近 → 远; 坐标由页面算好)
+  ///   画法: 先画线 (每一格 → 下面那格; 最下一格 → 「我」), 再由远到近画节点
+  void _drawUplineCaps(Canvas canvas) {
+    if (uplineCaps.isEmpty) return;
     final boost = (1.0 / scale).clamp(1.0, 4.0);
     final capColor = AppTheme.primary;
 
-    // 1. 连线 (上层 → 我): 有人 = 实线; 虚位 = 虚线 (还没接上)
-    if (myRoot != null) {
+    // 1. 连线 (上层 → 下一层): 有人 = 实线; 虚位 = 虚线 (还没接上)
+    for (var i = 0; i < uplineCaps.length; i++) {
+      final cap = uplineCaps[i];
+      final center = uplineCapCenters[cap.node.id];
+      if (center == null) continue;
+      final below = i + 1 < uplineCaps.length
+          ? uplineCapCenters[uplineCaps[i + 1].node.id]
+          : positions[root.id];
+      if (below == null) continue;
       final from = Offset(center.dx, center.dy + TreeLayout.nodeRadius);
-      final to = Offset(myRoot.dx, myRoot.dy - TreeLayout.nodeRadius);
+      final to = Offset(below.dx, below.dy - TreeLayout.nodeRadius);
       final paint = Paint()
         ..color = cap.ghost
             ? AppTheme.accent.withOpacity(0.75)
@@ -609,12 +614,26 @@ class FranchiseTreePainter extends CustomPainter {
       }
     }
 
-    if (!cap.ghost) {
-      // 有上层: 跟别的节点同一套画法 (含会员金环/角标)
-      _drawNode(canvas, cap.node);
-      return;
+    // 2. 节点 (由远到近画, 近的盖在上面)
+    for (final cap in uplineCaps.reversed) {
+      final center = uplineCapCenters[cap.node.id];
+      if (center == null) continue;
+      if (!cap.ghost) {
+        // 有上层: 跟别的节点同一套画法 (含会员金环/角标)
+        _drawNode(canvas, cap.node);
+        continue;
+      }
+      _drawUplineGhost(canvas, cap, center, boost);
     }
+  }
 
+  /// 虚位 / 待确认那一格: 浅底 + 虚线圆 + 圆内「＋」 + 圆上名字 + 圆下说明
+  void _drawUplineGhost(
+    Canvas canvas,
+    UplineCap cap,
+    Offset center,
+    double boost,
+  ) {
     // 虚位 / 待确认: 浅底 + 虚线圆 + 圆内提示 + 圆下说明
     canvas.drawCircle(
       center,
@@ -694,7 +713,7 @@ class FranchiseTreePainter extends CustomPainter {
         ellipsis: '…',
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: TreeLayout.labelMaxWidth + 40);
-      // 提示放圆下方 (那一行离「我」还有 12px 余量)
+      // 提示放圆下方 (那一行离下一格还有余量)
       tpHint.paint(
         canvas,
         Offset(
@@ -933,7 +952,7 @@ class FranchiseTreePainter extends CustomPainter {
   /// 节点颜色: 我=绿, A线=深蓝, B线=紫, 上层格=绿
   Color _lineColorOf(String id, bool isCurrentUser) {
     if (isCurrentUser) return AppTheme.primary;
-    if (uplineCap?.node.id == id) return AppTheme.primary;
+    if (uplineCaps.any((c) => c.node.id == id)) return AppTheme.primary;
     if (aLineIds.contains(id)) return AppTheme.franchiseeA;
     return AppTheme.franchiseeB;
   }
@@ -1320,6 +1339,21 @@ class FranchiseTreePainter extends CustomPainter {
     return false;
   }
 
+  /// 上层链变化判定 (ADR-0015 Q13: 链长/节点/虚位状态/坐标任一变化 → 重画)
+  bool _changedUplineCaps(List<UplineCap> a, List<UplineCap> b) {
+    if (identical(a, b)) return false;
+    if (a.length != b.length) return true;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].node.id != b[i].node.id ||
+          a[i].ghost != b[i].ghost ||
+          a[i].node.name != b[i].node.name ||
+          a[i].node.member != b[i].node.member) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @override
   bool shouldRepaint(covariant FranchiseTreePainter old) {
     return old.root != root ||
@@ -1331,8 +1365,7 @@ class FranchiseTreePainter extends CustomPainter {
         _setChanged(old.bLineIds, bLineIds) ||
         _mapChanged(old.relations, relations) ||
         _setChanged(old.filterIds, filterIds) ||
-        old.uplineCap != uplineCap ||
-        old.uplineCapCenter != uplineCapCenter ||
+        _changedUplineCaps(old.uplineCaps, uplineCaps) ||
         old.pendingPlacements.length != pendingPlacements.length ||
         !_samePending(old.pendingPlacements) ||
         _setChanged(old.searchMatchedIds, searchMatchedIds);

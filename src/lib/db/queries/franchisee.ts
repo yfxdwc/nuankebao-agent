@@ -663,66 +663,10 @@ export async function getPlacementTree(
 /**
  * 我的「上层点位」= **点位父** (不是推荐码提供人!) —— 主人 2026-09-21 拍.
  *
- * 图谱里画在「我」上面那一个节点 (每个用户有且只有一个上层节点):
- *   - 口径: 我的 `placement_path` 去掉最后一段, 在**同一棵树** (root_id) 里找那个节点
- *   - 我是 app 这棵树的根 (`placement_path === ''`) → 无上层 → 返回 null
- *     (前端画「上层 · 虚位以待」, 且只有这种根用户能去认领; 见 promote 单)
- *   - ⚠ **上层一旦有人就不可撤换** (主人拍) —— 本函数只读; 仓内没有任何"换上层"的入口,
- *     确需调整只能联系系统管理员按运营流程处理
+ * ⚠ 旧 `getPlacementUpline` (只取直接上层) 已被 `getUplineAncestors` 取代
+ *   (ADR-0015 Q13, 主人 2026-09-22 拍「上行最多 3 层直系」) —— 避免两份「上层」口径。
+ *   函数本体已删除; 需要「直接上层」= `getUplineAncestors(fid, 3)[0]`。
  */
-export interface UplineView {
-  id: string;
-  name: string;
-  /** 我在她下面的线别 (left = A线 / right = B线) */
-  side: PlacementSide | null;
-  /** 她的绝对层号 (相对本树; 我是根时为 -1 的性质, 不返回) */
-  depth: number;
-  /** 会员标识 (与树节点同口径; 她没有账号 → false) */
-  member: boolean;
-}
-
-export async function getPlacementUpline(
-  fid: bigint
-): Promise<UplineView | null> {
-  const [me] = await db
-    .select({
-      placementPath: franchisee.placementPath,
-      rootId: franchisee.rootId,
-    })
-    .from(franchisee)
-    .where(and(eq(franchisee.id, fid), isNull(franchisee.deletedAt)))
-    .limit(1);
-  if (!me) return null;
-  const parent = parentPath(me.placementPath); // '' 的有根 → null
-  if (parent == null) return null; // 我是树根 → 上层虚位以待
-
-  const [up] = await db
-    .select({
-      id: franchisee.id,
-      name: franchisee.name,
-      placementDepth: franchisee.placementDepth,
-      member: memberExistsSql(sql`u.franchisee_id = ${franchisee.id}`),
-    })
-    .from(franchisee)
-    .where(
-      and(
-        isNull(franchisee.deletedAt),
-        // 多根 (B1): 必须同树, 否则两个根 path 都是 ''/前缀会串味
-        sql`${franchisee.rootId} IS NOT DISTINCT FROM ${me.rootId}`,
-        eq(franchisee.placementPath, parent)
-      )
-    )
-    .limit(1);
-  if (!up) return null; // 数据异常 (父节点被删) → 当作虚位, 不炸页面
-
-  return {
-    id: up.id.toString(),
-    name: up.name,
-    side: sideFromPath(me.placementPath),
-    depth: up.placementDepth,
-    member: up.member === true,
-  };
-}
 
 /**
  * 懒加载: 取某节点的直接子级 (ADR-0011, 主人 2026-09-18 拍「按需展开」)
@@ -926,6 +870,8 @@ export interface UplineAncestorRow {
   phoneEncrypted: string;
   /** 1 = 直接上层 / 2 = 上 2 层 / 3 = 上 3 层 (基于我的 path 删了几次末段) */
   level: number;
+  /** 她的绝对层号 (相对本树; 根 = 0) */
+  depth: number;
   /** 我在她下面的线别 (level 1 直接上层才有意义; 更上层同理, 二叉对称) */
   side: "left" | "right" | null;
   /** 是否 app 会员 (同 franchisee_id 有 active user) */
@@ -1000,6 +946,8 @@ export async function getUplineAncestors(
         phoneEncrypted: row.phoneEncrypted,
         /** 1 = 直接上层 / 2 = 上 2 层 / 3 = 上 3 层 */
         level: idx + 1,
+        /** 她的绝对层号 (图谱/详情页显示用) */
+        depth: row.placementDepth,
         /** 我在直接上层下的线别; 更上层同理 (二叉对称, 都按「我→上层」的 left/right 标注) */
         side: mySide,
         isMember: row.isMember === true,
