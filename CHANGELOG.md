@@ -22,8 +22,19 @@
 - Slice 4 分析与查看: `GET /api/admin/usage/*` (admin only, 只出聚合) + **/admin/usage** 页
   (web admin 解冻后首个新页面) + `scripts/usage-report.ts` + `scripts/usage-retention.ts` (180 天)
 
-**验证** (待补): `pnpm db:compat` / `pnpm db:migrate` / `pnpm type-check` / `pnpm test:run` /
-`flutter analyze` + `flutter test` / dev server + 截图
+**验证** (全部通过)
+- `pnpm db:compat` 0 error / 0 warning; migration 0023 已应用到 dev 库 (表 + 5 索引)
+- `npx tsc --noEmit` 过; Vitest 单元 **202 passed** (新增 `tests/usage-events.test.ts` 17 例;
+  7 个 DB 集成文件因本机无 test 库仍为环境性失败, 与本次改动无关)
+- 冒烟 `scripts/smoke-usage-events.ts` **10/10 全过**: 幂等重传 / 词表外拒收 / 中文 props 写不进 /
+  缺 device 400 / 非管理员 403 / 聚合与过滤 / 180 天清理
+- Flutter: `flutter analyze` 改动文件 0 issue; `flutter test` **148 passed** (新增 `usage_service_test.dart` 11 例)
+- **web admin 页真实浏览器验证** (playwright + dev server 3003): `/admin/usage` 桌面 + 移动视口
+  均 0 横向溢出 / 0 console error / 图表渲染; 非管理员访问显示「只有管理员能看」; 截图已出
+  (`/tmp/usage-admin-page.png` / `/tmp/usage-admin-mobile.png`)
+- 报表脚本实测: `usage-report.ts 30` 输出正常; `usage-retention.ts --dry-run` 正常
+- `pnpm build` (Next.js production) 成功 — `/admin/usage` + 3 个 `/api/admin/usage/*` 已入构建产物
+- 冒烟/验证脚本已自清: dev 库 `usage_event` 0 行残留 (测试数据不留库)
 
 ---
 

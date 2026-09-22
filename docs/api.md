@@ -1047,6 +1047,82 @@ Flutter 详情页「上级加盟商」卡读 `placementParentId`; `referrerId` �
 
 ---
 
+## 17. 使用数据 (usage, v0.1.5; web admin 解冻后首个模块)
+
+> 主人 2026-09-22 拍: 「需要有对真实用户的完整全面的使用数据收集模块」
+> 同意模式 = 内部工具**强制开启**; 原始事件 **180 天**后删 (`USAGE_RETENTION_DAYS` 可配);
+> 红线 (CHARTER §4.4.5): 只记 ID/枚举/计数/时长 — ❌ 不记姓名/手机号/疾病史/养生内容/自由文本;
+> 不接第三方 (Firebase/GA/Sentry); 只在 release APK 采集 (dev/web 不污染)。
+
+### POST /api/usage/events — 批量上报 (客户端 → 服务端)
+
+- **鉴权**: 必须登录 (user_id 服务端取自 session, 不信任客户端)
+- **限流**: 30 次/分钟/用户; 单次 ≤ 50 条事件, body ≤ 64KB
+- **幂等**: 每条事件带 `id` (客户端随机生成), 服务端唯一索引去重 — 批量重传安全
+
+请求体:
+
+```json
+{
+  "device": {
+    "deviceId": "d-abc123...",
+    "appVersion": "0.2.7+8",
+    "platform": "android",
+    "osVersion": null,
+    "deviceModel": null
+  },
+  "events": [
+    {
+      "id": "e12ab34-1-x9k2",
+      "name": "ai_generate_click",
+      "ts": "2026-09-22T10:00:00.000Z",
+      "sessionId": "s12ab34",
+      "screen": "/customers/:id",
+      "entityType": "customer",
+      "entityId": "42",
+      "success": true,
+      "errorCode": "http_500",
+      "durationMs": 1200,
+      "props": { "card": "follow_up" }
+    }
+  ]
+}
+```
+
+响应: `{ "accepted": 9, "rejected": 0, "deduped": 0 }`
+
+校验 (服务端, `src/lib/usage/`):
+
+| 规则 | 行为 |
+|---|---|
+| `name` 不在词表 (`src/lib/usage/catalog.ts`) | 整条丢弃 (rejected+1) |
+| `props` 键不在该事件白名单 | 只丢那个键 |
+| prop 字符串值非安全 slug (含空格/中文/手机号) | 丢键 (双层: 客户端也过滤一遍) |
+| `device.deviceId` 缺失/非法 | 400 整批拒绝 |
+| `ts` 偏离服务器 > 7 天 | client_ts 置 null, 事件保留 (以 server_ts 为准) |
+| 批内/批间重复 `id` | ON CONFLICT 去重 (deduped) |
+
+事件词表 (双端契约, 改一处必须同步另一处):
+`src/lib/usage/catalog.ts` (服务端) ↔ `flutter_app/lib/core/telemetry/usage_events.dart` (客户端)
+
+### GET /api/admin/usage/overview?days=30 — 总览 (admin only)
+
+返回: 活跃用户/事件/会话/设备/平均会话时长 + 每日趋势 + 事件排行 + 页面排行 +
+AI 卡片 (点击/成功/失败/重生成/平均耗时) + 报错 Top + 核心漏斗 (客户详情→AI→跟进)。
+
+### GET /api/admin/usage/users?days=30 — 按用户 (admin only)
+
+每个真实用户: 最后活跃 / 活跃天 / 事件 / 会话 / AI 点击 / 建客户 / 养生记录 / 完成跟进。
+不返回手机号 (只姓名 + 角色)。
+
+### GET /api/admin/usage/events?limit=100&userId=&name= — 最近原始事件 (admin only)
+
+排查用, 最多 200 条。展示: /admin/usage (侧栏「使用数据」)。
+CLI: `npx tsx scripts/usage-report.ts 30 --events=20`
+保留期: `npx tsx scripts/usage-retention.ts [--dry-run] [--days=180]`
+
+---
+
 ## 错误码
 
 | 状态 | 含义 |
@@ -1056,11 +1132,26 @@ Flutter 详情页「上级加盟商」卡读 `placementParentId`; `referrerId` �
 | 302 | 重定向 (Auth.js) |
 | 400 | 输入验证失败 (Zod 报错) |
 | 401 | 未登录 |
+| 403 | 已登录但无权限 (如非管理员访问 /api/admin/*) |
 | 404 | 资源不存在 |
+| 409 | 冲突 (重复/已有归属等业务规则) |
+| 413 | 请求体过大 (usage 上报 > 64KB) |
+| 429 | 触发限流 |
 | 500 | 服务器内部错误 |
 
 ---
 
 ## 限流
 
-当前 v0.1.0 **未限流**。Phase 2 加入 (Upstash Redis)。
+`src/lib/rate-limit.ts` (内存滑动窗口; 生产建议换 Upstash Redis):
+
+| 规则 | 窗口 | 上限 |
+|---|---|---|
+| `login` | 1 分钟 | 5 次 / IP |
+| `sendCode` | 10 秒 | 1 次 / IP |
+| `api` | 1 分钟 | 60 次 / 用户 |
+| `ai` | 1 分钟 | 10 次 / 用户 (AI 贵) |
+| `upload` | 1 小时 | 20 次 / 用户 |
+| `report` | 1 分钟 | 30 次 / 用户 |
+| `referralLookup` | 1 分钟 | 10 次 / 用户 |
+| `usage` | 1 分钟 | 30 次 / 用户 (批量刷盘) |

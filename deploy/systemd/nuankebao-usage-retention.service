@@ -1,0 +1,18 @@
+[Unit]
+Description=暖客宝 使用数据保留期清理 (原始事件 180 天后删; CHARTER §4.4.5)
+Documentation=file:///__PROJECT_DIR__/docs/CHARTER.md
+# 错开凌晨备份批次 (backup 03:00 / code-snapshot 04:00 / followup 07:00)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=%h/.config/nuankebao/paths.conf
+Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
+# USAGE_RETENTION_DAYS 可覆盖 (默认 180, 见 deploy/run-usage-retention.sh)
+ExecStart=__PROJECT_DIR__/deploy/run-with-log.sh __DATABACKUPS_DIR__/logs/usage-retention.log __PROJECT_DIR__/deploy/run-usage-retention.sh
+SuccessExitStatus=0
+
+# 安全加固 (同 TD-010 A4 口径)
+NoNewPrivileges=yes
+PrivateTmp=yes

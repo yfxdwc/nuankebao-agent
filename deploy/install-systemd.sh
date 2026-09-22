@@ -99,7 +99,8 @@ mkdir -p "$USER_SVC_DIR"
 
 for svc in nuankebao-backup.service nuankebao-code-snapshot.service nuankebao-restore-verify.service \
            nuankebao-prod-backup.service nuankebao-prod-healthcheck.service \
-           nuankebao-flutter-web-watch.service            nuankebao-followup-tasks.service; do
+           nuankebao-flutter-web-watch.service            nuankebao-followup-tasks.service \
+           nuankebao-usage-retention.service; do
     # 用 awk 处理 OFFSITE_DIR 空时删整行 + 路径占位符替换
     awk -v project="$PROJECT_DIR" \
         -v databackups="$DATABACKUPS_DIR" \
@@ -122,7 +123,8 @@ done
 
 echo "==> 复制 timer (timer 无路径占位符, 直接 cp)"
 for tmr in nuankebao-backup.timer nuankebao-code-snapshot.timer nuankebao-restore-verify.timer \
-           nuankebao-prod-backup.timer nuankebao-prod-healthcheck.timer            nuankebao-followup-tasks.timer; do
+           nuankebao-prod-backup.timer nuankebao-prod-healthcheck.timer \
+           nuankebao-followup-tasks.timer nuankebao-usage-retention.timer; do
     cp "$SRC_DIR/$tmr" "$USER_SVC_DIR/"
 done
 
@@ -143,6 +145,8 @@ systemctl --user enable --now nuankebao-prod-healthcheck.timer
 systemctl --user enable --now nuankebao-flutter-web-watch.service
 # 跟进任务生成 (每日 07:00; 不 --now: 装的时候跑一次没意义, 且会立刻建任务)
 systemctl --user enable nuankebao-followup-tasks.timer
+# 使用数据保留期清理 (每日 04:30; 不 --now: 装的时候删一遍没意义)
+systemctl --user enable nuankebao-usage-retention.timer
 
 # ============== 5. 验证 ==============
 

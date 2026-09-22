@@ -68,10 +68,12 @@
 │   ├── code_snapshot.sh                       ← 代码快照 (§10.2)
 │   ├── restore_verify.sh                      ← PG 月度演练 (§10.5)
 │   ├── install-systemd.sh                     ← 一键装 systemd timers
+│   ├── run-usage-retention.sh                 ← 用量保留期清理入口 (180 天; §10.11)
 │   ├── README.md                              ← 本文件
 │   └── systemd/
 │       ├── nuankebao-backup.{service,timer}
 │       ├── nuankebao-code-snapshot.{service,timer}
+│       ├── nuankebao-usage-retention.{service,timer}
 │       └── nuankebao-restore-verify.{service,timer}
 ├── data/                                      ← ⚠ gitignored (chmod 700 健康 state + 备份日志)
 │   ├── backup-key.gpg                         ← GPG 密钥 (chmod 600)
@@ -119,6 +121,7 @@
 |---|---|---|
 | `nuankebao-backup.timer` | `*-*-* 03:00:00` | 凌晨低负载, 03:00 抢首 |
 | `nuankebao-code-snapshot.timer` | `*-*-* 04:00:00` | 错开 backup 1h, 防 rsync 重叠 |
+| `nuankebao-usage-retention.timer` | `*-*-* 04:30:00` | 用量原始事件 180 天清理 (CHARTER §4.4.5) |
 | `nuankebao-restore-verify.timer` | `Sun *-*-1..7 04:00:00` | 月度演练, 不与日常冲突 |
 
 **`RandomizedDelaySec=5min`**: 防集群同时跑 / 雪崩.

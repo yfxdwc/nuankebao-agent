@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Heart, Bell, FileText, Sparkles, BarChart3, Upload, MessageCircle, Brain, Download, Wrench } from "lucide-react";
+import { Users, Heart, Bell, FileText, Sparkles, BarChart3, Upload, MessageCircle, Brain, Download, Wrench, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -12,6 +12,8 @@ const navItems = [
   { href: "/admin/follow-ups", label: "跟进任务", icon: Bell },
   { href: "/admin/interactions", label: "联系记录", icon: MessageCircle },
   { href: "/admin/reports", label: "报表中心", icon: BarChart3 },
+  // 使用数据 (2026-09-22 web admin 解冻后首个新页面, ADR-0017 + CHARTER §4.4.5)
+  { href: "/admin/usage", label: "使用数据", icon: Activity },
   { href: "/admin/import", label: "导入客户", icon: Upload },
   { href: "/admin/ai", label: "AI 助手", icon: Brain },
   { href: "/admin/download", label: "App 下载", icon: Download },

@@ -89,6 +89,17 @@ export async function purgeUsageEvents(days: number): Promise<number> {
   return (rows as unknown as unknown[]).length;
 }
 
+/** 保留期清理预览: 统计 N 天前的原始事件行数 (不删) */
+export async function countUsageEventsOlderThan(days: number): Promise<number> {
+  const rows = await db.execute<{ count: number }>(sql`
+    SELECT count(*)::int AS count
+    FROM usage_event
+    WHERE server_ts < NOW() - (${days}::int * INTERVAL '1 day')
+  `);
+  const row = (rows as unknown as Array<{ count: number }>)[0];
+  return Number(row?.count ?? 0);
+}
+
 // ============================================
 // 读 (聚合)
 // ============================================
