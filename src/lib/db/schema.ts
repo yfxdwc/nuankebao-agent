@@ -425,6 +425,18 @@ export const customer = pgTable(
     lastInteractionAt: timestamp("last_interaction_at", { withTimezone: true }),
     lastVisitAt: timestamp("last_visit_at", { withTimezone: true }),
 
+    // ★ 归属人 (ADR-0015 Q11/Q12, 主人 2026-09-22 拍「全按建议」): **谁的客户列表里有她**
+    //   「我的客户」的唯一真相源 = owner_id = 我  ∪  我的直推加盟 (点位父 = 我的 franchisee)
+    //   ⚠ 与 created_by 的分工 (migration 0020 拆开):
+    //     owner_id   = 归属 (业务; 参与列表 / 概览 / 可见性判定)
+    //     created_by = 建档人 (审计; **不再**用于归属判定)
+    //   写路径规则:
+    //     - 手工建档 (POST /api/customers) → owner = 建档人
+    //     - 建号 / 导入 / 加盟落位建档       → NULL (等推荐人/任何人显式添加, Q12)
+    //       建号**不自动**归属推荐人 (推荐码 ≠ 关系, ADR-0015 Q3 禁令)
+    //   冲突规则 (Q15): 已有归属 → 明确报错 (先到先得); claim 接口在步骤 3 落地
+    ownerId: bigint("owner_id", { mode: "bigint" }),
+
     createdBy: bigint("created_by", { mode: "bigint" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -439,6 +451,8 @@ export const customer = pgTable(
       table.phoneHash
     ),
     deletedAtIdx: index("idx_customer_deleted_at").on(table.deletedAt),
+    // 归属过滤 (ADR-0015 步骤 1: 「我的客户」按 owner_id 查)
+    ownerIdx: index("idx_customer_owner").on(table.ownerId),
     // W5 RBAC: store_id 索引 (供 middleware 行级过滤用)
     storeIdx: index("idx_customer_store").on(table.storeId),
     // 跟进紧急度排序 (2026-09-20): 按「多久没联系」排序用

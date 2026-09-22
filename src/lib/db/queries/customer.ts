@@ -25,6 +25,7 @@ import {
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
 import { customerRbacFilter, type RbacContext } from "@/lib/auth/rbac";
+import { directDownlineFranchiseeSql } from "./customer-scope";
 import {
   memberExistsSql,
   memberFlagByPhoneHash,
@@ -105,30 +106,15 @@ export const CUSTOMER_TYPES: readonly CustomerType[] = [
   "normal",
 ];
 
-/**
- * SQL: 「这位客户 (customer.phone_hash) 是不是我的**直推**加盟商」
- *
- * 口径 (主人 2026-09-22 拍「列表页加盟客户 = 只算我直推的」):
- *   - 直推 = **结构口径**: 她的点位父 (`placement_parent_id`) 就是我 (= 第 1 层)
- *     —— AGENTS §6.8 拆栏后, 点位父专记"挂在谁下面"; **不是** referrer_id (推荐人)
- *   - 软删加盟商不算
- *
- * ⚠ 与图谱 (`getPlacementTree`, 整个子树) **故意不同**: 列表「加盟」只算直推,
- *   所以列表加盟数 ≤ 图谱加盟节点数 (主人 2026-09-22 拍).
- *
- * viewerFranchiseeId = null (未加盟 / dev 无 session) → 永远 false
- */
-export function myDirectDownlineFranchiseeSql(
-  viewerFranchiseeId: bigint | null
-): SQL {
-  if (viewerFranchiseeId === null) return sql`false`;
-  return sql`EXISTS (
-    SELECT 1 FROM ${franchisee}
-    WHERE ${franchisee.deletedAt} IS NULL
-      AND ${franchisee.phoneHash} = ${customer.phoneHash}
-      AND ${franchisee.placementParentId} = ${viewerFranchiseeId}
-  )`;
-}
+// 直推加盟判定 (myDirectDownlineFranchiseeSql) 的**定义**已移到
+//   queries/customer-scope.ts (单一真相源): rbac.ts (行级过滤) 要用同一口径,
+//   而 customer.ts ↔ rbac.ts 不能互相 import。
+//   口径: 直推 = 点位父 (placement_parent_id) = 我; 与图谱(整个子树)故意不同;
+//         null → 永远 false。
+//   本文件 re-export 旧名字 (tests/customer-type.test.ts 在用)。
+export {
+  directDownlineFranchiseeSql as myDirectDownlineFranchiseeSql,
+} from "./customer-scope";
 
 /** 单条判定 (create / get / update 用, 避免为一行拉整个列表) */
 async function isMyDirectDownlineFranchisee(
@@ -358,6 +344,9 @@ export async function createCustomer(
     referrerId: input.referrerId ? BigInt(input.referrerId) : null,
     avatar: parseAvatarForWrite(input.avatar),
     isSeed: input.isSeed ?? false,
+    // 归属 = 建档人 (ADR-0015 Q11): 手工新建的客户 = 归我
+    //   (建号/导入/落位建档不自动归属 —— 见 registration.ts / signup.ts 的 ownerId: null)
+    ownerId: createdBy,
     createdBy,
   };
 
@@ -439,7 +428,7 @@ function buildCustomerConditions(options: ListCustomersOptions): SQL[] {
   //   种子 = is_seed 且非加盟; 普通 = 其余
   // 存量老客户端不传 type → 不筛 (跟改动前完全一致)
   if (type && type !== "all") {
-    const directDownline = myDirectDownlineFranchiseeSql(viewerFranchiseeId ?? null);
+    const directDownline = directDownlineFranchiseeSql(viewerFranchiseeId ?? null);
     if (type === "franchisee") {
       conditions.push(directDownline);
     } else if (type === "seed") {
@@ -466,7 +455,7 @@ export async function listCustomers(
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   // 类型随行算: 一次 SELECT 把「是否我的直推加盟商」当计算列带回来 (不再多一次 IN 查询)
-  const directDownline = myDirectDownlineFranchiseeSql(viewerFranchiseeId ?? null);
+  const directDownline = directDownlineFranchiseeSql(viewerFranchiseeId ?? null);
   const [rows, [{ count }]] = await Promise.all([
     db
       .select({
@@ -521,6 +510,9 @@ export function franchiseeCustomerValues(input: {
     phoneEncrypted: encryptField(input.phone),
     phoneHash: hashForLookup(input.phone),
     isSeed: false,
+    // 归属 = NULL (ADR-0015 Q12): 落位建档不自动归属
+    //   —— 她在谁的客户列表里由**结构**决定 (直推加盟, 点位父); 归属留给显式添加
+    ownerId: null,
     createdBy: input.createdBy,
   };
 }
@@ -537,14 +529,20 @@ export async function customerTypeCounts(options: {
    * (主人 2026-09-22)。不传 = 不排除 (web admin 老调用方保持原样)。
    */
   excludePhoneHash?: string | null;
+  /**
+   * 行级过滤上下文 (ADR-0015 步骤 1): 传了就跟列表**同一口径**
+   * (归属我 ∪ 我的直推加盟); 不传 = 全库 (web admin 老调用方保持原样)
+   */
+  rbacCtx?: RbacContext;
 } = {}): Promise<CustomerTypeCounts> {
   const conditions = buildCustomerConditions({
     search: options.search,
     viewerFranchiseeId: options.viewerFranchiseeId,
     excludePhoneHash: options.excludePhoneHash,
+    rbacCtx: options.rbacCtx,
   });
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-  const directDownline = myDirectDownlineFranchiseeSql(options.viewerFranchiseeId ?? null);
+  const directDownline = directDownlineFranchiseeSql(options.viewerFranchiseeId ?? null);
 
   const [row] = await db
     .select({

@@ -58,6 +58,11 @@ async function main() {
   let createdProfiles = 0;
   for (const u of users) {
     if (dryRun) {
+      // admin 豁免建档 (ADR-0015 Q5, 2026-09-22 拍)
+      if (u.role === "admin") {
+        line(`  [dry-run] 账号 ${u.id} ${u.name} (admin) → 豁免建档 (Q5, 不建)`);
+        continue;
+      }
       const [c] = await db
         .select({ id: customer.id })
         .from(customer)
@@ -69,6 +74,10 @@ async function main() {
       continue;
     }
     const prof = await ensureAccountProfile(u.id, ACTOR);
+    if (u.role === "admin") {
+      line(`  - 账号 ${u.id} ${u.name} (admin) → 豁免建档 (ADR-0015 Q5) | 推荐码 ${prof.referralCode}`);
+      continue;
+    }
     if (prof.customerCreated) {
       createdProfiles++;
       line(`  ✓ 账号 ${u.id} ${u.name} (${u.role}) → 新建客户档案 #${prof.customerId} | 推荐码 ${prof.referralCode}`);

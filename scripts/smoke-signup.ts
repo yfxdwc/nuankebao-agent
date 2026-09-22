@@ -4,7 +4,8 @@
 // 验: ① 注册成功 → 建了 user  ② 同时建了客户档案 (list 里能看到)
 //     ③ 客户档案是**普通客户** (is_seed=false)
 //     ④ referrer_id **不写** (no_link: 账号推荐关系 ≠ 客户图谱老带新 — ADR-0013 D4, 主人 2026-09-19 拍)
-//     ⑤ 手机号重复 → 409
+//     ⑤ 归属 owner_id = **null** + 建档人 = 本人 (建号不自动归属推荐人 — ADR-0015 Q12, 2026-09-22 拍)
+//     ⑥ 手机号重复 → 409
 //
 // 跑: npx tsx scripts/smoke-signup.ts   (幂等, 跑完自己清理)
 // ============================================
@@ -69,12 +70,27 @@ async function cleanup() {
       name: customer.name,
       isSeed: customer.isSeed,
       referrerId: customer.referrerId,
+      ownerId: customer.ownerId,
+      createdBy: customer.createdBy,
       deletedAt: customer.deletedAt,
     })
     .from(customer)
     .where(and(eq(customer.phoneHash, hashForLookup(PHONE)), isNull(customer.deletedAt)))
     .limit(1);
   ck("建号同时建了客户档案", !!c, `customerId=${c?.id}`);
+
+  // 归属 = NULL (ADR-0015 Q12, 主人 2026-09-22 拍): 建号**不自动**归属推荐人 ——
+  //   推荐人在「我推荐的人」页显式添加; 建号只保证"有档案" (AGENTS §6.6)
+  ck(
+    "客户档案归属为空 (owner_id = null, 等推荐人显式添加)",
+    c?.ownerId == null,
+    `owner_id=${c?.ownerId ?? "null"} created_by=${c?.createdBy ?? "null"} (建档人应为本人)`
+  );
+  ck(
+    "建档人 = 本人 (自助注册, 档案随她的账号产生)",
+    c?.createdBy != null && String(c.createdBy) === String(res.userId),
+    `created_by=${c?.createdBy ?? "null"} userId=${res.userId}`
+  );
 
   const [refCustomer] = await db
     .select({ id: customer.id })

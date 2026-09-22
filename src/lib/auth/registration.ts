@@ -54,7 +54,10 @@ export interface CreateAccountInput {
 
 export interface CreateAccountResult {
   userId: bigint;
-  customerId: bigint;
+  /**
+   * 客户档案 id —— **admin 豁免建档** (ADR-0015 Q5, 主人 2026-09-22 拍) → null
+   */
+  customerId: bigint | null;
   /**
    * 建号时自动认领的"无账号加盟节点" id (主人 2026-09-21 拍: 消除无账号节点)
    *   - 她本来就是树里的人 (老 seed / 老数据留下的孤儿节点), 一注册就补上账号
@@ -149,6 +152,18 @@ export async function createAccountWithProfile(
         phoneHash,
       });
 
+      // ⓪ admin 豁免建档 (ADR-0015 Q5, 主人 2026-09-22 拍):
+      //   管理员「不是任何人的下线」, 不参与客户维护 → 不建客户档案
+      //   (prod 现状 admin 无档案 = 合法; 推荐码照发, 它是身份识别码)
+      if (role === "admin") {
+        return {
+          userId: created.id,
+          customerId: null,
+          customerCreated: false,
+          adoptedFranchiseeId: adopted?.adoptedFid ?? null,
+        };
+      }
+
       // ① 客户档案: 同手机号已有 (例如他早就是客户/加盟商) → 复用, 不重复建
       const [existingCustomer] = await tx
         .select({ id: customer.id })
@@ -171,6 +186,9 @@ export async function createAccountWithProfile(
           phoneEncrypted: encryptField(phone),
           phoneHash,
           isSeed: false,
+          // 归属 = NULL (ADR-0015 Q12, 2026-09-22 拍): 建号只建档, **不自动**归属推荐人
+          //   → 推荐人在「我推荐的人」页**显式添加** (先到先得, Q15)
+          ownerId: null,
           createdBy: input.actorUserId,
           referrerId: input.customerReferrerId ?? null,
         })
@@ -232,11 +250,16 @@ export async function createAccountWithProfile(
 export async function ensureAccountProfile(
   userId: bigint,
   actorUserId: bigint
-): Promise<{ customerId: bigint; customerCreated: boolean; referralCode: string }> {
+): Promise<{
+  customerId: bigint | null;
+  customerCreated: boolean;
+  referralCode: string;
+}> {
   const [u] = await db
     .select({
       id: user.id,
       name: user.name,
+      role: user.role,
       phoneEncrypted: user.phoneEncrypted,
       phoneHash: user.phoneHash,
     })
@@ -244,6 +267,16 @@ export async function ensureAccountProfile(
     .where(eq(user.id, userId))
     .limit(1);
   if (!u) throw new RegistrationError(404, `账号不存在 (id=${userId})`);
+
+  // admin 豁免建档 (ADR-0015 Q5): 管理员「不是任何人的下线」, 不参与客户维护
+  //   → 不建客户档案 (推荐码照发: 身份识别用); prod admin 现状 = 无档案, 合法
+  if (u.role === "admin") {
+    return {
+      customerId: null,
+      customerCreated: false,
+      referralCode: await ensureReferralCode(userId),
+    };
+  }
 
   const { customerId, customerCreated } = await withAuditContext(
     { userId: actorUserId },
@@ -262,6 +295,8 @@ export async function ensureAccountProfile(
           phoneEncrypted: u.phoneEncrypted,
           phoneHash: u.phoneHash,
           isSeed: false,
+          // 归属 = NULL (ADR-0015 Q12): 补档不自动归属建档人, 等显式添加
+          ownerId: null,
           createdBy: actorUserId,
         })
         .returning({ id: customer.id });

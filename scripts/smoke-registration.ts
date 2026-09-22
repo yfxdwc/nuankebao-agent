@@ -1,8 +1,8 @@
 // ============================================
 // 建号不变量冒烟 (dev only) — 主人 2026-09-19 拍
 //
-// 验三条: ① 非 admin 无推荐码 → 拒  ② 建号即强制建客户档案 (+ 自己的推荐码 + 推荐人归属)
-//         ③ 客户图谱推荐人 = 空 (no_link)  ④ admin 免推荐码但仍强制建档
+// 验: ① 非 admin 无推荐码 → 拒  ② 建号即强制建客户档案 (+ 自己的推荐码 + 推荐人归属)
+//     ③ 客户图谱推荐人 = 空 (no_link)  ④ admin 免推荐码 **且豁免建档** (ADR-0015 Q5, 2026-09-22)
 //
 // 跑: npx tsx scripts/smoke-registration.ts   (幂等, 跑完自己清理)
 // ============================================
@@ -73,12 +73,22 @@ async function cleanup() {
     ck("重复手机号 → 被拒", e instanceof RegistrationError && e.status === 409, (e as Error).message);
   }
 
-  // ④ admin 无码 (allowNoReferral) → 放行
+  // ④ admin 无码 (allowNoReferral) → 放行 + **豁免建档** (ADR-0015 Q5, 2026-09-22 拍)
   const r2 = await createAccountWithProfile({
     name: "测试-admin", phone: PHONE2, role: "admin", password: "Test1234",
     allowNoReferral: true, actorUserId: BigInt(1),
   });
-  ck("admin 无推荐码 → 放行 (建档依然强制)", r2.customerCreated === true, `customerId=${r2.customerId}`);
+  ck("admin 无推荐码 → 放行", r2.referralAccepted || r2.referralRejectedReason == null, `reason=${r2.referralRejectedReason}`);
+  ck(
+    "admin 豁免建档 (不建客户档案, customerId=null)",
+    r2.customerCreated === false && r2.customerId == null,
+    `customerId=${r2.customerId} customerCreated=${r2.customerCreated}`
+  );
+  const [adminProfile] = await db
+    .select({ id: customer.id })
+    .from(customer)
+    .where(eq(customer.phoneHash, hashForLookup(PHONE2)));
+  ck("DB 确认: admin 手机号名下无客户档案", !adminProfile, `customerId=${adminProfile?.id ?? "无"}`);
 
   await cleanup();
   console.log(`\n${fail === 0 ? "🎉 全过" : "⚠️ 有失败"} pass=${pass} fail=${fail}`);

@@ -140,14 +140,6 @@ export async function registerWithReferral(opts: {
     throw new BillingError(429, "QUOTA_EXCEEDED", quota.reason);
   }
 
-  // 推荐人的**客户档案** (新客户的 referrer_id 挂这里; 没有就先空)
-  const [referrerProfile] = await db
-    .select({ id: customer.id })
-    .from(customer)
-    .innerJoin(userTable, eq(userTable.phoneHash, customer.phoneHash))
-    .where(and(eq(userTable.id, owner.userId), isNull(customer.deletedAt)))
-    .limit(1);
-
   // 账号 + 客户档案 同一事务 (主人 2026-09-19 拍「建号即强制建档」)
   const created = await withAuditContext(
     { userId: owner.userId, ipAddress: opts.ip ?? null },
@@ -176,9 +168,15 @@ export async function registerWithReferral(opts: {
           name: nameCheck.name,
           phoneEncrypted: encryptField(phone),
           phoneHash,
-          isSeed: false, // 普通客户 (主人: 「客户列表中自动多出一个普通客户」)
-          createdBy: owner.userId, // 建档人 = 推荐人
-          referrerId: referrerProfile?.id ?? null, // 挂在推荐人名下
+          isSeed: false,
+          // 建档人 = 本人 (自助注册: 档案随她的账号一起产生) —— 审计用
+          createdBy: u.id,
+          // 归属 = NULL (ADR-0015 Q12, 2026-09-22 拍): 建号**不自动**归属推荐人。
+          //   推荐码 = 身份识别 + 奖励凭证, 不表达关系;
+          //   推荐人在「我推荐的人」页**显式**加为我的客户 (先到先得, Q15)。
+          ownerId: null,
+          // ⛔ 不再写 customer.referrer_id (ADR-0015 Q4: 客户图谱"老带新"死链路,
+          //   零调用方; "谁带她进来" 的唯一真相源 = referral_reward)
         });
       }
       return u;

@@ -127,10 +127,11 @@ async function main() {
     );
   }
 
-  // 「建号即强制建档」: 管理员也要有客户档案 + 自己的推荐码
+  // 「建档」不是 admin 必选项 (ADR-0015 Q5): admin 豁免
+  //   → 推荐码照发 (身份识别码), 客户档案不建 (prod admin 现状 = 无档案)
   const prof = await ensureAccountProfile(userId, BigInt(0));
   console.log(
-    `   账号档案: 客户档案 ${prof.customerCreated ? "新建" : "已在"} #${prof.customerId}` +
+    `   账号档案: 客户档案 ${prof.customerCreated ? "新建" : prof.customerId == null ? "admin 豁免 (不建)" : "已在"}${prof.customerId ? ` #${prof.customerId}` : ""}` +
       ` | 推荐码 ${prof.referralCode}`
   );
   console.log(

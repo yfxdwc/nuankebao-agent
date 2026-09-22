@@ -141,6 +141,13 @@
       "when": 1790070000000,
       "tag": "0019_placement_parent_id",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790156400000,
+      "tag": "0020_customer_owner",
+      "breakpoints": true
     }
   ]
 }
