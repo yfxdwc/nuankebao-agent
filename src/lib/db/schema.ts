@@ -710,6 +710,63 @@ export const auditLog = pgTable(
 );
 
 export type AuditLog = typeof auditLog.$inferSelect;
+
+// ============================================
+// 真实用户使用数据 (v0.1.5, 主人 2026-09-22 拍: 「需要有对真实用户的完整全面的
+// 使用数据收集模块」)
+//
+// 设计要点 (CHARTER §4.4.5 用量域红线):
+//   1. append-only 事件表, **不挂审计触发器** (它自身就是行为留痕; 挂上 = 双倍写入)
+//   2. 只存 ID / 枚举 / 计数 / 时长 — 无姓名 / 手机号 / 疾病史 / 养生内容 / 自由文本
+//      (服务端另有词表 + props 白名单 + 手机号 regex 兜底, 见 src/lib/usage/)
+//   3. event_id = 客户端生成的事件 ID (幂等键, 批量重传去重)
+//   4. user_id 无 FK (与 audit_log 同口径; 账号停用后行为数据仍保留)
+//   5. 保留期: 原始事件 180 天 (scripts/usage-retention.ts, USAGE_RETENTION_DAYS 可配)
+// ============================================
+
+export const usageEvent = pgTable(
+  "usage_event",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    eventId: text("event_id").notNull(),
+    userId: bigint("user_id", { mode: "bigint" }),
+    deviceId: text("device_id"),
+    sessionId: text("session_id"),
+    eventName: text("event_name").notNull(),
+    category: text("category"),
+    screen: text("screen"),
+    entityType: text("entity_type"),
+    entityId: text("entity_id"),
+    success: boolean("success"),
+    errorCode: text("error_code"),
+    durationMs: integer("duration_ms"),
+    props: jsonb("props"),
+    appVersion: text("app_version"),
+    platform: text("platform"),
+    osVersion: text("os_version"),
+    deviceModel: text("device_model"),
+    clientTs: timestamp("client_ts", { withTimezone: true }),
+    serverTs: timestamp("server_ts", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+  },
+  (table) => ({
+    eventIdUnique: uniqueIndex("idx_usage_event_event_id").on(table.eventId),
+    userTsIdx: index("idx_usage_event_user_ts").on(
+      table.userId,
+      table.serverTs
+    ),
+    nameTsIdx: index("idx_usage_event_name_ts").on(
+      table.eventName,
+      table.serverTs
+    ),
+    sessionIdx: index("idx_usage_event_session").on(table.sessionId),
+    serverTsIdx: index("idx_usage_event_server_ts").on(table.serverTs),
+  })
+);
+
+export type UsageEvent = typeof usageEvent.$inferSelect;
+export type NewUsageEvent = typeof usageEvent.$inferInsert;
 // ============================================
 // 沙龙 (v0.1.5 Phase 7, 主人 2026-09-18 拍板: 完整方案)
 // ============================================

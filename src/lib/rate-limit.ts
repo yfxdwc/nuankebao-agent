@@ -85,6 +85,9 @@ export const RateLimits = {
   // 推荐码查人 (身份识别, ADR-0015 Q10): 10 次 / 分钟 / 用户
   //   防枚举: 32^6 空间 + 限流 → 暴力遍历不可行
   referralLookup: { windowMs: 60_000, max: 10 },
+  // 用量事件上传 (客户端批量刷盘): 30 次 / 分钟 / 用户
+  //   一次 ≤ 50 条事件, 正常用户远远用不满; 刷盘频率异常时才触发
+  usage: { windowMs: 60_000, max: 30 },
 } as const satisfies Record<string, LimitRule>;
 
 /**

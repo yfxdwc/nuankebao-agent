@@ -162,6 +162,13 @@
       "when": 1790173200000,
       "tag": "0022_placement_new_user_id",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790259600000,
+      "tag": "0023_usage_event",
+      "breakpoints": true
     }
   ]
 }
