@@ -553,10 +553,16 @@ export function franchiseeCustomerValues(input: {
 export async function customerTypeCounts(options: {
   search?: string;
   viewerFranchiseeId?: bigint | null;
+  /**
+   * 当前登录者的手机号 hash —— 与列表 / 概览同一口径排掉他自己的客户档案
+   * (主人 2026-09-22)。不传 = 不排除 (web admin 老调用方保持原样)。
+   */
+  excludePhoneHash?: string | null;
 } = {}): Promise<CustomerTypeCounts> {
   const conditions = buildCustomerConditions({
     search: options.search,
     viewerFranchiseeId: options.viewerFranchiseeId,
+    excludePhoneHash: options.excludePhoneHash,
   });
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
   const downline = myDownlineFranchiseeSql(options.viewerFranchiseeId ?? null);

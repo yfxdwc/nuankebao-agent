@@ -2,7 +2,8 @@
 // GET 客户类型计数 (胶囊按键上的数量, 主人 2026-09-18 拍)
 //
 // 返回 { all, franchisee, seed, normal } — 口径跟 GET /api/customers 完全一致
-// (同一份 buildCustomerConditions + 「加盟 = 我的下级加盟商」tree 口径):
+// (同一份 buildCustomerConditions + 「加盟 = 我的下级加盟商」tree 口径);
+// 与列表一样排掉当前登录者自己的客户档案 (主人 2026-09-22, 「自己不应该是自己的客户」):
 //   all = 全部; franchisee = 我的下级加盟商; seed = 显式标种子且非加盟; normal = 其余
 //   三类互斥穷尽 → franchisee + seed + normal === all (前端可断言)
 //
@@ -14,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { customerTypeCounts } from "@/lib/db/queries/customer";
-import { resolveViewerFranchiseeId } from "@/lib/auth/viewer";
+import { resolveViewerFranchiseeId, resolveViewerPhoneHash } from "@/lib/auth/viewer";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -28,6 +29,7 @@ export async function GET(request: NextRequest) {
   const counts = await customerTypeCounts({
     search,
     viewerFranchiseeId: await resolveViewerFranchiseeId(session?.user?.id),
+    excludePhoneHash: await resolveViewerPhoneHash(session?.user?.id),
   });
 
   return NextResponse.json(counts);
