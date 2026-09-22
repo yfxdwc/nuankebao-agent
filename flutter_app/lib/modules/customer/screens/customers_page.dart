@@ -16,6 +16,7 @@ import '../../../core/models/follow_up_info.dart';
 // fix-graph-zoom-pan (2026-09-16): auto-fit initial scale, user can see whole tree on open
 import 'dart:math' as math;
 import '../../../core/models/franchisee.dart';
+import '../../../core/services/api.dart' show ReferralLookup;
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/member_avatar.dart';
@@ -2648,6 +2649,15 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+
+  /// 推荐码识别 (只新建时显示; ADR-0015 Q10/Q12):
+  ///   推荐码 = 身份识别码 → 填已注册朋友的码 = 把**她**加为客户 (不新建重复档案)
+  final _refCodeController = TextEditingController();
+  ReferralLookup? _lookup;
+  bool _lookupLoading = false;
+
+  /// 「识别到可加的人」→ 保存走 claim, 不走 create
+  bool get _claimMode => widget.customerId == null && _lookup?.canClaim == true;
   final _notesController = TextEditingController();
   final _diseaseController = TextEditingController(); // 既往病史
   final _allergyController = TextEditingController(); // 过敏史 (2026-09-18 新增)
@@ -2718,6 +2728,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _refCodeController.dispose();
     _notesController.dispose();
     _diseaseController.dispose();
     _allergyController.dispose();
@@ -2816,10 +2827,105 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     });
   }
 
+  /// 按推荐码识别已注册用户 (ADR-0015 Q10)
+  /// 后端: 登录 + 限流 10/分 + 审计; 只返回姓名/打码手机号/会员/归属状态
+  Future<void> _lookupCode() async {
+    final code = _refCodeController.text.trim();
+    if (code.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入推荐码')),
+      );
+      return;
+    }
+    setState(() => _lookupLoading = true);
+    try {
+      final r = await ref.read(billingServiceProvider).lookupReferralCode(code);
+      if (!mounted) return;
+      setState(() {
+        _lookup = r;
+        // 识别到可加的人 → 预填真实姓名 (手机号拿不到明文, 用打码显示)
+        if (r.canClaim) _nameController.text = r.name;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('识别失败: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _lookupLoading = false);
+    }
+  }
+
+  /// 识别结果提示框 (可加 = 暖色提示; 不可加 = 警示色)
+  Widget _lookupHint(ReferralLookup r) {
+    if (!r.found) {
+      return _hintBox('没找到这个推荐码, 请核对后重试', warn: true);
+    }
+    if (r.canClaim) {
+      final member = r.isMember ? ' · 会员' : '';
+      return _hintBox(
+        '已识别: ${r.name}${r.phoneMasked.isEmpty ? '' : ' (${r.phoneMasked})'}$member\n'
+        '保存后把她加为你的客户 (不新建重复档案, 之后可继续编辑资料)',
+      );
+    }
+    return _hintBox('已识别: ${r.name} — ${r.claimLabel}', warn: true);
+  }
+
+  Widget _hintBox(String text, {bool warn = false}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: warn ? AppTheme.bgWarm : AppTheme.primaryLight,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: AppTheme.fontXs,
+          height: 1.5,
+          color: warn ? AppTheme.textSecondary : AppTheme.primaryDark,
+        ),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
+      // 新建 + 填了推荐码但还没点「识别」→ 先识别 (直接保存也兜得住)
+      if (widget.customerId == null &&
+          _refCodeController.text.trim().isNotEmpty &&
+          _lookup == null) {
+        await _lookupCode();
+        if (_lookup == null) return; // 识别失败已提示
+      }
+      final lookup = _lookup;
+      if (lookup != null) {
+        if (!lookup.found) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('推荐码不存在, 请核对后重试')),
+          );
+          return;
+        }
+        if (!lookup.canClaim) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(lookup.claimLabel)),
+          );
+          return;
+        }
+        // 识别到 → 归属声明 (ADR-0015 Q15 先到先得; 409 会被后端拦下)
+        await ref.read(customerServiceProvider).claim(lookup.customerId!);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已把 ${lookup.name} 加为我的客户')),
+        );
+        ref.invalidate(customersProvider);
+        ref.invalidate(customerTypeCountsProvider);
+        context.pop();
+        return;
+      }
       final data = <String, dynamic>{
         'name': _nameController.text,
         'phone': _phoneController.text,
@@ -2870,26 +2976,72 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // 推荐码识别 (只新建时; ADR-0015 Q10): 填已注册朋友的码 → 把她加为客户
+            if (widget.customerId == null) ...[
+              TextFormField(
+                controller: _refCodeController,
+                style: const TextStyle(fontSize: AppTheme.fontMd),
+                textCapitalization: TextCapitalization.characters,
+                onChanged: (v) {
+                  // 码改了 → 之前的识别结果作废 (避免拿旧结果去 claim)
+                  if (_lookup != null &&
+                      v.trim().toUpperCase() != _lookup!.code) {
+                    setState(() => _lookup = null);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: '推荐码 (可选)',
+                  hintText: '6 位字母数字',
+                  helperText: '朋友的推荐码: 填了可把已注册的她加为客户',
+                  suffixIcon: _lookupLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : TextButton(
+                          onPressed: _loading ? null : _lookupCode,
+                          child: const Text('识别',
+                              style: TextStyle(fontSize: AppTheme.fontSm)),
+                        ),
+                ),
+              ),
+              if (_lookup != null) ...[
+                const SizedBox(height: 8),
+                _lookupHint(_lookup!),
+              ],
+              const SizedBox(height: 16),
+            ],
             TextFormField(
               controller: _nameController,
               style: const TextStyle(fontSize: AppTheme.fontMd),
-              decoration: const InputDecoration(labelText: '姓名 *'),
+              readOnly: _claimMode, // 已注册用户用她的真实姓名 (claim 不改档案)
+              decoration: InputDecoration(
+                labelText: '姓名 *',
+                helperText: _claimMode ? '用对方账号的真实姓名 (不能改)' : null,
+              ),
               validator: (v) => (v == null || v.trim().isEmpty) ? '请输入姓名' : null,
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _phoneController,
-              style: const TextStyle(fontSize: AppTheme.fontMd),
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: '手机号 *'),
-              validator: (v) {
-                if (v == null || !RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) {
-                  return '请输入正确的手机号';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
+            // 已注册用户: 手机号在对方账号里, 不需要录 (档案已存在)
+            if (!_claimMode) ...[
+              TextFormField(
+                controller: _phoneController,
+                style: const TextStyle(fontSize: AppTheme.fontMd),
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: '手机号 *'),
+                validator: (v) {
+                  if (v == null || !RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) {
+                    return '请输入正确的手机号';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
             // 性别 (大按钮组)
             const Text('性别', style: TextStyle(fontSize: AppTheme.fontMd)),
             const SizedBox(height: 8),

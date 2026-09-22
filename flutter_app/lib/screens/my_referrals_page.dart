@@ -41,6 +41,32 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
     ref.invalidate(meProfileProvider);
   }
 
+  /// 「加为我的客户」—— 归属声明 (ADR-0015 Q11/Q12/Q15, 先到先得)
+  /// 后端: owner 空 → 成功 / 已是我的 → 幂等 / 别人 → 409 / 自己 → 400
+  Future<void> _claim(MyReferral r) async {
+    final cid = r.customerId;
+    if (cid == null) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(customerServiceProvider).claim(cid);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已把 ${r.name} 加为我的客户', style: const TextStyle(fontSize: AppTheme.fontMd))),
+      );
+      ref.invalidate(myReferralsProvider);
+      ref.invalidate(customersProvider);
+      ref.invalidate(customerTypeCountsProvider);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('添加失败: $e', style: const TextStyle(fontSize: AppTheme.fontMd))),
+      );
+      ref.invalidate(myReferralsProvider); // 409 = 被别人先占了 → 刷新状态
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(myReferralsProvider);
@@ -167,6 +193,30 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                                     ),
                                   ),
                                 ],
+                              ),
+                            ],
+                            // 归属声明 (ADR-0015 Q11/Q12): 无归属 → 可加为我的客户;
+                            // 已是我的 / 已归属别人 → 只显示状态, 不显示按钮
+                            if (r.canClaim) ...[
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.tonalIcon(
+                                  onPressed: _busy ? null : () => _claim(r),
+                                  icon: const Icon(Icons.person_add_alt_1_outlined,
+                                      size: 18),
+                                  label: const Text('加为我的客户',
+                                      style: TextStyle(fontSize: AppTheme.fontSm)),
+                                ),
+                              ),
+                            ] else if (r.claimLabel != null) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                r.claimLabel!,
+                                style: const TextStyle(
+                                  fontSize: AppTheme.fontXs,
+                                  color: AppTheme.textSecondary,
+                                ),
                               ),
                             ],
                           ],

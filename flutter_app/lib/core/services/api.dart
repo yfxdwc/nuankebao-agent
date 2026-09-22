@@ -251,6 +251,16 @@ class CustomerService {
     await _dio.delete('/customers/$id');
   }
 
+  /// 把一位**已注册用户**加为我的客户 (归属声明, ADR-0015 Q11/Q12/Q15)
+  ///
+  /// 后端规则 (先到先得):
+  ///   无归属 → 成功; 已是我的 → 幂等成功; 已归属别人 → 409; 自己 → 400; 不存在 → 404
+  Future<Customer> claim(String customerId) async {
+    final res = await _dio.post('/customers/claim', data: {'customerId': customerId});
+    final data = res.data as Map<String, dynamic>;
+    return Customer.fromJson(data['customer'] as Map<String, dynamic>);
+  }
+
   /// 客户推荐关系图 (客户页图谱视图数据源)
   /// 返回节点列表, 边 = referrerId -> id 由前端构建
   /// 范围: RBAC 过滤后的客户池 (sales=自己, manager=本店, admin=全网)
@@ -787,6 +797,16 @@ class MyReferral {
   final String source;
   final String createdAt;
 
+  /// 对方的客户档案 id (建号即建档 §6.6; admin 豁免建档 = null)
+  final String? customerId;
+
+  /// 归属状态 (ADR-0015 Q11/Q12/Q15):
+  ///   claimable  无归属 → 可「加为我的客户」
+  ///   mine       已经是我的客户
+  ///   others     已归属别人 (先到先得, 不能抢)
+  ///   no_profile 对方无客户档案 (管理员等豁免建档)
+  final String claimState;
+
   const MyReferral({
     required this.id,
     required this.name,
@@ -794,10 +814,22 @@ class MyReferral {
     this.status = 'pending',
     this.source = 'admin',
     this.createdAt = '',
+    this.customerId,
+    this.claimState = 'no_profile',
   });
 
   /// 需要我点确认的 (只有自助注册 + 还没处理)
   bool get needsMyConfirmation => status == 'pending' && source == 'self_signup';
+
+  /// 可以「加为我的客户」吗 (后端会再校验一次先到先得)
+  bool get canClaim => claimState == 'claimable' && customerId != null;
+
+  /// 归属状态文案 (null = 不显示)
+  String? get claimLabel => switch (claimState) {
+        'mine' => '✓ 已是我的客户',
+        'others' => '已归属其他销售',
+        _ => null,
+      };
 
   String get statusLabel {
     if (needsMyConfirmation) return '等你确认';
@@ -817,6 +849,56 @@ class MyReferral {
         status: j['status']?.toString() ?? 'pending',
         source: j['source']?.toString() ?? 'admin',
         createdAt: j['createdAt']?.toString() ?? '',
+        customerId: j['customerId']?.toString(),
+        claimState: j['claimState']?.toString() ?? 'no_profile',
+      );
+}
+
+/// 按推荐码查到的人 (身份识别结果, ADR-0015 Q10)
+///
+/// 用途: 新建客户时填对方推荐码 → 识别到人 → 走 claim 把他加为我的客户
+class ReferralLookup {
+  final bool found;
+  final String code;
+  final String name;
+  final String phoneMasked;
+  final bool isMember;
+
+  /// 对方的客户档案 id (admin 豁免建档 = null)
+  final String? customerId;
+
+  /// claimable | mine | others | no_profile | self
+  final String claimState;
+
+  const ReferralLookup({
+    required this.found,
+    this.code = '',
+    this.name = '',
+    this.phoneMasked = '',
+    this.isMember = false,
+    this.customerId,
+    this.claimState = 'no_profile',
+  });
+
+  bool get canClaim => found && claimState == 'claimable' && customerId != null;
+
+  /// 不能加时的原因文案 (claimable → 空串)
+  String get claimLabel => switch (claimState) {
+        'mine' => '已经是你的客户',
+        'others' => '已归属其他销售 (先到先得)',
+        'self' => '这是你自己的推荐码',
+        'no_profile' => '该用户没有客户档案 (不参与客户维护)',
+        _ => '',
+      };
+
+  static ReferralLookup fromJson(Map<String, dynamic> j) => ReferralLookup(
+        found: j['found'] == true,
+        code: j['code']?.toString() ?? '',
+        name: j['name']?.toString() ?? '',
+        phoneMasked: j['phoneMasked']?.toString() ?? '',
+        isMember: j['isMember'] == true,
+        customerId: j['customerId']?.toString(),
+        claimState: j['claimState']?.toString() ?? 'no_profile',
       );
 }
 
@@ -873,6 +955,15 @@ class BillingService {
   Future<ReferralSummary> referralSummary() async {
     final res = await _dio.get('/billing/referral/summary');
     return ReferralSummary.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 按推荐码查人 (身份识别, ADR-0015 Q10)
+  ///
+  /// 后端: 必须登录 + 限流 10 次/分 + 审计; 只返回姓名/打码手机号/会员标识/归属状态。
+  /// 码不存在 → found=false (200, 不是错误)。
+  Future<ReferralLookup> lookupReferralCode(String code) async {
+    final res = await _dio.get('/referral/lookup', queryParameters: {'code': code});
+    return ReferralLookup.fromJson(res.data as Map<String, dynamic>);
   }
 
   // ---------- 人工收款 (内测: 个人微信收款码) ----------
