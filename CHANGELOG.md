@@ -36,6 +36,13 @@
 - `pnpm build` (Next.js production) 成功 — `/admin/usage` + 3 个 `/api/admin/usage/*` 已入构建产物
 - 冒烟/验证脚本已自清: dev 库 `usage_event` 0 行残留 (测试数据不留库)
 
+**上线收尾 (2026-09-22 主人反馈「没看到入口」后)**
+- 修: 手机端底部「更多」菜单补 `/admin/usage` 入口 (`mobile-bottom-tab.tsx`; 侧栏 <md 隐藏,
+  手机只能从「更多」进) — commit `f224462`
+- 部署: `bash deploy/prod-deploy.sh` → 生产 (nuankebao.tooyang.top → :3004) 已含新页 +
+  migration 0023 (additive); 验证: prod DB `usage_event` 存在 / prod 镜像含页面 / 公网
+  `POST /api/usage/events` 401 (路由已存在) / `/admin/usage` 302 到登录 (非 404)
+
 ---
 
 ### Changed (主体模型落地: 建档≠归属 + 「我的客户」口径 + 推荐码识别, 2026-09-22, ADR-0015 步骤 0-3)
