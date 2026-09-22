@@ -1536,17 +1536,21 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : _pickProof,
-                      icon: const Icon(Icons.image_outlined, size: 22),
-                      label: Text(
-                        _proofUrl == null ? '传付款截图 (可不传)' : '已传截图 ✓',
-                        style: const TextStyle(fontSize: AppTheme.fontSm),
-                      ),
+                // 全宽 = 用 SizedBox 而不是 Row: 主题里 OutlinedButton 的
+                //   minimumSize 是 Size(double.infinity, 56) (大按钮语义), 放进 Row 的
+                //   children 会拿到**无界宽度**约束 → debug 直接断言
+                //   "BoxConstraints forces an infinite width" (test 里实测炸过),
+                //   release 则静默把按钮撑成怪尺寸. 有界父 (Column / SizedBox) 才安全.
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : _pickProof,
+                    icon: const Icon(Icons.image_outlined, size: 22),
+                    label: Text(
+                      _proofUrl == null ? '传付款截图 (可不传)' : '已传截图 ✓',
+                      style: const TextStyle(fontSize: AppTheme.fontSm),
                     ),
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(

@@ -1146,6 +1146,14 @@ class SalonService {
     return items.map(Salon.fromJson).toList();
   }
 
+  /// Tab 计数: 我主理的 / 我受邀的 各有多少「进行中」的沙龙
+  /// (口径 = status NOT IN 'finished','cancelled', 与 list(includeFinished=false) 一致)
+  /// 用于子页面 tab 角标
+  Future<SalonActiveCounts> activeCounts() async {
+    final res = await _dio.get('/salons/counts');
+    return SalonActiveCounts.fromJson(res.data as Map<String, dynamic>);
+  }
+
   Future<Salon> getById(String id) async {
     final res = await _dio.get('/salons/$id');
     return Salon.fromJson(res.data as Map<String, dynamic>);

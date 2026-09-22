@@ -76,23 +76,22 @@ export interface CustomerView {
 }
 
 // ============================================
-// 客户类型 (主人 2026-09-18 拍 — 混合方案 C + 图谱同口径)
+// 客户类型 (主人 2026-09-18 拍 混合方案 C; 2026-09-22 主人改「加盟」口径)
 // ============================================
 //
 //   - `franchisee` 加盟: **派生** — franchisee 表存在同 phone_hash 记录,
-//                        **且该加盟商在我的 placement 子树里 (= 我的下级)**
-//                        —— 跟客户页「图谱」tab 同口径 (getPlacementTree / ADR-0010)
+//                        **且她是我的「直推」加盟商 (点位父 = 我, 第 1 层)**
+//                        (主人 2026-09-22: 「列表页加盟客户 = 只算我直推的」)
 //   - `seed`       种子: **显式** — `customer.is_seed = true` (潜在客户开关, 表单可勾)
 //   - `normal`     普通: 其余 (默认)
 //
-// 为什么口径是「我的下级」而不是「任意加盟商」 (主人 2026-09-18):
-//   客户列表原本显示加盟 0, 而图谱显示 14 位下级加盟商 → 两张表 (customer vs
-//   franchisee) 靠 phone_hash 对齐, seed 数据两拨人手机号不重叠 → 对不上.
-//   主人拍: 列表「加盟」= 图谱里的人 (我的下级), 不再用「全局任意加盟商」.
-//   实现: 同时给加盟商建客户档案 (createFranchisee / backfill 脚本), 两边就能对上.
+// ⚠ 与图谱 tab **故意不同口径** (主人 2026-09-22 拍):
+//   - 图谱 = 我的**整个** placement 子树 (含下级的下级, 「客户的客户也能看到」)
+//   - 列表「加盟」= 只要**直推** (点位父 = 我) → 列表 ⊆ 图谱, 数量天然更少
+//   直推是**结构口径** (`placement_parent_id`, 拆栏见 AGENTS §6.8), **不是** referrer_id.
 //
 // 优先级: 加盟 > 种子 > 普通 (已加盟的即使误标种子也显示「加盟」)
-//   - 未加盟 viewer (viewerFranchiseeId = null) → 无下级 → 加盟恒 0, 种子/普通照常
+//   - 未加盟 viewer (viewerFranchiseeId = null) → 无直推 → 加盟恒 0, 种子/普通照常
 //   - 三类互斥且穷尽 → 「全部」= 加盟 + 种子 + 普通 (计数同一套 SQL 保证)
 //   - 老 APK / 未升级客户端不发 is_seed 也能跑 (DB DEFAULT false, 见 drizzle/0005)
 
@@ -107,16 +106,19 @@ export const CUSTOMER_TYPES: readonly CustomerType[] = [
 ];
 
 /**
- * SQL: 「这位客户 (customer.phone_hash) 是不是我 (viewerFranchiseeId) 的下级加盟商」
+ * SQL: 「这位客户 (customer.phone_hash) 是不是我的**直推**加盟商」
  *
- * 口径与 `getPlacementTree` (图谱 tab 数据源) 严格一致:
- *   - 我的子树 = **同 root_id** + placement_path 前缀匹配 (`''` 根 → 同树内所有 path <> '')
- *   - 排除我自己
+ * 口径 (主人 2026-09-22 拍「列表页加盟客户 = 只算我直推的」):
+ *   - 直推 = **结构口径**: 她的点位父 (`placement_parent_id`) 就是我 (= 第 1 层)
+ *     —— AGENTS §6.8 拆栏后, 点位父专记"挂在谁下面"; **不是** referrer_id (推荐人)
  *   - 软删加盟商不算
+ *
+ * ⚠ 与图谱 (`getPlacementTree`, 整个子树) **故意不同**: 列表「加盟」只算直推,
+ *   所以列表加盟数 ≤ 图谱加盟节点数 (主人 2026-09-22 拍).
  *
  * viewerFranchiseeId = null (未加盟 / dev 无 session) → 永远 false
  */
-export function myDownlineFranchiseeSql(
+export function myDirectDownlineFranchiseeSql(
   viewerFranchiseeId: bigint | null
 ): SQL {
   if (viewerFranchiseeId === null) return sql`false`;
@@ -124,24 +126,12 @@ export function myDownlineFranchiseeSql(
     SELECT 1 FROM ${franchisee}
     WHERE ${franchisee.deletedAt} IS NULL
       AND ${franchisee.phoneHash} = ${customer.phoneHash}
-      AND ${franchisee.id} <> ${viewerFranchiseeId}
-      AND EXISTS (
-        SELECT 1 FROM franchisee me
-        WHERE me.id = ${viewerFranchiseeId}
-          AND me.deleted_at IS NULL
-          -- 多根 (B1): 必须先同树 —— path 只在根内唯一, 根用户 path='' 时
-          --   少了这条会把**别的树**的加盟商全部算成"我的下线"
-          AND me.root_id = ${franchisee.rootId}
-          AND (
-            (me.placement_path = '' AND ${franchisee.placementPath} <> '')
-            OR (me.placement_path <> '' AND ${franchisee.placementPath} LIKE me.placement_path || '%')
-          )
-      )
+      AND ${franchisee.placementParentId} = ${viewerFranchiseeId}
   )`;
 }
 
 /** 单条判定 (create / get / update 用, 避免为一行拉整个列表) */
-async function isMyDownlineFranchisee(
+async function isMyDirectDownlineFranchisee(
   viewerFranchiseeId: bigint | null,
   phoneHash: string
 ): Promise<boolean> {
@@ -150,19 +140,7 @@ async function isMyDownlineFranchisee(
     SELECT 1 FROM ${franchisee}
     WHERE ${franchisee.deletedAt} IS NULL
       AND ${franchisee.phoneHash} = ${phoneHash}
-      AND ${franchisee.id} <> ${viewerFranchiseeId}
-      AND EXISTS (
-        SELECT 1 FROM franchisee me
-        WHERE me.id = ${viewerFranchiseeId}
-          AND me.deleted_at IS NULL
-          -- 多根 (B1): 必须先同树 —— path 只在根内唯一, 根用户 path='' 时
-          --   少了这条会把**别的树**的加盟商全部算成"我的下线"
-          AND me.root_id = ${franchisee.rootId}
-          AND (
-            (me.placement_path = '' AND ${franchisee.placementPath} <> '')
-            OR (me.placement_path <> '' AND ${franchisee.placementPath} LIKE me.placement_path || '%')
-          )
-      )
+      AND ${franchisee.placementParentId} = ${viewerFranchiseeId}
   )`;
   const rows = await db.execute<{ d: boolean }>(sql`SELECT ${existsSql} AS d`);
   return rows[0]?.d === true;
@@ -171,9 +149,9 @@ async function isMyDownlineFranchisee(
 /** 类型判定 (纯函数, 单测用) */
 export function resolveCustomerType(
   row: { isSeed: boolean },
-  isMyDownlineFranchisee: boolean
+  isMyDirectDownlineFranchisee: boolean
 ): CustomerType {
-  if (isMyDownlineFranchisee) return "franchisee";
+  if (isMyDirectDownlineFranchisee) return "franchisee";
   return row.isSeed ? "seed" : "normal";
 }
 
@@ -390,7 +368,7 @@ export async function createCustomer(
   // 会员标识同理: 这个手机号可能已经是会员账号 (建号即建档, ADR-0013)
   return toView(
     row,
-    await isMyDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
+    await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
     await memberFlagByPhoneHash(row.phoneHash)
   );
 }
@@ -412,7 +390,7 @@ export async function getCustomerById(
   return row
     ? toView(
         row,
-        await isMyDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.phoneHash),
+        await isMyDirectDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.phoneHash),
         await memberFlagByPhoneHash(row.phoneHash)
       )
     : null;
@@ -457,16 +435,17 @@ function buildCustomerConditions(options: ListCustomersOptions): SQL[] {
     );
   }
   // 客户类型筛选 (胶囊按键, 主人 2026-09-18 拍) — 跟 resolveCustomerType 严格对齐:
-  //   加盟 = 我的下级加盟商 (tree 口径, 同图谱); 种子 = is_seed 且非加盟; 普通 = 其余
+  //   加盟 = 我的**直推**加盟商 (点位父 = 我; 主人 2026-09-22 拍, 不再算整个子树);
+  //   种子 = is_seed 且非加盟; 普通 = 其余
   // 存量老客户端不传 type → 不筛 (跟改动前完全一致)
   if (type && type !== "all") {
-    const downline = myDownlineFranchiseeSql(viewerFranchiseeId ?? null);
+    const directDownline = myDirectDownlineFranchiseeSql(viewerFranchiseeId ?? null);
     if (type === "franchisee") {
-      conditions.push(downline);
+      conditions.push(directDownline);
     } else if (type === "seed") {
-      conditions.push(eq(customer.isSeed, true), not(downline));
+      conditions.push(eq(customer.isSeed, true), not(directDownline));
     } else if (type === "normal") {
-      conditions.push(eq(customer.isSeed, false), not(downline));
+      conditions.push(eq(customer.isSeed, false), not(directDownline));
     }
   }
   // W5 RBAC: 行级 store_id 过滤 (Q1-A + Q4-A)
@@ -486,13 +465,13 @@ export async function listCustomers(
   const conditions = buildCustomerConditions(options);
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  // 类型随行算: 一次 SELECT 把「是否我的下级加盟商」当计算列带回来 (不再多一次 IN 查询)
-  const downline = myDownlineFranchiseeSql(viewerFranchiseeId ?? null);
+  // 类型随行算: 一次 SELECT 把「是否我的直推加盟商」当计算列带回来 (不再多一次 IN 查询)
+  const directDownline = myDirectDownlineFranchiseeSql(viewerFranchiseeId ?? null);
   const [rows, [{ count }]] = await Promise.all([
     db
       .select({
         row: customer,
-        isDownline: sql<boolean>`${downline}`,
+        isDownline: sql<boolean>`${directDownline}`,
         // 会员标识: 同手机号账号的会员状态 (EXISTS 子查询, 不产生重复行)
         isMember: memberExistsSql(sql`u.phone_hash = ${customer.phoneHash}`),
       })
@@ -565,14 +544,14 @@ export async function customerTypeCounts(options: {
     excludePhoneHash: options.excludePhoneHash,
   });
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-  const downline = myDownlineFranchiseeSql(options.viewerFranchiseeId ?? null);
+  const directDownline = myDirectDownlineFranchiseeSql(options.viewerFranchiseeId ?? null);
 
   const [row] = await db
     .select({
       all: sql<number>`count(*)::int`,
-      franchisee: sql<number>`(count(*) FILTER (WHERE ${downline}))::int`,
-      seed: sql<number>`(count(*) FILTER (WHERE ${customer.isSeed} AND NOT (${downline})))::int`,
-      normal: sql<number>`(count(*) FILTER (WHERE NOT ${customer.isSeed} AND NOT (${downline})))::int`,
+      franchisee: sql<number>`(count(*) FILTER (WHERE ${directDownline}))::int`,
+      seed: sql<number>`(count(*) FILTER (WHERE ${customer.isSeed} AND NOT (${directDownline})))::int`,
+      normal: sql<number>`(count(*) FILTER (WHERE NOT ${customer.isSeed} AND NOT (${directDownline})))::int`,
     })
     .from(customer)
     .where(whereClause);
@@ -668,7 +647,7 @@ export async function updateCustomer(
   return row
     ? toView(
         row,
-        await isMyDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
+        await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
         await memberFlagByPhoneHash(row.phoneHash)
       )
     : null;

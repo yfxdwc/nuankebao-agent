@@ -548,3 +548,70 @@ describe("salon — 取消带 reason", () => {
     expect(detail!.status).toBe("published");
   });
 });
+
+describe("salon — active counts (Tab 角标)", () => {
+  it("返回 organizing + invited 各多少「进行中」", async () => {
+    const { getSalonActiveCounts } = await import("@/lib/db/queries/salon");
+
+    // organizer 视角 — 我主理的几个
+    await createSalon(
+      { title: "计数-A", status: "published", startAt: futureIso(1) },
+      { staff: [], invitees: [] },
+      ctx,
+      organizerId,
+    );
+    await createSalon(
+      { title: "计数-B", status: "draft", startAt: futureIso(2) },
+      { staff: [], invitees: [] },
+      ctx,
+      organizerId,
+    );
+    const cId = BigInt(
+      (
+        await createSalon(
+          { title: "计数-C", status: "published", startAt: futureIso(3) },
+          { staff: [], invitees: [] },
+          ctx,
+          organizerId,
+        )
+      ).id,
+    );
+    const { cancelSalon } = await import("@/lib/db/queries/salon");
+    await cancelSalon(cId, ctx, organizerId, "不算进行中");
+
+    // 计数: 应是 2 (A + B, 不含已取消的 C)
+    const counts = await getSalonActiveCounts(organizerId);
+    expect(counts.organizing).toBeGreaterThanOrEqual(2);
+
+    // 受邀视角 — 邀请另一 user
+    await createSalon(
+      {
+        title: "计数-D-邀请受邀者",
+        status: "published",
+        startAt: futureIso(4),
+      },
+      {
+        staff: [],
+        invitees: [{ name: "测试受邀者", phone: INVITEE_PHONE }],
+      },
+      ctx,
+      organizerId,
+    );
+    const counts2 = await getSalonActiveCounts(inviteeId);
+    expect(counts2.invited).toBeGreaterThanOrEqual(1);
+    expect(counts2.organizing).toBe(0);
+  });
+
+  it("0 沙龙时 counts 都是 0", async () => {
+    const { getSalonActiveCounts } = await import("@/lib/db/queries/salon");
+    // 用一个不存在的 user id (无 salon) → counts 应为 0
+    const hugeUserId = BigInt("9999999999");
+    const counts = await getSalonActiveCounts(hugeUserId);
+    expect(counts.organizing).toBe(0);
+    expect(counts.invited).toBe(0);
+  });
+});
+
+function futureIso(daysFromNow: number): string {
+  return new Date(Date.now() + daysFromNow * 86_400_000).toISOString();
+}

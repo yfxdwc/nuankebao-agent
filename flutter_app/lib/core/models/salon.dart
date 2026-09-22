@@ -1010,3 +1010,18 @@ class QuickInviteSuggestions {
   bool get isEmpty => customers.isEmpty && ancestors.isEmpty;
   int get total => customers.length + ancestors.length;
 }
+
+
+// ============================================
+// Tab 角标: 我主理的 / 我受邀的 各多少「进行中」沙龙
+// ============================================
+class SalonActiveCounts {
+  final int organizing;
+  final int invited;
+  const SalonActiveCounts({required this.organizing, required this.invited});
+
+  factory SalonActiveCounts.fromJson(Map<String, dynamic> j) => SalonActiveCounts(
+        organizing: (j['organizing'] as num?)?.toInt() ?? 0,
+        invited: (j['invited'] as num?)?.toInt() ?? 0,
+      );
+}

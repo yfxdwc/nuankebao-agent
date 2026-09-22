@@ -9,6 +9,7 @@
 
 | # | 标题 | 状态 | 拍板日期 | 关键决策 |
 |---|---|---|---|---|
+| 0015 | [主体模型 —— 人 / 账号 / 客户 / 节点 (消歧 + 单一真相源)](./0015-subject-model.md) | ⏳ Draft | — | 定义"一个自然人 = 一份身份 + 三个面"; 4 条"谁带来谁"的边分工 (一条边只管一类问题); 「我的客户」= 我建的 ∪ 直推加盟; 废弃 `customer.referrer_id` 死链路; 落 `user.customer_id` (additive) |
 | 0013 | [账号 = 客户 (建号即强制建档) + 推荐码必填](./0013-account-customer-binding.md) | ✅ Accepted | 2026-09-19 | 唯一建号入口 `createAccountWithProfile`; 非 admin 必须有推荐码; 推荐码**不写** `customer.referrer_id` (no_link); 存量补齐 7/7 + 0 无推荐人 |
 | 0011 | [加盟树层级**不限** (取消深度上限 + 图谱懒加载)](./0011-unlimited-franchise-depth.md) | ✅ Accepted | 2026-09-18 | 层级不限 (合规依据 ADR-0006); env `FRANCHISEE_MAX_DEPTH` 手闸; `GET /:id/children` 懒加载; Supersedes ADR-0010 |
 | 0009 | [预览框架冻结 (4 层防御)](./0009-preview-framework-freeze.md) | ✅ Accepted | 2026-09-16 | tag baseline + pre-commit guard (block) + ADR + Vitest/Playwright 测试; 9 个路径冻结 |
@@ -51,6 +52,7 @@
 - **ADR-0011**: 加盟树层级不限 (+ 图谱懒加载)
 - **ADR-0012**: 会员 + 推荐码
 - **ADR-0013**: 账号 = 客户 (建号即强制建档)
+- **ADR-0015**: 主体模型 (人 / 账号 / 客户 / 节点 —— 消歧 + 单一真相源; ⏳ Draft 待拍板)
 
 ---
 

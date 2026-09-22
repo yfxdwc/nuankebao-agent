@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuankebao/core/models/me.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/providers/settings_provider.dart';
+import 'package:nuankebao/core/theme/app_theme.dart';
 import 'package:nuankebao/core/services/api.dart'
     show ManualPayInfo, ManualPayProduct, MyReferral;
 import 'package:nuankebao/core/widgets/user_avatar.dart';
@@ -76,6 +77,11 @@ Future<ProviderContainer> _container(
     meProfileProvider.overrideWith((ref) async => profile),
     // 默认空列表: 「我的」页现在会读"我推荐的人", 不 override 会去打网络
     myReferralsProvider.overrideWith((ref) async => const <MyReferral>[]),
+    // 「邀请被推荐人」区块读 appReleaseProvider. 不 override = 真去打网络 →
+    //   测试里永远停在 AsyncLoading → 那块是 CircularProgressIndicator (无限动画)
+    //   → pumpAndSettle 永不收敛 = 整份文件全挂 (2026-09-22 修).
+    //   给空 release (apk=null) → 渲染"服务器上还没发布 APK"那行短文案, 不引入二维码图片
+    appReleaseProvider.overrideWith((ref) async => const AppRelease()),
     ...extraOverrides,
   ]);
   addTearDown(container.dispose);
@@ -111,6 +117,9 @@ Future<void> _pumpProfile(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        // 必须带真主题: 不带 = Flutter 默认样式, 测不出"主题把组件默认样式顶掉了"这类 bug
+        //   (2026-09-22 真机 chip 白字 bug 就是这么漏过去的 —— 见 chip_label_color_test.dart)
+        theme: AppTheme.light(),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(fontScale)),
@@ -129,6 +138,10 @@ Future<void> _scrollToBottom(WidgetTester tester) async {
     await tester.drag(find.byType(ListView), const Offset(0, -400));
     await tester.pump();
   }
+  // 滚到底会把「账号与安全」也建出来, 它读 authProvider → 未登录时会
+  // `Future.delayed(200ms)` 重试一次 cookie 同步 (R12 时序兜底). 测试结束时这个
+  // Timer 还挂着 = "A Timer is still pending" 断言失败 → 这里把它跑完.
+  await tester.pump(const Duration(milliseconds: 250));
 }
 
 void main() {
@@ -189,7 +202,8 @@ void main() {
 
     // 关于与帮助
     expect(find.text('关于与帮助'), findsOneWidget);
-    expect(find.text('检查更新'), findsOneWidget);
+    // 2026-09-21 主人: 独立的「检查更新」入口已并进「当前版本」行 (点一下 = 检查更新)
+    expect(find.text('当前版本'), findsOneWidget);
     expect(find.text('使用帮助 / 数据安全'), findsOneWidget);
     expect(find.text('网络自检'), findsOneWidget);
 

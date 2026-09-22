@@ -23,15 +23,37 @@
 ① 新增单测 `flutter_app/test/chip_label_color_test.dart`: 真主题下「我的」页 4 个字号档位 chip 的
 文字颜色必须 = `textPrimary` (改前实测 `null` = 真机白字; 改后通过)
 ② 像素级复查 (Skia 引擎, 临时脚本): 改前 chip 文字像素是 `255,255,255` (纯白), 改后 `26,26,26` (= `#1A1A1A`)
-③ `flutter analyze` 干净; `flutter test` 除 `profile_page_test.dart` (既有问题, 见下) 全绿
+③ `flutter analyze` 干净; `flutter test` 全绿 (含 profile_page_test.dart 16 例, 见下条)
 ④ `tools/build-apk.sh` release 打包成功 + 签名指纹与线上版一致 (可直接覆盖安装)
 
-**顺带发现 (不在本次修复范围)** — `flutter_app/test/profile_page_test.dart` 17 例目前**全挂**
-(`pumpAndSettle timed out`, 与本次改动无关, stash 掉本改动后同样挂): 「邀请被推荐人」区块
-(`_InviteCard`, commit bc8ca42 新增) 读 `appReleaseProvider`, 测试里不 override → 永远 `AsyncLoading`
-→ 里面是 `CircularProgressIndicator` (无限动画) → `pumpAndSettle` 永不收敛。修法: 该文件 harness 里补一个
-`appReleaseProvider.overrideWith((ref) async => const AppRelease())` (本 CHANGELOG 记录的回归测试因此
-另建 `chip_label_color_test.dart` 自带 harness, 不动那个文件)。
+### Fixed (「我的」页测试 harness 全挂 + 会员弹层按钮布局断言, 2026-09-22)
+
+**A. `flutter_app/test/profile_page_test.dart` 16 例全挂** (`pumpAndSettle timed out`, 与 chip 白字同批发现)
+- 根因: 「邀请被推荐人」区块 (`_InviteCard`, commit bc8ca42) 读 `appReleaseProvider`, 测试不 override
+  → 永远 `AsyncLoading` → 里面是 `CircularProgressIndicator` (无限动画) → `pumpAndSettle` 永不收敛。
+  修: harness 补 `appReleaseProvider.overrideWith((ref) async => const AppRelease())`
+- **顺带把 harness 换成真主题** (`theme: AppTheme.light()`): 之前不带主题 = 走 Flutter 默认样式
+  → chip 白字这类"主题写错了"的 bug 根本测不出来 (这次漏过去的真正根因)
+- 另修两处过时/遗漏: ① 「检查更新」入口 2026-09-21 已并进「当前版本」行 (断言改成 `当前版本`)
+  ② 滚到底会建出「账号与安全」→ 读 `authProvider` → 未登录时 `Future.delayed(200ms)` 重试 cookie 同步
+  → 测试结束 timer 还挂着 ("A Timer is still pending") → `_scrollToBottom` 末尾多 pump 250ms
+
+**B. 会员弹层「传付款截图」按钮 (debug 断言 / release 静默变形)** — 带真主题跑测试当场炸出来:
+`profile_sheets.dart` 里 `Row(children: [OutlinedButton.icon(...)])` —— Row 给子节点**无界宽度**,
+而主题 OutlinedButton `minimumSize = Size(double.infinity, 56)` → debug 断言
+`BoxConstraints forces an infinite width`, release 不报错但会把按钮撑成怪尺寸。
+修: 换成 `SizedBox(width: double.infinity, child: …)` (跟同页 FilledButton 一致)。
+全仓扫描"按钮直接放 Row/Wrap": 其余 12 处都有 `Expanded` / 本地 `minimumSize` 兜住 → 安全。
+
+### Changed (发版: APK 0.2.7+8, 2026-09-22)
+
+- `flutter_app/pubspec.yaml`: `0.2.6+7` → **`0.2.7+8`** (装了 0.2.6 的人「当前版本 → 点一下」能看到这版)
+- APK 已按 `tools/build-apk.sh` 打包 (同签名 SHA-1 `1e369ee9…`), 并拷到两处发布位置:
+  `public/downloads/NUANKEBAO-release.apk` (dev serve) + `data/prod/downloads/NUANKEBAO-release.apk`
+  (prod compose `:ro` 挂载)
+  ⚠ `tools/build-flutter-web.sh` 会跑 `flutter clean` → `flutter_app/build/...` 里的 APK 会被清掉,
+  所以发布包必须拷到上面两处; 只留 build 输出 = 下次 web 重建后退回旧包
+- `/app-preview` 静态包由 `tools/watch-flutter-web.sh` 自动重建 (不用手工)
 
 ### Fixed (客户列表出现「自己」— 自己的客户档案不进自己的列表, 2026-09-22)
 

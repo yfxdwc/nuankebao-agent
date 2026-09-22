@@ -56,10 +56,7 @@ class _SalonListPageState extends ConsumerState<SalonListPage>
             fontWeight: FontWeight.w600,
           ),
           unselectedLabelStyle: const TextStyle(fontSize: AppTheme.fontMd),
-          tabs: const [
-            Tab(text: '我受邀的'),
-            Tab(text: '我主理的'),
-          ],
+          tabs: _buildTabs(),
         ),
       ),
       body: TabBarView(
@@ -77,6 +74,46 @@ class _SalonListPageState extends ConsumerState<SalonListPage>
         tooltip: '创建沙龙',
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  /// Tab 标签 + 角标 (进行中数量)
+  /// 角标: 0 时不渲染 (避免视觉噪音); 加载中也不显示
+  List<Widget> _buildTabs() {
+    final asyncCounts = ref.watch(salonActiveCountsProvider);
+    final counts = asyncCounts.valueOrNull;
+    return [
+      Tab(child: _tabLabel('我受邀的', counts?.invited)),
+      Tab(child: _tabLabel('我主理的', counts?.organizing)),
+    ];
+  }
+
+  Widget _tabLabel(String label, int? count) {
+    // count 为 null (加载中) 或 0 → 只显示文字
+    if (count == null || count <= 0) {
+      return Text(label);
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppTheme.primary,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '$count',
+            style: const TextStyle(
+              fontSize: AppTheme.fontSm,
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

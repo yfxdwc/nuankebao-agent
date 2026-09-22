@@ -20,6 +20,14 @@ final salonsProvider = FutureProvider.family<List<Salon>, String>(
   },
 );
 
+/// Tab 角标: 我主理 / 我受邀 各有多少「进行中」沙龙
+/// 一次性返回两个数, tab 切换不需要重新拉
+final salonActiveCountsProvider = FutureProvider<SalonActiveCounts>(
+  (ref) async {
+    return ref.watch(salonServiceProvider).activeCounts();
+  },
+);
+
 /// 沙龙详情 (含我的身份 / 统计)
 final salonDetailProvider = FutureProvider.family<Salon, String>(
   (ref, salonId) async {

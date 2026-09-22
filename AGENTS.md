@@ -294,6 +294,20 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 - ❌ **Button asChild 套原生 `<a>` 触发整页刷新 (2026-09-15 发现)** — shadcn `Button asChild` 套 `<a href="/admin/x">` 时, 浏览器按超链接语义跳转, 整页 HTML 重新加载, sidebar/topbar 全部重挂载, 视觉上整页闪一下。**修法 = 必须 `Button asChild` 套 `<Link href>`** (next/link) 走 RSC 软导航, 只换 `<main>` 区域 children, sidebar/topbar 保留。例外 (仍用原生 `<a>`): `tel:` 协议 (按钮触发拨号) + `download` 属性 (浏览器原生下载) + `mailto:`。仓内已知误用点: `src/components/business/import-customers.tsx:272` 修复于 commit 717a289。验证手段: playwright + dev server, Network 面板看 `document` 请求数 = 0 + `fetch/xhr` 请求 (RSC `?_rsc=...`) > 0 = 软导航成功。
 - ❌ **Next.js dev mode 下不要并发打 30+ API 请求 (2026-09-20 w21 调试 prewarm 失误)** — dev mode 懒编译下并发请求 = webpack 编译队列堆积 + 内存爆炸 (实测 1.4GB), 单路由响应从 <1s 退化成 30-60s, 必须 `systemctl --user restart nuankebao-nextjs.service` 才恢复。**修法 = 改完路径 / 重写 prewarm 类脚本后, 先 dry-run 用 `grep` / `sed -n` 验证 URL 路径, 再 curl 测单个路径, 不要 30+ 并发打**。教训: dev mode 架构性问题 (冷编译) 治本是换 `next start` production 模式; dev mode 仅适合「边改边看 HMR」, 不适合「批量验证脚本」。详见 CHANGELOG [0.5.4] + `tools/prewarm-dev-routes.sh` 头部注释。
 
+- ❌ **组件主题里只写字号、不写 color → 真机白字 (2026-09-22 发现)** — 给 `ThemeData` 的组件样式
+  (`chipTheme.labelStyle` 等) 设了**非 null 但没 color** 的 TextStyle, 等于整个**顶掉** Flutter 的组件默认色
+  (`RawChip` 取样式 = `chipTheme.labelStyle ?? chipDefaults.labelStyle`; 默认色来自 M3: 未选 `onSurfaceVariant` /
+  选中 `onSecondaryContainer`) → 文字 `color = null` → 引擎兜底色 = **白** (Android/Skia 实测 `#FFFFFF`)
+  → 白卡片上根本看不见 (主人 2026-09-22 报的「字号档位 chip 白字」就是这个)。
+  ⚠ Flutter web (CanvasKit) 兜底色是**黑** → `/app-preview` 看着"正常", **预览端验收必被骗**;
+  只有真机 APK 看得出来。**修法 = 主题里每个组件 TextStyle 都显式写 color**;
+  **测 UI 的 widget test 必须带到真主题** (`MaterialApp(theme: AppTheme.light())`) —— 不带主题 = 走 Flutter
+  默认样式, 这类 bug 永远测不出来 (profile_page_test.dart 之前就是不带, 16 例全挂都发现不了)。
+  同类坑: 主题里 `minimumSize: Size(double.infinity, …)` 的按钮放进 `Row` / `Wrap` (无界宽度) 会断言
+  `BoxConstraints forces an infinite width` (debug 当场炸 / release 静默变形) —— 要有 `Expanded` / `SizedBox` 兜宽。
+  详见 CHANGELOG (2026-09-22) + `flutter_app/test/chip_label_color_test.dart` + `flutter_app/lib/core/theme/app_theme.dart` chipTheme 注释。
+
+
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
 > **历史**:

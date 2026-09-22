@@ -851,6 +851,53 @@ export async function createSalon(
   return (await getSalonDetail(created.id, userId))!;
 }
 
+/**
+ * Tab 计数: 我主理的 / 我受邀的 各有多少「进行中」(未结束 / 未取消) 的沙龙
+ *
+ * 口径与 listSalons(includeFinished=false) 一致: status NOT IN ('finished','cancelled')
+ *  - 受邀侧: 沿用 listSalons 的「invitee_user_id 命中 OR 手机号 hash 命中」判定
+ *  - 主理侧: salon.organizer_user_id = userId
+ *
+ * 用途: GET /api/salons/counts → tab 角标
+ */
+export async function getSalonActiveCounts(
+  userId: bigint
+): Promise<{ organizing: number; invited: number }> {
+  const myPhoneHash = await getUserPhoneHash(userId);
+  const invitedExists = myPhoneHash
+    ? sql`EXISTS (
+        SELECT 1 FROM salon_invitation si
+        WHERE si.salon_id = ${salon.id}
+          AND si.status <> 'cancelled'
+          AND (si.invitee_user_id = ${userId} OR si.invitee_phone_hash = ${myPhoneHash})
+      )`
+    : sql`EXISTS (
+        SELECT 1 FROM salon_invitation si
+        WHERE si.salon_id = ${salon.id}
+          AND si.status <> 'cancelled'
+          AND si.invitee_user_id = ${userId}
+      )`;
+  const activeFilter = sql`${salon.status} NOT IN ('finished', 'cancelled')`;
+
+  const [[organizingRow], [invitedRow]] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(salon)
+      .where(
+        and(
+          isNull(salon.deletedAt),
+          eq(salon.organizerUserId, userId),
+          activeFilter,
+        )
+      ),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(salon)
+      .where(and(isNull(salon.deletedAt), invitedExists, activeFilter)),
+  ]);
+  return { organizing: organizingRow.count, invited: invitedRow.count };
+}
+
 export interface ListSalonsOptions {
   userId: bigint;
   /** organizing = 我主理的; invited = 我受邀的; all = 两者并集 */
