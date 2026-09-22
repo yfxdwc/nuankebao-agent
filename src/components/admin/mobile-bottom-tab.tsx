@@ -16,6 +16,7 @@ import {
   LogOut,
   X,
   ChevronRight,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
@@ -46,6 +47,8 @@ const PRIMARY_TABS = [
 const MORE_ITEMS = [
   { href: "/admin/interactions", label: "联系记录", icon: MessageCircle, desc: "总联系次数" },
   { href: "/admin/reports", label: "报表中心", icon: BarChart3, desc: "客户/养生/月度报表" },
+  // 使用数据 (2026-09-22 web admin 解冻后首个新页面; 手机端从「更多」进)
+  { href: "/admin/usage", label: "使用数据", icon: Activity, desc: "谁在用 / AI 点击 / 漏斗" },
   { href: "/admin/import", label: "导入客户", icon: Upload, desc: "Excel 批量导入" },
   { href: "/admin/ai", label: "AI 助手", icon: Brain, desc: "跟进建议 + 话术生成" },
   { href: "/admin/download", label: "App 下载", icon: Download, desc: "暖客宝 APK" },
