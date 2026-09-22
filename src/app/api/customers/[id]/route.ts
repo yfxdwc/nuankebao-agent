@@ -28,8 +28,7 @@ const UpdateCustomerSchema = z.object({
   diseaseHistory: z.string().optional(),
   allergyHistory: z.string().optional(),
   notes: z.string().optional(),
-  // 客户推荐人. 显式 null = 清空推荐人
-  referrerId: z.string().regex(/^\d+$/, "推荐人 ID 格式错误").nullable().optional(),
+  // ❌ referrerId 已废弃 (ADR-0015 Q4, 主人 2026-09-22 拍): 死链路, 不再接受写入
   // 种子客户开关 (潜在客户, 主人 2026-09-18)
   isSeed: z.boolean().optional(),
   // 客户头像: 传 null = 恢复默认首字 (白名单校验在 query 层)

@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../http/api_client.dart';
 import '../services/notifications/follow_up_reminder.dart';
 import '../services/api.dart';
-import '../models/customer.dart';
 import '../models/follow_up_info.dart';
 import '../models/dashboard.dart';
 import '../models/follow_up.dart';
@@ -195,12 +194,6 @@ final customerWellnessRecordsProvider =
       limit: 50,
     );
   },
-);
-
-/// 我的客户推荐关系图 (客户页图谱视图用)
-/// 边界: RBAC 过滤后的客户池, sales 只看自己
-final myCustomerGraphProvider = FutureProvider<CustomerGraph>(
-  (ref) async => ref.watch(customerServiceProvider).getReferralGraph(),
 );
 
 /// 加盟商列表

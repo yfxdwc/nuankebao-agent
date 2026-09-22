@@ -52,6 +52,17 @@ async function cleanup() {
     referralCode: "WRJZAN", actorUserId: BigInt(1),
   });
   ck("建号成功, 客户档案已建", r.customerCreated === true, `customerId=${r.customerId}`);
+  // ★ 列连接 (ADR-0015 Q7, migration 0021): user.customer_id 必须同步落值
+  const [u1] = await db
+    .select({ customerId: user.customerId })
+    .from(user)
+    .where(eq(user.id, r.userId))
+    .limit(1);
+  ck(
+    "user.customer_id 落值 (账号↔档案有列可查)",
+    u1?.customerId != null && String(u1.customerId) === String(r.customerId),
+    `customer_id=${u1?.customerId} / 档案=${r.customerId}`
+  );
   ck("推荐码已受理, 推荐人 = user 1", r.referralAccepted && String(r.referrerUserId) === "1", `referrer=${r.referrerUserId}`);
   ck("自己也被分配推荐码", (r.ownReferralCode ?? "").length === 6, r.ownReferralCode);
   const [c1] = await db
@@ -84,6 +95,12 @@ async function cleanup() {
     r2.customerCreated === false && r2.customerId == null,
     `customerId=${r2.customerId} customerCreated=${r2.customerCreated}`
   );
+  const [u2] = await db
+    .select({ customerId: user.customerId })
+    .from(user)
+    .where(eq(user.id, r2.userId))
+    .limit(1);
+  ck("admin 的 user.customer_id 也为空 (与豁免一致)", u2?.customerId == null, `customer_id=${u2?.customerId}`);
   const [adminProfile] = await db
     .select({ id: customer.id })
     .from(customer)

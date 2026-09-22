@@ -35,8 +35,8 @@ const CreateCustomerSchema = z.object({
   diseaseHistory: z.string().optional(),
   allergyHistory: z.string().optional(),
   notes: z.string().optional(),
-  // 客户推荐人 (客户页图谱关系边). null/undefined = 无推荐人
-  referrerId: z.string().regex(/^\d+$/, "推荐人 ID 格式错误").nullable().optional(),
+  // ❌ referrerId 已废弃 (ADR-0015 Q4, 主人 2026-09-22 拍): 死链路, 不再接受写入
+  //   旧客户端传了也会被忽略 (zod 默认 strip 未声明字段)
   // 客户头像: 'preset:<id>' / '/uploads/x.jpg' / null(= 默认首字)
   // 白名单/格式校验在 src/lib/avatar.ts (query 层执行, 非法值 → 400)
   avatar: z.string().max(300).nullable().optional(),

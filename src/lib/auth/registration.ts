@@ -45,8 +45,17 @@ export interface CreateAccountInput {
   referralCode?: string;
   /** 豁免"必须有推荐码" (只给 admin / 根账号用; 调用方要显式传) */
   allowNoReferral?: boolean;
-  /** 客户档案上的推荐人 (客户图谱用; 与推荐码无关, 默认 null) */
-  customerReferrerId?: bigint | null;
+  /**
+   * 客户档案的建档人 = **本人** (自助注册场景; ADR-0015 Q12)
+   *   false/缺省 = 建档人 = `actorUserId` (管理员/脚本代建)
+   */
+  customerCreatedBySelf?: boolean;
+  /**
+   * 推荐码生效方式 (透传给 claimReferralCode):
+   *   immediate (缺省) = 管理员建号, 新人立刻拿 15 天
+   *   pending_confirmation = 自助注册, 等推荐人确认才发
+   */
+  referralMode?: "immediate" | "pending_confirmation";
   ipAddress?: string;
   /** 操作人 (审计) */
   actorUserId: bigint;
@@ -170,34 +179,43 @@ export async function createAccountWithProfile(
         .from(customer)
         .where(and(eq(customer.phoneHash, phoneHash), isNull(customer.deletedAt)))
         .limit(1);
+
+      let customerId: bigint;
+      let customerCreated = false;
       if (existingCustomer) {
-        return {
-          userId: created.id,
-          customerId: existingCustomer.id,
-          customerCreated: false,
-          adoptedFranchiseeId: adopted?.adoptedFid ?? null,
-        };
+        customerId = existingCustomer.id;
+      } else {
+        const [newCustomer] = await tx
+          .insert(customer)
+          .values({
+            name,
+            phoneEncrypted: encryptField(phone),
+            phoneHash,
+            isSeed: false,
+            // 归属 = NULL (ADR-0015 Q12, 2026-09-22 拍): 建号只建档, **不自动**归属推荐人
+            //   → 推荐人在「我推荐的人」页**显式添加** (先到先得, Q15)
+            ownerId: null,
+            // 建档人: 自助注册 = 本人 (Q12); 管理员/脚本建号 = actor (审计看得见谁建的)
+            createdBy: input.customerCreatedBySelf ? created.id : input.actorUserId,
+            // ❌ 不写 customer.referrer_id (ADR-0015 Q4: 客户图谱老带新死链路已废);
+            //   「谁带来谁」唯一真相源 = referral_reward (本函数上方就写它)
+          })
+          .returning({ id: customer.id });
+        customerId = newCustomer.id;
+        customerCreated = true;
       }
 
-      const [newCustomer] = await tx
-        .insert(customer)
-        .values({
-          name,
-          phoneEncrypted: encryptField(phone),
-          phoneHash,
-          isSeed: false,
-          // 归属 = NULL (ADR-0015 Q12, 2026-09-22 拍): 建号只建档, **不自动**归属推荐人
-          //   → 推荐人在「我推荐的人」页**显式添加** (先到先得, Q15)
-          ownerId: null,
-          createdBy: input.actorUserId,
-          referrerId: input.customerReferrerId ?? null,
-        })
-        .returning({ id: customer.id });
+      // ★ 列连接 (ADR-0015 Q7, migration 0021): user.customer_id = 她对应的客户档案
+      //   从此改手机号 / 查"我的档案"不用再靠 phone_hash 相等现猜
+      await tx
+        .update(user)
+        .set({ customerId })
+        .where(eq(user.id, created.id));
 
       return {
         userId: created.id,
-        customerId: newCustomer.id,
-        customerCreated: true,
+        customerId,
+        customerCreated,
         adoptedFranchiseeId: adopted?.adoptedFid ?? null,
       };
     }
@@ -217,6 +235,7 @@ export async function createAccountWithProfile(
       rawCode: code,
       refereePhoneHash: phoneHash,
       refereeIp: input.ipAddress ?? null,
+      mode: input.referralMode ?? "immediate",
     });
     referralAccepted = res.accepted;
     referralRejectedReason = res.accepted ? null : (res.reason ?? "推荐码未被受理");
@@ -286,7 +305,14 @@ export async function ensureAccountProfile(
         .from(customer)
         .where(and(eq(customer.phoneHash, u.phoneHash), isNull(customer.deletedAt)))
         .limit(1);
-      if (existing) return { customerId: existing.id, customerCreated: false };
+      if (existing) {
+        // ★ 列连接 (ADR-0015 Q7): 补上 user.customer_id (存量行 / 之前漏写)
+        await tx
+          .update(user)
+          .set({ customerId: existing.id })
+          .where(eq(user.id, userId));
+        return { customerId: existing.id, customerCreated: false };
+      }
 
       const [created] = await tx
         .insert(customer)
@@ -300,6 +326,10 @@ export async function ensureAccountProfile(
           createdBy: actorUserId,
         })
         .returning({ id: customer.id });
+      await tx
+        .update(user)
+        .set({ customerId: created.id })
+        .where(eq(user.id, userId));
       return { customerId: created.id, customerCreated: true };
     }
   );

@@ -2721,9 +2721,6 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
 
   /// 自定义标签上限: 6 个汉字 (主人 2026-09-18 拍)
   static const int _maxTagLength = 6;
-  /// 客户推荐人 (客户页图谱关系边). null = 无推荐人
-  String? _referrerId;
-  String? _referrerName;
 
   /// 种子客户 (潜在客户开关, 主人 2026-09-18 拍 — 显式勾选)
   /// 注意: 已加盟客户 (同手机号有加盟商记录) 后端会优先显示「加盟」, 这个开关就不生效
@@ -2756,9 +2753,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       _birthdayRemindDays = c.birthdayRemindDays;
       _healthTags.clear();
       _healthTags.addAll(c.healthTags);
-      _referrerId = c.referrerId;
       _isSeed = c.isSeed;
-      _referrerName = null; // 按需点击选择器时懒加载名字
     });
   }
 
@@ -2978,8 +2973,6 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
         'diseaseHistory': _diseaseController.text,
         'allergyHistory': _allergyController.text,
         if (_notesController.text.isNotEmpty) 'notes': _notesController.text,
-        // referrerId: 显式发 null 清空, undefined 不变
-        'referrerId': _referrerId,
         // 种子客户开关 (后端算进 customerType: 加盟 > 种子 > 普通)
         'isSeed': _isSeed,
       };
@@ -3310,45 +3303,6 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               ),
             ),
             const SizedBox(height: 16),
-            // 推荐人 (客户页图谱关系边)
-            const Text('推荐人', style: TextStyle(fontSize: AppTheme.fontMd)),
-            const SizedBox(height: 4),
-            const Text(
-              '谁介绍这位客户来的? 设置后可以在客户页「图谱」看到推荐链',
-              style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _pickReferrer,
-                    icon: const Icon(Icons.person_add_alt_1_outlined, size: 24),
-                    label: Text(
-                      _referrerName ?? (_referrerId == null ? '选择推荐人 (可选)' : '已选 #$_referrerId'),
-                      style: const TextStyle(fontSize: AppTheme.fontMd),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 56),
-                      alignment: Alignment.centerLeft,
-                    ),
-                  ),
-                ),
-                if (_referrerId != null) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 24),
-                    tooltip: '清除推荐人',
-                    onPressed: () => setState(() {
-                      _referrerId = null;
-                      _referrerName = null;
-                    }),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 16),
             TextFormField(
               controller: _notesController,
               style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -3387,25 +3341,6 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     );
   }
 
-  Future<void> _pickReferrer() async {
-    final result = await showDialog<_ReferrerResult>(
-      context: context,
-      builder: (_) => _ReferrerPickerDialog(excludeId: widget.customerId),
-    );
-    if (result != null && mounted) {
-      setState(() {
-        _referrerId = result.id;
-        _referrerName = result.name;
-      });
-    }
-  }
-}
-
-/// 推荐人选择结果
-class _ReferrerResult {
-  final String id;
-  final String name;
-  const _ReferrerResult(this.id, this.name);
 }
 
 // ============================================
@@ -3536,101 +3471,6 @@ class _TagInputDialogState extends State<_TagInputDialog> {
             if (v.isNotEmpty) Navigator.of(context).pop(v);
           },
           child: const Text('添加', style: TextStyle(fontSize: AppTheme.fontMd)),
-        ),
-      ],
-    );
-  }
-}
-
-// ============================================
-// 推荐人选择对话框 (客户页图谱关系录入)
-// ============================================
-
-class _ReferrerPickerDialog extends ConsumerStatefulWidget {
-  /// 排除的 customer id (不能推荐自己)
-  final String? excludeId;
-  const _ReferrerPickerDialog({this.excludeId});
-
-  @override
-  ConsumerState<_ReferrerPickerDialog> createState() => _ReferrerPickerDialogState();
-}
-
-class _ReferrerPickerDialogState extends ConsumerState<_ReferrerPickerDialog> {
-  String _search = '';
-
-  @override
-  Widget build(BuildContext context) {
-    // 推荐人选择器不按类型筛 (所有客户都可能当推荐人)
-    final asyncCustomers =
-        ref.watch(customersProvider(CustomerListQuery(search: _search.isEmpty ? null : _search)));
-
-    return AlertDialog(
-      title: const Text('选择推荐人', style: TextStyle(fontSize: AppTheme.fontLg)),
-      contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      content: SizedBox(
-        width: double.maxFinite,
-        height: 480,
-        child: Column(
-          children: [
-            // 搜索框
-            TextField(
-              style: const TextStyle(fontSize: AppTheme.fontMd),
-              autofocus: false,
-              decoration: const InputDecoration(
-                hintText: '搜索 姓名 或 手机号',
-                prefixIcon: Icon(Icons.search, size: 24),
-              ),
-              onChanged: (v) => setState(() => _search = v),
-            ),
-            const SizedBox(height: 8),
-            // 客户列表
-            Expanded(
-              child: asyncCustomers.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('加载失败: $e')),
-                data: (rawList) {
-                  final list = rawList.items
-                      .map((r) => r.customer)
-                      .where((c) => c.id != widget.excludeId)
-                      .toList();
-                  if (list.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('没有可选客户\n请先添加客户', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecondary)),
-                      ),
-                    );
-                  }
-                  return ListView.builder(
-                    itemCount: list.length,
-                    itemBuilder: (context, i) {
-                      final c = list[i];
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        leading: CircleAvatar(
-                          backgroundColor: AppTheme.primaryLight,
-                          radius: 24,
-                          child: Text(
-                            c.name.isNotEmpty ? c.name[0] : '?',
-                            style: const TextStyle(fontSize: 18, color: AppTheme.primaryDark, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        title: Text(c.name, style: const TextStyle(fontSize: AppTheme.fontMd, fontWeight: FontWeight.w600)),
-                        subtitle: Text(c.phone, style: const TextStyle(fontSize: AppTheme.fontXs)),
-                        onTap: () => Navigator.of(context).pop(_ReferrerResult(c.id, c.name)),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(null),
-          child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
         ),
       ],
     );

@@ -13,11 +13,19 @@
 // ⚠ 必须是第一个 import (见 scripts/_env.ts)
 import "./_env";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { customer, membership, referralCode, referralReward, user } from "@/lib/db/schema";
+import {
+  customer,
+  entitlementGrant,
+  membership,
+  referralCode,
+  referralReward,
+  user,
+} from "@/lib/db/schema";
 import { hashForLookup } from "@/lib/crypto/field";
-import { registerWithReferral } from "@/lib/billing/signup";
+import { confirmReferral, registerWithReferral } from "@/lib/billing/signup";
+import { REFERRAL_GRANT_DAYS } from "@/lib/billing/referral";
 import { resolveCustomerType } from "@/lib/db/queries/customer";
 
 const PHONE = "13900006622";
@@ -108,6 +116,42 @@ async function cleanup() {
   // 走真实口径 (resolveCustomerType: 加盟 > 种子 > 普通); 新注册不是加盟 → 看 is_seed
   const t = resolveCustomerType({ isSeed: c!.isSeed }, false);
   ck("列表口径 = 普通客户", t === "normal", `customerType=${t} isSeed=${c!.isSeed}`);
+
+  // ★ 自助注册语义必须保持 (ADR-0015 Q7 建号合并后): source=self_signup + **不立即发权益**
+  //   （防码被转发到群里被陌生人白嫖; 主人 2026-09-20 拍）
+  const [reward] = await db
+    .select({
+      id: referralReward.id,
+      source: referralReward.source,
+      status: referralReward.status,
+    })
+    .from(referralReward)
+    .where(eq(referralReward.refereeUserId, res.userId))
+    .limit(1);
+  ck(
+    "推荐关系 source = self_signup (等推荐人确认才发权益)",
+    reward?.source === "self_signup",
+    `source=${reward?.source} status=${reward?.status}`
+  );
+  const [grantBefore] = await db
+    .select({ n: count() })
+    .from(entitlementGrant)
+    .where(eq(entitlementGrant.userId, res.userId));
+  ck(
+    "确认前: 被推荐人**没**拿到权益 (合并不能变成立即发)",
+    Number(grantBefore?.n ?? 0) === 0,
+    `grants=${grantBefore?.n ?? 0}`
+  );
+  // 推荐人点「这是我朋友」→ 被推荐人立刻拿 15 天
+  const conf = await confirmReferral({
+    referrerUserId: refUser.id,
+    rewardId: reward!.id,
+  });
+  ck(
+    "推荐人确认后: 被推荐人拿到 15 天",
+    conf.grantedDays === REFERRAL_GRANT_DAYS,
+    `grantedDays=${conf.grantedDays} ok=${conf.ok}`
+  );
 
   // 重复手机号 → 拒
   let dupRejected = false;

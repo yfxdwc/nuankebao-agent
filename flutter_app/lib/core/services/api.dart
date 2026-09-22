@@ -261,13 +261,6 @@ class CustomerService {
     return Customer.fromJson(data['customer'] as Map<String, dynamic>);
   }
 
-  /// 客户推荐关系图 (客户页图谱视图数据源)
-  /// 返回节点列表, 边 = referrerId -> id 由前端构建
-  /// 范围: RBAC 过滤后的客户池 (sales=自己, manager=本店, admin=全网)
-  Future<CustomerGraph> getReferralGraph() async {
-    final res = await _dio.get('/customers/graph');
-    return CustomerGraph.fromJson(res.data as Map<String, dynamic>);
-  }
 }
 
 // ============================================

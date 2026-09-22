@@ -24,9 +24,9 @@ import {
   referralReward,
   referralCode,
 } from "@/lib/db/schema";
-import { withAuditContext } from "@/lib/audit/context";
-import { encryptField, hashForLookup } from "@/lib/crypto/field";
-import { hashPassword, isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/auth/password";
+import { createAccountWithProfile } from "@/lib/auth/registration";
+import { hashForLookup } from "@/lib/crypto/field";
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from "@/lib/auth/password";
 import { BillingError, grantDays } from "@/lib/billing/entitlements";
 import {
   checkReferralQuota,
@@ -70,8 +70,12 @@ export interface SignupResult {
   userId: bigint;
   /** 登录账号 (= 手机号) */
   username: string;
-  /** 需要推荐人去确认才发 15 天 */
-  needsReferrerConfirmation: true;
+  /**
+   * 需要推荐人去确认才发 15 天
+   *   true  = 常规 (已建推荐关系, 等确认)
+   *   false = 并发兜底: 号建了但码未生效 (名额被抢完等), 如实告知
+   */
+  needsReferrerConfirmation: boolean;
   message: string;
 }
 
@@ -140,63 +144,37 @@ export async function registerWithReferral(opts: {
     throw new BillingError(429, "QUOTA_EXCEEDED", quota.reason);
   }
 
-  // 账号 + 客户档案 同一事务 (主人 2026-09-19 拍「建号即强制建档」)
-  const created = await withAuditContext(
-    { userId: owner.userId, ipAddress: opts.ip ?? null },
-    async (tx) => {
-      const [u] = await tx
-        .insert(userTable)
-        .values({
-          name: nameCheck.name,
-          role: "sales",
-          isActive: true,
-          phoneEncrypted: encryptField(phone),
-          phoneHash,
-          username: phone, // 登录账号 = 手机号 (跟 import-users 一致)
-          passwordHash: hashPassword(opts.password),
-        })
-        .returning({ id: userTable.id, username: userTable.username });
-
-      // 客户档案: 同手机号已有 (例如他早就是客户) → 复用不重复建
-      const [existingCustomer] = await tx
-        .select({ id: customer.id })
-        .from(customer)
-        .where(and(eq(customer.phoneHash, phoneHash), isNull(customer.deletedAt)))
-        .limit(1);
-      if (!existingCustomer) {
-        await tx.insert(customer).values({
-          name: nameCheck.name,
-          phoneEncrypted: encryptField(phone),
-          phoneHash,
-          isSeed: false,
-          // 建档人 = 本人 (自助注册: 档案随她的账号一起产生) —— 审计用
-          createdBy: u.id,
-          // 归属 = NULL (ADR-0015 Q12, 2026-09-22 拍): 建号**不自动**归属推荐人。
-          //   推荐码 = 身份识别 + 奖励凭证, 不表达关系;
-          //   推荐人在「我推荐的人」页**显式**加为我的客户 (先到先得, Q15)。
-          ownerId: null,
-          // ⛔ 不再写 customer.referrer_id (ADR-0015 Q4: 客户图谱"老带新"死链路,
-          //   零调用方; "谁带她进来" 的唯一真相源 = referral_reward)
-        });
-      }
-      return u;
-    }
-  );
-
-  await db.insert(referralReward).values({
-    referrerUserId: owner.userId,
-    refereeUserId: created.id,
-    code,
-    status: "pending",
-    // 自助注册 = **等推荐人确认**才发权益 (防码被转发后陌生人白嫖)
-    source: "self_signup",
-    refereePhoneHash: phoneHash,
-    refereeSignupIp: opts.ip ?? null,
+  // 建号 (唯一入口, ADR-0015 Q7 合并): 账号 + 客户档案 + 自己的推荐码 + 推荐关系
+  //   之前这里自己 insert(user/customer) = 第二套不变量实现 (将来必分叉) → 改走
+  //   createAccountWithProfile (与 import-users / 管理员建号同一路径)。
+  //   差异靠参数保留 (语义不变):
+  //     customerCreatedBySelf: 建档人 = 本人 (自助注册, Q12)
+  //     referralMode: pending_confirmation → source='self_signup' + **不立即发权益**
+  //       (等推荐人在「我推荐的人」页点确认; 防码被转发后被陌生人白嫖, 主人 2026-09-20 拍)
+  const res = await createAccountWithProfile({
+    name: nameCheck.name,
+    phone,
+    password: opts.password,
+    referralCode: code,
+    actorUserId: owner.userId, // 审计 = 推荐人 (谁把这条建号带进来的)
+    ipAddress: opts.ip ?? undefined,
+    customerCreatedBySelf: true,
+    referralMode: "pending_confirmation",
   });
 
+  if (!res.referralAccepted) {
+    // 预检已挡住绝大多数 (名额/码); 这里是并发兜底 —— 号建了但码没生效, 如实告知
+    return {
+      userId: res.userId,
+      username: phone,
+      needsReferrerConfirmation: false,
+      message: `注册成功, 但推荐码未生效: ${res.referralRejectedReason ?? "未知原因"}`,
+    };
+  }
+
   return {
-    userId: created.id,
-    username: created.username ?? phone,
+    userId: res.userId,
+    username: phone,
     needsReferrerConfirmation: true,
     message: `注册成功! 请让推荐人 (${code}) 在 App 里点「这是我朋友」确认, 确认后你会得到 ${REFERRAL_GRANT_DAYS} 天会员`,
   };

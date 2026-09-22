@@ -54,7 +54,11 @@ export interface CustomerView {
   /** 过敏史 (2026-09-18 新增; 跟既往病史分开) */
   allergyHistory: string | null;
   notes: string | null;
-  /** 客户推荐人 (客户图谱数据源), null = 无推荐人 (根/孤儿节点) */
+  /**
+   * 客户推荐人 (客户图谱数据源) —— ❌ **已废弃** (ADR-0015 Q4, 主人 2026-09-22 拍)
+   *   死链路: 端点 / provider / 视图全删; 列保留仅为存量 (ADR-0004 禁 DROP), 新代码不要读写。
+   *   「谁带来谁」的唯一真相源 = `referral_reward` (账号推荐) / `franchisee.placement_parent_id` (结构)。
+   */
   referrerId: string | null;
   /** 客户头像 (null / 'preset:x' / '/uploads/x.jpg') */
   avatar: string | null;
@@ -167,7 +171,7 @@ function toView(
       ? decryptField(row.allergyHistoryEncrypted)
       : null,
     notes: row.notesEncrypted ? decryptField(row.notesEncrypted) : null,
-    referrerId: row.referrerId?.toString() ?? null,
+    referrerId: row.referrerId?.toString() ?? null, // ❌ 废弃字段 (Q4): 只为存量透出, 新代码不要用
     // 读侧兜底: 库里万一有脏值 → null (跟 user 头像同一套 readAvatarValue)
     avatar: readAvatarValue(row.avatar),
     isSeed: row.isSeed,
@@ -197,8 +201,6 @@ export interface CreateCustomerInput {
   /** 过敏史 (2026-09-18 新增) */
   allergyHistory?: string;
   notes?: string;
-  /** 客户推荐人 (老带新, 客户图谱关系边). null = 无推荐人 */
-  referrerId?: string | null;
   /** 客户头像: 'preset:<id>' / '/uploads/x.jpg' / null (= 默认首字) */
   avatar?: string | null;
   /** 种子客户 (潜在客户开关, 主人 2026-09-18). 缺省 false */
@@ -220,8 +222,6 @@ export interface UpdateCustomerInput {
   diseaseHistory?: string;
   allergyHistory?: string;
   notes?: string;
-  /** 客户推荐人. 显式传 null 可清空推荐人 */
-  referrerId?: string | null;
   /** 种子客户开关 (true/false 双向可改) */
   isSeed?: boolean;
   /** 客户头像: 传 null = 恢复默认首字 */
@@ -342,7 +342,6 @@ export async function createCustomer(
       ? encryptField(input.allergyHistory)
       : null,
     notesEncrypted: input.notes ? encryptField(input.notes) : null,
-    referrerId: input.referrerId ? BigInt(input.referrerId) : null,
     avatar: parseAvatarForWrite(input.avatar),
     isSeed: input.isSeed ?? false,
     // 归属 = 建档人 (ADR-0015 Q11): 手工新建的客户 = 归我
@@ -632,15 +631,6 @@ export async function updateCustomer(
   if (input.notes !== undefined) {
     updateData.notesEncrypted = input.notes ? encryptField(input.notes) : null;
   }
-  if (input.referrerId !== undefined) {
-    // 显式传 null = 清空推荐人
-    // 闭环检查: 客户不能推荐自己 (DB 层无 self-FK 约束, 应用层必做)
-    const newReferrerId = input.referrerId ? BigInt(input.referrerId) : null;
-    if (newReferrerId !== null && newReferrerId === id) {
-      throw new Error("客户不能推荐自己");
-    }
-    updateData.referrerId = newReferrerId;
-  }
   if (input.isSeed !== undefined) updateData.isSeed = input.isSeed;
   if (input.avatar !== undefined) {
     updateData.avatar = parseAvatarForWrite(input.avatar);
@@ -768,71 +758,8 @@ export async function claimCustomerOwnership(
 }
 
 // ============================================
-// 客户推荐关系图 (客户页图谱视图数据源)
+// (已删) 客户推荐关系图 —— ADR-0015 Q4 死链路
 // ============================================
-
-/**
- * 图谱节点 (简化字段, 避免解密全部 PII)
- * 边界: 手机号不解密, 名字明文 (UI 需要)
- */
-export interface CustomerGraphNode {
-  id: string;
-  name: string;
-  /** 推荐人 customer.id, null = 根/孤儿 (无推荐人) */
-  referrerId: string | null;
-  /** 会员标识 (同手机号账号的会员状态; 无账号 = false); 口径见 member-flag.ts */
-  member: boolean;
-}
-
-/**
- * 获取「当前用户」可见客户的推荐关系图 (节点 + 边由前端从 referrerId 派生)
- * 范围:
- *   - sales: createdBy = me (默认 RBAC 策略)
- *   - admin: 全网
- *   - manager: 本店所有客户的子图 (基于 RBAC filter)
- *
- * 设计: 返回节点列表, 边 = referrerId -> id 的关系由前端构建
- *   - 节点上限 1000 (中老年销售不会超过, 超了前端再分页)
- *   - 不返回手机号/健康数据 (图谱视图不需要 PII)
- *   - 已软删客户过滤掉
- */
-export async function getCustomerReferralGraph(
-  options: {
-    rbacCtx?: RbacContext;
-    limit?: number;
-    /** 当前登录者的手机号 hash → 排掉他自己的客户档案 (与列表同口径, 主人 2026-09-22) */
-    excludePhoneHash?: string | null;
-  } = {}
-): Promise<CustomerGraphNode[]> {
-  const { rbacCtx, limit = 1000 } = options;
-
-  const conditions: SQL[] = [isNull(customer.deletedAt)];
-  const selfExclusion = selfCustomerExclusionSql(options.excludePhoneHash);
-  if (selfExclusion) {
-    conditions.push(selfExclusion);
-  }
-  if (rbacCtx) {
-    const rbacFilter = customerRbacFilter(rbacCtx);
-    if (rbacFilter) {
-      conditions.push(rbacFilter);
-    }
-  }
-
-  const rows = await db
-    .select({
-      id: customer.id,
-      name: customer.name,
-      referrerId: customer.referrerId,
-      member: memberExistsSql(sql`u.phone_hash = ${customer.phoneHash}`),
-    })
-    .from(customer)
-    .where(and(...conditions))
-    .limit(limit);
-
-  return rows.map((r) => ({
-    id: r.id.toString(),
-    name: r.name,
-    referrerId: r.referrerId?.toString() ?? null,
-    member: r.member === true,
-  }));
-}
+// 原 getCustomerReferralGraph + /api/customers/graph + Flutter CustomerGraphView
+// 全部零调用方 (2026-09-22 实测), 但会误导后来人当真相源 → 主人拍「废弃」已删。
+// 「谁带来谁」看: referral_reward (账号推荐) / franchisee.placement_parent_id (点位父)。

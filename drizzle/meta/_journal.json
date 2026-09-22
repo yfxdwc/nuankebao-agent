@@ -148,6 +148,13 @@
       "when": 1790156400000,
       "tag": "0020_customer_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790166000000,
+      "tag": "0021_user_customer_id",
+      "breakpoints": true
     }
   ]
 }

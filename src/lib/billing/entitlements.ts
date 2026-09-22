@@ -334,8 +334,15 @@ export async function claimReferralCode(opts: {
   rawCode: string;
   refereePhoneHash?: string | null;
   refereeIp?: string | null;
+  /**
+   * immediate (默认) = 管理员/脚本建号: 管理员已背书 → 新人与刻拿 15 天, source='admin'
+   * pending_confirmation = 自助注册: 不立即发, 等推荐人点「这是我朋友」确认 → source='self_signup'
+   *   (防码被转发到群里被陌生人白嫖, 主人 2026-09-20 拍)
+   */
+  mode?: "immediate" | "pending_confirmation";
   now?: Date;
 }): Promise<ClaimReferralResult> {
+  const pending = opts.mode === "pending_confirmation";
   const now = opts.now ?? new Date();
   const code = normalizeReferralCode(opts.rawCode);
   if (!isValidReferralCodeShape(code)) {
@@ -407,8 +414,9 @@ export async function claimReferralCode(opts: {
       refereeUserId: opts.refereeUserId,
       code,
       status: "pending",
-      // 管理员/脚本建号时填的码 = 管理员已背书 → 新人立刻拿 15 天 (source 用于 UI 区分)
-      source: "admin",
+      // admin = 管理员/脚本建号 (已背书 → 新人立刻拿 15 天)
+      // self_signup = 自助注册 (等推荐人确认)
+      source: pending ? "self_signup" : "admin",
       refereePhoneHash: opts.refereePhoneHash ?? null,
       refereeSignupIp: opts.refereeIp ?? null,
       createdAt: now,
@@ -424,6 +432,16 @@ export async function claimReferralCode(opts: {
       reason: "这个账号已经用推荐码领过了",
       refereeGranted: false,
       referrerPending: false,
+    };
+  }
+
+  // 自助注册: 不立即发权益 (等推荐人确认; 见 signup.confirmReferral)
+  if (pending) {
+    return {
+      accepted: true,
+      reason: "已记录推荐关系, 等推荐人确认",
+      refereeGranted: false,
+      referrerPending: true,
     };
   }
 

@@ -307,6 +307,12 @@ export const user = pgTable(
     isActive: boolean("is_active").notNull().default(true),
     // F1: 1:1 绑 franchisee (nullable, 应用层强制非空)
     franchiseeId: bigint("franchisee_id", { mode: "bigint" }),
+    // ★ 账号 ↔ 客户档案 的**列连接** (ADR-0015 Q7, migration 0021, additive 可空)
+    //   在此之前只能靠 phone_hash 相等"约定"互认 (无 FK 列) → 改名/改号会漂。
+    //   写路径: 建号 (createAccountWithProfile) / 补档 (ensureAccountProfile) 落值;
+    //   admin 豁免建档 (Q5) → 可空 (prod admin 现状)。
+    //   旧 data: scripts/audit-subject-integrity.ts --fix 可补齐。
+    customerId: bigint("customer_id", { mode: "bigint" }),
     // W5 RBAC: 默认门店 (sales 角色专用, manager 看本店)
     defaultStoreId: bigint("default_store_id", { mode: "bigint" }),
     // 「我的」页自定义头像 (2026-09-18 主人要: 支持上传 + 候选头像)
@@ -326,6 +332,8 @@ export const user = pgTable(
   (table) => ({
     phoneHashUnique: uniqueIndex("idx_user_phone_hash").on(table.phoneHash),
     usernameUnique: uniqueIndex("idx_user_username").on(table.username),
+    // 一条档案最多被一个账号认领 (phone_hash 唯一 → 天然一对一)
+    customerUnique: uniqueIndex("idx_user_customer").on(table.customerId),
     franchiseeIdx: index("idx_user_franchisee").on(table.franchiseeId),
     defaultStoreIdx: index("idx_user_default_store").on(table.defaultStoreId),
   })

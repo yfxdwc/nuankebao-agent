@@ -171,9 +171,13 @@ void main() {
       expect(m.copyWith(children: const []).member, isTrue);
     });
 
-    test('CustomerGraphNode: member 解析 + 缺字段兜底', () {
-      expect(CustomerGraphNode.fromJson({'id': '1', 'name': 'a', 'member': true}).member, isTrue);
-      expect(CustomerGraphNode.fromJson({'id': '1', 'name': 'a'}).member, isFalse);
+    test('图谱节点: member 解析 + 缺字段兜底 (原 CustomerGraphNode 已随 ADR-0015 Q4 死链路删除)', () {
+      final on = FranchiseeTreeNode.fromJson(
+          {'id': '1', 'name': 'a', 'children': <dynamic>[], 'member': true});
+      final off = FranchiseeTreeNode.fromJson(
+          {'id': '1', 'name': 'a', 'children': <dynamic>[]});
+      expect(on.member, isTrue);
+      expect(off.member, isFalse);
     });
   });
 }
