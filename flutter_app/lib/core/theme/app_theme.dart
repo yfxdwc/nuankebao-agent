@@ -161,8 +161,28 @@ class AppTheme {
       ),
 
       // Chip (大触摸区)
+      //
+      // ⚠ labelStyle / secondaryLabelStyle **必须显式写 color** (主人 2026-09-22 报 bug):
+      //   RawChip 取样式是 `chipTheme.labelStyle ?? chipDefaults.labelStyle` —— 只要我们的
+      //   labelStyle 非 null (哪怕只是设了字号), 就整个顶掉 M3 默认色
+      //   (未选 onSurfaceVariant / 选中 onSecondaryContainer) → 文字 color = null
+      //   → 引擎兜底色 = **白** (Android/Skia 实测 #FFFFFF) → 白卡片上根本看不见.
+      //   ⚠ Flutter web (CanvasKit) 兜底色是**黑** → /app-preview 看着"正常", 会骗过验收:
+      //     这类"样式没写颜色"的问题只能在真机 APK 上看出来.
+      //   选中态: M3 的 ChoiceChip 会把 secondaryLabelStyle 当成 "已选中" 的 label 样式
+      //          (choice_chip.dart: `labelStyle ?? (selected ? chipTheme.secondaryLabelStyle : null)`),
+      //          所以两栏都要给色.
       chipTheme: ChipThemeData(
-        labelStyle: const TextStyle(fontSize: fontMd, fontWeight: FontWeight.w500),
+        labelStyle: const TextStyle(
+          fontSize: fontMd,
+          fontWeight: FontWeight.w500,
+          color: textPrimary,
+        ),
+        secondaryLabelStyle: const TextStyle(
+          fontSize: fontMd,
+          fontWeight: FontWeight.w600,
+          color: textPrimary,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),

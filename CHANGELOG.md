@@ -2,6 +2,37 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+### Fixed (字号档位 chip 文字在真机 APK 上发白、看不见, 2026-09-22)
+
+> **主人原话**: 「apk安装后的应用中，显示与存储区块中，字体选择标签的文字颜色太淡，根本看不清，
+> 文字颜色是白色的。开发预览端看是正常的，文字颜色是黑色的」
+
+**根因** — 不是平台差异, 是主题写法: `AppTheme.light()` 的 `chipTheme.labelStyle` 只写了
+`fontSize/fontWeight`, **没写 `color`**。`RawChip` 取样式是
+`chipTheme.labelStyle ?? chipDefaults.labelStyle` —— 只要我们的 `labelStyle` 非 null (哪怕只设了字号),
+就**整个顶掉** M3 默认色 (未选 `onSurfaceVariant` / 选中 `onSecondaryContainer`)
+→ chip 文字 `color = null` → **引擎兜底色 = 白** (Android/Skia 实测 `#FFFFFF`) → 白卡片上根本看不见。
+⚠ Flutter web (CanvasKit) 在 color=null 时兜底成**黑** → `/app-preview` 看着"正常", 骗过预览验收。
+
+**修法** — `flutter_app/lib/core/theme/app_theme.dart`: chipTheme 的 `labelStyle` +
+`secondaryLabelStyle` 都显式给 `color: AppTheme.textPrimary`
+(选中态也要给: `choice_chip.dart` 把 `secondaryLabelStyle` 当"已选中"的 label 样式用)。
+改主题一处 → 全 App 所有 chip (`ChoiceChip` / `FilterChip` / `InputChip` / `Chip`) 一起修好。
+
+**验证** —
+① 新增单测 `flutter_app/test/chip_label_color_test.dart`: 真主题下「我的」页 4 个字号档位 chip 的
+文字颜色必须 = `textPrimary` (改前实测 `null` = 真机白字; 改后通过)
+② 像素级复查 (Skia 引擎, 临时脚本): 改前 chip 文字像素是 `255,255,255` (纯白), 改后 `26,26,26` (= `#1A1A1A`)
+③ `flutter analyze` 干净; `flutter test` 除 `profile_page_test.dart` (既有问题, 见下) 全绿
+④ `tools/build-apk.sh` release 打包成功 + 签名指纹与线上版一致 (可直接覆盖安装)
+
+**顺带发现 (不在本次修复范围)** — `flutter_app/test/profile_page_test.dart` 17 例目前**全挂**
+(`pumpAndSettle timed out`, 与本次改动无关, stash 掉本改动后同样挂): 「邀请被推荐人」区块
+(`_InviteCard`, commit bc8ca42 新增) 读 `appReleaseProvider`, 测试里不 override → 永远 `AsyncLoading`
+→ 里面是 `CircularProgressIndicator` (无限动画) → `pumpAndSettle` 永不收敛。修法: 该文件 harness 里补一个
+`appReleaseProvider.overrideWith((ref) async => const AppRelease())` (本 CHANGELOG 记录的回归测试因此
+另建 `chip_label_color_test.dart` 自带 harness, 不动那个文件)。
+
 ### Fixed (客户列表出现「自己」— 自己的客户档案不进自己的列表, 2026-09-22)
 
 > **主人原话**: 「先核实并修复: 新用户注册后, 其客户列表中出现了自己的信息, 自己不应该是自己的客户」
