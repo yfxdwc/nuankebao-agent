@@ -20,6 +20,7 @@ import { signOut } from "next-auth/react";
 import { Sparkles, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DevTabsNav } from "@/components/dev/dev-tabs-nav";
+import { ThemeSwitcher } from "@/components/ui/theme-switcher";
 
 export function AdminTopbar() {
   const pathname = usePathname();
@@ -37,7 +38,9 @@ export function AdminTopbar() {
         {isDevPage && <DevTabsNav className="hidden md:flex" />}
       </div>
 
-      {/* 右: 移动只显 icon 按钮, 桌面显完整按钮 */}
+      {/* 右: 主题配色下拉 + 退出登录 (移动端只显退出 icon) */}
+      <div className="flex items-center gap-1 md:gap-2">
+      <ThemeSwitcher className="hidden md:inline-flex" />
       <Button
         variant="ghost"
         size="icon"
@@ -56,6 +59,7 @@ export function AdminTopbar() {
         <LogOut className="h-4 w-4 mr-2" />
         退出登录
       </Button>
+      </div>
     </header>
   );
 }

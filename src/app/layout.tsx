@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "@/styles/globals.css";
+import { defaultThemeColors } from "@/lib/design-tokens.g";
+import { themeBootScript } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: "暖客宝 · 大健康销售 CRM",
@@ -15,7 +17,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#1f8a4c",
+  // 默认主题的主色 —— 真源 design/tokens/design-tokens.json (换肤后由 theme.ts 在客户端改写)
+  themeColor: defaultThemeColors.primary,
 };
 
 export default function RootLayout({
@@ -25,7 +28,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      <body className="min-h-screen bg-background font-sans antialiased">
+      <head>
+        {/*
+          首屏防闪: 在 body 绘制前把用户的主题打到 <html data-theme> 上。
+          必须内联且不能依赖任何 JS chunk —— 否则会先画默认绿再跳成用户选的主题。
+          真源: src/lib/theme.ts (themeBootScript)
+        */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
+      <body className="theme-transition min-h-screen bg-background font-sans antialiased">
         {children}
       </body>
     </html>

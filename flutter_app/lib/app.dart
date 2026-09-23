@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/http/api_client.dart';
 import 'core/providers/service_providers.dart';
 import 'core/providers/settings_provider.dart';
+import 'core/providers/theme_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/telemetry/usage_providers.dart';
 import 'core/theme/app_theme.dart';
@@ -39,6 +40,7 @@ class _NuankeBaoAppState extends ConsumerState<NuankeBaoApp> {
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     final settings = ref.watch(settingsProvider);
+    final tokens = ref.watch(activeTokensProvider);
 
     // 会员功能被拒 (402) 时全局提示一次 (ADR-0012)
     //   注册在 build 里是幂等的: 回调只覆盖, 不叠加; 用 messengerKey 保证不依赖某个页面 context
@@ -66,8 +68,8 @@ class _NuankeBaoAppState extends ConsumerState<NuankeBaoApp> {
       title: '暖客宝',
       scaffoldMessengerKey: _messengerKey,
       debugShowCheckedModeBanner: false,
-      // 养生行业偏温暖, 不做 dark mode (AGENTS §1)
-      theme: AppTheme.light(),
+      // 养生行业偏温暖, 不做 dark mode (AGENTS §1); 品牌色/季节主题可运行时切换 (换肤)
+      theme: AppTheme.light(tokens),
       themeMode: ThemeMode.light,
       routerConfig: router,
       localizationsDelegates: const [],

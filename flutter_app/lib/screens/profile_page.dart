@@ -36,6 +36,7 @@ import '../core/widgets/franchise_chip.dart';
 import '../core/widgets/member_avatar.dart';
 import 'profile_sheets.dart';
 import 'profile_widgets.dart';
+import 'theme_picker_card.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -128,6 +129,9 @@ class _ProfileBody extends ConsumerWidget {
         _StatsCard(profile: profile),
         profileSectionGap,
         const _DisplaySettingsCard(),
+        profileSectionGap,
+        // 换肤入口 (主题配色) —— 令牌系统消费方, 见 core/providers/theme_provider.dart
+        const ThemePickerCard(),
 
         const _ReminderCard(),
         profileSectionGap,
