@@ -122,8 +122,12 @@ describe("② 对比度门槛 (WCAG 2.1)", () => {
         Object.entries({ ...shared, ...t.colors }).map(([k, v]) => [k, resolveRef(v as string)]),
       );
 
-      it(`primary 底 + 自动推导的前景色 ≥ AA (${min}:1)`, () => {
-        expect(ratio(c.primary, onColor(c.primary))).toBeGreaterThanOrEqual(min);
+      it("primary 底 + 前景色达 AAA (7:1) —— 硬门槛, 不是建议", () => {
+        // primary 是按钮底色, 上面永远压白字。design-tokens.json 的
+        // contrast.requiredRatio.primary = 7 会被生成器强制执行 (不达标直接 exit 1),
+        // 这里再独立复核一遍 —— 免得门槛配置本身被改松。
+        const r = ratio(c.primary, onColor(c.primary));
+        expect(r, `primary/onPrimary = ${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(7);
       });
 
       it(`accent 底 + 自动推导的前景色 ≥ AA (${min}:1)`, () => {
@@ -154,6 +158,10 @@ describe("② 对比度门槛 (WCAG 2.1)", () => {
       });
     });
   }
+
+  it("硬门槛配置存在且 primary 门槛 = 7 (防止有人把它调松)", () => {
+    expect(doc.contrast.requiredRatio?.primary).toBeGreaterThanOrEqual(7);
+  });
 
   it("状态色 (success/warning/danger/info) 的前景色 ≥ AA", () => {
     for (const key of ["success", "warning", "danger", "info"]) {

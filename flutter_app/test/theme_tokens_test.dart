@@ -163,8 +163,10 @@ void main() {
   group('④ 对比度门槛 (在装配后的 ThemeData 上复验)', () {
     for (final theme in AppThemes.all) {
       test('${theme.label}: 主要配对 ≥ AA, 正文 ≥ AAA', () {
-        expect(_contrast(theme.primary, theme.onPrimary), greaterThanOrEqualTo(4.5),
-            reason: '按钮底/字');
+        // 硬门槛: primary 是按钮底色, 上面永远压白字。
+      // 2026-09-23 主人拍板「用 primaryDark 加强」→ 5 个主题全部抬到 AAA。
+      expect(_contrast(theme.primary, theme.onPrimary), greaterThanOrEqualTo(7.0),
+            reason: '按钮底/字 —— 中老年视力对 4.86:1 的绿底白字偏吃力, 必须 AAA');
         expect(_contrast(theme.accent, theme.onAccent), greaterThanOrEqualTo(4.5),
             reason: '强调色底/字');
         expect(_contrast(theme.textPrimary, theme.surface),
@@ -197,7 +199,10 @@ void main() {
   group('⑤ 尺度令牌 (不随主题变, 中老年底线)', () {
     test('字号档位满足可读性底线 (正文 ≥18, 副信息 ≥14)', () {
       expect(AppType.md, greaterThanOrEqualTo(18));
+      // xs 是常规 UI 的可读性底线 (14); micro 仅限图谱画布/极小角标
       expect(AppType.xs, greaterThanOrEqualTo(14));
+      // 2026-09-23 主人拍板把 micro 从 10 抬到 12 (web 密集表格 42 处)
+      expect(AppType.micro, greaterThanOrEqualTo(12));
       expect(AppType.xs, lessThan(AppType.sm));
       expect(AppType.sm, lessThan(AppType.md));
       expect(AppType.md, lessThan(AppType.lg));
