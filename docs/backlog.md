@@ -5,6 +5,33 @@
 
 ---
 
+## ⓪-新 · admin 「客户管理参数调节」页 (2026-09-23 主人点名挂起)
+
+> **主人原话**: 「挂起待办任务：在 admin 里增加管理、调节页面，让评分规则及其他客户管理中的参数可在管理页面进行调节」
+
+**背景**: 2026-09-23 已把客户洞察的 **31 个可调参数**全部变量化
+(`src/lib/customer/insight-config.ts`, JSON 可序列化)。现在只差"给谁改"的入口。
+
+**要做**
+
+| # | 东西 | 说明 |
+|---|---|---|
+| 1 | **DB 覆盖层** | 通用表 `app_config(key text pk, value jsonb, updated_by, updated_at)` —— 一张表装所有"可调参数组", 不只评分 |
+| 2 | **读写口** | `getInsightConfig()` = `resolveInsightConfig(DB 里那份)`; 写走 `PUT /api/admin/insight-config` (admin only + 审计) |
+| 3 | **admin 页** | `/admin/settings/insight` —— 按参数组分折叠面板 (评分 / 行动 / 阈值), 每项带**当前值 + 默认值 + 说明 + 合法区间**; 改完显示"这会改变 N 个客户的分数" |
+| 4 | **版本提示** | 保存时 `version` 自动 +1; 详情页可提示"评分规则已更新, 分数可能变化" |
+| 5 | **重置为默认** | 一键删 DB 覆盖 → 回落 `DEFAULT_INSIGHT_CONFIG` |
+| 6 | **"其他客户管理参数"** | 同表承载: 客户列表排序权重 / 紧急度分档 (`urgency.ts::URGENCY_LEVELS`) / 分页大小 / 标签规则阈值 |
+
+**前置**: 无 (config 层已就绪)。**风险**: 改阈值影响全店分数 → 必须**审计留痕 + 可回滚**(这是 ADR-0015「诊断/配置类改动要留痕」的延伸)。
+
+**待拍板**
+- 谁能改? (仅 admin / 或允许店长改本店的?)
+- 改了要不要通知受影响的销售?
+- 参数要不要按门店隔离? (CHARTER §3.6 门店维度已冻结 → 倾向**全局一套**, 不按门店)
+
+---
+
 ## ⓪ web admin 解冻 (2026-09-22 已拍板落地, ADR-0017)
 
 - ✅ `src/app/admin/**` / `src/components/business/**` / `src/components/admin/**` 恢复活跃
