@@ -261,6 +261,21 @@ class CustomerService {
     return Customer.fromJson(data['customer'] as Map<String, dynamic>);
   }
 
+  /// 绑定 app 身份: 填她的**邀请码** (身份识别码) 把手工客户与她账号合上
+  ///   ADR-0016 场景: 客户先手工建档, 后来自已注册 app (手机号对不上 → 自动匹配不到)
+  /// 后端: 只改 user.customer_id; 若她注册时系统已自动建了**空档案** → 接管 (删掉那条)
+  Future<BindAccountResult> bindAccount(
+    String customerId,
+    String referralCode, {
+    bool syncPhone = false,
+  }) async {
+    final res = await _dio.post('/customers/$customerId/bind-account', data: {
+      'referralCode': referralCode,
+      if (syncPhone) 'syncPhone': true,
+    });
+    return BindAccountResult.fromJson(res.data as Map<String, dynamic>);
+  }
+
 }
 
 // ============================================
@@ -900,6 +915,44 @@ class ReferralLookup {
         customerId: j['customerId']?.toString(),
         claimState: j['claimState']?.toString() ?? 'no_profile',
       );
+}
+
+/// 绑定 app 身份的结果 (POST /customers/:id/bind-account)
+///
+/// 场景 (主人 2026-09-22): 客户先被手工建档, 后来自己注册了 app (手机号对不上 →
+/// 系统自动匹配不到) → 在客户详情页填她的**邀请码**把两边合上。
+class BindAccountResult {
+  final bool alreadyBound;
+  final bool phoneMismatch;
+  final bool phoneSynced;
+  /// 接管了她注册时系统自动建的空档案 (那条已删)
+  final bool replacedEmptyProfile;
+  final String accountName;
+  final String accountPhoneMasked;
+  final String message;
+
+  const BindAccountResult({
+    this.alreadyBound = false,
+    this.phoneMismatch = false,
+    this.phoneSynced = false,
+    this.replacedEmptyProfile = false,
+    this.accountName = '',
+    this.accountPhoneMasked = '',
+    this.message = '',
+  });
+
+  factory BindAccountResult.fromJson(Map<String, dynamic> j) {
+    final acc = (j['account'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return BindAccountResult(
+      alreadyBound: j['alreadyBound'] == true,
+      phoneMismatch: j['phoneMismatch'] == true,
+      phoneSynced: j['phoneSynced'] == true,
+      replacedEmptyProfile: j['replacedEmptyProfile'] == true,
+      accountName: acc['name']?.toString() ?? '',
+      accountPhoneMasked: acc['phoneMasked']?.toString() ?? '',
+      message: j['message']?.toString() ?? '',
+    );
+  }
 }
 
 /// 管理员看到的待审申请

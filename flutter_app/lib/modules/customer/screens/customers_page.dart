@@ -5,6 +5,7 @@
 // ============================================
 
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1966,6 +1967,10 @@ class CustomerDetailPage extends ConsumerWidget {
         _buildTypeCard(context, ref, customer),
         const SizedBox(height: AppSpace.s12),
 
+        // 1.6) app 身份 (ADR-0016 主人 2026-09-22): 已注册 / 未注册 + 填邀请码绑定
+        _buildIdentityCard(context, ref, customer),
+        const SizedBox(height: AppSpace.s12),
+
         // 2) 被动养生记录 (含汇总: 共 N 次 / 最近到店)
         _buildWellnessSection(context, asyncRecords),
         const SizedBox(height: AppSpace.s12),
@@ -2514,6 +2519,166 @@ class CustomerDetailPage extends ConsumerWidget {
   }
 
   /// 客户类型卡 (普通 ↔ 种子 一键切换; 加盟类型由关系决定不可切)
+  /// app 身份卡 (ADR-0016, 主人 2026-09-22 拍):
+  ///   「客户列表中的客户有一些也是 app 用户, 有一些没有注册 app 账号」
+  ///   → 详情页给出状态; 没绑定的可以**填她的邀请码 (身份识别码)** 绑定 —— 手机号对不上也能绑
+  Widget _buildIdentityCard(BuildContext context, WidgetRef ref, Customer c) {
+    final bound = c.hasAccount;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  bound ? Icons.verified_user : Icons.person_add_alt_1_outlined,
+                  size: 20,
+                  color: bound ? AppTheme.primaryDark : AppTheme.textSecondary,
+                ),
+                const SizedBox(width: AppSpace.s6),
+                const Text(
+                  'app 身份',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontMd,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: AppSpace.s4),
+                  decoration: BoxDecoration(
+                    color: bound ? AppTheme.primaryLight : AppTheme.bgWarm,
+                    borderRadius: BorderRadius.circular(AppRadius.r12),
+                  ),
+                  child: Text(
+                    bound ? '已注册' : '未注册',
+                    style: TextStyle(
+                      // ⚠ 必须显式给 color (AGENTS §5: 不给 = 真机白字)
+                      color: bound ? AppTheme.primaryDark : AppTheme.textSecondary,
+                      fontSize: AppTheme.fontXs,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.s8),
+            Text(
+              bound
+                  ? '她已经是 app 用户 —— 可以在 app 内直接邀请她 (沙龙 / 活动)'
+                  : '还不是 app 用户。她注册 app 后, 把她的 6 位**邀请码**填进来即可绑定身份'
+                      ' (手机号对不上也能绑; 若系统已按她的号自动建了空档案, 会自动并入这条)',
+              style: const TextStyle(
+                fontSize: AppTheme.fontXs,
+                color: AppTheme.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            if (!bound) ...[
+              const SizedBox(height: AppSpace.s12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  onPressed: () => _showBindAccountDialog(context, ref, c),
+                  icon: const Icon(Icons.qr_code_2, size: 20),
+                  label: const Text(
+                    '填邀请码绑定身份',
+                    style: TextStyle(fontSize: AppTheme.fontSm),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 绑定弹层: 填她的 6 位邀请码 (身份识别码)
+  Future<void> _showBindAccountDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Customer c,
+  ) async {
+    final codeCtrl = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('绑定 app 身份', style: TextStyle(fontSize: AppTheme.fontLg)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '让「${c.name}」打开 app → 我的 → 我的邀请码, 把 6 位码填到这里。',
+              style: const TextStyle(
+                fontSize: AppTheme.fontXs,
+                color: AppTheme.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: AppSpace.s12),
+            TextField(
+              controller: codeCtrl,
+              style: const TextStyle(fontSize: AppTheme.fontMd),
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: '她的邀请码 *',
+                helperText: '6 位字母数字 (不区分大小写)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('绑定', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+        ],
+      ),
+    );
+    final code = codeCtrl.text.trim().toUpperCase();
+    codeCtrl.dispose();
+    if (submitted != true || !context.mounted) return;
+    if (!RegExp(r'^[A-Z0-9]{6}$').hasMatch(code)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请填对方的 6 位邀请码')),
+      );
+      return;
+    }
+    try {
+      final res = await ref.read(customerServiceProvider).bindAccount(c.id, code);
+      ref.invalidate(customerDetailProvider(c.id));
+      ref.invalidate(customersProvider);
+      ref.invalidate(customerTypeCountsProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res.message.isEmpty ? '已绑定' : res.message)),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('绑定失败: ${_apiErrorText(e)}')),
+      );
+    }
+  }
+
+  /// 从 dio 异常里取服务端人话错误 (AGENTS: 不要只显示 DioException)
+  String _apiErrorText(Object e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map && data['error'] != null) return data['error'].toString();
+    }
+    return e.toString();
+  }
+
   Widget _buildTypeCard(BuildContext context, WidgetRef ref, Customer c) {
     final isFranchisee = c.customerType == 'franchisee';
     return Card(

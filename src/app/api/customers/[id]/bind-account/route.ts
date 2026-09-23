@@ -94,6 +94,7 @@ export async function POST(
       alreadyBound: res.alreadyBound,
       phoneMismatch: res.phoneMismatch,
       phoneSynced: res.phoneSynced,
+      replacedEmptyProfile: res.replacedEmptyProfile,
       account: {
         userId: res.account.userId.toString(),
         name: res.account.name,
@@ -101,11 +102,13 @@ export async function POST(
       },
       message: res.alreadyBound
         ? `已经是绑定的账号 (${res.account.name})`
-        : res.phoneMismatch && !res.phoneSynced
-          ? `已绑定 (${res.account.name}); ⚠ 与账号手机号不一致 (账号: ${res.account.phoneMasked})`
-          : res.phoneSynced
-            ? `已绑定 (${res.account.name}), 手机号已同步为 ${res.account.phoneMasked}`
-            : `已绑定 (${res.account.name})`,
+        : res.replacedEmptyProfile
+          ? `已绑定 (${res.account.name}) —— 她注册时系统自动建的空档案已并入这条`
+          : res.phoneMismatch && !res.phoneSynced
+            ? `已绑定 (${res.account.name}); ⚠ 与账号手机号不一致 (账号: ${res.account.phoneMasked})`
+            : res.phoneSynced
+              ? `已绑定 (${res.account.name}), 手机号已同步为 ${res.account.phoneMasked}`
+              : `已绑定 (${res.account.name})`,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
