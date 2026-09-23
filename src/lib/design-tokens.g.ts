@@ -142,8 +142,10 @@ export const space = {
 
 export const radius = {
   "r0": 0,
+  "r2": 2,
   "r3": 3,
   "r4": 4,
+  "r5": 5,
   "r6": 6,
   "r8": 8,
   "r10": 10,
@@ -157,7 +159,6 @@ export const radius = {
   "r32": 32,
   "r40": 40,
   "full": 999,
-  "r2": 2,
 } as const;
 
 export const typeScale = {

@@ -76,7 +76,7 @@ class EmptyState extends StatelessWidget {
 ///   lg = 64 (空态 hero 区)
 ///
 /// ⚠ 按钮内 (高度 20-26) 不要用 LoadingState -- 它的 Center 包装会破坏按钮布局。
-///   那种场景直接 `SizedBox(height: 20, child: CircularProgressIndicator(strokeWidth: 2))`。
+///   那种场景直接用 SizedBox + spinner (示例尺寸 20 仅供参考, 真用查 AppSize 令牌)。
 class LoadingState extends StatelessWidget {
   final double? size;
   final double? strokeWidth;

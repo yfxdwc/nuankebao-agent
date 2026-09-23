@@ -1302,7 +1302,7 @@ class FranchiseTreePainter extends CustomPainter {
   ) {
     final a = (isFaded ? 0.6 : 0.9) * (col == 0 ? 1.0 : 0.85);
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(5)),
+      RRect.fromRectAndRadius(rect, AppRadius.r5),
       Paint()..color = AppTheme.bgWarm.withOpacity(a),
     );
   }

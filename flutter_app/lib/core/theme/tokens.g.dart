@@ -163,8 +163,10 @@ abstract final class AppSpace {
 /// L1 尺度 —— 圆角
 abstract final class AppRadius {
   static const double r0 = 0.0;
+  static const double r2 = 2.0;
   static const double r3 = 3.0;
   static const double r4 = 4.0;
+  static const double r5 = 5.0;
   static const double r6 = 6.0;
   static const double r8 = 8.0;
   static const double r10 = 10.0;
@@ -178,7 +180,6 @@ abstract final class AppRadius {
   static const double r32 = 32.0;
   static const double r40 = 40.0;
   static const double full = 999.0;
-  static const double r2 = 2.0;
   // 语义别名
   static const double card = r10;
   static const double button = r8;
@@ -188,6 +189,7 @@ abstract final class AppRadius {
   static const double sheet = r16;
   static const double dialog = r14;
   static const double pill = full;
+  static const double graphNode = r5;
 }
 
 /// L1 尺度 —— 字号 (中老年: 正文 18 起步, Material 默认是 14)

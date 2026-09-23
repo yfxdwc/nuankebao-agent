@@ -59,7 +59,12 @@ count() {
   fi
 
   # grep -r 在无匹配时 exit 1 → 用 || true 兜住 (set -e 没开, 但保持明确)
-  n=$(grep -rEo "$pattern" "$@" 2>/dev/null | wc -l | tr -d ' ')
+  # 默认 POSIX ERE。个别需 PCRE (负向先行 (?!)) 的指标调用前 export GREP_PC=1 切换。
+  if [ "${GREP_PC:-}" = "1" ]; then
+    n=$(grep -rPo "$pattern" "$@" 2>/dev/null | wc -l | tr -d ' ')
+  else
+    n=$(grep -rEo "$pattern" "$@" 2>/dev/null | wc -l | tr -d ' ')
+  fi
   COUNTS["$label"]=$n
   TOTAL=$((TOTAL + n))
 
@@ -129,6 +134,29 @@ fi
 # shellcheck disable=SC2086
 count "flutter.constThemeRef" 'AppThemes\.[a-z]+\.' $FLUTTER_ACTIVE
 
+# ---- Flutter 新增指标 (P2-P5 漏网补漏, 2026-09-24 加) ----
+#
+# flutter.toolbarHeight: AppBar 高度必须用 token
+#   P2 漏网的元凶 (之前批次 1-3 都漏扫了) —— 当时 15 处全 Flutter 写死 64
+#   现在应该恒为 0; 不涨 = 没人"顺手写 64"
+count "flutter.toolbarHeight" 'toolbarHeight: *[0-9]+' $FLUTTER_ACTIVE
+
+# flutter.iconSize: Icon(...) 内的 size 硬数字
+#   简化版: 只匹配 Icon( 后的 size: 数字 —— 不加负向先行 (IconBuilder 在用 Icon 的代码库
+#   里极少, 不强求零误伤; 比起 PCRE 的复杂度收益更大)
+#   例外白名单: LoadingState.size: / QrImage.size: / SizedBox 都是非 Icon 上下文
+count "flutter.iconSize" 'Icon\([^I)]*?size: *[0-9]+(\.[0-9]+)?[,)]' $FLUTTER_ACTIVE
+#   匹配 SnackBar.showSnackBar(duration: Duration(seconds: N))
+#   业务 timing (telemetry flush / auth init / api timeout / 搜索 debounce)
+#   在白名单路径, 不计入 —— 它们是业务时长, 不是 UI 动效
+MOTION_FILES=$(echo "$FLUTTER_ACTIVE" | grep -v -E '(/telemetry/|/http/api_client\.dart|/auth/screens/login_screen\.dart|/auth/providers/auth_provider\.dart)')
+# shellcheck disable=SC2086
+count "flutter.motionDuration" 'duration: Duration\(+seconds: *[2-6]\)' $MOTION_FILES
+
+# flutter.radiusRadius: 独立 Radius.circular(N) (不经 BorderRadius)
+#   BorderRadius.circular(N) 已由 flutter.radius 覆盖; 这个是独立使用场景
+count "flutter.radiusRadius" 'Radius\.circular\([0-9]+' $FLUTTER_ACTIVE
+
 # ============================================
 # 报告
 # ============================================
@@ -138,7 +166,9 @@ echo " UI 令牌护栏 (硬编码棘轮)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 KEYS=(flutter.color flutter.fontSize flutter.radius flutter.spacing \
-      web.paletteClass web.arbitraryValue web.hexLiteral flutter.constThemeRef)
+      flutter.toolbarHeight flutter.iconSize flutter.motionDuration flutter.radiusRadius \
+      flutter.constThemeRef \
+      web.paletteClass web.arbitraryValue web.hexLiteral)
 
 BASELINE_JSON='{}'
 [ -f "$BASELINE" ] && BASELINE_JSON=$(cat "$BASELINE")
