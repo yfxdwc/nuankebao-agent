@@ -39,7 +39,7 @@ class BigButton extends StatelessWidget {
                   strokeWidth: 3,
                 ),
               )
-            : (icon != null ? Icon(icon, size: 28) : const SizedBox.shrink()),
+            : (icon != null ? Icon(icon, size: AppSize.iconXl) : const SizedBox.shrink()),
         label: Text(
           label,
           style: const TextStyle(

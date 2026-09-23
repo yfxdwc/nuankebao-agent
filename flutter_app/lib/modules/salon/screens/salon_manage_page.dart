@@ -51,7 +51,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
     return Scaffold(
       appBar: AppBar(
         title: const Text('沙龙管理'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
         actions: [
           // 取消沙龙: 主理人 + 未取消 状态 才显示
           _CancelSalonAction(

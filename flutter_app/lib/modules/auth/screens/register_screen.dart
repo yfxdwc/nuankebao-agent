@@ -108,7 +108,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.bgWarm,
-      appBar: AppBar(title: const Text('注册账号'), toolbarHeight: 64),
+      appBar: AppBar(title: const Text('注册账号'), toolbarHeight: AppSize.appBarHeight),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpace.s20),
@@ -215,7 +215,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           height: AppSpace.s22,
                           child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
                         )
-                      : const Icon(Icons.person_add_alt_1, size: 26),
+                      : const Icon(Icons.person_add_alt_1, size: AppSize.iconLg),
                   label: Text(_busy ? '注册中...' : '注册',
                       style: const TextStyle(fontSize: AppTheme.fontMd)),
                 ),

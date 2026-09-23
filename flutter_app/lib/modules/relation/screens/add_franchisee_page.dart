@@ -122,7 +122,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isSlotMode ? '添加下线' : '新增加盟商'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
       ),
       body: Form(
         key: _formKey,

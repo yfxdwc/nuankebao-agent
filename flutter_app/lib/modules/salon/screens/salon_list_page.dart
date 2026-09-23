@@ -45,7 +45,7 @@ class _SalonListPageState extends ConsumerState<SalonListPage>
     return Scaffold(
       appBar: AppBar(
         title: const Text('沙龙'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
         bottom: TabBar(
           controller: _tab,
           labelColor: AppTheme.primaryDark,

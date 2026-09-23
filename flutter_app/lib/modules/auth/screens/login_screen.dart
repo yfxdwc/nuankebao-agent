@@ -184,7 +184,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         //   找不到入口 = 以为要托人代建。注册完由推荐人确认 (页面上有说明)。
         OutlinedButton.icon(
           onPressed: loading ? null : () => context.push('/register'),
-          icon: const Icon(Icons.person_add_alt_1, size: 22),
+          icon: const Icon(Icons.person_add_alt_1, size: AppSize.iconMd),
           label: const Text('有新推荐码? 去注册',
               style: TextStyle(fontSize: AppTheme.fontMd)),
           style: OutlinedButton.styleFrom(

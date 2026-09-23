@@ -49,7 +49,7 @@ class ProfilePage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('我的'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, size: AppSize.iconXl),

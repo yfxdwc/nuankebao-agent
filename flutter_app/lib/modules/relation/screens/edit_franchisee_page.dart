@@ -121,7 +121,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('编辑加盟商'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
       ),
       body: _booting
           ? const LoadingState()

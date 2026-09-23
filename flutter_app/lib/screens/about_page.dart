@@ -36,7 +36,7 @@ class AboutPage extends ConsumerWidget {
     final infoAsync = ref.watch(_packageInfoProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('关于与帮助'), toolbarHeight: 64),
+      appBar: AppBar(title: const Text('关于与帮助'), toolbarHeight: AppSize.appBarHeight),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
         children: [

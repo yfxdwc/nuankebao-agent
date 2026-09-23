@@ -122,7 +122,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
                 style: const TextStyle(fontSize: AppTheme.fontMd),
                 decoration: const InputDecoration(
                   hintText: '搜上级姓名',
-                  prefixIcon: Icon(Icons.search, size: 24),
+                  prefixIcon: Icon(Icons.search, size: AppSize.iconLg),
                 ),
                 onChanged: (v) => setState(() => _search = v),
               ),
@@ -187,7 +187,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
                     onPressed: () => Navigator.of(context).pop(
                       PlacementTarget(_picked!.id, _picked!.name, _side),
                     ),
-                    icon: const Icon(Icons.send, size: 22),
+                    icon: const Icon(Icons.send, size: AppSize.iconMd),
                     label: const Text('提交 (走三方确认)',
                         style: TextStyle(fontSize: AppTheme.fontMd)),
                     style: FilledButton.styleFrom(

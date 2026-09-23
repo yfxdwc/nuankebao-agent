@@ -183,7 +183,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
     return Scaffold(
       appBar: AppBar(
         title: const Text('加盟落位确认'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
         bottom: TabBar(
           controller: _tab,
           labelStyle: const TextStyle(fontSize: AppTheme.fontMd),

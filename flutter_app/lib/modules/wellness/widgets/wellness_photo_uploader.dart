@@ -149,7 +149,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: _uploading ? null : () => _pickImage(ImageSource.camera),
-                icon: const Icon(Icons.camera_alt, size: 28),
+                icon: const Icon(Icons.camera_alt, size: AppSize.iconXl),
                 label: const Text('拍照', style: TextStyle(fontSize: AppTheme.fontMd)),
                 style: OutlinedButton.styleFrom(minimumSize: const Size(0, 64)),
               ),
@@ -158,7 +158,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: _uploading ? null : () => _pickImage(ImageSource.gallery),
-                icon: const Icon(Icons.photo_library, size: 28),
+                icon: const Icon(Icons.photo_library, size: AppSize.iconXl),
                 label: const Text('相册', style: TextStyle(fontSize: AppTheme.fontMd)),
                 style: OutlinedButton.styleFrom(minimumSize: const Size(0, 64)),
               ),
@@ -227,7 +227,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
                 color: Colors.black54,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.close, color: Colors.white, size: 18),
+              child: const Icon(Icons.close, color: Colors.white, size: AppSize.iconSm),
             ),
           ),
         ),

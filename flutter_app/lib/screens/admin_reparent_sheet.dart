@@ -240,7 +240,7 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
               controller: _search,
               decoration: const InputDecoration(
                 isDense: true,
-                prefixIcon: Icon(Icons.search, size: 20),
+                prefixIcon: Icon(Icons.search, size: AppSize.iconMd),
                 hintText: '搜名字',
                 border: OutlineInputBorder(),
               ),

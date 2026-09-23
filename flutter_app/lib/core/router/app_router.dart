@@ -67,7 +67,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     // fix-route (2026-09-17): 未知路由兜底 — 以前直接抛 GoException 红屏,
     // 现在给一个「页面不存在 + 回客户页」的友好页 (缺路由时不再吓到主人/销售)
     errorBuilder: (context, state) => Scaffold(
-      appBar: AppBar(title: const Text('页面不存在'), toolbarHeight: 64),
+      appBar: AppBar(title: const Text('页面不存在'), toolbarHeight: AppSize.appBarHeight),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.s24),
@@ -88,7 +88,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               const SizedBox(height: AppSpace.s20),
               FilledButton.icon(
                 onPressed: () => context.go('/customers'),
-                icon: const Icon(Icons.home_outlined, size: 22),
+                icon: const Icon(Icons.home_outlined, size: AppSize.iconMd),
                 label: const Text('回客户页', style: TextStyle(fontSize: AppType.md)),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(200, 56),
@@ -276,7 +276,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           if (customerId == null || customerId.isEmpty) {
             // 强约束: 必须从客户详情进入
             return Scaffold(
-              appBar: AppBar(title: const Text('错误'), toolbarHeight: 64),
+              appBar: AppBar(title: const Text('错误'), toolbarHeight: AppSize.appBarHeight),
               body: const Center(
                 child: Text('请从客户详情页"添加记录"进入', style: TextStyle(fontSize: AppType.md)),
               ),
@@ -367,18 +367,18 @@ class _MainShell extends StatelessWidget {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.people_outline, size: 28),
-            selectedIcon: Icon(Icons.people, size: 28),
+            icon: Icon(Icons.people_outline, size: AppSize.iconXl),
+            selectedIcon: Icon(Icons.people, size: AppSize.iconXl),
             label: '客户',
           ),
           NavigationDestination(
-            icon: Icon(Icons.event_outlined, size: 28),
-            selectedIcon: Icon(Icons.event, size: 28),
+            icon: Icon(Icons.event_outlined, size: AppSize.iconXl),
+            selectedIcon: Icon(Icons.event, size: AppSize.iconXl),
             label: '沙龙',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outline, size: 28),
-            selectedIcon: Icon(Icons.person, size: 28),
+            icon: Icon(Icons.person_outline, size: AppSize.iconXl),
+            selectedIcon: Icon(Icons.person, size: AppSize.iconXl),
             label: '我的',
           ),
         ],

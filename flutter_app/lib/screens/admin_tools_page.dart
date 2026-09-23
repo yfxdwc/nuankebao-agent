@@ -163,7 +163,7 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
     final async = ref.watch(adminPaymentsProvider(_status));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('管理员工具'), toolbarHeight: 64),
+      appBar: AppBar(title: const Text('管理员工具'), toolbarHeight: AppSize.appBarHeight),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(adminPaymentsProvider(_status));
@@ -380,7 +380,7 @@ class _ProofImage extends StatelessWidget {
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => const ColoredBox(
         color: Colors.black12,
-        child: Center(child: Icon(Icons.broken_image, size: 24)),
+        child: Center(child: Icon(Icons.broken_image, size: AppSize.iconLg)),
       ),
     );
   }

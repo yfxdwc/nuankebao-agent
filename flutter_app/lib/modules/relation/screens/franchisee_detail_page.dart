@@ -29,17 +29,17 @@ class FranchiseeDetailPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('加盟商详情'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit, size: 28),
+            icon: const Icon(Icons.edit, size: AppSize.iconXl),
             tooltip: '编辑',
             onPressed: () => context.push('/franchisees/$franchiseeId/edit'),
           ),
           // admin 强删 (主人 2026-09-18 拍): 死账兜底, 绕过三方确认
           if (ref.watch(meProfileProvider).valueOrNull?.user?.role == 'admin')
             IconButton(
-              icon: const Icon(Icons.delete_forever, size: 28),
+              icon: const Icon(Icons.delete_forever, size: AppSize.iconXl),
               tooltip: '管理强删 (admin)',
               onPressed: () => _confirmForceUnjoin(context, ref),
             ),
@@ -179,7 +179,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
               r.name,
               style: const TextStyle(fontSize: AppTheme.fontMd, fontWeight: FontWeight.w500),
             ),
-            trailing: const Icon(Icons.chevron_right, size: 28),
+            trailing: const Icon(Icons.chevron_right, size: AppSize.iconXl),
             onTap: () => context.push('/franchisees/${r.id}'),
           ),
         );

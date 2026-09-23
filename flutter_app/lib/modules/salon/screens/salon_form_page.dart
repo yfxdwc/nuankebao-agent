@@ -331,11 +331,11 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
       // 避免嵌进外 Scaffold 出现「两个 AppBar + 两个返回键」的重复。
       return asyncSalon.when(
         loading: () => Scaffold(
-          appBar: AppBar(title: const Text('编辑沙龙'), toolbarHeight: 64),
+          appBar: AppBar(title: const Text('编辑沙龙'), toolbarHeight: AppSize.appBarHeight),
           body: const LoadingState(),
         ),
         error: (e, _) => Scaffold(
-          appBar: AppBar(title: const Text('编辑沙龙'), toolbarHeight: 64),
+          appBar: AppBar(title: const Text('编辑沙龙'), toolbarHeight: AppSize.appBarHeight),
           body: ErrorState(
             error: e,
             onRetry: () => ref.invalidate(salonDetailProvider(widget.salonId!)),
@@ -360,7 +360,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEdit ? '编辑沙龙' : '创建沙龙'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
       ),
       body: Column(
         children: [

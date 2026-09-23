@@ -62,7 +62,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('我的加盟网络'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, size: AppSize.iconXl),

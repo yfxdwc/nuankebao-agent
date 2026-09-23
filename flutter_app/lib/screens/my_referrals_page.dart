@@ -73,7 +73,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
     final async = ref.watch(myReferralsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('我推荐的人'), toolbarHeight: 64),
+      appBar: AppBar(title: const Text('我推荐的人'), toolbarHeight: AppSize.appBarHeight),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(myReferralsProvider);
@@ -205,7 +205,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                                 child: FilledButton.tonalIcon(
                                   onPressed: _busy ? null : () => _claim(r),
                                   icon: const Icon(Icons.person_add_alt_1_outlined,
-                                      size: 18),
+                                      size: AppSize.iconSm),
                                   label: const Text('加为我的客户',
                                       style: TextStyle(fontSize: AppTheme.fontSm)),
                                 ),

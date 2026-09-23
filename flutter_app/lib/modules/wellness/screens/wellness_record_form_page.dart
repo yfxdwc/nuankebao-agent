@@ -182,7 +182,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.recordId == null ? '添加养生记录' : '编辑养生记录'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
       ),
       body: _dict == null
           ? const Center(child: CircularProgressIndicator())

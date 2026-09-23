@@ -30,7 +30,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
       salonGuestsProvider((salonId: widget.salonId, mine: false)),
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('带来的客人'), toolbarHeight: 64),
+      appBar: AppBar(title: const Text('带来的客人'), toolbarHeight: AppSize.appBarHeight),
       body: asyncGuests.when(
         loading: () => const LoadingState(),
         error: (e, _) => ErrorState(

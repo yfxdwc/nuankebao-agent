@@ -1,6 +1,7 @@
 // 大 FAB (中老年妇女版, 80pt 圆形)
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tokens.g.dart';
 
 class BigFab extends StatelessWidget {
   final VoidCallback onPressed;
@@ -27,7 +28,7 @@ class BigFab extends StatelessWidget {
         backgroundColor: backgroundColor ?? AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 6,
-        child: Icon(icon, size: 36),
+        child: Icon(icon, size: AppSize.avatarMd),
       ),
     );
   }
