@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../http/api_client.dart';
 import '../services/notifications/follow_up_reminder.dart';
 import '../services/api.dart';
+import '../models/customer_insight.dart';
 import '../models/follow_up_info.dart';
 import '../models/dashboard.dart';
 import '../models/follow_up.dart';
@@ -38,6 +39,20 @@ final customerServiceProvider = Provider<CustomerService>(
 );
 final wellnessRecordServiceProvider = Provider<WellnessRecordService>(
   (ref) => WellnessRecordService(ref.watch(dioProvider)),
+);
+
+/// 客户洞察 (评分 + 行动指引; 免费层)
+final customerInsightServiceProvider = Provider<CustomerInsightService>(
+  (ref) => CustomerInsightService(ref.watch(dioProvider)),
+);
+
+/// 详情页 L0 的洞察数据 (family: 按客户 id 缓存)
+///
+/// autoDispose: 详情页关了就该释放 (分数会随数据变化, 不该长期缓存)
+final customerInsightProvider =
+    FutureProvider.autoDispose.family<CustomerInsight, String>(
+  (ref, customerId) =>
+      ref.watch(customerInsightServiceProvider).get(customerId),
 );
 final dictionaryServiceProvider = Provider<DictionaryService>(
   (ref) => DictionaryService(ref.watch(dioProvider)),

@@ -6,6 +6,7 @@
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../models/customer_insight.dart';
 import '../models/customer.dart';
 import '../models/follow_up_info.dart';
 import '../models/ai_insight.dart';
@@ -281,6 +282,19 @@ class CustomerService {
 // ============================================
 // WellnessRecordService (养生记录)
 // ============================================
+
+/// 客户洞察 (评分 + 行动指引; 免费层, 不烧 AI 额度)
+class CustomerInsightService {
+  final Dio _dio;
+  CustomerInsightService(this._dio);
+
+  /// GET /api/customers/[id]/insight
+  /// 一次拿 [评分环] + [今日待办]; 确定性规则引擎, 不调 AI。
+  Future<CustomerInsight> get(String customerId) async {
+    final res = await _dio.get('/customers/$customerId/insight');
+    return CustomerInsight.fromJson(res.data as Map<String, dynamic>);
+  }
+}
 
 class WellnessRecordService {
   final Dio _dio;

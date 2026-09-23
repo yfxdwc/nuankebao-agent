@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/models/customer_insight.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/follow_up_info.dart';
 // fix-graph-zoom-pan (2026-09-16): auto-fit initial scale, user can see whole tree on open
@@ -25,6 +26,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/big_fab.dart';
+import '../widgets/customer_insight_header.dart';
 import '../widgets/ai_insight_cards.dart';
 import '../widgets/customer_activity_cards.dart';
 import '../widgets/customer_row.dart';
@@ -1959,6 +1961,14 @@ class CustomerDetailPage extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, AppSpace.s48),
       children: [
+        // 0) ★ L0 客户洞察 (评分环 + 今日待办) —— 永远在最上面 (§1.4 "行动输出")
+        //    免费层 (确定性规则引擎), 不判会员、不烧 AI 额度; 拿不到就静默隐藏
+        CustomerInsightHeader(
+          customerId: customerId,
+          onBuildTask: (action) => _buildTaskFromAction(context, ref, action),
+        ),
+        const SizedBox(height: AppSpace.s12),
+
         // 1) 大头像 + 基本信息 (类型徽章 / 年龄 / 拨号)
         _buildHeader(context, ref, customer),
         const SizedBox(height: AppSpace.s12),
@@ -1996,6 +2006,48 @@ class CustomerDetailPage extends ConsumerWidget {
         CustomerInteractionSection(customerId: customerId),
       ],
     );
+  }
+
+  /// 「建任务」—— 把一条行动指引落成 follow_up_task (闭环的关键一步)
+  ///
+  /// 为什么这是 P1 的核心: CHARTER §1.4 要求"明确的**可落地**跟进指引"。
+  ///   只给一段话术 = 不可勾选/不可追踪; 建了任务才有 dueAt + 状态 + 完成回写,
+  ///   完成率还会反哺下一轮评分的「任务健康」因子。
+  Future<void> _buildTaskFromAction(
+    BuildContext context,
+    WidgetRef ref,
+    ActionItem action,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final dueAt = DateTime.tryParse(action.taskDueAt) ?? DateTime.now();
+      await ref.read(followUpServiceProvider).create({
+        'customerId': customerId,
+        'dueAt': dueAt.toUtc().toIso8601String(),
+        'reason': action.taskTitle,
+      });
+      ref.read(usageServiceProvider).track('follow_up_task_created',
+          props: {'from': 'insight_action', 'rule': action.id});
+      // 任务列表 / 洞察都刷新 (洞察的"任务健康"因子会变)
+      ref.invalidate(customerInsightProvider(customerId));
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('已建任务「${action.taskTitle}」',
+              style: const TextStyle(fontSize: AppType.md)),
+          duration: AppDuration.fast,
+        ),
+      );
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('建任务失败: $e',
+              style: const TextStyle(fontSize: AppType.md)),
+          duration: AppDuration.base,
+        ),
+      );
+    }
   }
 
   /// 养生记录区: 汇总 + 最近 5 条 + 入口
