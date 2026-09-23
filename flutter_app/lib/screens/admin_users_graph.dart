@@ -353,7 +353,7 @@ class _NodeCard extends StatelessWidget {
           MemberAvatar(
             avatarUrl: avatarUrl,
             name: title,
-            size: 48,
+            size: AppSize.avatarLg,
             isMember: isMember,
             noAccount: noAccount,
           ),

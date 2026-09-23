@@ -65,7 +65,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
         toolbarHeight: 64,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, size: 28),
+            icon: const Icon(Icons.refresh, size: AppSize.iconXl),
             tooltip: '刷新',
             onPressed: () => ref.invalidate(myFranchiseeTreeProvider),
           ),
@@ -123,7 +123,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
           color: AppTheme.franchisee.withOpacity(0.08),
           child: Row(
             children: [
-              const Icon(Icons.arrow_upward, size: 20, color: AppTheme.franchisee),
+              const Icon(Icons.arrow_upward, size: AppSize.iconMd, color: AppTheme.franchisee),
               const SizedBox(width: AppSpace.s8),
               const Text(
                 '我的上级',
@@ -236,7 +236,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
         style: const TextStyle(fontSize: AppTheme.fontMd),
         decoration: InputDecoration(
           hintText: '搜索加盟商名字',
-          prefixIcon: const Icon(Icons.search, size: 24),
+          prefixIcon: const Icon(Icons.search, size: AppSize.iconLg),
           suffixIcon: q.isEmpty
               ? null
               : Row(
@@ -261,7 +261,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
                         ),
                       ),
                     IconButton(
-                      icon: const Icon(Icons.close, size: 20),
+                      icon: const Icon(Icons.close, size: AppSize.iconMd),
                       tooltip: '清除',
                       onPressed: () {
                         _searchController.clear();
@@ -497,7 +497,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
             children: [
               const Icon(
                 Icons.add,
-                size: 20,
+                size: AppSize.iconMd,
                 color: AppTheme.primary,
               ),
               Text(

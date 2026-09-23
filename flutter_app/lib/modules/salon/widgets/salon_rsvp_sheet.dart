@@ -282,7 +282,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
           height: AppSpace.s64,
           child: Icon(
             icon,
-            size: 32,
+            size: AppSize.iconXl,
             color: enabled ? AppTheme.primaryDark : AppTheme.textSecondary,
           ),
         ),
@@ -362,7 +362,7 @@ class _RsvpChoice extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 30, color: selected ? Colors.white : color),
+            Icon(icon, size: AppSize.iconXl, color: selected ? Colors.white : color),
             const SizedBox(height: AppSpace.s6),
             Text(
               label,

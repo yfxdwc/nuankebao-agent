@@ -105,7 +105,7 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
       title: '复购预测',
       subtitle: '根据历史到店间隔算下次该什么时候约',
       trailing: IconButton(
-        icon: const Icon(Icons.refresh, size: 22),
+        icon: const Icon(Icons.refresh, size: AppSize.iconMd),
         tooltip: '重新计算',
         onPressed: _loading ? null : () => _load(manual: true),
       ),
@@ -264,7 +264,7 @@ class _AiProfileCardState extends ConsumerState<AiProfileCard> {
       trailing: _data == null
           ? null
           : IconButton(
-              icon: const Icon(Icons.refresh, size: 22),
+              icon: const Icon(Icons.refresh, size: AppSize.iconMd),
               tooltip: '重新生成',
               onPressed: _loading ? null : () => _generate(regenerate: true),
             ),
@@ -361,7 +361,7 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
       trailing: _data == null
           ? null
           : IconButton(
-              icon: const Icon(Icons.refresh, size: 22),
+              icon: const Icon(Icons.refresh, size: AppSize.iconMd),
               tooltip: '重新生成',
               onPressed: _loading ? null : () => _generate(_reason, true),
             ),
@@ -507,7 +507,7 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
       trailing: _data == null
           ? null
           : IconButton(
-              icon: const Icon(Icons.refresh, size: 22),
+              icon: const Icon(Icons.refresh, size: AppSize.iconMd),
               tooltip: '重新分析',
               onPressed: _loading ? null : () => _generate(regenerate: true),
             ),
@@ -607,7 +607,7 @@ class _AiCardShell extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, size: 26, color: iconColor),
+                Icon(icon, size: AppSize.iconLg, color: iconColor),
                 const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(

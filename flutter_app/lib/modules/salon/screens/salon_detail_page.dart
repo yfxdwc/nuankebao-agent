@@ -54,13 +54,13 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
         actions: [
           if (salon != null && salon.viewer.canManage)
             IconButton(
-              icon: const Icon(Icons.tune, size: 28),
+              icon: const Icon(Icons.tune, size: AppSize.iconXl),
               tooltip: '管理',
               onPressed: () => context.push('/salons/${widget.salonId}/manage'),
             ),
           if (salon != null && salon.viewer.isOrganizer)
             IconButton(
-              icon: const Icon(Icons.edit, size: 28),
+              icon: const Icon(Icons.edit, size: AppSize.iconXl),
               tooltip: '编辑',
               onPressed: () => context.push('/salons/${widget.salonId}/edit'),
             ),
@@ -198,7 +198,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
             Row(
               children: [
                 const Icon(Icons.person_outline,
-                    size: 22, color: AppTheme.textSecondary),
+                    size: AppSize.iconMd, color: AppTheme.textSecondary),
                 const SizedBox(width: AppSpace.s6),
                 Expanded(
                   child: Text(
@@ -253,7 +253,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.cancel_outlined,
-              size: 24, color: AppTheme.danger),
+              size: AppSize.iconLg, color: AppTheme.danger),
           const SizedBox(width: AppSpace.s10),
           Expanded(
             child: Column(
@@ -298,7 +298,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
           children: [
             Row(
               children: [
-                const Icon(Icons.reply, size: 26, color: AppTheme.primary),
+                const Icon(Icons.reply, size: AppSize.iconLg, color: AppTheme.primary),
                 const SizedBox(width: AppSpace.s8),
                 const Text(
                   '我的回复',
@@ -335,7 +335,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                 child: Row(
                   children: [
                     const Icon(Icons.flag_outlined,
-                        size: 22, color: AppTheme.accent),
+                        size: AppSize.iconMd, color: AppTheme.accent),
                     const SizedBox(width: AppSpace.s8),
                     Expanded(
                       child: Text(
@@ -723,7 +723,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
           ),
           if (phone != null && phone.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.phone, size: 28, color: AppTheme.primary),
+              icon: const Icon(Icons.phone, size: AppSize.iconXl, color: AppTheme.primary),
               tooltip: '拨打电话',
               onPressed: () => _callPhone(phone),
             ),
@@ -818,7 +818,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
       icon: Icons.group_add_outlined,
       trailing: TextButton.icon(
         onPressed: _showAddGuestDialog,
-        icon: const Icon(Icons.add, size: 22),
+        icon: const Icon(Icons.add, size: AppSize.iconMd),
         label: const Text('添加', style: TextStyle(fontSize: AppTheme.fontSm)),
       ),
       child: asyncGuests.when(
@@ -888,7 +888,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline,
-                size: 26, color: AppTheme.danger),
+                size: AppSize.iconLg, color: AppTheme.danger),
             tooltip: '删除',
             onPressed: () => _confirmDeleteGuest(guest),
           ),
@@ -919,7 +919,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                       attachment.fileType == 'image'
                           ? Icons.image_outlined
                           : Icons.insert_drive_file_outlined,
-                      size: 26,
+                      size: AppSize.iconLg,
                       color: AppTheme.primary,
                     ),
                     const SizedBox(width: AppSpace.s12),
@@ -930,7 +930,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                       ),
                     ),
                     const Icon(Icons.open_in_new,
-                        size: 20, color: AppTheme.textSecondary),
+                        size: AppSize.iconMd, color: AppTheme.textSecondary),
                   ],
                 ),
               ),
@@ -1003,7 +1003,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.send, size: 26),
+                    : const Icon(Icons.send, size: AppSize.iconLg),
               ),
             ],
           ),
@@ -1013,7 +1013,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
               onPressed: _sendingActivity
                   ? null
                   : () => _sendActivity(type: 'announcement'),
-              icon: const Icon(Icons.campaign, size: 24),
+              icon: const Icon(Icons.campaign, size: AppSize.iconLg),
               label: const Text('发公告'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 56),

@@ -64,7 +64,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
           children: [
             Row(
               children: [
-                const Icon(Icons.insights, size: 22, color: AppTheme.primary),
+                const Icon(Icons.insights, size: AppSize.iconMd, color: AppTheme.primary),
                 const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text(
@@ -77,7 +77,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.refresh, size: 22),
+                  icon: const Icon(Icons.refresh, size: AppSize.iconMd),
                   tooltip: '重新计算',
                   onPressed: _loading ? null : _load,
                 ),
@@ -168,7 +168,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
                     : a.isWarmer
                         ? Icons.trending_up
                         : Icons.trending_flat,
-                size: 22,
+                size: AppSize.iconMd,
                 color: trendColor,
               ),
               const SizedBox(width: AppSpace.s6),

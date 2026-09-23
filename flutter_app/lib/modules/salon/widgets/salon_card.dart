@@ -151,7 +151,7 @@ class _IconLine extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 22, color: AppTheme.textSecondary),
+        Icon(icon, size: AppSize.iconMd, color: AppTheme.textSecondary),
         const SizedBox(width: AppSpace.s6),
         Expanded(
           child: Text(
@@ -182,7 +182,7 @@ class _QuotaBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.flag_outlined, size: 16, color: AppColors.warningDark),
+          const Icon(Icons.flag_outlined, size: AppSize.iconXs, color: AppColors.warningDark),
           const SizedBox(width: AppSpace.s4),
           Text(
             '带约 $value 人',

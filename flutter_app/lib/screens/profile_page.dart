@@ -52,7 +52,7 @@ class ProfilePage extends ConsumerWidget {
         toolbarHeight: 64,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, size: 28),
+            icon: const Icon(Icons.refresh, size: AppSize.iconXl),
             tooltip: '刷新',
             onPressed: () => ref.invalidate(meProfileProvider),
           ),
@@ -210,7 +210,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                         ),
                         child: const Icon(
                           Icons.photo_camera,
-                          size: 18,
+                          size: AppSize.iconSm,
                           color: Colors.white,
                         ),
                       ),
@@ -227,7 +227,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                 currentAvatarUrl: p.user?.avatarUrl,
                 name: name,
               ),
-              icon: const Icon(Icons.face_retouching_natural, size: 20),
+              icon: const Icon(Icons.face_retouching_natural, size: AppSize.iconMd),
               label: const Text('换头像',
                   style: TextStyle(fontSize: AppTheme.fontSm)),
               style: TextButton.styleFrom(
@@ -286,7 +286,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.phone_iphone,
-                        size: 22, color: AppTheme.primaryDark),
+                        size: AppSize.iconMd, color: AppTheme.primaryDark),
                     const SizedBox(width: AppSpace.s8),
                     // Flexible + ellipsis: 号码在窄屏/特大字号下能缩, 不把这一行顶爆
                     // (号码本身很短, 正常手机永不会真的省略)
@@ -363,7 +363,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                       );
                     }
                   },
-                  icon: const Icon(Icons.edit_outlined, size: 24),
+                  icon: const Icon(Icons.edit_outlined, size: AppSize.iconLg),
                   label: const Text('编辑我的资料',
                       style: TextStyle(fontSize: AppTheme.fontMd)),
                 ),
@@ -399,7 +399,7 @@ class _PhoneAction extends StatelessWidget {
         child: SizedBox(
           width: AppSpace.s44,
           height: AppSpace.s44,
-          child: Icon(icon, size: 24, color: AppTheme.primaryDark),
+          child: Icon(icon, size: AppSize.iconLg, color: AppTheme.primaryDark),
         ),
       ),
     );
@@ -464,7 +464,7 @@ class _FranchiseCard extends StatelessWidget {
           trailing: referrer == null
               ? null
               : const Icon(Icons.chevron_right,
-                  size: 28, color: AppTheme.textSecondary),
+                  size: AppSize.iconXl, color: AppTheme.textSecondary),
           onTap: referrer == null
               ? null
               : () => context.push('/franchisees/${referrer.id}'),
@@ -509,7 +509,7 @@ class _NotFranchiseeCard extends StatelessWidget {
           children: [
             Row(
               children: const [
-                Icon(Icons.info_outline, size: 24, color: AppTheme.accent),
+                Icon(Icons.info_outline, size: AppSize.iconLg, color: AppTheme.accent),
                 SizedBox(width: AppSpace.s8),
                 Text(
                   '还没绑定加盟关系',
@@ -556,7 +556,7 @@ class _AdminNoFranchiseeCard extends StatelessWidget {
           children: [
             Row(
               children: const [
-                Icon(Icons.shield_outlined, size: 24, color: AppTheme.primaryDark),
+                Icon(Icons.shield_outlined, size: AppSize.iconLg, color: AppTheme.primaryDark),
                 SizedBox(width: AppSpace.s8),
                 Text(
                   '系统管理员',
@@ -877,7 +877,7 @@ class _AccountCard extends ConsumerWidget {
           trailing: p.phone == null
               ? null
               : IconButton(
-                  icon: const Icon(Icons.copy, size: 22),
+                  icon: const Icon(Icons.copy, size: AppSize.iconMd),
                   tooltip: '复制',
                   onPressed: () async {
                     await Clipboard.setData(ClipboardData(text: p.phone!.full));
@@ -973,7 +973,7 @@ class _AboutCard extends ConsumerWidget {
             title: '服务地址 (调试)',
             subtitle: ApiClient.baseUrl,
             trailing: IconButton(
-              icon: const Icon(Icons.copy, size: 22),
+              icon: const Icon(Icons.copy, size: AppSize.iconMd),
               onPressed: () async {
                 await Clipboard.setData(
                   ClipboardData(text: ApiClient.baseUrl),
@@ -1131,7 +1131,7 @@ class _InviteCard extends ConsumerWidget {
                         );
                       }
                     },
-                    icon: const Icon(Icons.link, size: 22),
+                    icon: const Icon(Icons.link, size: AppSize.iconMd),
                     label: const Text(
                       '复制下载链接',
                       style: TextStyle(fontSize: AppTheme.fontSm),
@@ -1173,7 +1173,7 @@ class _LogoutButton extends ConsumerWidget {
       height: AppTheme.buttonLgHeight,
       child: OutlinedButton.icon(
         onPressed: () => _confirmLogout(context, ref),
-        icon: const Icon(Icons.logout, size: 26),
+        icon: const Icon(Icons.logout, size: AppSize.iconLg),
         label: const Text('退出登录', style: TextStyle(fontSize: AppTheme.fontMd)),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppTheme.danger,
@@ -1241,7 +1241,7 @@ class _MembershipCard extends ConsumerWidget {
             padding: EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s8),
             child: Row(
               children: [
-                Icon(Icons.verified_user, size: 26, color: AppTheme.primary),
+                Icon(Icons.verified_user, size: AppSize.iconLg, color: AppTheme.primary),
                 SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
@@ -1265,7 +1265,7 @@ class _MembershipCard extends ConsumerWidget {
             padding: const EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s8),
             child: Row(
               children: [
-                const Icon(Icons.verified, size: 26, color: AppTheme.primary),
+                const Icon(Icons.verified, size: AppSize.iconLg, color: AppTheme.primary),
                 const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
@@ -1373,7 +1373,7 @@ class _ReferralCodeRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.group_add, size: 24, color: AppTheme.primaryDark),
+              const Icon(Icons.group_add, size: AppSize.iconLg, color: AppTheme.primaryDark),
               const SizedBox(width: AppSpace.s8),
               // Expanded: 窄屏/特大字号下让标题列先缩, 保住推荐码本身完整可读
               const Expanded(
@@ -1397,7 +1397,7 @@ class _ReferralCodeRow extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.copy, size: 22),
+                icon: const Icon(Icons.copy, size: AppSize.iconMd),
                 tooltip: '复制推荐码',
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: code));

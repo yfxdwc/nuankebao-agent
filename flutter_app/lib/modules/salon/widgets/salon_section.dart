@@ -37,7 +37,7 @@ class SalonSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, size: 26, color: AppTheme.primary),
+                Icon(icon, size: AppSize.iconLg, color: AppTheme.primary),
                 const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
@@ -85,7 +85,7 @@ class SalonInfoRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 22, color: AppTheme.textSecondary),
+          Icon(icon, size: AppSize.iconMd, color: AppTheme.textSecondary),
           const SizedBox(width: AppSpace.s8),
           Text(
             label,
@@ -107,7 +107,7 @@ class SalonInfoRow extends StatelessWidget {
           ),
           if (onTap != null) ...[
             const SizedBox(width: AppSpace.s4),
-            const Icon(Icons.chevron_right, size: 24, color: AppTheme.textSecondary),
+            const Icon(Icons.chevron_right, size: AppSize.iconLg, color: AppTheme.textSecondary),
           ],
         ],
       ),

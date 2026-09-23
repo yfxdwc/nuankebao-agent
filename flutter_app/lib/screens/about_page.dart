@@ -55,7 +55,7 @@ class AboutPage extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(AppRadius.r20),
                     ),
                     child: const Icon(Icons.spa,
-                        size: 44, color: AppTheme.primaryDark),
+                        size: AppSize.avatarMd, color: AppTheme.primaryDark),
                   ),
                   const SizedBox(height: AppSpace.s12),
                   const Text(
@@ -316,7 +316,7 @@ class _FactItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 24, color: AppTheme.primary),
+          Icon(icon, size: AppSize.iconLg, color: AppTheme.primary),
           const SizedBox(width: AppSpace.s12),
           Expanded(
             child: Column(

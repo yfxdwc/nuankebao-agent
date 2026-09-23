@@ -207,7 +207,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 icon: Badge(
                   isLabelVisible: count > 0,
                   label: Text('$count'),
-                  child: const Icon(Icons.fact_check_outlined, size: 26),
+                  child: const Icon(Icons.fact_check_outlined, size: AppSize.iconLg),
                 ),
               );
             },
@@ -249,11 +249,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 hintText: _viewMode == _CustomerViewMode.graph
                     ? '搜索客户姓名 (高亮匹配节点)'
                     : '搜索 姓名 或 手机号',
-                prefixIcon: const Icon(Icons.search, size: 28),
+                prefixIcon: const Icon(Icons.search, size: AppSize.iconXl),
                 suffixIcon: _search.isEmpty
                     ? null
                     : IconButton(
-                        icon: const Icon(Icons.close, size: 22),
+                        icon: const Icon(Icons.close, size: AppSize.iconMd),
                         tooltip: '清除',
                         onPressed: () {
                           _searchController.clear();
@@ -413,7 +413,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             const SizedBox(width: AppSpace.s6),
             Text('($count)', style: TextStyle(fontSize: AppTheme.fontXs, color: color)),
             const Spacer(),
-            Icon(collapsed ? Icons.expand_more : Icons.expand_less, size: 20, color: AppTheme.textSecondary),
+            Icon(collapsed ? Icons.expand_more : Icons.expand_less, size: AppSize.iconMd, color: AppTheme.textSecondary),
           ],
         ),
       ),
@@ -782,7 +782,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                           searchQuery.isNotEmpty
                               ? Icons.search
                               : Icons.touch_app_outlined,
-                          size: 20,
+                          size: AppSize.iconMd,
                           color: searchQuery.isNotEmpty && matchCount == 0
                               ? AppTheme.danger
                               : AppTheme.primaryDark,
@@ -1205,7 +1205,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         node.hasChildren && node.children.isEmpty && !childrenLoaded;
     return Row(
       children: [
-        const Icon(Icons.account_tree_outlined, size: 20, color: AppTheme.accent),
+        const Icon(Icons.account_tree_outlined, size: AppSize.iconMd, color: AppTheme.accent),
         const SizedBox(width: AppSpace.s8),
         Expanded(
           child: Text(
@@ -1221,7 +1221,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         ),
         // 落位「三方确认」(主人 2026-09-18 拍): 在这个点位的下级加新加盟商
         IconButton(
-          icon: const Icon(Icons.person_add_alt_1, size: 22),
+          icon: const Icon(Icons.person_add_alt_1, size: AppSize.iconMd),
           tooltip: '加下线到此点位',
           visualDensity: VisualDensity.compact,
           onPressed: () => _showAddDownlineDialog(node),
@@ -1239,19 +1239,19 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         else if (canExpand)
           TextButton.icon(
             onPressed: () => _expandNode(node),
-            icon: const Icon(Icons.unfold_more, size: 20),
+            icon: const Icon(Icons.unfold_more, size: AppSize.iconMd),
             label: const Text('展开下级', style: TextStyle(fontSize: AppType.xs)),
             style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
           )
         else if (childrenLoaded && !_graphNoFold)
           TextButton.icon(
             onPressed: () => _collapseNode(node),
-            icon: const Icon(Icons.unfold_less, size: 20),
+            icon: const Icon(Icons.unfold_less, size: AppSize.iconMd),
             label: const Text('收起', style: TextStyle(fontSize: AppType.xs)),
             style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
           ),
         IconButton(
-          icon: const Icon(Icons.close, size: 20),
+          icon: const Icon(Icons.close, size: AppSize.iconMd),
           tooltip: '取消选中',
           visualDensity: VisualDensity.compact,
           onPressed: _clearSelection,
@@ -1682,7 +1682,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18, color: AppTheme.primaryDark),
+              Icon(icon, size: AppSize.iconSm, color: AppTheme.primaryDark),
               const SizedBox(width: AppSpace.s4),
               Text(
                 label,
@@ -1936,7 +1936,7 @@ class CustomerDetailPage extends ConsumerWidget {
         toolbarHeight: AppSize.appBarHeight,
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit, size: 28),
+            icon: const Icon(Icons.edit, size: AppSize.iconXl),
             tooltip: '编辑',
             onPressed: () => context.push('/customers/$customerId/edit'),
           ),
@@ -2013,7 +2013,7 @@ class CustomerDetailPage extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.favorite, size: 26, color: AppTheme.accent),
+                const Icon(Icons.favorite, size: AppSize.iconLg, color: AppTheme.accent),
                 const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text('养生记录',
@@ -2060,7 +2060,7 @@ class CustomerDetailPage extends ConsumerWidget {
                     if (records.length > 5)
                       TextButton.icon(
                         onPressed: () => _showAllRecords(context, records),
-                        icon: const Icon(Icons.expand_more, size: 22),
+                        icon: const Icon(Icons.expand_more, size: AppSize.iconMd),
                         label: Text('查看全部 ${records.length} 条',
                             style: const TextStyle(fontSize: AppTheme.fontSm)),
                       ),
@@ -2164,7 +2164,7 @@ class CustomerDetailPage extends ConsumerWidget {
                         border: Border.all(color: Colors.white, width: AppSpace.s2),
                       ),
                       child: const Icon(Icons.photo_camera,
-                          size: 18, color: Colors.white),
+                          size: AppSize.iconSm, color: Colors.white),
                     ),
                   ),
                 ],
@@ -2280,7 +2280,7 @@ class CustomerDetailPage extends ConsumerWidget {
                       Row(
                         children: [
                           Icon(Icons.cake_outlined,
-                              size: 20,
+                              size: AppSize.iconMd,
                               color: due ? AppTheme.accent : AppTheme.primaryDark),
                           const SizedBox(width: AppSpace.s6),
                           Expanded(
@@ -2345,7 +2345,7 @@ class CustomerDetailPage extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Icon(Icons.warning_amber_rounded,
-                        size: 20, color: AppTheme.accent),
+                        size: AppSize.iconMd, color: AppTheme.accent),
                     const SizedBox(width: AppSpace.s6),
                     Expanded(
                       child: Text(
@@ -2535,7 +2535,7 @@ class CustomerDetailPage extends ConsumerWidget {
               children: [
                 Icon(
                   bound ? Icons.verified_user : Icons.person_add_alt_1_outlined,
-                  size: 20,
+                  size: AppSize.iconMd,
                   color: bound ? AppTheme.primaryDark : AppTheme.textSecondary,
                 ),
                 const SizedBox(width: AppSpace.s6),
@@ -2583,7 +2583,7 @@ class CustomerDetailPage extends ConsumerWidget {
                 width: double.infinity,
                 child: FilledButton.tonalIcon(
                   onPressed: () => _showBindAccountDialog(context, ref, c),
-                  icon: const Icon(Icons.qr_code_2, size: 20),
+                  icon: const Icon(Icons.qr_code_2, size: AppSize.iconMd),
                   label: const Text(
                     '填邀请码绑定身份',
                     style: TextStyle(fontSize: AppTheme.fontSm),
@@ -2691,7 +2691,7 @@ class CustomerDetailPage extends ConsumerWidget {
             Row(
               children: [
                 const Icon(Icons.badge_outlined,
-                    size: 20, color: AppTheme.primaryDark),
+                    size: AppSize.iconMd, color: AppTheme.primaryDark),
                 const SizedBox(width: AppSpace.s6),
                 const Text(
                   '客户类型',
@@ -2746,7 +2746,7 @@ class CustomerDetailPage extends ConsumerWidget {
               FilledButton.icon(
                 onPressed: () =>
                     _promoteCustomerToFranchisee(context, ref, c),
-                icon: const Icon(Icons.person_add_alt_1, size: 24),
+                icon: const Icon(Icons.person_add_alt_1, size: AppSize.iconLg),
                 label: const Text(
                   '发展为加盟商',
                   style: TextStyle(fontSize: AppTheme.fontMd),
@@ -2812,7 +2812,7 @@ class CustomerDetailPage extends ConsumerWidget {
       child: Center(
         child: Column(
           children: [
-            const Icon(Icons.history, size: 56, color: AppTheme.textSecondary),
+            const Icon(Icons.history, size: AppSize.fabSize, color: AppTheme.textSecondary),
             const SizedBox(height: AppSpace.s8),
             Text(title, style: const TextStyle(fontSize: AppTheme.fontMd)),
             const SizedBox(height: AppSpace.s4),
@@ -2836,7 +2836,7 @@ class CustomerDetailPage extends ConsumerWidget {
             color: AppTheme.accent.withOpacity(0.2),
             borderRadius: BorderRadius.circular(AppRadius.r24),
           ),
-          child: const Icon(Icons.favorite, color: AppTheme.accent, size: 28),
+          child: const Icon(Icons.favorite, color: AppTheme.accent, size: AppSize.iconXl),
         ),
         title: Text(
           '养生记录',
@@ -2852,7 +2852,7 @@ class CustomerDetailPage extends ConsumerWidget {
             style: const TextStyle(fontSize: AppTheme.fontSm),
           ),
         ),
-        trailing: const Icon(Icons.chevron_right, size: 28),
+        trailing: const Icon(Icons.chevron_right, size: AppSize.iconXl),
         onTap: () => context.push('/wellness-records/${r.id}'),
       ),
     );
@@ -3354,7 +3354,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     const Row(
                       children: [
                         Icon(Icons.notifications_active_outlined,
-                            size: 20, color: AppTheme.accent),
+                            size: AppSize.iconMd, color: AppTheme.accent),
                         SizedBox(width: AppSpace.s6),
                         Text('生日提醒 (已开启)',
                             style: TextStyle(
@@ -3449,7 +3449,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                       minimumSize: const Size(0, 48),
                       padding: EdgeInsets.zero,
                     ),
-                    icon: const Icon(Icons.add, size: 20),
+                    icon: const Icon(Icons.add, size: AppSize.iconMd),
                     label: const Text('添加', style: TextStyle(fontSize: AppTheme.fontSm)),
                   ),
                 ),

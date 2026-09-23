@@ -211,6 +211,7 @@ abstract final class AppWeight {
 
 /// L1 尺度 —— 组件尺寸
 abstract final class AppSize {
+  static const double iconXs = 16.0;
   static const double iconSm = 16.0;
   static const double iconMd = 20.0;
   static const double iconLg = 24.0;

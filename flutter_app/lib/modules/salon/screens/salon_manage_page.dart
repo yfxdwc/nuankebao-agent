@@ -86,14 +86,14 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
       floatingActionButton: _tab.index == 1
           ? FloatingActionButton.extended(
               onPressed: _showAddInvitation,
-              icon: const Icon(Icons.person_add_alt, size: 32),
+              icon: const Icon(Icons.person_add_alt, size: AppSize.iconXl),
               label: const Text('添加邀请',
                   style: TextStyle(fontSize: AppTheme.fontMd)),
             )
           : _tab.index == 2
               ? FloatingActionButton.extended(
                   onPressed: _showAssignQuota,
-                  icon: const Icon(Icons.flag_outlined, size: 32),
+                  icon: const Icon(Icons.flag_outlined, size: AppSize.iconXl),
                   label: const Text('分配任务',
                       style: TextStyle(fontSize: AppTheme.fontMd)),
                 )
@@ -457,7 +457,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
                 ListTile(
                   leading: Icon(
                     a.icon,
-                    size: 28,
+                    size: AppSize.iconXl,
                     color: a.value == 'remove'
                         ? AppTheme.danger
                         : AppTheme.textSecondary,
@@ -636,7 +636,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
                 onPressed: () => _confirmCancelQuota(q),
                 icon: const Icon(
                   Icons.close,
-                  size: 24,
+                  size: AppSize.iconLg,
                   color: AppTheme.danger,
                 ),
                 label: const Text(
@@ -1091,7 +1091,7 @@ class _CancelSalonAction extends ConsumerWidget {
     if (!visible) return const SizedBox.shrink();
 
     return IconButton(
-      icon: const Icon(Icons.cancel_outlined, size: 28, color: AppTheme.danger),
+      icon: const Icon(Icons.cancel_outlined, size: AppSize.iconXl, color: AppTheme.danger),
       tooltip: '取消沙龙',
       onPressed: busy
           ? null

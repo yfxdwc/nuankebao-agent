@@ -43,7 +43,7 @@ class ProfileSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, size: 24, color: AppTheme.primaryDark),
+                Icon(icon, size: AppSize.iconLg, color: AppTheme.primaryDark),
                 const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
@@ -113,7 +113,7 @@ class ProfileTile extends StatelessWidget {
                 color: tint.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(AppRadius.r22),
               ),
-              child: Icon(icon, size: 26, color: tint),
+              child: Icon(icon, size: AppSize.iconLg, color: tint),
             ),
             const SizedBox(width: AppSpace.s12),
             Expanded(
@@ -147,7 +147,7 @@ class ProfileTile extends StatelessWidget {
               trailing!
             else if (onTap != null)
               const Icon(Icons.chevron_right,
-                  size: 28, color: AppTheme.textSecondary),
+                  size: AppSize.iconXl, color: AppTheme.textSecondary),
           ],
         ),
       ),

@@ -148,7 +148,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                   MemberAvatar(
                     avatarUrl: u.avatarUrl,
                     name: u.name,
-                    size: 56,
+                    size: AppSize.fabSize,
                     isMember: u.member.isMember,
                   ),
                   const SizedBox(width: AppSpace.s12),
@@ -209,7 +209,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                       Navigator.pop(ctx);
                       _openReparent(_nodeOfUser(u)!);
                     },
-                    icon: const Icon(Icons.swap_vert, size: 18),
+                    icon: const Icon(Icons.swap_vert, size: AppSize.iconSm),
                     label: const Text('协商处理: 改上层'),
                   ),
                 ),
@@ -261,7 +261,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                       Navigator.pop(ctx);
                       _openReparent(n);
                     },
-                    icon: const Icon(Icons.swap_vert, size: 18),
+                    icon: const Icon(Icons.swap_vert, size: AppSize.iconSm),
                     label: const Text('协商处理: 改上层'),
                   ),
                 )
@@ -398,7 +398,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                   child: Row(
                     children: [
                       const Icon(Icons.swipe_outlined,
-                          size: 18, color: AppTheme.textSecondary),
+                          size: AppSize.iconSm, color: AppTheme.textSecondary),
                       const SizedBox(width: AppSpace.s6),
                       Expanded(
                         child: Text(
@@ -516,7 +516,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                   MemberAvatar(
                     avatarUrl: u.avatarUrl,
                     name: u.name,
-                    size: 48,
+                    size: AppSize.avatarLg,
                     isMember: u.member.isMember,
                   ),
                   const SizedBox(width: AppSpace.s12),

@@ -202,7 +202,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.arrow_downward, color: AppTheme.franchisee, size: 28),
+                const Icon(Icons.arrow_downward, color: AppTheme.franchisee, size: AppSize.iconXl),
                 const SizedBox(width: AppSpace.s12),
                 Expanded(
                   child: Column(
@@ -286,7 +286,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
             Icon(
               _selectedSide == 'left' ? Icons.arrow_back : Icons.arrow_forward,
               color: AppTheme.franchisee,
-              size: 28,
+              size: AppSize.iconXl,
             ),
             const SizedBox(width: AppSpace.s12),
             Text(
@@ -329,7 +329,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
     final selected = _selectedSide == value;
     return OutlinedButton.icon(
       onPressed: () => setState(() => _selectedSide = value),
-      icon: Icon(icon, size: 24),
+      icon: Icon(icon, size: AppSize.iconLg),
       label: Text(label, style: const TextStyle(fontSize: AppTheme.fontMd)),
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, 64),

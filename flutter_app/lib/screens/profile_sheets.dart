@@ -136,7 +136,7 @@ Future<bool> showEditMyProfileSheet(
                             color: Colors.white,
                           ),
                         )
-                      : const Icon(Icons.check, size: 26),
+                      : const Icon(Icons.check, size: AppSize.iconLg),
                   label: Text(
                     saving ? '保存中...' : '保存',
                     style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -221,7 +221,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                 const SizedBox(height: AppSpace.s8),
                 OutlinedButton.icon(
                   onPressed: () => ref.invalidate(appReleaseProvider),
-                  icon: const Icon(Icons.refresh, size: 22),
+                  icon: const Icon(Icons.refresh, size: AppSize.iconMd),
                   label: const Text('重试',
                       style: TextStyle(fontSize: AppTheme.fontMd)),
                 ),
@@ -277,7 +277,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                       child: FilledButton.icon(
                         onPressed: () =>
                             _openDownload(release.apk!.downloadUrl),
-                        icon: const Icon(Icons.download, size: 26),
+                        icon: const Icon(Icons.download, size: AppSize.iconLg),
                         label: const Text(
                           '下载 / 更新安装包',
                           style: TextStyle(fontSize: AppTheme.fontMd),
@@ -297,7 +297,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                                 _toast(context, '下载链接已复制');
                               }
                             },
-                            icon: const Icon(Icons.link, size: 22),
+                            icon: const Icon(Icons.link, size: AppSize.iconMd),
                             label: const Text(
                               '复制链接',
                               style: TextStyle(fontSize: AppTheme.fontSm),
@@ -327,7 +327,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                                 ],
                               ),
                             ),
-                            icon: const Icon(Icons.qr_code_2, size: 22),
+                            icon: const Icon(Icons.qr_code_2, size: AppSize.iconMd),
                             label: const Text(
                               '扫码安装',
                               style: TextStyle(fontSize: AppTheme.fontSm),
@@ -521,7 +521,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
                 const SizedBox(height: AppSpace.s8),
                 Row(
                   children: const [
-                    Icon(Icons.error_outline, color: AppTheme.danger, size: 26),
+                    Icon(Icons.error_outline, color: AppTheme.danger, size: AppSize.iconLg),
                     SizedBox(width: AppSpace.s8),
                     Text(
                       '连不上服务器',
@@ -552,7 +552,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
                     Icon(
                       h.healthy ? Icons.check_circle : Icons.error_outline,
                       color: h.healthy ? AppTheme.primary : AppTheme.danger,
-                      size: 26,
+                      size: AppSize.iconLg,
                     ),
                     const SizedBox(width: AppSpace.s8),
                     Text(
@@ -583,7 +583,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => ref.invalidate(healthCheckProvider),
-                  icon: const Icon(Icons.refresh, size: 22),
+                  icon: const Icon(Icons.refresh, size: AppSize.iconMd),
                   label: const Text('重新检测',
                       style: TextStyle(fontSize: AppTheme.fontSm)),
                 ),
@@ -598,7 +598,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
                       _toast(context, '诊断信息已复制, 可发给管理员');
                     }
                   },
-                  icon: const Icon(Icons.content_copy, size: 22),
+                  icon: const Icon(Icons.content_copy, size: AppSize.iconMd),
                   label: const Text('复制诊断信息',
                       style: TextStyle(fontSize: AppTheme.fontSm)),
                 ),
@@ -843,7 +843,7 @@ Future<bool> showAvatarPickerSheet(
                       UserAvatar(
                         avatarUrl: currentAvatarUrl,
                         name: name,
-                        size: 72,
+                        size: AppSize.avatarLg,
                       ),
                       if (busy)
                         const Positioned.fill(
@@ -877,7 +877,7 @@ Future<bool> showAvatarPickerSheet(
                             onPressed: busy
                                 ? null
                                 : () => pickAndUpload(ImageSource.camera),
-                            icon: const Icon(Icons.photo_camera, size: 24),
+                            icon: const Icon(Icons.photo_camera, size: AppSize.iconLg),
                             label: const Text('拍一张',
                                 style: TextStyle(fontSize: AppTheme.fontMd)),
                           ),
@@ -890,7 +890,7 @@ Future<bool> showAvatarPickerSheet(
                             onPressed: busy
                                 ? null
                                 : () => pickAndUpload(ImageSource.gallery),
-                            icon: const Icon(Icons.photo_library, size: 24),
+                            icon: const Icon(Icons.photo_library, size: AppSize.iconLg),
                             label: const Text('从相册选',
                                 style: TextStyle(fontSize: AppTheme.fontMd)),
                           ),
@@ -940,7 +940,7 @@ Future<bool> showAvatarPickerSheet(
                             child: UserAvatar(
                               avatarUrl: 'preset:${p.id}',
                               name: name,
-                              size: 56,
+                              size: AppSize.fabSize,
                               showLoadingIndicator: false,
                             ),
                           ),
@@ -966,7 +966,7 @@ Future<bool> showAvatarPickerSheet(
               const Divider(height: 1),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.restart_alt, size: 26),
+                leading: const Icon(Icons.restart_alt, size: AppSize.iconLg),
                 title: const Text('恢复默认头像',
                     style: TextStyle(fontSize: AppTheme.fontMd)),
                 subtitle: const Text('用姓名第一个字当头像',
@@ -1546,7 +1546,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: _busy ? null : _pickProof,
-                    icon: const Icon(Icons.image_outlined, size: 22),
+                    icon: const Icon(Icons.image_outlined, size: AppSize.iconMd),
                     label: Text(
                       _proofUrl == null ? '传付款截图 (可不传)' : '已传截图 ✓',
                       style: const TextStyle(fontSize: AppTheme.fontSm),
@@ -1573,7 +1573,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                             height: AppSpace.s22,
                             child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
                           )
-                        : const Icon(Icons.check_circle_outline, size: 26),
+                        : const Icon(Icons.check_circle_outline, size: AppSize.iconLg),
                     label: Text(
                       _busy ? '提交中...' : '我已支付',
                       style: const TextStyle(fontSize: AppTheme.fontMd),

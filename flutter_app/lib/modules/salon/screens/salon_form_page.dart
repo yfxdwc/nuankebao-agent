@@ -411,7 +411,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                       ? AppTheme.primary
                       : AppColors.border,
                   child: done
-                      ? const Icon(Icons.check, size: 20, color: Colors.white)
+                      ? const Icon(Icons.check, size: AppSize.iconMd, color: Colors.white)
                       : Text(
                           '${i + 1}',
                           style: TextStyle(
@@ -776,7 +776,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         const SizedBox(height: AppSpace.s8),
         OutlinedButton.icon(
           onPressed: _loadQuickInvite,
-          icon: const Icon(Icons.refresh, size: 18),
+          icon: const Icon(Icons.refresh, size: AppSize.iconSm),
           label: const Text('重试'),
         ),
       ] else if (_quickInvite == null || _quickInvite!.isEmpty) ...[
@@ -946,7 +946,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(double.infinity, 56),
         ),
-        icon: const Icon(Icons.add, size: 24),
+        icon: const Icon(Icons.add, size: AppSize.iconLg),
         label: const Text('添加会务人员'),
       ),
     ]);
@@ -980,7 +980,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                 tooltip: '删除',
                 icon: const Icon(
                   Icons.delete_outline,
-                  size: 26,
+                  size: AppSize.iconLg,
                   color: AppTheme.danger,
                 ),
               ),
@@ -1049,7 +1049,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(double.infinity, 56),
         ),
-        icon: const Icon(Icons.add, size: 24),
+        icon: const Icon(Icons.add, size: AppSize.iconLg),
         label: const Text('添加日程'),
       ),
     ]);
@@ -1083,7 +1083,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                 tooltip: '删除',
                 icon: const Icon(
                   Icons.delete_outline,
-                  size: 26,
+                  size: AppSize.iconLg,
                   color: AppTheme.danger,
                 ),
               ),
@@ -1226,7 +1226,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
             isExpanded: true,
             itemHeight: 56,
             icon: const Icon(Icons.arrow_drop_down,
-                size: 32, color: AppTheme.primary),
+                size: AppSize.iconXl, color: AppTheme.primary),
             dropdownColor: AppTheme.bgCard,
             style: const TextStyle(
               fontSize: AppTheme.fontMd,
@@ -1272,7 +1272,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 56),
                   ),
-                  icon: const Icon(Icons.event, size: 24),
+                  icon: const Icon(Icons.event, size: AppSize.iconLg),
                   label: Text(
                     value == null ? '点击选择' : _fmtDateTime(value),
                     style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -1283,7 +1283,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                 IconButton(
                   onPressed: _saving ? null : () => onChanged(null),
                   tooltip: '清除',
-                  icon: const Icon(Icons.close, size: 26),
+                  icon: const Icon(Icons.close, size: AppSize.iconLg),
                 ),
             ],
           ),

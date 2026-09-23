@@ -249,7 +249,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                   r.kind == 'create'
                       ? Icons.person_add_alt
                       : Icons.link_off,
-                  size: 22,
+                  size: AppSize.iconMd,
                   color: AppTheme.primary,
                 ),
                 const SizedBox(width: AppSpace.s8),
@@ -301,7 +301,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                     child: FilledButton.icon(
                       onPressed: () =>
                           r.needsSidePick ? _approveWithSidePick(r) : _decide(r, true),
-                      icon: const Icon(Icons.check, size: 22),
+                      icon: const Icon(Icons.check, size: AppSize.iconMd),
                       label: const Text('同意', style: TextStyle(fontSize: AppTheme.fontMd)),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 56),
@@ -312,7 +312,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _decide(r, false),
-                      icon: const Icon(Icons.close, size: 22),
+                      icon: const Icon(Icons.close, size: AppSize.iconMd),
                       label: const Text('拒绝', style: TextStyle(fontSize: AppTheme.fontMd)),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(0, 56),
@@ -332,7 +332,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
             else
               OutlinedButton.icon(
                 onPressed: () => _cancel(r),
-                icon: const Icon(Icons.undo, size: 22),
+                icon: const Icon(Icons.undo, size: AppSize.iconMd),
                 label: const Text('撤回', style: TextStyle(fontSize: AppTheme.fontMd)),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(0, 56),

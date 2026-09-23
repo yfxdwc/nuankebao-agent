@@ -202,7 +202,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
                     Row(
                       children: [
                         const Icon(Icons.info_outline,
-                            size: 18, color: AppTheme.primaryDark),
+                            size: AppSize.iconSm, color: AppTheme.primaryDark),
                         const SizedBox(width: AppSpace.s6),
                         const Text(
                           '推荐人 / 位置 不可修改',

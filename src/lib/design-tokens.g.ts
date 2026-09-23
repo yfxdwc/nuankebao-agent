@@ -171,6 +171,7 @@ export const typeScale = {
 } as const;
 
 export const size = {
+  "iconXs": 16,
   "iconSm": 16,
   "iconMd": 20,
   "iconLg": 24,

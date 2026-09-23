@@ -193,7 +193,7 @@ class _CustomerFollowUpSectionState
           children: [
             Row(
               children: [
-                const Icon(Icons.task_alt, size: 26, color: AppTheme.primary),
+                const Icon(Icons.task_alt, size: AppSize.iconLg, color: AppTheme.primary),
                 const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text('跟进任务',
@@ -289,7 +289,7 @@ class _CustomerFollowUpSectionState
             )
           else
             IconButton(
-              icon: const Icon(Icons.check_circle_outline, size: 26),
+              icon: const Icon(Icons.check_circle_outline, size: AppSize.iconLg),
               tooltip: '标记完成',
               color: AppTheme.primary,
               onPressed: () => _complete(t),
@@ -346,7 +346,7 @@ class _CustomerInteractionSectionState
           children: [
             Row(
               children: [
-                const Icon(Icons.forum_outlined, size: 26, color: AppTheme.accent),
+                const Icon(Icons.forum_outlined, size: AppSize.iconLg, color: AppTheme.accent),
                 const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text('互动记录',
@@ -388,7 +388,7 @@ class _CustomerInteractionSectionState
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Icon(_typeIcon[i.type] ?? Icons.more_horiz,
-                                        size: 22, color: AppTheme.textSecondary),
+                                        size: AppSize.iconMd, color: AppTheme.textSecondary),
                                     const SizedBox(width: AppSpace.s8),
                                     Expanded(
                                       child: Column(

@@ -184,7 +184,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16),
           child: Row(
             children: [
-              Icon(icon, color: iconColor ?? AppTheme.textPrimary, size: 24),
+              Icon(icon, color: iconColor ?? AppTheme.textPrimary, size: AppSize.iconLg),
               const SizedBox(width: AppSpace.s16),
               Expanded(
                 child: Text(
@@ -204,7 +204,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
                   ),
                 ),
               const SizedBox(width: AppSpace.s8),
-              const Icon(Icons.chevron_right, size: 24, color: AppTheme.textSecondary),
+              const Icon(Icons.chevron_right, size: AppSize.iconLg, color: AppTheme.textSecondary),
             ],
           ),
         ),

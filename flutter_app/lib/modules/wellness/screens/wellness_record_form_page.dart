@@ -299,7 +299,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
           itemHeight: 56,
           decoration: const InputDecoration(hintText: '请选择服务项目'),
           icon: const Icon(Icons.arrow_drop_down,
-              size: 32, color: AppTheme.primary),
+              size: AppSize.iconXl, color: AppTheme.primary),
           dropdownColor: AppTheme.bgCard,
           style: const TextStyle(
             fontSize: AppTheme.fontMd,
@@ -429,7 +429,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
             );
             if (picked != null) setState(() => _nextAdviceDate = picked);
           },
-          icon: const Icon(Icons.calendar_today, size: 24),
+          icon: const Icon(Icons.calendar_today, size: AppSize.iconLg),
           label: Text(
             _nextAdviceDate == null
                 ? '选择日期 (可选)'

@@ -140,7 +140,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
                       children: [
                         const Icon(
                           Icons.phone,
-                          size: 20,
+                          size: AppSize.iconMd,
                           color: AppTheme.primary,
                         ),
                         const SizedBox(width: AppSpace.s4),
@@ -159,7 +159,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
             ],
           ),
         ),
-        trailing: const Icon(Icons.chevron_right, size: 28),
+        trailing: const Icon(Icons.chevron_right, size: AppSize.iconXl),
         onTap: () => _showGuestActions(g),
       ),
     );
@@ -231,7 +231,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
                 ListTile(
                   leading: Icon(
                     a.icon,
-                    size: 28,
+                    size: AppSize.iconXl,
                     color: a.key == 'remove'
                         ? AppTheme.danger
                         : AppTheme.textSecondary,

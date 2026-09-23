@@ -135,7 +135,7 @@ class _AddRecordSheet extends ConsumerWidget {
                   color: iconColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(AppRadius.r28),
                 ),
-                child: Icon(icon, color: iconColor, size: 32),
+                child: Icon(icon, color: iconColor, size: AppSize.iconXl),
               ),
               const SizedBox(width: AppSpace.s16),
               Expanded(
@@ -162,7 +162,7 @@ class _AddRecordSheet extends ConsumerWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 28, color: AppTheme.textSecondary),
+              const Icon(Icons.chevron_right, size: AppSize.iconXl, color: AppTheme.textSecondary),
             ],
           ),
         ),
@@ -251,7 +251,7 @@ class _AddRecordSheet extends ConsumerWidget {
                   );
                   if (picked != null) setSt(() => dueAt = picked);
                 },
-                icon: const Icon(Icons.calendar_today, size: 24),
+                icon: const Icon(Icons.calendar_today, size: AppSize.iconLg),
                 label: Text(
                   '${dueAt.year}-${dueAt.month.toString().padLeft(2, '0')}-${dueAt.day.toString().padLeft(2, '0')}',
                   style: const TextStyle(fontSize: AppTheme.fontMd),

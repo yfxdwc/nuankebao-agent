@@ -229,7 +229,7 @@ class CustomerRow extends StatelessWidget {
             const Icon(
               Icons.chevron_right,
               color: AppTheme.textSecondary,
-              size: 28,
+              size: AppSize.iconXl,
             ),
           ],
         ),
