@@ -35,36 +35,42 @@ class AppTheme {
   //
   // 迁移进度看 `tools/check-ui-tokens.sh` 的输出。
 
+  // ⚠ 这些别名**从生成的令牌派生**, 不是字面值 ——
+  //   2026-09-23 主人把 5 个主题的 primary 抬到 AAA 时, 这里因为写死了旧绿而漂移,
+  //   被 test/theme_tokens_test.dart 的「兼容层 == 默认主题」断言当场抓到。
+  //   现在改成引用 AppPalette / AppColors 的 const, 物理上不可能再漂移。
+  //   (品牌槽随主题变, 所以只能取默认主题对应的色板槽; 中性槽用 AppColors, 它跨主题恒定)
+
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.primary`
-  static const Color primary = Color(0xFF4A7C59);
+  static const Color primary = AppPalette.green700;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.primaryLight`
-  static const Color primaryLight = Color(0xFFA8D5BA);
+  static const Color primaryLight = AppPalette.green200;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.primaryDark`
-  static const Color primaryDark = Color(0xFF2D5A3D);
+  static const Color primaryDark = AppPalette.green800;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.accent`
-  static const Color accent = Color(0xFFE89F4D);
+  static const Color accent = AppPalette.amber500;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.graphFranchiseeB`
-  static const Color franchisee = Color(0xFF8E5BA8);
+  static const Color franchisee = AppColors.graphFranchiseeB;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.graphFranchiseeA`
-  static const Color franchiseeA = Color(0xFF2B6CB0);
+  static const Color franchiseeA = AppColors.graphFranchiseeA;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.graphFranchiseeB`
-  static const Color franchiseeB = Color(0xFF8E5BA8);
+  static const Color franchiseeB = AppColors.graphFranchiseeB;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.badgeNeutral`
-  static const Color badgeNeutral = Color(0xFF5A5A5A);
+  static const Color badgeNeutral = AppColors.badgeNeutral;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.danger`
-  static const Color danger = Color(0xFFB33A3A);
+  static const Color danger = AppColors.danger;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.surface`
-  static const Color bgWarm = Color(0xFFFFFBF5);
+  static const Color bgWarm = AppColors.surface;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.surfaceCard`
-  static const Color bgCard = Color(0xFFFFFFFF);
+  static const Color bgCard = AppColors.surfaceCard;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.textPrimary`
-  static const Color textPrimary = Color(0xFF1A1A1A);
+  static const Color textPrimary = AppColors.textPrimary;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.textSecondary`
-  static const Color textSecondary = Color(0xFF4A4A4A);
+  static const Color textSecondary = AppColors.textSecondary;
 
   /// 边框 / 分隔线 (原先是散落各处的 `Color(0xFFD0D0D0)`)
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.borderInput`
-  static const Color border = Color(0xFFD0D0D0);
+  static const Color border = AppColors.border;
 
   // ---- 字号 (尺度, 不随主题变; 保留旧名字) ----
   static const double fontXs = AppType.xs; // 14 副信息
