@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../http/api_client.dart';
 import '../services/notifications/follow_up_reminder.dart';
 import '../services/api.dart';
+import '../models/customer_charts.dart';
 import '../models/customer_insight.dart';
 import '../models/follow_up_info.dart';
 import '../models/dashboard.dart';
@@ -44,6 +45,17 @@ final wellnessRecordServiceProvider = Provider<WellnessRecordService>(
 /// 客户洞察 (评分 + 行动指引; 免费层)
 final customerInsightServiceProvider = Provider<CustomerInsightService>(
   (ref) => CustomerInsightService(ref.watch(dioProvider)),
+);
+
+/// 客户分析图谱 (P4; 趋势 + 部位热力)
+final customerChartsServiceProvider = Provider<CustomerChartsService>(
+  (ref) => CustomerChartsService(ref.watch(dioProvider)),
+);
+
+/// 「分析」Tab 的图谱数据 (autoDispose: 关掉详情页就释放)
+final customerChartsProvider =
+    FutureProvider.autoDispose.family<CustomerCharts, String>(
+  (ref, customerId) => ref.watch(customerChartsServiceProvider).get(customerId),
 );
 
 /// 详情页 L0 的洞察数据 (family: 按客户 id 缓存)

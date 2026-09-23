@@ -29,6 +29,7 @@ import '../../../core/widgets/big_fab.dart';
 import '../widgets/customer_insight_header.dart';
 import '../widgets/ai_insight_cards.dart';
 import '../widgets/customer_activity_cards.dart';
+import '../widgets/customer_analysis_charts.dart';
 import '../widgets/customer_row.dart';
 import '../../follow_up/widgets/follow_up_analysis_card.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -2022,13 +2023,23 @@ class CustomerDetailPage extends ConsumerWidget {
     ]);
   }
 
-  /// **分析 Tab** —— 三大动作之「分析」: 先事实 (客观指标), 再 AI 解读
+  /// **分析 Tab** —— 三大动作之「分析」: 图谱 → 客观指标 → AI 解读
   Widget _buildAnalysisTab(
     BuildContext context,
     WidgetRef ref,
     Customer customer,
   ) {
+    // 雷达图要吃 L0 的评分 (避免重复请求 /insight)
+    final insight = ref.watch(customerInsightProvider(customerId)).valueOrNull;
     return _tabScroll(children: [
+      // ★ P4 图谱 (主人 2026-09-23 拍): 雷达 / 效果趋势 / 部位热力
+      //   放最上面: 图比文字快 —— "她整体怎样" 一眼就能看出
+      if (insight != null)
+        CustomerAnalysisCharts(
+          customerId: customerId,
+          score: insight.score,
+        ),
+      if (insight != null) const SizedBox(height: AppSpace.cardGap),
       // 客观指标 (免费)
       FollowUpAnalysisCard(customerId: customerId),
       const SizedBox(height: AppSpace.cardGap),

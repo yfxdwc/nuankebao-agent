@@ -6,6 +6,7 @@
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../models/customer_charts.dart';
 import '../models/customer_insight.dart';
 import '../models/customer.dart';
 import '../models/follow_up_info.dart';
@@ -293,6 +294,19 @@ class CustomerInsightService {
   Future<CustomerInsight> get(String customerId) async {
     final res = await _dio.get('/customers/$customerId/insight');
     return CustomerInsight.fromJson(res.data as Map<String, dynamic>);
+  }
+}
+
+/// 客户分析图谱 (P4; 免费层)
+class CustomerChartsService {
+  final Dio _dio;
+  CustomerChartsService(this._dio);
+
+  /// GET /api/customers/[id]/charts
+  /// 趋势 + 部位热力; 雷达图用 CustomerScore 的维度分, 不走这里。
+  Future<CustomerCharts> get(String customerId) async {
+    final res = await _dio.get('/customers/$customerId/charts');
+    return CustomerCharts.fromJson(res.data as Map<String, dynamic>);
   }
 }
 
