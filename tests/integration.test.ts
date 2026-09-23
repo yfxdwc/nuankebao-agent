@@ -102,9 +102,13 @@ describe("crypto/field integration", () => {
       .where(sql`id = ${row.id}`);
 
     // 检查 audit_log (验证至少有一条该 id 的记录)
+    // ⚠ 必须带 table_name —— audit_log.record_id **跨表不唯一** (user.id=5 与
+    //   customer.id=5 都有审计行), 只按 record_id 查会把别的表的记录捞出来
+    //   (本用例曾因此拿到 table_name='user' 而失败)。schema 的
+    //   idx_audit_table_record(table_name, record_id) 也正是为两列一起查建的。
     const audit = await db.execute(sql`
       SELECT table_name, operation FROM audit_log
-      WHERE record_id = ${row.id}::bigint
+      WHERE table_name = 'customer' AND record_id = ${row.id}::bigint
       ORDER BY id
     `);
     const auditRows = (audit as unknown as Array<{ table_name: string; operation: string }>);

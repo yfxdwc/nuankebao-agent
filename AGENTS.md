@@ -367,6 +367,24 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   所以**这类问题只能真机/真浏览器验收**, 别因为单测绿就认为 UI 没问题。
   根因未完全定位 (不排除 Flutter web 引擎 sliver 布局的边缘 bug), 但规避手段已验证。
 
+- ❌ **`audit_log.record_id` 跨表不唯一 —— 查审计必须带 `table_name` (2026-09-23 修两个假失败测试)** —
+  `record_id` 只存了一个 BIGINT (为了兼容没有 `id` 列的键值表, 见 `audit_function.sql`),
+  **不是全局唯一**: `user.id = 5` 与 `customer.id = 5` 都有各自的审计行。
+  只按 `record_id` 查会**静默拿到别的表的记录** —— 本次两个测试就是这么挂的
+  (`expected 'user' to be 'customer'`)。
+  schema 里本来就有 `idx_audit_table_record(table_name, record_id)` 索引, 设计意图就是两列一起查。
+  **正确写法**: `WHERE table_name = 'customer' AND record_id = $1`。
+  ⚠ 将来做「这个客户的操作历史」类功能时必踩 —— 会显示出另一个表同 id 记录的内容。
+
+- ❌ **改一个字段的查询口径后, 只改实现没改测试 fixture (2026-09-23 member-flag)** —
+  ADR-0016 D3 把「客户 → 账号」的判定从 `phone_hash 相等` 改成走 `user.customer_id` 列连接,
+  实现改了, 但 `tests/member-flag.test.ts` 的 fixture **只建了档案没建列连接** →
+  `memberFlagByCustomerId` 永远返回 false。
+  ⚠ 危险在于它是**假绿的反面**: 测试挂了但没人查 (被当成“既有失败”忽略了好几轮),
+  而真相是 fixture 跟不上 —— 生产侧 `registration.ts` 一直有写这条连接, 线上是好的。
+  **修法**: 建档案的同时把 `user.customer_id` 也连上; 而且**反向的那条也要连**
+  (验"连了但不是会员"而不是"压根没连"), 否则连接逻辑坏掉时用例仍会假绿。
+
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
 > **历史**:

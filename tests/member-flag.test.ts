@@ -150,6 +150,19 @@ beforeAll(async () => {
   cidMember = c1.id;
   cidFree = c2.id;
   cidNoAccount = c3.id;
+
+  // ★ 必须补上「列连接」(ADR-0015 Q7 / ADR-0016 D3): user.customer_id
+  //
+  //   为什么本文件曾经失败: 实现按 ADR-0016 D3 从「phone_hash 相等猜同一个人」
+  //   改成了走 `user.customer_id`; 而这个 fixture 一直在建档案却没建这条连接
+  //   → `memberFlagByCustomerId` 永远 false (它**按设计**就不看手机号了)。
+  //   生产侧这条连接由 registration.ts::createAccountWithProfile 写入, 所以线上正常;
+  //   坏的是测试 fixture。
+  //
+  //   free 那条也连上: 这样 "false" 验的是"连了但不是会员", 而不是
+  //   "压根没连" —— 后者会让用例在连接逻辑坏掉时也假绿。
+  await db.update(user).set({ customerId: cidMember }).where(eq(user.id, uidMember));
+  await db.update(user).set({ customerId: cidFree }).where(eq(user.id, uidFree));
 });
 
 afterAll(async () => {

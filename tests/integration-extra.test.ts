@@ -190,7 +190,7 @@ describe("audit log (自动写)", () => {
     const logs = await db.execute<{ table_name: string; operation: string; record_id: string }>(sql`
       SELECT table_name, operation, record_id::text
       FROM audit_log
-      WHERE record_id = ${c.id}::bigint
+      WHERE table_name = 'customer' AND record_id = ${c.id}::bigint
       ORDER BY id DESC
     `);
 
