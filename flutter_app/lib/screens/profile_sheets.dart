@@ -19,6 +19,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/http/api_client.dart';
+import '../core/widgets/empty_state.dart';
 import '../core/http/session_token.dart';
 import '../core/models/me.dart';
 import '../core/services/api.dart' show ManualPayProduct;
@@ -205,7 +206,7 @@ class _UpdateSheetBody extends ConsumerWidget {
           releaseAsync.when(
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpace.s16),
-              child: Center(child: CircularProgressIndicator()),
+              child: LoadingState(),
             ),
             error: (e, _) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,7 +391,7 @@ class QrImage extends ConsumerWidget {
           return SizedBox(
             width: size,
             height: size,
-            child: const Center(child: CircularProgressIndicator()),
+            child: const LoadingState(),
           );
         }
         final bytes = snap.data;
@@ -507,7 +508,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
                   SizedBox(
                     width: AppSpace.s22,
                     height: AppSpace.s22,
-                    child: CircularProgressIndicator(strokeWidth: 3),
+                    child: LoadingState(size: 24),
                   ),
                   SizedBox(width: AppSpace.s12),
                   Text('正在连接服务器...',
@@ -1402,7 +1403,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
       child: infoAsync.when(
         loading: () => const SizedBox(
           height: 200,
-          child: Center(child: CircularProgressIndicator()),
+          child: LoadingState(),
         ),
         error: (e, _) => Column(
           mainAxisSize: MainAxisSize.min,
@@ -1571,7 +1572,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                         ? const SizedBox(
                             width: AppSpace.s22,
                             height: AppSpace.s22,
-                            child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+                            child: LoadingState(size: 24, color: Colors.white),
                           )
                         : const Icon(Icons.check_circle_outline, size: AppSize.iconLg),
                     label: Text(
@@ -1607,7 +1608,7 @@ class _QrImageLarge extends StatelessWidget {
       fit: BoxFit.contain,
       loadingBuilder: (c, child, progress) => progress == null
           ? child
-          : const Center(child: CircularProgressIndicator()),
+          : const LoadingState(),
       // ⚠ 两种失败要分开说: "没配置" 由外面那段红字提示; 这里是"图片拉不到"(断网/文件被删)
       errorBuilder: (c, _, __) => const Center(
         child: Padding(

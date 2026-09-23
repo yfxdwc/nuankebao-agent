@@ -70,16 +70,30 @@ class EmptyState extends StatelessWidget {
 }
 
 /// 加载中 (大圆圈)
+/// 加载中 -- size: sm/md/lg, 默认 md (= 主按钮大小, 48)
+///   sm = 16 (按钮内 / 列表右侧 inline)
+///   md = 48 (页面级 / 卡片级, 默认)
+///   lg = 64 (空态 hero 区)
+///
+/// ⚠ 按钮内 (高度 20-26) 不要用 LoadingState -- 它的 Center 包装会破坏按钮布局。
+///   那种场景直接 `SizedBox(height: 20, child: CircularProgressIndicator(strokeWidth: 2))`。
 class LoadingState extends StatelessWidget {
-  const LoadingState({super.key});
+  final double? size;
+  final double? strokeWidth;
+  final Color? color;
+  const LoadingState({super.key, this.size, this.strokeWidth, this.color});
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final s = size ?? AppSize.buttonLgHeight;       // md 默认 48
+    return Center(
       child: SizedBox(
-        width: AppSize.buttonLgHeight,
-        height: AppSize.buttonLgHeight,
-        child: const CircularProgressIndicator(strokeWidth: 3),
+        width: s,
+        height: s,
+        child: CircularProgressIndicator(
+          strokeWidth: strokeWidth ?? 3,
+          color: color,
+        ),
       ),
     );
   }

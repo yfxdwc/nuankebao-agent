@@ -216,6 +216,13 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: t.surface,
       visualDensity: VisualDensity.standard, // 不要 compact (触摸精度)
+      // B 档: 页面切换动画比 Material 默认 (300ms) 紧凑一些, 用 AppDuration.base
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: ZoomPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       textTheme: textThemeOf(t),
       extensions: <ThemeExtension<dynamic>>[AppTokensTheme(t)],
 

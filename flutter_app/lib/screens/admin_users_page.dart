@@ -126,7 +126,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, style: const TextStyle(fontSize: AppTheme.fontSm)),
-        duration: const Duration(seconds: 3),
+        duration: AppDuration.base,
       ),
     );
   }

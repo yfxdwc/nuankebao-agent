@@ -170,7 +170,7 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(r.message, style: const TextStyle(fontSize: AppTheme.fontSm)),
-          duration: const Duration(seconds: 4),
+          duration: AppDuration.base,
         ),
       );
     } else {
@@ -182,7 +182,7 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, style: const TextStyle(fontSize: AppTheme.fontSm)),
-        duration: const Duration(seconds: 3),
+        duration: AppDuration.base,
       ),
     );
   }
