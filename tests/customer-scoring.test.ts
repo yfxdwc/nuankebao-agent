@@ -939,7 +939,7 @@ describe("参数变量化 (resolveInsightConfig + config 生效)", () => {
     expect(d.scoring.bands).toHaveLength(4);
     expect(d.scoring.bands[0].min).toBe(80);
     expect(d.scoring.weights).toEqual({ effect: 0.3, engagement: 0.4, value: 0.3 });
-    expect(d.actions.contactAbsoluteGapDays).toBe(45);
+    expect(d.actions.contactAbsoluteGapDays).toBe(30);
     expect(d.actions.priorities.profile_incomplete).toBe("low");
   });
 
