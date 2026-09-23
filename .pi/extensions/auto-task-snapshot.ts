@@ -1,38 +1,40 @@
 /**
- * Auto Task Snapshot + Auto Commit Extension (W8 治本, vibe coding 优化)
+ * Auto Task Snapshot Extension (W8 治本, vibe coding 优化)
  *
- * 两个 hook 协作, 让你完全不需管 git:
+ * 一个 hook, 让你不需要手动打快照:
  *
- * 1. turn_start (session 第一条 user 消息触发)
- *    - 自动打任务快照 (`git add -A && git commit --allow-empty -m "[SNAPSHOT]..."`)
- *    - 你不需要: 手动 `bash scripts/task-snapshot.sh start <name>`
+ * turn_start (session 第一条 user 消息触发)
+ *   - 自动打任务快照 (`bash scripts/task-snapshot.sh start <name>`)
+ *   - 你不需要: 手动跑 `bash scripts/task-snapshot.sh start <name>`
  *               用 `/new-task <name> <描述>` prompt
- *               指望 agent 自觉读 AGENTS.md §7
+ *               指望 agent 自觉读 AGENTS.md §8
  *
- * 2. agent_end (agent 说完话触发, 适配 vibe coding)
- *    - 自动 commit working tree 改动 (`git add -A -- . ':(exclude)public/app'`)
- *    - commit message = `wip(snapshot): <agent 最后一句话前 60 字>`
- *    - 你不需要: 手动 `git add` + `git commit`, cron 凑时间, 编辑器 auto-commit
+ * 失败: 静默 + console.error, 不打扰用户, 不阻塞 pi
  *
- * 失败: 两个 hook 都静默 + console.error, 不打扰用户, 不阻塞 pi
+ * ⚠⚠ 2026-09-23 主人拍板: **去掉 `agent_end` 自动 commit**
  *
- * ⚠ 本项目对 canonical 版 (sales-ai) 的两处本地化改动 (2026-09-23 主人拍板):
+ *   原来第二个 hook 会在 agent 说完话时把**整棵工作树** `git add -A` + commit
+ *   (`wip(snapshot): <agent 最后一句话>`)。实测危害远大于收益:
  *
- *   a) **commit message 前缀 `[pi] ` → `wip(snapshot): `**
- *      原因: 自动 commit 是**中间态存盘**, 不是 feature commit。用 agent 的原话当 message
- *      会污染 history —— 实际出现过 `[pi] 下面给你一份「大健康养生行业客户分级评分维度池」...`
- *      这种把"回复正文"当 commit 标题的荒唐结果, 而且下次 `git log` 完全看不出改了什么。
- *      `wip(snapshot):` 一眼可辨"这是自动存盘, 该 squash / reword", 也方便
- *      `git log --grep='^wip(snapshot)'` 批量清理。
- *      ⚠ 主人/agent 仍应在收尾时**自己**提交语义化 commit (feat/fix/refactor) ——
- *      自动 commit 只是兜底网, 不是提交策略。
+ *   ① **反复污染 history**. 本仓 agent 收尾时会自己提交语义化 commit, 但 hook 往往
+ *      先抢一步 —— 于是同一个任务被拆成 `[SNAPSHOT] task-start: ...` / `wip(snapshot): ...`
+ *      加上 agent 自己的 feat commit。实测一个任务最多清出 5 个垃圾 commit,
+ *      每次都要 `git reset --soft` 重排。
+ *   ② **会把别的 session 的在制品扫进自己的 commit** (最危险). 本仓经常多个 pi/codex
+ *      session 同时在同一工作目录干活, 而 `git add -A` 不区分是谁改的 ——
+ *      实测已经发生过: 把另一 session 的 `/admin/plan` 未提交改动扫进"记录页完善"的
+ *      commit, 且 message 与内容完全无关 (考古灾难)。
+ *   ③ **commit message 本身就是错的来源**. 用"agent 最后一句话"当标题, 出现过
+ *      `[pi] 下面给你一份「大健康养生行业客户评分维度池」...` 这种把回复正文当
+ *      commit 标题的荒唐结果。
  *
- *   b) **add 时排除 `public/app/`**
- *      原因: AGENTS §5 明确 `public/app/` 是 Flutter web 编译产物, **本质不该跟踪**
- *      (deploy 走 working dir, 见 §5「APK 分发走 volume mount」同根)。
- *      但 `flutter-web-watch.service` 会在 lib/** 变化后自动重建它, 于是每次 auto-commit
- *      都会把几十 MB `main.dart.js` 的 diff 卷进来 —— 实测污染过 3 个 commit
- *      (114532 行 diff), 把真正的代码改动淹没。
+ *   **为什么可以直接去掉而不丢东西**: hook 想解决的问题 ("agent 改错了想回滚") 已由
+ *   `turn_start` 覆盖 —— 它打的是 **git tag + dirty diff dump**
+ *   (`.git/snapshots/<tag>.diff`, 见 scripts/task-snapshot.sh),
+ *   不需要 commit 也能把"任务开始前的状态"完整存下来并回滚。
+ *   中间态存盘的价值远小于"history 干净 + 不会误提交别人的东西"。
+ *
+ *   ➡ agent / 主人收尾时**自己**提交语义化 commit (feat/fix/refactor) —— 这是唯一提交来源。
  *
  * 见 AGENTS.md §8.1.3, docs/dev-modules/task-snapshot.md, scripts/task-snapshot.sh.
  */
@@ -40,7 +42,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const RECENT_SNAPSHOT_THRESHOLD_SEC = 5 * 60; // 5 分钟内不打第二次 snapshot
-const COMMIT_MSG_MAX_LEN = 60; // commit message 最大长度 (不含 `wip(snapshot): ` 前缀)
 
 interface SessionMessageEntry {
 	type: string;
@@ -90,16 +91,6 @@ function deriveTaskName(entries: SessionMessageEntry[]): string {
 		if (slug) return `auto-${slug}`;
 	}
 	return `auto-${ts}`;
-}
-
-function deriveCommitMsg(entries: SessionMessageEntry[]): string {
-	const firstLine = extractFirstTextLine(entries, "assistant");
-	if (firstLine) {
-		return firstLine.length > COMMIT_MSG_MAX_LEN
-			? firstLine.slice(0, COMMIT_MSG_MAX_LEN - 3) + "..."
-			: firstLine;
-	}
-	return "wip";
 }
 
 export default function (pi: ExtensionAPI) {
@@ -202,44 +193,6 @@ export default function (pi: ExtensionAPI) {
 			}
 		} catch (err) {
 			console.error(`[auto-task-snapshot] error:`, err);
-		}
-	});
-
-	// ============== Hook 2: agent_end = 自动 commit (vibe coding 优化) ==============
-	pi.on("agent_end", async (_event, ctx) => {
-		try {
-			// 1) 检查 working tree 是否有改动
-			const { stdout: status, code: statusCode } = await pi.exec(
-				"git",
-				["status", "--porcelain"],
-			);
-			if (statusCode !== 0) return;
-			if (!status.trim()) return; // 无改动, 跳过
-
-			// 2) 拿 agent 最后一句话作 commit message
-			const entries = ctx.sessionManager.getEntries() as SessionMessageEntry[];
-			const msg = deriveCommitMsg(entries);
-
-			// 3) commit (--no-verify 跳过 pre-commit hook 检查, vibe coding 下不卡)
-			//
-			// ⚠ 排除 public/app/: Flutter web 编译产物 (AGENTS §5 明确不该跟踪)。
-			//   flutter-web-watch.service 在 lib/** 变化后会重建它, 不排除的话每次
-			//   auto-commit 都卷进 ~100k 行 main.dart.js diff, 把真改动淹没。
-			await pi.exec("git", ["add", "-A", "--", ".", ":(exclude)public/app"]);
-			const { code: commitCode, stderr } = await pi.exec("git", [
-				"commit",
-				"-m",
-				`wip(snapshot): ${msg}`,
-				"--no-verify",
-			]);
-
-			if (commitCode === 0) {
-				if (ctx.hasUI) ctx.ui.notify(`✓ Auto-commit: ${msg}`, "info");
-			} else {
-				console.error(`[auto-commit] commit failed:`, stderr);
-			}
-		} catch (err) {
-			console.error(`[auto-commit] error:`, err);
 		}
 	});
 }

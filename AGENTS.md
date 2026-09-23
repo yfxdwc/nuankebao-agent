@@ -669,12 +669,29 @@ bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached +
 
 #### 8.1.3 auto-snapshot extension (pi hook 自动挡)
 
-`.pi/extensions/auto-task-snapshot.ts` 已注册到 `.pi/settings.json`, 启动 pi 时自动加载。两个 hook 协作:
+`.pi/extensions/auto-task-snapshot.ts` 已注册到 `.pi/settings.json`, 启动 pi 时自动加载。
+
+**只有一个 hook**:
 
 | Hook | 触发时机 | 行为 |
 |---|---|---|
-| `turn_start` | session 第一条 user 消息 | 自动打 `pre-auto-<task-slug>-<sha>`, 5 分钟内去重 |
-| `agent_end` | agent 说完话 | 自动 commit working tree 改动 (`wip(snapshot): <agent 最后一句话前 60 字>`) |
+| `turn_start` | session 第一条 user 消息 | 自动打 `pre-auto-<task-slug>-<sha>` (git tag) + dirty diff 兜底 dump, 5 分钟内去重 |
+
+> ⚠ **`agent_end` 自动 commit 已于 2026-09-23 去掉** (主人拍板)。
+>
+> 它原本在 agent 说完话时 `git add -A` + commit (`wip(snapshot): <agent 最后一句话>`)。
+> 实测危害远大于收益:
+> ① **反复污染 history** —— agent 收尾会自己提语义化 commit, 但 hook 常先抢一步,
+>    实测一个任务最多清出 5 个垃圾 commit, 每次都要 `git reset --soft` 重排;
+> ② **会把别的 session 的在制品扫进自己的 commit** (最危险) —— 见 §5
+>    「并发 session 不许 `git add -A`」那条, 就是这个 hook 造成的;
+> ③ 用"agent 最后一句话"当 commit 标题本身就是错的来源
+>    (出现过把回复正文当标题的荒唐结果)。
+>
+> **为什么可以直接去掉**: hook 想解决的 ("改错了想回滚") 已由 `turn_start` 覆盖 ——
+> 它打的是 **git tag + dirty diff dump** (`.git/snapshots/<tag>.diff`),
+> 不 commit 也能完整存下"任务开始前的状态"并回滚。
+> ➡ **收尾提交语义化 commit 是 agent / 主人的事, 不是 hook 的事。**
 
 **前提**: cwd 必须在 git 仓库里, 否则 console.error 警告 (UI notify 提示 `git init`).
 **依赖**: `@earendil-works/pi-coding-agent` (pi-coding-agent 全局自带, 不入 nuankebao/package.json, 跟 sales-ai 一致).
@@ -727,6 +744,9 @@ bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached +
 - [ ] `cat .pi/settings.json` 看到 `extensions: ["./extensions/auto-task-snapshot.ts"]`
 - [ ] 在 nuankebao-agent cwd 启动 pi, 发第一条 user 消息, 看到 `🔖 Auto-snapshot: auto-...` notify
 - [ ] agent 说完话后 `git status` 显示 `nothing to commit, working tree clean`
+      ⛔ **已作废** (2026-09-23): `agent_end` 自动 commit 已去掉 —— 现在 agent 说完话后
+      working tree **本来就该有未提交改动**, 由 agent/主人收尾时自己提语义化 commit。
+      验证钩子是否生效改为看: `bash scripts/task-snapshot.sh list` 有新的 `pre-auto-*` tag。
 
 ## §9. 预览框架冻结 (Preview Framework Freeze) (CHARTER §7 反模式沉淀 + ADR-0009)
 
