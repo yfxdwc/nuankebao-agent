@@ -176,6 +176,13 @@
       "when": 1790346000000,
       "tag": "0024_app_config",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790432400000,
+      "tag": "0025_idea",
+      "breakpoints": true
     }
   ]
 }

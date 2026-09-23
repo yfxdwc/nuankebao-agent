@@ -119,3 +119,11 @@ DROP TRIGGER IF EXISTS app_config_audit ON app_config;
 CREATE TRIGGER app_config_audit
   AFTER INSERT OR UPDATE OR DELETE ON app_config
   FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+-- 主人待开发想法 / 备忘录 (v0.1.5, migration 0025)
+--   为什么必须挂: 主人想看"什么时候改了哪个想法的标题/状态/描述",
+--   跟其他表同口径, 跟 docs/CHARTER §3.1 一致 (敏感/私人信息写入留痕)。
+DROP TRIGGER IF EXISTS idea_audit ON idea;
+CREATE TRIGGER idea_audit
+  AFTER INSERT OR UPDATE OR DELETE ON idea
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();

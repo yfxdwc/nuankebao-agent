@@ -1453,3 +1453,65 @@ export const appConfig = pgTable("app_config", {
 
 export type AppConfigRow = typeof appConfig.$inferSelect;
 export type NewAppConfigRow = typeof appConfig.$inferInsert;
+
+// ============================================
+// 主人待开发想法 / 备忘录 (v0.1.5, migration 0025)
+// ============================================
+// 主人 2026-09-23 拍 (ask_user d3e7f2a1 第二轮):
+//   「我需要能手动记录一个待开发的想法, 有些备忘的意思, 可以增删改,
+//    完成后勾选完成, 或丢弃」
+//
+// 用途: /admin/plan 页 (开发计划模块) 顶部的主人待办 CRUD 后端
+//   - status 三态: open / done / discarded
+//     - open       待办 (默认)
+//     - done       完成 (填 completed_at)
+//     - discarded  丢弃 (软丢, 保留 audit 留痕)
+//   - 任何状态都能再转 open (清 completed_at)
+//   - 不加密 (主人自己的备忘录, 跟 chat log / docs/ 同口径)
+//   - 跟 app_config / usage_event 区分: idea = 主人私人 todo, 不是配置/行为日志
+//
+// 现阶段约束:
+//   - 仅 admin 自用 (前端 /admin/plan 路由被 admin layout 保护)
+//   - user_id 列存留以备多人协作 (现阶段只查主人的; 列写死 = session.user.id)
+// ============================================
+
+export const ideaStatusEnum = pgEnum("idea_status", [
+  "open",
+  "done",
+  "discarded",
+]);
+
+export const idea = pgTable(
+  "idea",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    userId: bigint("user_id", { mode: "bigint" }).notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    status: ideaStatusEnum("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => ({
+    // 主查询: 某用户某状态按 updated_at desc
+    userStatusIdx: index("idx_idea_user_status").on(
+      table.userId,
+      table.status,
+      table.updatedAt.desc()
+    ),
+    // 兜底: 某用户全状态按 updated_at desc (全部 tab 用)
+    userUpdatedIdx: index("idx_idea_user_updated").on(
+      table.userId,
+      table.updatedAt.desc()
+    ),
+  })
+);
+
+export type Idea = typeof idea.$inferSelect;
+export type NewIdea = typeof idea.$inferInsert;
+export type IdeaStatus = (typeof ideaStatusEnum.enumValues)[number];
