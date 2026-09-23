@@ -2,6 +2,33 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 定位文档 drift 清扫 + 副标题决策闭环 (2026-09-23)
+
+主人问「当前项目的核心定位」时，顺带核对四份文档同步状态，清掉四处 drift：
+
+**策略层 (ADR-0017 解冻后未同步的残留)**
+- `README.md` 顶部 banner: `v0.1.2 / Mobile-Only / web admin 冻结 / flutter-only-sync` → `v0.1.6 / 双域活跃 / 双线同步`
+  （旧 banner 与 CHARTER §4.4 正文互相矛盾）
+- `README.md` 另外 3 段同类残留（按 AGENTS §3「单点修一处必全仓扫」清）:
+  `## Phase 1 状态` / `### Mobile-Only 阶段要点` → `### 双域策略要点` / `## 实施路线图`
+- `AGENTS.md` 2 处 stale 措辞: §9.1 冻结清单相邻文件 `src/app/(admin)/ (已 freeze-keep)`;
+  §9.5 平行机制表 `ADR-0005 web admin freeze-keep` → `ADR-0017 解冻`
+- `docs/CHARTER.md` §10.1 版本表: v0.1.5 标「已被 v0.1.6 追加」+ **补 v0.1.6「生效」行**
+
+**定位层 (旧 tagline 残留)**
+- `flutter_app/web/index.html` 的 `<meta name="description">` 还是**旧 tagline**
+  (`养生行业销售人员的 CRM + AI 客户维护 + 养生记录系统`) → 同步为 `大健康客户管理・AI助手`
+  （登录页 / manifest.json / layout.tsx 早已改，唯此漏网；`flutter build web` 产物同源）
+- 全仓复查: 代码 / 资源文件旧 tagline **0 残留**；ADR-0001 / ADR-0018 / CHANGELOG 里的旧措辞保留（历史记录）
+
+**副标题决策闭环 (ADR-0018 §4.4)**
+- 复核三个候选 (A 现状 / B `…・AI跟进指引` / C `客户管理・AI 跟进指引`)，主人拍板 **维持 A 案**
+- 已把「副标题不含『跟进指引』」记为**已知取舍**（非未发现问题），并关闭 ADR 原文的
+  「后续 UI tagline … 待下一轮」待办；后续要改属**新决策**
+
+**保留不动的历史记录**（故意的）: README 的「v0.1.2 的 Mobile-Only 阶段结束」说明 /
+AGENTS §5 反模式 `~~删除线~~` 条目 / CHARTER §4.4「历史:」段 + §10.1 v0.1.2 行 + §10.2 变更记录 / ADR-0005 文件名
+
 ## [Unreleased] — 工具化: Flutter 硬数字扫描加进护栏 (2026-09-24)
 
 主人 2026-09-23 拍板「继续工具化」: 让 P2-P5 成果不再被回退。
