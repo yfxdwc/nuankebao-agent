@@ -650,7 +650,7 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 
 ```bash
 # 任务开始前
-bash scripts/task-snapshot.sh start <task-name>     # git tag pre-<name>-<sha> + dirty diff 兜底
+bash scripts/task-snapshot.sh start <task-name>     # 只暂存已跟踪改动 (git add -u) + commit + tag pre-<name>-<sha>
 
 # 任务中查询
 bash scripts/task-snapshot.sh list                  # 最近 10 个 snapshot
@@ -692,6 +692,15 @@ bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached +
 > 它打的是 **git tag + dirty diff dump** (`.git/snapshots/<tag>.diff`),
 > 不 commit 也能完整存下"任务开始前的状态"并回滚。
 > ➡ **收尾提交语义化 commit 是 agent / 主人的事, 不是 hook 的事。**
+>
+> ⚠ **同时改了 `scripts/task-snapshot.sh start`: `git add -A` → `git add -u`** (同一根)
+> —— `turn_start` 仍会打快照 commit (`[SNAPSHOT] task-start: <name>`), 但它现在
+> **只暂存已跟踪文件的改动/删除**, 不再把**别人新加的 untracked 文件**扫进 commit。
+> untracked 不会丢: 完整 dump 在 `.git/snapshots/<tag>.diff`。
+> **已知取舍**: 任务开始时就存在的 untracked 文件若任务中被删, `rollback` 不会自动恢复
+> (它不在 commit 里) —— `rollback` 会把备份路径打出来, 手捞即可。
+> 已在 `/tmp` 克隆里做过完整回滚演练: 已跟踪文件**完全复原** ✅ / commit **不含** untracked ✅ /
+> dump **含** untracked 全文 ✅。
 
 **前提**: cwd 必须在 git 仓库里, 否则 console.error 警告 (UI notify 提示 `git init`).
 **依赖**: `@earendil-works/pi-coding-agent` (pi-coding-agent 全局自带, 不入 nuankebao/package.json, 跟 sales-ai 一致).
