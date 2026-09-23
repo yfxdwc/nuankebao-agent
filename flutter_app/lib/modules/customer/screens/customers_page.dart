@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/models/customer_insight.dart';
+import '../../../core/models/wellness_record.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/follow_up_info.dart';
 // fix-graph-zoom-pan (2026-09-16): auto-fit initial scale, user can see whole tree on open
@@ -27,6 +28,7 @@ import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/big_fab.dart';
 import '../widgets/customer_insight_header.dart';
+import '../widgets/record_tile.dart';
 import '../widgets/ai_insight_cards.dart';
 import '../widgets/customer_activity_cards.dart';
 import '../widgets/customer_analysis_charts.dart';
@@ -2025,7 +2027,7 @@ class CustomerDetailPage extends ConsumerWidget {
     final asyncRecords = ref.watch(customerWellnessRecordsProvider(customerId));
     return _tabScroll(children: [
       // 养生记录 (含汇总: 共 N 次 / 最近到店)
-      _buildWellnessSection(context, asyncRecords),
+      _buildWellnessSection(context, ref, asyncRecords),
       const SizedBox(height: AppSpace.cardGap),
       // 跟进任务 (该客户待办, 可直接勾完成)
       CustomerFollowUpSection(customerId: customerId),
@@ -2135,9 +2137,9 @@ class CustomerDetailPage extends ConsumerWidget {
   /// 养生记录区: 汇总 + 最近 5 条 + 入口
   Widget _buildWellnessSection(
     BuildContext context,
-    AsyncValue<List<dynamic>> asyncRecords,
+    WidgetRef ref,
+    AsyncValue<List<WellnessRecord>> asyncRecords,
   ) {
-    final fmt = DateFormat('yyyy-MM-dd');
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -2158,11 +2160,10 @@ class CustomerDetailPage extends ConsumerWidget {
                 asyncRecords.maybeWhen(
                   data: (records) {
                     if (records.isEmpty) return const SizedBox.shrink();
-                    final last = records.first.serviceDate.toString();
                     // Flexible: 窄屏/大字体下让文案省略, 不撑破 Row (中老年常放大系统字号)
                     return Flexible(
                       child: Text(
-                        '共 ${records.length} 次 · 最近 ${fmt.format(DateTime.parse(last))}',
+                        _recordSummary(records),
                         style: const TextStyle(
                             fontSize: AppTheme.fontXs,
                             color: AppTheme.textSecondary),
@@ -2188,12 +2189,20 @@ class CustomerDetailPage extends ConsumerWidget {
                 if (records.isEmpty) {
                   return _buildEmptyHint('还没有记录', '点下面的「添加记录」开始');
                 }
+                // 字典可能还没加载完 —— 为 null 时卡片回落显示「养生记录」而不是白屏
+                final dict = ref
+                    .watch(dictionariesProvider)
+                    .maybeWhen(data: (d) => d, orElse: () => null);
                 return Column(
                   children: [
-                    ...records.take(5).map((r) => _buildRecordTile(context, r)),
+                    ...records.take(5).map((r) => RecordTile(
+                          record: r,
+                          dict: dict,
+                          onTap: () => context.push('/wellness-records/${r.id}'),
+                        )),
                     if (records.length > 5)
                       TextButton.icon(
-                        onPressed: () => _showAllRecords(context, records),
+                        onPressed: () => _showAllRecords(context, ref, records),
                         icon: const Icon(Icons.expand_more, size: AppSize.iconMd),
                         label: Text('查看全部 ${records.length} 条',
                             style: const TextStyle(fontSize: AppTheme.fontSm)),
@@ -2222,8 +2231,19 @@ class CustomerDetailPage extends ConsumerWidget {
   }
 
   /// 全部记录 (底部弹层; 列表长了不把详情页撑爆)
-  void _showAllRecords(BuildContext context, List<dynamic> records) {
-    final fmt = DateFormat('yyyy-MM-dd');
+  void _showAllRecords(
+    BuildContext context,
+    WidgetRef ref,
+    List<WellnessRecord> records,
+  ) {
+    // ⚠ 2026-09-23 修: 这里原来读的是 `r.bodyParts` / `r.serviceItem` ——
+    //   `WellnessRecord` 上**根本没有这两个字段** (只有 bodyPartIds / serviceItemId)。
+    //   因为列表声明是 List<dynamic>, 编译期不报错, **运行时必抛 NoSuchMethodError**。
+    //   而且 "查看全部" 按钮只在 >5 条时才出现 —— 客户测试数据都是 3 条，
+    //   所以一直没人碰到。类型收紧成 List<WellnessRecord> 后立即暴露。
+    final dict = ref
+        .watch(dictionariesProvider)
+        .maybeWhen(data: (d) => d, orElse: () => null);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2234,24 +2254,14 @@ class CustomerDetailPage extends ConsumerWidget {
         maxChildSize: 0.95,
         builder: (_, controller) => ListView.builder(
           controller: controller,
-          padding: const EdgeInsets.fromLTRB(AppSpace.s16, 0, 16, 24),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpace.pagePadding, 0, AppSpace.pagePadding, AppSpace.s24),
           itemCount: records.length,
           itemBuilder: (ctx, i) {
             final r = records[i];
-            final parts = (r.bodyParts as List?)?.join('/') ?? '';
-            return ListTile(
-              leading: const Icon(Icons.favorite, color: AppTheme.accent),
-              title: Text(fmt.format(DateTime.parse(r.serviceDate.toString())),
-                  style: const TextStyle(fontSize: AppTheme.fontMd)),
-              subtitle: Text(
-                [
-                  if (r.serviceItem != null) '${r.serviceItem}',
-                  if (parts.isNotEmpty) parts,
-                  if (r.customerFeedback != null) '反馈: ${r.customerFeedback}',
-                ].join(' · '),
-                style: const TextStyle(fontSize: AppTheme.fontSm),
-              ),
-              trailing: const Icon(Icons.chevron_right),
+            return RecordTile(
+              record: r,
+              dict: dict,
               onTap: () {
                 Navigator.pop(ctx);
                 context.push('/wellness-records/${r.id}');
@@ -2261,6 +2271,39 @@ class CustomerDetailPage extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// 记录汇总行: 「共 N 次 · 最近 X · 平均 Y 天一次」
+  ///
+  /// 「平均 Y 天一次」与 P1 洞察 / `follow-up-analysis` 的复购周期**同口径**
+  /// (相邻两次到店天数的均值) —— 三处显示同一个数, 销售才不会觉得"两个地方说的不一样"。
+  /// 不足 2 次算不出间隔 → 只显示前两段 (宁可少一条信息, 不编)。
+  String _recordSummary(List<WellnessRecord> records) {
+    if (records.isEmpty) return '';
+    final last = records.first.serviceDate;
+    final parts = <String>['共 ${records.length} 次', '最近 $last'];
+
+    if (records.length >= 2) {
+      // records 按 serviceDate 倒序 (后端 orderBy desc) → 排序后算相邻差
+      final days = records
+          .map((r) => DateTime.tryParse(r.serviceDate))
+          .whereType<DateTime>()
+          .toList()
+        ..sort();
+      if (days.length >= 2) {
+        var sum = 0;
+        var n = 0;
+        for (var i = 1; i < days.length; i++) {
+          final d = days[i].difference(days[i - 1]).inDays;
+          if (d >= 0) {
+            sum += d;
+            n++;
+          }
+        }
+        if (n > 0) parts.add('平均 ${(sum / n).round()} 天一次');
+      }
+    }
+    return parts.join(' · ');
   }
 
   Widget _buildHeader(BuildContext context, WidgetRef ref, Customer c) {
@@ -2953,41 +2996,6 @@ class CustomerDetailPage extends ConsumerWidget {
             Text(hint, style: const TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildRecordTile(BuildContext context, dynamic r) {
-    final dateFmt = DateFormat('yyyy-MM-dd');
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSpace.s8),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s12),
-        leading: Container(
-          width: AppSpace.s48,
-          height: AppSpace.s48,
-          decoration: BoxDecoration(
-            color: AppTheme.accent.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(AppRadius.r24),
-          ),
-          child: const Icon(Icons.favorite, color: AppTheme.accent, size: AppSize.iconXl),
-        ),
-        title: Text(
-          '养生记录',
-          style: const TextStyle(
-            fontSize: AppTheme.fontMd,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: AppSpace.s4),
-          child: Text(
-            '${dateFmt.format(DateTime.parse(r.serviceDate))}${r.customerFeedback != null ? ' · ${r.customerFeedback}' : ''}',
-            style: const TextStyle(fontSize: AppTheme.fontSm),
-          ),
-        ),
-        trailing: const Icon(Icons.chevron_right, size: AppSize.iconXl),
-        onTap: () => context.push('/wellness-records/${r.id}'),
       ),
     );
   }

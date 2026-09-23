@@ -9,6 +9,8 @@ import '../services/notifications/follow_up_reminder.dart';
 import '../services/api.dart';
 import '../models/customer_charts.dart';
 import '../models/customer_insight.dart';
+import '../models/dictionaries.dart';
+import '../models/wellness_record.dart';
 import '../models/follow_up_info.dart';
 import '../models/dashboard.dart';
 import '../models/follow_up.dart';
@@ -68,6 +70,20 @@ final customerInsightProvider =
 );
 final dictionaryServiceProvider = Provider<DictionaryService>(
   (ref) => DictionaryService(ref.watch(dioProvider)),
+);
+
+/// 全局字典 (服务项目 / 部位 / 产品) —— **各页面共用一份**
+///
+/// 为什么要提到 core 层 (2026-09-23, 记录页完善):
+///   原来它私有在 `wellness_record_{form,detail}_page.dart` 里 (`_dictProvider`),
+///   客户详情页拿不到 → 记录列表只能显示 `serviceItemId` 数字, 列不出项目名/部位。
+///   字典是**全 app 共用 + 几乎不变**的静态数据, 放 core 让所有页面复用。
+///
+/// 不用 autoDispose: 它要在客户列表/详情/录入/明细之间反复用到,
+///   每次进页面重新拉一遍是浪费 (而且字典改动极少, 缓存不会陈旧)。
+///   下拉刷新如果需要强制更新, `ref.invalidate(dictionariesProvider)` 即可。
+final dictionariesProvider = FutureProvider<Dictionaries>(
+  (ref) async => ref.watch(dictionaryServiceProvider).all(),
 );
 final followUpServiceProvider = Provider<FollowUpService>(
   (ref) => FollowUpService(ref.watch(dioProvider)),
@@ -213,8 +229,13 @@ final customerDetailProvider = FutureProvider.family<dynamic, String>(
 );
 
 /// 客户的养生记录
+///
+/// 类型从 `List<dynamic>` 收紧为 `List<WellnessRecord>` (2026-09-23 记录页):
+///   service.list 本来就返回 `List<WellnessRecord>`, 写成 dynamic 只是把类型检查
+///   推到了调用方手写 cast —— 而记录页要在卡片上读 `preCondition['pain_level']`,
+///   类型一丢就是把错误从编译期推到用户面前。
 final customerWellnessRecordsProvider =
-    FutureProvider.family<List<dynamic>, String>(
+    FutureProvider.family<List<WellnessRecord>, String>(
   (ref, customerId) async {
     return ref.watch(wellnessRecordServiceProvider).list(
       customerId: customerId,

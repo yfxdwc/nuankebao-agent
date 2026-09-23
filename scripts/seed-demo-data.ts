@@ -427,33 +427,90 @@ async function main(): Promise<void> {
   ok(`互动记录: ${interCount} 条 (顺带更新 lastInteractionAt → 紧急度排序有意义)`);
 
   let wellnessCount = 0;
+  let wellnessSkipped = 0;
   for (let i = 0; i < ownedCustomers.length; i++) {
     if (i % 4 !== 0) continue; // 1/4 的客户做过养生服务
     const c = ownedCustomers[i];
+
+    // ── 幂等 (2026-09-23): 已有记录就跳过 ──
+    //   本段原来无查重, 重跑一次就多一条**完全一样**的记录
+    //   (演示库里的客户 798 因此有 3 条重复记录)。
+    const existing = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(wellnessRecord)
+      .where(eq(wellnessRecord.customerId, c.id));
+    if ((existing[0]?.n ?? 0) > 0) {
+      wellnessSkipped++;
+      continue;
+    }
+
     const owner = ownerPool.find((o) => o.id === c.ownerId);
+
+    // ── 数值量表 (0-10), 与录入表单 / 评分口径**完全一致** ──
+    //   ⚠ 2026-09-23 修: 原来写的是 `{ 主诉: "肩颈僵硬, 睡眠浅" }` /
+    //     `{ 反馈: "轻松一些" }` 这种自由文本 —— 与表单口径 (pain_level /
+    //     sleep_quality / mood) 不一致, 后果是**三个功能在演示环境永远"数据不足"**:
+    //       · P1 健康改善分 (effect 维度) 算不出来 → 分维度显示"待评估"
+    //       · P4 效果趋势图空白 (trend 数组为空)
+    //       · 记录卡片的「前 → 后」改善对比不显示
+    //     演示数据必须能演示出功能 —— 否则主人看到的永远是一堆"数据不足",
+    //     而真实录入 (走表单) 本来是有数值的。
+    //
+    //   pain_level 越小越好; sleep_quality / mood 越大越好 (0-10)。
+    const course = 3 + (i % 2); // 3-4 次一个疗程
+    const basePain = 8 + (i % 3); // 起始疼痛 8-10
     try {
-      await createWellnessRecord(
-        {
-          customerId: c.id.toString(),
-          serviceDate: new Date(Date.now() - (i % 30) * 86400_000)
-            .toISOString()
-            .slice(0, 10),
-          serviceItemId: String((i % 6) + 1),
-          bodyPartIds: [String((i % 9) + 1), String(((i + 3) % 9) + 1)],
-          preCondition: { 主诉: "肩颈僵硬, 睡眠浅" },
-          postCondition: { 反馈: "轻松一些, 温热感明显" },
-          processNote: "手法 + 艾灸 30 分钟",
-          customerFeedback: "挺舒服的, 下次还来",
-        },
-        ctx,
-        owner?.id ?? adminId
-      );
-      wellnessCount++;
+      for (let k = 0; k < course; k++) {
+        // 疗程推进: 每做一次都好一点 (疼痛↓ / 睡眠↑ / 情绪↑)
+        const pain = Math.max(1, basePain - k);
+        const sleep = Math.min(9, 3 + k);
+        const mood = Math.min(9, 3 + k);
+        // 单次做完的即时改善 (做完比做前好 2-3 分)
+        const painAfter = Math.max(0, pain - 2 - (k % 2));
+
+        await createWellnessRecord(
+          {
+            customerId: c.id.toString(),
+            // 倒着排: k=0 是最早那次 (越往后越近)
+            serviceDate: new Date(
+              Date.now() - (course - k) * 9 * 86400_000
+            )
+              .toISOString()
+              .slice(0, 10),
+            serviceItemId: String((i % 6) + 1),
+            bodyPartIds: [String((i % 9) + 1), String(((i + 3) % 9) + 1)],
+            preCondition: {
+              pain_level: pain,
+              sleep_quality: sleep,
+              mood,
+            },
+            postCondition: {
+              pain_level: painAfter,
+              sleep_quality: Math.min(10, sleep + 2),
+              mood: Math.min(10, mood + 1),
+            },
+            processNote: "手法 + 艾灸 30 分钟",
+            // ⚠ 用 undefined 不用 null: createWellnessRecord 的入参是可选的
+            //   `string | undefined`, 传 null 会 tsc 报错 (踩过)
+            customerFeedback: k === course - 1 ? "挺舒服的, 下次还来" : undefined,
+            nextAdviceDate:
+              k === course - 1
+                ? new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10)
+                : undefined,
+          },
+          ctx,
+          owner?.id ?? adminId
+        );
+        wellnessCount++;
+      }
     } catch {
       /* 字典不齐时跳过 */
     }
   }
-  ok(`养生记录: ${wellnessCount} 条`);
+  ok(
+    `养生记录: ${wellnessCount} 条` +
+      (wellnessSkipped > 0 ? ` (${wellnessSkipped} 位客户已有记录, 跳过)` : "")
+  );
 
   // ── ⑥ 沙龙 (邀约 / 带约 / 名额 / 动态) ──
   log("\n⑥ 沙龙");

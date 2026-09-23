@@ -45,7 +45,7 @@ class WellnessRecordDetailPage extends ConsumerWidget {
 
   Widget _buildBody(BuildContext context, WidgetRef ref, WellnessRecord r) {
     final dateFmt = DateFormat('yyyy-MM-dd');
-    final dict = ref.watch(_dictProvider).valueOrNull;
+    final dict = ref.watch(dictionariesProvider).valueOrNull;
     final bodyPartNames = (dict?.bodyParts ?? [])
         .where((bp) => r.bodyPartIds.contains(bp.id))
         .map((bp) => bp.name)
@@ -263,8 +263,4 @@ class WellnessRecordDetailPage extends ConsumerWidget {
 
 final _recordProvider = FutureProvider.family<WellnessRecord, String>(
   (ref, id) async => ref.watch(wellnessRecordServiceProvider).getById(id),
-);
-
-final _dictProvider = FutureProvider(
-  (ref) async => ref.watch(dictionaryServiceProvider).all(),
 );
