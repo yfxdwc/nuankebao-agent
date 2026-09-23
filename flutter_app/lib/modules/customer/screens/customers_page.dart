@@ -1923,68 +1923,145 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 // CustomerDetailPage (详情 + 时间线)
 // ============================================
 
-/// 客户详情页 (Tab 容器) — 拆成 3 个独立 Tab + 顶部 L0
-/// L0 是 CustomerInsightHeader (评分环 + 今日待办), 永远是详情页第一屏
-/// (§1.4 「行动输出 = 明确的跟进指引」必须**永远可见**)。
-class CustomerDetailPage extends ConsumerStatefulWidget {
+class CustomerDetailPage extends ConsumerWidget {
   final String customerId;
   const CustomerDetailPage({super.key, required this.customerId});
 
   @override
-  ConsumerState<CustomerDetailPage> createState() => _CustomerDetailPageState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncCustomer = ref.watch(customerDetailProvider(customerId));
 
-  /// 3 个 Tab 都接收 customer, 内部调 _build* 私有方法渲染各自的内容
-  /// (这样 _buildHeader / _buildTypeCard / _buildIdentityCard 等不需要搬出去)
-
-  /// **记录** —— 时间线: 养生记录 (含汇总 + 最近 5 条) + 互动流水 + 全量跟进任务 + 「快速记录」入口
-  /// 自带 watch wellness record provider, 不依赖父传 (TabBarView 重建时重新拉)
-  Widget _RecordTab(BuildContext context, WidgetRef ref, Customer customer) {
-    final asyncRecords = ref.watch(customerWellnessRecordsProvider(widget.customerId));
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, AppSpace.s48),
-      children: [
-        _buildWellnessSection(context, asyncRecords),
-        const SizedBox(height: AppSpace.s12),
-        CustomerFollowUpSection(customerId: widget.customerId),
-        const SizedBox(height: AppSpace.s12),
-        CustomerInteractionSection(customerId: widget.customerId),
-      ],
+    // P2 (主人 2026-09-23 拍): 单页 11 section 堆叠 → L0 + 3 Tab
+    //
+    // 为什么用 DefaultTabController 而不是自己管 TabController:
+    //   不需要 StatefulWidget / TickerProvider / dispose —— 本页没有
+    //   "记住用户选了哪个 Tab" 的需求, 少一份生命周期就少一类 bug。
+    //
+    // 为什么 L0 在 TabBarView **外面**:
+    //   CHARTER §1.4 的「行动输出 = 明确的跟进指引」必须**切 Tab 也可见** ——
+    //   放进任一 Tab 里就等于"只有切到那个 Tab 才看得到", 又退回"要滚才看见"的老毛病。
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('客户详情'),
+          toolbarHeight: AppSize.appBarHeight,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit, size: AppSize.iconXl),
+              tooltip: '编辑',
+              onPressed: () => context.push('/customers/$customerId/edit'),
+            ),
+          ],
+          // Tab 只在数据就绪后出现 (加载中/出错时没有东西可切, 显示 Tab 反而误导)
+          bottom: asyncCustomer.maybeWhen(
+            data: (_) => const TabBar(
+              tabs: [
+                Tab(text: '记录'),
+                Tab(text: '分析'),
+                Tab(text: '管理'),
+              ],
+            ),
+            orElse: () => null,
+          ),
+        ),
+        body: asyncCustomer.when(
+          loading: () => const LoadingState(),
+          error: (e, _) => ErrorState(error: e),
+          data: (customer) => Column(
+            children: [
+              // L0: 评分环 + 今日待办 (免费层, 不烧 AI 额度; 拿不到数据时自己静默隐藏)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, 0),
+                child: CustomerInsightHeader(
+                  customerId: customerId,
+                  onBuildTask: (action) =>
+                      _buildTaskFromAction(context, ref, action),
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _buildRecordTab(context, ref, customer),
+                    _buildAnalysisTab(context, ref, customer),
+                    _buildManagementTab(context, ref, customer),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  /// **分析** —— 先事实再 AI: 跟进分析客观指标 + AI 卡 ×4 (复购 / 跟进建议 / 画像 / 效果)
-  Widget _AnalysisTab(BuildContext context, WidgetRef ref, Customer customer) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, AppSpace.s48),
-      children: [
-        FollowUpAnalysisCard(customerId: widget.customerId),
-        const SizedBox(height: AppSpace.s12),
-        _buildSectionTitle('AI 助手'),
-        RepurchaseCard(customerId: widget.customerId),
-        AiFollowUpCard(customerId: widget.customerId),
-        AiProfileCard(customerId: widget.customerId),
-        EffectAnalysisCard(customerId: widget.customerId),
-      ],
-    );
+  /// 各 Tab 统一的滚动容器 (防止三个各写一遍 padding 漂移)
+  Widget _tabScroll({required List<Widget> children}) => ListView(
+        padding: const EdgeInsets.fromLTRB(AppSpace.pagePadding, AppSpace.s12,
+            AppSpace.pagePadding, AppSpace.s48),
+        children: children,
+      );
+
+  /// **记录 Tab** —— 三大动作之「记录」: 养生记录 + 跟进任务 + 互动流水
+  Widget _buildRecordTab(
+    BuildContext context,
+    WidgetRef ref,
+    Customer customer,
+  ) {
+    final asyncRecords = ref.watch(customerWellnessRecordsProvider(customerId));
+    return _tabScroll(children: [
+      // 养生记录 (含汇总: 共 N 次 / 最近到店)
+      _buildWellnessSection(context, asyncRecords),
+      const SizedBox(height: AppSpace.cardGap),
+      // 跟进任务 (该客户待办, 可直接勾完成)
+      CustomerFollowUpSection(customerId: customerId),
+      const SizedBox(height: AppSpace.cardGap),
+      // 互动记录 (电话/微信/到店流水)
+      CustomerInteractionSection(customerId: customerId),
+    ]);
   }
 
-  /// **管理** —— 档案字段 + 客户类型切换 + app 身份绑定
-  Widget _ManagementTab(BuildContext context, WidgetRef ref, Customer customer) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, AppSpace.s48),
-      children: [
-        _buildHeader(context, ref, customer),
-        const SizedBox(height: AppSpace.s12),
-        _buildTypeCard(context, ref, customer),
-        const SizedBox(height: AppSpace.s12),
-        _buildIdentityCard(context, ref, customer),
-      ],
-    );
+  /// **分析 Tab** —— 三大动作之「分析」: 先事实 (客观指标), 再 AI 解读
+  Widget _buildAnalysisTab(
+    BuildContext context,
+    WidgetRef ref,
+    Customer customer,
+  ) {
+    return _tabScroll(children: [
+      // 客观指标 (免费)
+      FollowUpAnalysisCard(customerId: customerId),
+      const SizedBox(height: AppSpace.cardGap),
+      // AI 智能区 (会员): 顺序按「销售员每天最用得上」排
+      //   复购预测 (自动算, 不烧额度) → 跟进建议 (开口话术) → 轮廓画像 (这人是谁) → 效果分析 (疗程有没有用)
+      _buildSectionTitle('AI 助手'),
+      RepurchaseCard(customerId: customerId),
+      AiFollowUpCard(customerId: customerId),
+      AiProfileCard(customerId: customerId),
+      EffectAnalysisCard(customerId: customerId),
+    ]);
   }
+
+  /// **管理 Tab** —— 三大动作之「管理」: 档案字段 + 类型 + 身份
+  ///
+  /// 为什么把这三个从首屏挪进 Tab:
+  ///   它们是"设置频次"的内容 (改一次就不动), 却占着详情页最宝贵的前两屏。
+  ///   L0 要留给"每天看"的东西 (§1.4 行动输出)。
+  Widget _buildManagementTab(
+    BuildContext context,
+    WidgetRef ref,
+    Customer customer,
+  ) {
+    return _tabScroll(children: [
+      // 大头像 + 基本信息 (类型徽章 / 年龄 / 拨号)
+      _buildHeader(context, ref, customer),
+      const SizedBox(height: AppSpace.cardGap),
+      // 客户类型切换 (主人 2026-09-18: 「没找到修改客户类型的入口」)
+      _buildTypeCard(context, ref, customer),
+      const SizedBox(height: AppSpace.cardGap),
+      // app 身份 (ADR-0016): 已注册 / 未注册 + 填邀请码绑定
+      _buildIdentityCard(context, ref, customer),
+    ]);
   }
 
   /// 「建任务」—— 把一条行动指引落成 follow_up_task (闭环的关键一步)
@@ -1997,7 +2074,6 @@ class CustomerDetailPage extends ConsumerStatefulWidget {
     WidgetRef ref,
     ActionItem action,
   ) async {
-    final customerId = widget.customerId;
     final messenger = ScaffoldMessenger.of(context);
     try {
       final dueAt = DateTime.tryParse(action.taskDueAt) ?? DateTime.now();
@@ -2009,7 +2085,7 @@ class CustomerDetailPage extends ConsumerStatefulWidget {
       ref.read(usageServiceProvider).track('follow_up_task_created',
           props: {'from': 'insight_action', 'rule': action.id});
       // 任务列表 / 洞察都刷新 (洞察的"任务健康"因子会变)
-      ref.invalidate(customerInsightProvider(widget.customerId));
+      ref.invalidate(customerInsightProvider(customerId));
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
@@ -2108,7 +2184,7 @@ class CustomerDetailPage extends ConsumerStatefulWidget {
                     label: '+ 添加记录',
                     icon: Icons.add_circle_outline,
                     onPressed: () =>
-                        showAddRecordSheet(context, customerId: widget.customerId),
+                        showAddRecordSheet(context, customerId: customerId),
                   ),
                 ),
               ],
@@ -3854,72 +3930,4 @@ class _GroupHeaderData {
   final String label;
   final int count;
   const _GroupHeaderData({required this.level, required this.label, required this.count});
-}
-
-class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
-    with TickerProviderStateMixin {
-  late final TabController _tabController =
-      TabController(length: 3, vsync: this);
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ref = this.ref; // ConsumerState 的 ref getter
-    final customerId = widget.customerId;
-    final asyncCustomer = ref.watch(customerDetailProvider(customerId));
-    final asyncRecords = ref.watch(customerWellnessRecordsProvider(customerId));
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('客户详情'),
-        toolbarHeight: AppSize.appBarHeight,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit, size: AppSize.iconXl),
-            tooltip: '编辑',
-            onPressed: () => context.push('/customers/$customerId/edit'),
-          ),
-        ],
-        bottom: asyncCustomer.maybeWhen(
-          data: (_) => TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(text: '记录'),
-              Tab(text: '分析'),
-              Tab(text: '管理'),
-            ],
-          ),
-          orElse: () => null,
-        ),
-      ),
-      // L0 (评分环 + 今日待办) 永远在顶部; TabBarView 占剩余空间
-      body: asyncCustomer.when(
-        loading: () => const LoadingState(),
-        error: (e, _) => ErrorState(error: e),
-        data: (customer) => Column(
-          children: [
-            CustomerInsightHeader(
-              customerId: customerId,
-              onBuildTask: (action) => _buildTaskFromAction(context, ref, action),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _RecordTab(context, ref, customer),
-                  _AnalysisTab(context, ref, customer),
-                  _ManagementTab(context, ref, customer),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
