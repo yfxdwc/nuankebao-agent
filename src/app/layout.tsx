@@ -5,7 +5,7 @@ import { themeBootScript } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: "暖客宝 · 大健康销售 CRM",
-  description: "大健康行业销售人员的 CRM + AI 客户维护 + 养生记录系统",
+  description: "大健康客户管理・AI助手",
   // favicon / apple-touch-icon 由 Next.js 15 metadata-icons 约定自动注入:
   //   src/app/icon.png       → <link rel="icon"> (192×192)
   //   src/app/apple-icon.png → <link rel="apple-touch-icon"> (180×180)

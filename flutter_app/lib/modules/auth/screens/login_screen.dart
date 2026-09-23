@@ -106,7 +106,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     fontSize: AppType.xxl, fontWeight: FontWeight.bold, color: AppTheme.primary,
                   )),
                   const SizedBox(height: AppSpace.s8),
-                  const Text('大健康行业销售 CRM', style: TextStyle(color: Colors.black54)),
+                  const Text('大健康客户管理・AI助手', style: TextStyle(color: Colors.black54)),
                   const SizedBox(height: AppSpace.s48),
                   _buildForm(authState),
                   const SizedBox(height: AppSpace.s24),
