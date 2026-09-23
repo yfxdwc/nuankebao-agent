@@ -28,6 +28,7 @@ import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/big_fab.dart';
 import '../widgets/customer_insight_header.dart';
+import '../widgets/ownership_card.dart';
 import '../widgets/record_tile.dart';
 import '../widgets/ai_insight_cards.dart';
 import '../widgets/customer_activity_cards.dart';
@@ -2084,6 +2085,11 @@ class CustomerDetailPage extends ConsumerWidget {
       // 大头像 + 基本信息 (类型徽章 / 年龄 / 拨号)
       _buildHeader(context, ref, customer),
       const SizedBox(height: AppSpace.cardGap),
+      // ★ 归属 (P7 管理维度补的缺口): 谁把她当客户在管 + 认领
+      //   放在类型卡**之前**: 归属是"她算不算我的客户"的前提,
+      //   比"她是普通还是种子客户"更前置 (ADR-0015 Q11/Q12)。
+      CustomerOwnershipCard(customerId: customerId),
+      const SizedBox(height: AppSpace.cardGap),
       // 客户类型切换 (主人 2026-09-18: 「没找到修改客户类型的入口」)
       _buildTypeCard(context, ref, customer),
       const SizedBox(height: AppSpace.cardGap),
@@ -2119,7 +2125,6 @@ class CustomerDetailPage extends ConsumerWidget {
         SnackBar(
           content: Text('已建任务「${action.taskTitle}」',
               style: const TextStyle(fontSize: AppType.md)),
-          duration: AppDuration.fast,
         ),
       );
     } catch (e) {
@@ -2128,7 +2133,6 @@ class CustomerDetailPage extends ConsumerWidget {
         SnackBar(
           content: Text('建任务失败: $e',
               style: const TextStyle(fontSize: AppType.md)),
-          duration: AppDuration.base,
         ),
       );
     }

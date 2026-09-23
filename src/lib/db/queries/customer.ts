@@ -1022,3 +1022,99 @@ export async function bindCustomerAccount(
 // 原 getCustomerReferralGraph + /api/customers/graph + Flutter CustomerGraphView
 // 全部零调用方 (2026-09-22 实测), 但会误导后来人当真相源 → 主人拍「废弃」已删。
 // 「谁带来谁」看: referral_reward (账号推荐) / franchisee.placement_parent_id (点位父)。
+
+// ============================================
+// 归属 (谁的客户) —— 管理维度 (2026-09-23, P7)
+// ============================================
+// 背景: 主人 2026-09-23 指出「记录、管理、分析三个维度都还相当粗糙」,
+//   而管理维度里**唯一真缺口就是归属** —— 编辑表单已覆盖姓名/手机/生日/提醒/
+//   健康标签/病史/过敏/备注, 但**详情页看不到"这是谁的客户", 也没法认领**。
+//
+// 为什么口径必须与 `claimCustomerOwnership` 完全一致:
+//   UI 的按钮可用性判断 (canClaim) 必须等于**后端真正会不会放行** ——
+//   否则就是"按钮能点但一点就 409" (最气的交互)。
+//   所以这里逐条对齐那个函数的判定顺序:
+//     ① 我自己那条档案    → 不能认领 (后端返 SELF)
+//     ② ownerId == null   → 可认领
+//     ③ ownerId == 我     → 可认领 (幂等, 后端返 alreadyMine)
+//     ④ ownerId == 别人   → 不可认领 (后端返 OWNED_BY_OTHER)
+//
+// ⚠ 与 `customer.owner_id` 的关系 (ADR-0015 Q11):
+//   owner_id = "谁把她当客户在管" (谁的客户列表);
+//   与 `referrer_id`(谁拉她进加盟) / `created_by`(谁录入的) 是**三件不同的事**,
+//   不要互相推导 —— 建档 ≠ 归属 (Q11 明文)。
+
+export interface CustomerOwnershipView {
+  customerId: string;
+  /** 归属人 user.id; null = 无归属 */
+  ownerId: string | null;
+  ownerName: string | null;
+  /** 登录者就是归属人 */
+  isMine: boolean;
+  /** UI 按钮可用性 —— 与 claimCustomerOwnership 的放行条件一一对应 */
+  canClaim: boolean;
+  /** 不能认领的原因 (人话; canClaim=true 时为 null) */
+  blockedReason: string | null;
+  /** 一句话状态 (后端算好, 前端不拼文案 —— 免得两处措辞不一致) */
+  statusLabel: string;
+}
+
+/**
+ * 查一位客户的归属状态 (管理 Tab 的「归属」卡用)
+ *
+ * @param viewerUserId    登录者 user.id
+ * @param viewerCustomerId 登录者自己的客户档案 id (user.customer_id) —— 用来拦"认领自己"
+ */
+export async function getCustomerOwnership(
+  customerId: bigint,
+  viewerUserId: bigint,
+  viewerCustomerId: bigint | null
+): Promise<CustomerOwnershipView | null> {
+  const [row] = await db
+    .select({
+      id: customer.id,
+      ownerId: customer.ownerId,
+      ownerName: user.name,
+    })
+    .from(customer)
+    .leftJoin(user, eq(user.id, customer.ownerId))
+    .where(and(eq(customer.id, customerId), isNull(customer.deletedAt)))
+    .limit(1);
+
+  if (!row) return null;
+
+  const isMine = row.ownerId != null && row.ownerId === viewerUserId;
+  const isMyOwnProfile = viewerCustomerId != null && row.id === viewerCustomerId;
+
+  let canClaim = false;
+  let blockedReason: string | null = null;
+  let statusLabel: string;
+
+  if (isMyOwnProfile) {
+    // ① 她就是我自己的客户档案 (建号即建档的产物) —— 后端会返 SELF
+    statusLabel = "这是你自己的档案";
+    blockedReason = "不能把自己加为客户";
+  } else if (row.ownerId == null) {
+    // ② 无归属 → 先到先得 (ADR-0015 Q15)
+    canClaim = true;
+    statusLabel = "还没有归属人";
+  } else if (isMine) {
+    // ③ 已经是我的 → 幂等, 按钮仍给 (点了不报错, 提示"已经是你的客户")
+    canClaim = true;
+    statusLabel = "我的客户";
+  } else {
+    // ④ 归属别人 → 先到先得, 不给按钮 (给了就是"一点就 409")
+    statusLabel = `已是 ${row.ownerName ?? "他人"} 的客户`;
+    blockedReason = "已被别人先认领 (先到先得); 要转移需与对方协商";
+  }
+
+  return {
+    customerId: row.id.toString(),
+    ownerId: row.ownerId?.toString() ?? null,
+    ownerName: row.ownerName ?? null,
+    isMine,
+    canClaim,
+    blockedReason,
+    statusLabel,
+  };
+}

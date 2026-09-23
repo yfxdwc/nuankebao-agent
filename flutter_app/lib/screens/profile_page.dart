@@ -791,7 +791,6 @@ class _ReminderCardState extends ConsumerState<_ReminderCard> {
             const SnackBar(
               content: Text('没有通知权限, 请在手机「设置 → 应用 → 暖客宝 → 通知」里打开',
                   style: TextStyle(fontSize: AppTheme.fontMd)),
-              duration: AppDuration.slow,
             ),
           );
           return; // 权限没给 → 开关保持关闭 (不假装打开)

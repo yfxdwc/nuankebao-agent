@@ -10,7 +10,6 @@ import 'core/providers/theme_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/telemetry/usage_providers.dart';
 import 'core/theme/app_theme.dart';
-import 'core/theme/tokens.g.dart';
 
 /// 全局 SnackBar 通道 (402 会员提示用; 不依赖任何页面 context)
 final GlobalKey<ScaffoldMessengerState> _messengerKey =
@@ -52,7 +51,6 @@ class _NuankeBaoAppState extends ConsumerState<NuankeBaoApp> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(message, style: const TextStyle(fontSize: AppTheme.fontMd)),
-          duration: AppDuration.slow,
           action: SnackBarAction(
             label: '去开通',
             onPressed: () => router.go('/profile'),

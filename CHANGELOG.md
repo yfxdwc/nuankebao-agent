@@ -2,6 +2,50 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 管理维度补口: 客户归属卡 (2026-09-23)
+
+主人 2026-09-23「接着做管理维度」。核实后管理维度**唯一的真缺口是归属** ——
+编辑表单已覆盖 姓名/手机/生日/生日提醒/健康标签/病史/过敏/备注，类型卡 + 身份卡也都在，
+但**详情页看不到"这是谁的客户", 也没法认领**。
+
+**为什么这不是锦上添花**: `customer.owner_id` 是「谁的客户列表」的唯一真相源 (ADR-0015 Q11)，
+客户列表 / 胶囊计数 / 图谱行级过滤全按它算。一个没有 owner_id 的客户, 在任何人列表里
+都不是"我的客户" —— 而 L0 会弹行动「认领为我的客户」(那条目前是死路, 见 backlog 挂起项)。
+
+**后端**
+- `getCustomerOwnership(customerId, viewerUserId, viewerCustomerId)` —— 归属状态 +
+  `canClaim` + 给 UI 的一句状态文案
+- 新增 `GET /api/customers/[id]/ownership`
+- ⭐ `canClaim` 的口径与 `claimCustomerOwnership` 的放行条件**一一对应**
+  (自己档案 / 无归属 / 归属我 / 归属别人), 保证「按钮能点 = 后端会放行」
+- 不塞进 `GET /api/customers/[id]`: `toView()` 是纯映射, 为一张卡片改公共签名不划算,
+  且归属卡只在管理 Tab 看, 首屏不该多背一次查库
+
+**前端**
+- `CustomerOwnership` 模型 + `customerOwnershipProvider` (autoDispose family) +
+  `ownership_card.dart`
+- 四种状态: 无归属(警告色 + 说清后果 + 认领按钮) / 我的(成功色) /
+  归属别人(灰 + **不给按钮** + 说清"先到先得, 要转移请协商") / 自己的档案(不给按钮)
+- 认领成功 → invalidate 归属 + 详情 + 客户列表 (三处都受归属影响)
+- **只做认领不做转移** —— 转移涉及"先到先得要不要破例", 是产品决策 (ADR-0015 Q15)
+
+**顺带修一个全仓 UX bug: 所有 SnackBar 提示停留 0.08~0.48 秒 = 看不见**
+`SnackBar.duration` 是**停留时长**(Flutter 默认 4s), 而全仓 10 处都传了
+`AppDuration.fast/base/slow`(80/200/320ms, 那是**动画时长**令牌) ——
+提示在入场动画(~250ms)走完前就被关掉了。全部改为不传 duration(用 Flutter 默认 4s)。
+证据: `ownership_card_test` 里 120ms 时 snackbar 在 `pumpAndSettle` 期间就消失、断言找不到;
+改默认后同一条断言通过。
+
+**验证**
+- 后端 4 个分支逐个冒烟: self / 无归属 / 归属我 / 归属别人 (文案与 canClaim 均正确)
+- **认领端到端** (真 API): `ownerId: null → 540`、`statusLabel: 还没有归属人 → 我的客户`、
+  库里 `owner_id=540`、`audit_log` 有 `UPDATE by 540`
+- 真浏览器: 管理 Tab 归属卡两种状态渲染正确 (我的 / 无归属)
+- flutter test 262 例(新增 7) / vitest 580 例 / 硬编码 0 / tsc + analyze 干净
+- 验证用的认领已复原 (740 归属改回空), 演示数据保持原样
+
+---
+
 ## [Unreleased] — admin 客户管理参数调节页 (2026-09-23)
 
 主人 2026-09-23 点名挂起的 backlog 条目落地: 「在 admin 里增加管理、调节页面，

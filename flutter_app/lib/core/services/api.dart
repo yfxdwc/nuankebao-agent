@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/customer_charts.dart';
 import '../models/customer_insight.dart';
 import '../models/customer.dart';
+import '../models/customer_ownership.dart';
 import '../models/follow_up_info.dart';
 import '../models/ai_insight.dart';
 import '../models/wellness_record.dart';
@@ -261,6 +262,15 @@ class CustomerService {
     final res = await _dio.post('/customers/claim', data: {'customerId': customerId});
     final data = res.data as Map<String, dynamic>;
     return Customer.fromJson(data['customer'] as Map<String, dynamic>);
+  }
+
+  /// 查客户的归属状态 (谁把她当客户在管) —— 管理 Tab 的「归属」卡用
+  ///
+  /// 返回体里的 `canClaim` 与后端 `claimCustomerOwnership` 的放行条件一一对应,
+  /// 所以 UI 可以直接拿它决定按钮可用性 ("按钮能点 = 后端会放行")。
+  Future<CustomerOwnership> ownership(String customerId) async {
+    final res = await _dio.get('/customers/$customerId/ownership');
+    return CustomerOwnership.fromJson(res.data as Map<String, dynamic>);
   }
 
   /// 绑定 app 身份: 填她的**邀请码** (身份识别码) 把手工客户与她账号合上

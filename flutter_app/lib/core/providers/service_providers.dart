@@ -9,6 +9,7 @@ import '../services/notifications/follow_up_reminder.dart';
 import '../services/api.dart';
 import '../models/customer_charts.dart';
 import '../models/customer_insight.dart';
+import '../models/customer_ownership.dart';
 import '../models/dictionaries.dart';
 import '../models/wellness_record.dart';
 import '../models/follow_up_info.dart';
@@ -47,6 +48,15 @@ final wellnessRecordServiceProvider = Provider<WellnessRecordService>(
 /// 客户洞察 (评分 + 行动指引; 免费层)
 final customerInsightServiceProvider = Provider<CustomerInsightService>(
   (ref) => CustomerInsightService(ref.watch(dioProvider)),
+);
+
+/// 客户归属 (管理维度 P7): 谁把她当客户在管 + 能不能认领
+///
+/// autoDispose: 关掉详情页就释放 —— 认领后归属会变, 不该跨会话长期缓存
+/// (认领成功后调用方 `ref.invalidate(customerOwnershipProvider(id))` 刷新)
+final customerOwnershipProvider =
+    FutureProvider.autoDispose.family<CustomerOwnership, String>(
+  (ref, customerId) => ref.watch(customerServiceProvider).ownership(customerId),
 );
 
 /// 客户分析图谱 (P4; 趋势 + 部位热力)

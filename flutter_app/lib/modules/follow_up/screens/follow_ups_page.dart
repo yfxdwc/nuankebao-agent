@@ -182,7 +182,6 @@ class FollowUpsPage extends ConsumerWidget {
                   SnackBar(
                     content: Text('已标记「${todo.customerName}」跟进完成',
                         style: const TextStyle(fontSize: AppType.sm)),
-                    duration: AppDuration.fast,
                   ),
                 );
               }
