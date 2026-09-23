@@ -15,6 +15,7 @@ import {
   desc,
   sql,
   ilike,
+  inArray,
   or,
   type SQL,
 } from "drizzle-orm";
@@ -877,7 +878,25 @@ export interface BindCustomerAccountOk {
   phoneMismatch: boolean;
   /** 本次是否把档案手机号同步成了账号手机号 */
   phoneSynced: boolean;
+  /**
+   * 是否**接管**了她注册时系统自动建的空档案 (那条被删掉, 让位给这条手工档案)
+   *   —— 主人 2026-09-22 场景: 客户先被手工建档, 后来自己注册 → 系统按她的号另建了一条;
+   *      绑定 = 用手工那条(带记录)当她的正式档案, 删掉系统那条空档案
+   */
+  replacedEmptyProfile: boolean;
   account: { userId: bigint; name: string; phoneMasked: string };
+}
+
+/** 这条档案是不是"空的" (没有任何维护记录) —— 接管前必须为空, 否则要人工合并 */
+async function isCustomerProfileEmpty(customerId: bigint): Promise<boolean> {
+  const rows = await db.execute<{ n: number }>(sql`
+    SELECT (
+      (SELECT count(*) FROM interaction WHERE customer_id = ${customerId}) +
+      (SELECT count(*) FROM wellness_record WHERE customer_id = ${customerId}) +
+      (SELECT count(*) FROM follow_up_task WHERE customer_id = ${customerId})
+    )::int AS n
+  `);
+  return Number(rows[0]?.n ?? 0) === 0;
 }
 
 export async function bindCustomerAccount(
@@ -896,11 +915,17 @@ export async function bindCustomerAccount(
   const account = await findActiveUserByReferralCode(db, referralCode);
   if (!account) return { ok: false, code: "CODE_NOT_FOUND" };
 
-  const okView = (alreadyBound: boolean, phoneMismatch: boolean, phoneSynced: boolean): BindCustomerAccountOk => ({
+  const okView = (
+    alreadyBound: boolean,
+    phoneMismatch: boolean,
+    phoneSynced: boolean,
+    replacedEmptyProfile = false
+  ): BindCustomerAccountOk => ({
     ok: true,
     alreadyBound,
     phoneMismatch,
     phoneSynced,
+    replacedEmptyProfile,
     account: { userId: account.userId, name: account.name, phoneMasked: maskPhone(account.phone) },
   });
 
@@ -919,19 +944,36 @@ export async function bindCustomerAccount(
   if (currentLink && currentLink.id !== account.userId) {
     return { ok: false, code: "BOUND_TO_OTHER", detail: "这条档案已经绑定另一个账号了" };
   }
+
+  // 她注册时系统可能已经按她的手机号**自动建了一条档案** → 要判断能不能接管
+  let staleProfileId: bigint | null = null;
   if (account.customerId != null && account.customerId !== customerId) {
-    return { ok: false, code: "BOUND_TO_OTHER", detail: "这个账号已经绑定另一位客户档案了" };
+    const empty = await isCustomerProfileEmpty(account.customerId);
+    if (!empty) {
+      return {
+        ok: false,
+        code: "BOUND_TO_OTHER",
+        detail:
+          "她的账号上已有一条**带记录的**客户档案 (互动/养生/跟进) —— 需要人工合并, 不能直接接管",
+      };
+    }
+    staleProfileId = account.customerId;
   }
 
-  const syncPhone = opts.syncPhone === true && phoneMismatch;
-  if (syncPhone) {
+  // 手机号: 要写入档案的号 = 账号的号 (她注册时用的真号)
+  //   - 接管空档案时**默认写** (空档案让位, 不写就白接管了)
+  //   - 没有空档案时按调用方 syncPhone 决定 (档案上的号可能是销售特意记的另一个联系方式)
+  const shouldSyncPhone = phoneMismatch && (staleProfileId != null || opts.syncPhone === true);
+  if (shouldSyncPhone) {
+    const others = [customerId];
+    if (staleProfileId != null) others.push(staleProfileId);
     const [conflict] = await db
       .select({ id: customer.id })
       .from(customer)
       .where(
         and(
           eq(customer.phoneHash, account.phoneHash),
-          ne(customer.id, customerId),
+          not(inArray(customer.id, others)),
           isNull(customer.deletedAt)
         )
       )
@@ -940,18 +982,18 @@ export async function bindCustomerAccount(
       return {
         ok: false,
         code: "PHONE_CONFLICT",
-        detail: "账号的手机号已经是另一条客户档案了 —— 先处理重复档案, 或选择不同步手机号",
+        detail: "账号的手机号已经是另一条客户档案了 —— 先处理重复档案",
       };
     }
   }
 
   await withAuditContext(ctx, async (tx) => {
-    // ★ 连接: user.customer_id = 这条档案 (账号↔档案 的唯一真相, ADR-0015 Q7)
-    await tx
-      .update(user)
-      .set({ customerId, updatedAt: new Date() })
-      .where(eq(user.id, account.userId));
-    if (syncPhone) {
+    // ① 接管: 删掉她注册时系统自动建的空档案 (无任何记录 → 删了不丢东西; 腾出手机号)
+    if (staleProfileId != null) {
+      await tx.delete(customer).where(eq(customer.id, staleProfileId));
+    }
+    // ② 手机号对齐 (用她账号里的真号)
+    if (shouldSyncPhone) {
       await tx
         .update(customer)
         .set({
@@ -961,9 +1003,17 @@ export async function bindCustomerAccount(
         })
         .where(eq(customer.id, customerId));
     }
+    // ③ 连接: user.customer_id = 这条档案 (账号↔档案 的唯一真相, ADR-0015 Q7)
+    await tx
+      .update(user)
+      .set({ customerId, updatedAt: new Date() })
+      .where(eq(user.id, account.userId));
   });
 
-  return okView(false, phoneMismatch, syncPhone);
+  return {
+    ...okView(false, phoneMismatch, shouldSyncPhone),
+    replacedEmptyProfile: staleProfileId != null,
+  };
 }
 
 // ============================================

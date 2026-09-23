@@ -12,7 +12,7 @@ export default function LoginPage() {
             暖客宝
           </h1>
           <p className="text-sm text-muted-foreground">
-            大健康销售 CRM · 登录
+            大健康客户管理・AI助手 · 登录
           </p>
         </div>
         <LoginForm />
