@@ -13,6 +13,7 @@ import '../../../core/models/dictionaries.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_ext.dart';
 import '../../../core/widgets/big_button.dart';
 import '../widgets/rating_slider.dart';
 import '../widgets/wellness_photo_uploader.dart';
@@ -58,6 +59,18 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
   bool _loading = false;
   String? _effectiveCustomerId;
 
+  /// 新建时是否已按「上一次记录」预填 (P3 提速, 主人 2026-09-23 拍)
+  ///
+  /// 为什么这是记录提速的最大单点 (预估 ~50s → ~5s):
+  ///   连续到店的客户, **上次结束的状态物理上就是这次开始的状态**。
+  ///   原先却写死 `_prePainLevel = 5`, 逼销售重新拖 6 次滑块。
+  ///   现在直接拿上次的 post* 当前 pre*, 并且 post* 默认 = pre* (="无变化"),
+  ///   真的没变化时**一跳直达保存**。
+  bool _prefilledFromLast = false;
+
+  /// 预填来源的那次记录日期 (UI 提示用: "按 9月12日那次填好")
+  String? _prefilledFromDate;
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +79,8 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
       _loadExisting();
     } else {
       _effectiveCustomerId = widget.customerId;
+      // 新建 → 尝试沿用上次 (拿不到就静默回落原来的写死默认值)
+      _loadLastRecord();
     }
   }
 
@@ -89,6 +104,64 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
       if (s.name.contains('碧波庭')) return s.id;
     }
     return null;
+  }
+
+  /// 新建时沿用「该客户上一次记录」(P3 提速)
+  ///
+  /// 口径 (为什么取 post 当这次的 pre):
+  ///   上次「做完之后」的身体状态 = 这次「开始之前」的状态。中间没有服务,
+  ///   所以这是**物理等价的**, 不是拍脑袋。
+  ///
+  /// 拿不到上次记录 (首次到店) → 什么都不做, 保留原默认值。
+  Future<void> _loadLastRecord() async {
+    final cid = _effectiveCustomerId;
+    if (cid == null) return;
+    try {
+      final list = await ref
+          .read(wellnessRecordServiceProvider)
+          .list(customerId: cid, limit: 1);
+      if (!mounted || list.isEmpty) return;
+      final last = list.first;
+      setState(() {
+        // 部位 / 服务: 大概率一样 (同一疗程) —— 但不覆盖用户已手动改过的值
+        _bodyPartIds.addAll(last.bodyPartIds);
+        _serviceItemId = last.serviceItemId;
+
+        // 本次的「前」= 上次的「后」
+        final pPain = (last.postCondition['pain_level'] as num?)?.toInt();
+        final pSleep = (last.postCondition['sleep_quality'] as num?)?.toInt();
+        final pMood = (last.postCondition['mood'] as num?)?.toInt();
+        if (pPain != null) _prePainLevel = pPain;
+        if (pSleep != null) _preSleep = pSleep;
+        if (pMood != null) _preMood = pMood;
+
+        // 本次的「后」默认 = 「前」→ 改善量为 0 (= "没变化", 中性而非虚报效果)
+        _postPainLevel = _prePainLevel;
+        _postSleep = _preSleep;
+        _postMood = _preMood;
+
+        _prefilledFromLast = true;
+        _prefilledFromDate = last.serviceDate;
+      });
+    } catch (_) {
+      // 预填失败不算错 —— 退化成"从默认值开始填", 绝不能让表单打不开
+    }
+  }
+
+  /// 「清空重填」—— 不想沿用上次时用 (回到出厂默认)
+  void _resetToDefaults() {
+    setState(() {
+      _bodyPartIds.clear();
+      _serviceItemId = _dict == null ? null : _defaultServiceItemIdOf(_dict!);
+      _prePainLevel = 5;
+      _preSleep = 3;
+      _preMood = 3;
+      _postPainLevel = 3;
+      _postSleep = 3;
+      _postMood = 3;
+      _prefilledFromLast = false;
+      _prefilledFromDate = null;
+    });
   }
 
   Future<void> _loadExisting() async {
@@ -191,6 +264,15 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
               child: ListView(
                 padding: const EdgeInsets.all(AppSpace.s16),
                 children: [
+                  // P3 提速: 沿用上次时给一条明确提示
+                  //   —— 不提示的话销售不知道已经填好了, 反而会把每个字段重看一遍
+                  if (_prefilledFromLast && _prefilledFromDate != null)
+                    _PrefillBanner(
+                      date: _prefilledFromDate!,
+                      onReset: _resetToDefaults,
+                    ),
+                  if (_prefilledFromLast && _prefilledFromDate != null)
+                    const SizedBox(height: AppSpace.s16),
                   _buildServiceSelector(),
                   const SizedBox(height: AppSpace.s20),
                   _buildBodyPartSelector(),
@@ -225,8 +307,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     );
   }
 
-  Widget _buildBodyPartSelector() {
-    return Column(
+  Widget _buildBodyPartSelector() {    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
@@ -441,6 +522,65 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
           ),
         ),
       ],
+    );
+  }
+}
+/// 「已按上次填好」提示条 (P3 记录提速)
+///
+/// 为什么必须有这条: 自动预填是"静默"的 —— 不提示的话销售不知道已经填好了,
+///   反而会把每个字段再检查一遍, 提速效果归零。提示 + 「清空重填」两者缺一不可。
+class _PrefillBanner extends StatelessWidget {
+  const _PrefillBanner({required this.date, required this.onReset});
+
+  final String date;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpace.s12, AppSpace.s10, AppSpace.s8, AppSpace.s10),
+      decoration: BoxDecoration(
+        color: t.primarySurface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: t.primaryLight),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.history, size: AppSize.iconMd, color: t.primaryDark),
+          const SizedBox(width: AppSpace.s8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '已按 $date 那次填好',
+                  style: TextStyle(
+                    fontSize: AppType.sm,
+                    fontWeight: AppWeight.semibold,
+                    color: t.primaryDark,
+                  ),
+                ),
+                const SizedBox(height: AppSpace.s2),
+                Text(
+                  '没变化可直接保存; 有变化只改对应项',
+                  style: TextStyle(fontSize: AppType.xs, color: t.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onReset,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, AppSize.controlSm),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('清空重填'),
+          ),
+        ],
+      ),
     );
   }
 }
