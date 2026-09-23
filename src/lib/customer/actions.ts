@@ -184,8 +184,15 @@ export function buildActionItems(
 
   // ── 规则 0: 全新客户从没联系过 → 破冰 (冒烟发现: 之前这种情况**零行动**, 是漏的) ──
   //   放在最前面: 她刚建档还没进过任何节奏, 其他规则的条件全是 null, 一条都不触发。
+  //
+  //   ⚠ 必须同时要求 `visitCount === 0` (2026-09-23 视觉验证发现):
+  //     到店记录 (wellness_record) **不计入** interaction.contactTotal ——
+  //     于是"到过店 3 次、但没记过联系"的客户会收到「一次都还没联系过」,
+  //     销售会觉得荒谬 ("我服务过她 3 次!")。
+  //     语义上: 到过店 = 有接触 ≠ 新线索 → 不该催破冰。
   if (
     a.contactTotal === 0 &&
+    a.visitCount === 0 &&
     daysBetween(input.customerCreatedAt, now) >= T.neverContactedGraceDays &&
     !input.hasPendingTask
   ) {
@@ -193,9 +200,10 @@ export function buildActionItems(
       id: "never_contacted",
       priority: P.never_contacted,
       title: "首次联系破冰",
-      why: `建档 ${daysBetween(input.customerCreatedAt, now)} 天了, 一次都还没联系过`,
+      why: `建档 ${daysBetween(input.customerCreatedAt, now)} 天了, 还没联系过也没到过店`,
       evidence: {
         contactTotal: 0,
+        visitCount: 0,
         daysSinceCreated: daysBetween(input.customerCreatedAt, now),
       },
       when: "今天",

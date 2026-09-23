@@ -769,6 +769,18 @@ describe("行动指引 (buildActionItems)", () => {
     expect(idsOf(items)).not.toContain("never_contacted");
   });
 
+  it("【回归】到过店但没记过联系 → 不催破冰 (到店即接触, 不是新线索)", () => {
+    // 2026-09-23 视觉验证在真机数据上发现: 有 3 条养生记录的客户被提示
+    // "一次都还没联系过" —— 因为 wellness_record 不计入 contactTotal。
+    const items = buildActionItems(
+      actionInput({
+        analysis: analysis({ contactTotal: 0, visitCount: 3 }),
+        customerCreatedAt: daysAgo(5),
+      })
+    );
+    expect(idsOf(items)).not.toContain("never_contacted");
+  });
+
   it("已联系过 → 不出破冰", () => {
     const items = buildActionItems(
       actionInput({
