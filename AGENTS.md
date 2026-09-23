@@ -84,7 +84,8 @@
   `npx tsx scripts/audit-placement-integrity.ts --strict` (不一致 → exit 1). 另: 脚本里读 env 一律
   `import "./_env"` 放第一个 import (见 `scripts/_env.ts`), 不要用老的 `loadEnv()` 写法
 - ✅ **单点问题修一处后必全仓扫一遍** (2026-09-15 主人立) → 修一个具体 bug (如整页刷新的 `<a>`) 后, 必须全仓 grep 同类问题 (如所有 `<a href>` / `window.location` / `router.push` / `<form action>`), 确认无其他遗漏才 commit. 单点修复 = 必复发, 跟 §5 登录循环 w14 三次复发同根.
-- ✅ **改前端必起 dev server + 截图验证** (2026-09-15 主人立) → 任何 web admin / Next.js / Flutter web UI 改动, 必 `pnpm dev` 起服务 (port 先跑 `./tools/check-port.sh`) + 截图 (playwright / 浏览器) + 视觉验证, 不能只看 `tsc --noEmit` / `pnpm build` 就 commit. 详见 §5 w14 R12 puppeteer ≠ Flutter web UI 真行为 同根问题.
+- ✅ **改前端必起 dev server + 截图验证** (2026-09-15 主人立)
+  → **改 UI 前/后跑 `bash tools/density-report.sh`** 看量化对比 (卡片数 / 视口行数 / 主字号 / 主按钮 / 列表项)。`docs/ui-principles.md` 是改 UI 时的逐条验收清单。 → 任何 web admin / Next.js / Flutter web UI 改动, 必 `pnpm dev` 起服务 (port 先跑 `./tools/check-port.sh`) + 截图 (playwright / 浏览器) + 视觉验证, 不能只看 `tsc --noEmit` / `pnpm build` 就 commit. 详见 §5 w14 R12 puppeteer ≠ Flutter web UI 真行为 同根问题.
 
 ### 不该做
 - ❌ **不要 sudo 改系统配置** — 这是 暖客宝 项目级别,跨用户操作要找主人拍
