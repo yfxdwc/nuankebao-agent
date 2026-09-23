@@ -200,7 +200,6 @@ tools/check-ui-tokens.sh --by-file    列每个文件的明细
 |---|---|
 | `flutter.color` | `core/theme/` 之外的字面 `Color(0x…)` |
 | `flutter.fontSize` / `radius` / `spacing` | 裸数字字号 / 圆角 / 间距 |
-| `flutter_deprecated.*` | 同上，`_deprecated/` 目录 |
 | `web.paletteClass` | 绕过语义令牌的 Tailwind 调色板类 (`bg-amber-700`) |
 | `web.arbitraryValue` | `[16px]` / `[#fff]` 这类任意值 |
 | `web.hexLiteral` | tsx/ts 里的字面 hex |
@@ -242,10 +241,10 @@ tools/check-ui-tokens.sh --by-file    列每个文件的明细
 
 ## 8. 已知取舍 / 后续
 
-- **`_deprecated/` 已变量化，但那 20 个文件本来就是坏的**（43 处 `uri_does_not_exist`，
-  200 条存量 issue，0 条与令牌有关）。按 AGENTS §4.5 与 `_deprecated/README.md` 的「真删」流程，
-  **建议主人 review 后直接 `rm -rf`**，而不是继续维护。为兼容 README 里的回滚流程（`mv` 到上层目录），
-  这里的令牌 import 用的是 `package:` 绝对路径。
+- **`_deprecated/` 已真删**（2026-09-23 主人拍板）：20 个文件本来就是坏的（43 处 `uri_does_not_exist`，
+  临时解禁分析出 200 条 issue，0 条与令牌有关），观察期早已过。删除前先做了完整令牌化，
+  万一要回滚: `git log --diff-filter=D --oneline -- flutter_app/lib/_deprecated` 找到删除 commit,
+  再 `git checkout <该commit>^ -- flutter_app/lib/_deprecated/`。
 - **Web 字号 `--text-micro` (10px)** ×42 处来自 web admin 密集表格。Flutter 可读性底线仍是 14px；
   web admin 是主人自用脚手架，暂许更小。要统一抬高 → 改 `scales.type.micro` 一个数。
 - **`sage` 的 `primary` 对白字 4.86:1**（AA，未达 AAA 7:1）。基础字号 18pt 属 WCAG 大字号，AA-large 达标；

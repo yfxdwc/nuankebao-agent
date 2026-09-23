@@ -1,5 +1,5 @@
 {
-  "_comment": "UI 硬编码棘轮基线。修完一批就 tools/check-ui-tokens.sh --update-baseline 往下拧。只许下降。",
+  "_comment": "UI 硬编码棘轮基线。修完一批就 tools/check-ui-tokens.sh --update-baseline 往下拧。只许下降。 (_deprecated/ 已于 2026-09-23 真删, 相关指标移除)",
   "_generatedBy": "tools/check-ui-tokens.sh --update-baseline",
   "updatedAt": "2026-09-23",
   "total": 0,
@@ -8,9 +8,6 @@
     "flutter.fontSize": 0,
     "flutter.radius": 0,
     "flutter.spacing": 0,
-    "flutter_deprecated.color": 0,
-    "flutter_deprecated.fontSize": 0,
-    "flutter_deprecated.spacing": 0,
     "web.paletteClass": 0,
     "web.arbitraryValue": 0,
     "web.hexLiteral": 0,

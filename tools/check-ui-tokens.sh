@@ -74,7 +74,6 @@ count() {
 # 1. Flutter: 活跃区 (参与编译)
 # ============================================
 FLUTTER_ACTIVE=$(find flutter_app/lib -name '*.dart' \
-  -not -path '*/_deprecated/*' \
   -not -path '*/core/theme/*' 2>/dev/null)
 
 # shellcheck disable=SC2086
@@ -83,19 +82,6 @@ if [ -n "$FLUTTER_ACTIVE" ]; then
   count "flutter.fontSize"     'fontSize: *[1-9][0-9]*(\.[0-9]+)?[^0-9]' $FLUTTER_ACTIVE
   count "flutter.radius"       'BorderRadius\.circular\([0-9]'  $FLUTTER_ACTIVE
   count "flutter.spacing"      '(EdgeInsets\.[a-zA-Z]+\([0-9]|SizedBox\((height|width): *[0-9]|(height|width): *(1[2-9]|[2-9][0-9])\b)' $FLUTTER_ACTIVE
-fi
-
-# ============================================
-# 2. Flutter: _deprecated/ (不参与编译, 但主人要求一并变量化)
-# ============================================
-FLUTTER_DEPRECATED=$(find flutter_app/lib/_deprecated -name '*.dart' 2>/dev/null)
-if [ -n "$FLUTTER_DEPRECATED" ]; then
-  # shellcheck disable=SC2086
-  count "flutter_deprecated.color"    'Color\(0x[0-9A-Fa-f]{6,8}\)'   $FLUTTER_DEPRECATED
-  # shellcheck disable=SC2086
-  count "flutter_deprecated.fontSize" 'fontSize: *[1-9][0-9]*(\.[0-9]+)?[^0-9]' $FLUTTER_DEPRECATED
-  # shellcheck disable=SC2086
-  count "flutter_deprecated.spacing"  '(EdgeInsets\.[a-zA-Z]+\([0-9]|SizedBox\((height|width): *[0-9]|(height|width): *(1[2-9]|[2-9][0-9])\b)' $FLUTTER_DEPRECATED
 fi
 
 # ============================================
@@ -152,7 +138,6 @@ echo " UI 令牌护栏 (硬编码棘轮)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 KEYS=(flutter.color flutter.fontSize flutter.radius flutter.spacing \
-      flutter_deprecated.color flutter_deprecated.fontSize flutter_deprecated.spacing \
       web.paletteClass web.arbitraryValue web.hexLiteral flutter.constThemeRef)
 
 BASELINE_JSON='{}'

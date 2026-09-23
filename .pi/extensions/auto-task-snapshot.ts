@@ -10,19 +10,37 @@
  *               指望 agent 自觉读 AGENTS.md §7
  *
  * 2. agent_end (agent 说完话触发, 适配 vibe coding)
- *    - 自动 commit working tree 改动 (`git add -A && git commit -m "[pi] ..."`)
- *    - commit message 用 agent 最后一句话的前 50 字符
+ *    - 自动 commit working tree 改动 (`git add -A -- . ':(exclude)public/app'`)
+ *    - commit message = `wip(snapshot): <agent 最后一句话前 60 字>`
  *    - 你不需要: 手动 `git add` + `git commit`, cron 凑时间, 编辑器 auto-commit
  *
  * 失败: 两个 hook 都静默 + console.error, 不打扰用户, 不阻塞 pi
  *
- * 见 AGENTS.md §7, scripts/task-snapshot.sh.
+ * ⚠ 本项目对 canonical 版 (sales-ai) 的两处本地化改动 (2026-09-23 主人拍板):
+ *
+ *   a) **commit message 前缀 `[pi] ` → `wip(snapshot): `**
+ *      原因: 自动 commit 是**中间态存盘**, 不是 feature commit。用 agent 的原话当 message
+ *      会污染 history —— 实际出现过 `[pi] 下面给你一份「大健康养生行业客户分级评分维度池」...`
+ *      这种把"回复正文"当 commit 标题的荒唐结果, 而且下次 `git log` 完全看不出改了什么。
+ *      `wip(snapshot):` 一眼可辨"这是自动存盘, 该 squash / reword", 也方便
+ *      `git log --grep='^wip(snapshot)'` 批量清理。
+ *      ⚠ 主人/agent 仍应在收尾时**自己**提交语义化 commit (feat/fix/refactor) ——
+ *      自动 commit 只是兜底网, 不是提交策略。
+ *
+ *   b) **add 时排除 `public/app/`**
+ *      原因: AGENTS §5 明确 `public/app/` 是 Flutter web 编译产物, **本质不该跟踪**
+ *      (deploy 走 working dir, 见 §5「APK 分发走 volume mount」同根)。
+ *      但 `flutter-web-watch.service` 会在 lib/** 变化后自动重建它, 于是每次 auto-commit
+ *      都会把几十 MB `main.dart.js` 的 diff 卷进来 —— 实测污染过 3 个 commit
+ *      (114532 行 diff), 把真正的代码改动淹没。
+ *
+ * 见 AGENTS.md §8.1.3, docs/dev-modules/task-snapshot.md, scripts/task-snapshot.sh.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const RECENT_SNAPSHOT_THRESHOLD_SEC = 5 * 60; // 5 分钟内不打第二次 snapshot
-const COMMIT_MSG_MAX_LEN = 50; // commit message 最大长度
+const COMMIT_MSG_MAX_LEN = 60; // commit message 最大长度 (不含 `wip(snapshot): ` 前缀)
 
 interface SessionMessageEntry {
 	type: string;
@@ -203,11 +221,15 @@ export default function (pi: ExtensionAPI) {
 			const msg = deriveCommitMsg(entries);
 
 			// 3) commit (--no-verify 跳过 pre-commit hook 检查, vibe coding 下不卡)
-			await pi.exec("git", ["add", "-A"]);
+			//
+			// ⚠ 排除 public/app/: Flutter web 编译产物 (AGENTS §5 明确不该跟踪)。
+			//   flutter-web-watch.service 在 lib/** 变化后会重建它, 不排除的话每次
+			//   auto-commit 都卷进 ~100k 行 main.dart.js diff, 把真改动淹没。
+			await pi.exec("git", ["add", "-A", "--", ".", ":(exclude)public/app"]);
 			const { code: commitCode, stderr } = await pi.exec("git", [
 				"commit",
 				"-m",
-				`[pi] ${msg}`,
+				`wip(snapshot): ${msg}`,
 				"--no-verify",
 			]);
 

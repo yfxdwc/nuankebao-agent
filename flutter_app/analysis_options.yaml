@@ -1,12 +1,9 @@
 # ============================================
 # Flutter 静态分析配置
-# Plan F2: 排除 _deprecated/ (旧代码, 留 1 周观察期后真删)
 # ============================================
 
 analyzer:
   exclude:
-    # 旧代码 (Plan F2 留 1 周观察期, 真删前不参与静态分析)
-    - lib/_deprecated/**
     # 生成代码 (freezed/json_serializable): 不参与 lint
     #   —— 生成器会把源文件的 // ignore: 注释复制到多处, 触发 duplicate_ignore 噪声
     #   (2026-09-22 加 hasAccount 字段重新生成后发现); 编译错误仍由 dart 编译器抦

@@ -124,8 +124,7 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 │   │   │   ├── presentation/   ← 图谱(graph) + 列表(list) 合并
 │   │   │   ├── salon/          ← ★ 沙龙 (v0.1.5 Phase 7 已实施; 旧名 meeting)
 │   │   │   └── relation/       ← ★ 客户/加盟关系 (接口 + 默认实现)
-│   │   ├── app.dart / main.dart
-│   │   └── _deprecated/        ← 旧文件暂存, 待 Phase 1-7 迁移完后清理
+│   │   └── app.dart / main.dart
 │   └── android/                ← APK 构建产物
 ├── deploy/                     ← ✅ 活跃 (dev-modules/deploy 物理位置)
 │   ├── backup.sh               ← 工业级备份 (PG + Media + GPG + 异地 + GFS)
@@ -231,11 +230,14 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   数据源 `GET /api/me` + `GET /api/app-version` (见 `docs/api.md §13`);
   本机设置 `core/providers/settings_provider.dart` (shared_preferences)
 
-**`lib/_deprecated/`** (v0.1.4 Phase 9 真删评估):
-- 1 周观察期已过 (v0.1.2 → v0.1.3 拍板 2026-09-07 → 现在 > 1 周)
-- **可删**: git rm -r flutter_app/lib/_deprecated/ (per _deprecated/README.md)
-- 但: 主人实际部署后, 若主理人未验证生产环境, 保留备份更稳
-- **本次决定**: 暂不删 (per AGENTS §3 "不要 sudo 改系统配置" 类比), 主人 review 后手工删
+**`lib/_deprecated/`** — ✅ **已于 2026-09-23 真删** (主人拍板, 观察期满 + 已变量化)
+- 20 个 dart 文件 (11 screen / 6 service / 3 widget) + README, 全部是 Plan F2 删掉的旧实现
+- 删除前已确认: **零引用** (`grep -rn _deprecated flutter_app/lib` 无命中) + 临时解禁分析 200 条 issue
+  全是存量坏引用 (43 处 `uri_does_not_exist`) —— 即"本来就编译不过", 留着只会误导
+- 恢复方式 (万一要回滚): `git log --diff-filter=D --oneline -- flutter_app/lib/_deprecated`
+  找到删除 commit, 再 `git checkout <该commit>^ -- flutter_app/lib/_deprecated/`
+- 连带清理: `flutter_app/analysis_options.yaml` 去掉 exclude / 护栏去掉 `flutter_deprecated.*` 指标 /
+  `docs/architecture/v0.1.3-final.md` 的待办项可勾掉
 
 **`src/app/preview/`** (v0.1.4 Phase 9 并入 app-preview):
 - history: W19 早期版本, v0.1.3 重构后完整版在 `/app-preview`
@@ -599,7 +601,7 @@ bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached +
 | Hook | 触发时机 | 行为 |
 |---|---|---|
 | `turn_start` | session 第一条 user 消息 | 自动打 `pre-auto-<task-slug>-<sha>`, 5 分钟内去重 |
-| `agent_end` | agent 说完话 | 自动 commit working tree 改动 (`[pi] <agent 最后一句话前 50 字符>`) |
+| `agent_end` | agent 说完话 | 自动 commit working tree 改动 (`wip(snapshot): <agent 最后一句话前 60 字>`) |
 
 **前提**: cwd 必须在 git 仓库里, 否则 console.error 警告 (UI notify 提示 `git init`).
 **依赖**: `@earendil-works/pi-coding-agent` (pi-coding-agent 全局自带, 不入 nuankebao/package.json, 跟 sales-ai 一致).
