@@ -11,7 +11,9 @@
 #
 # 用法:
 #   scripts/task-snapshot.sh start <task-name>
-#       捕获当前完整工作树 (含 untracked) -> commit + tag pre-<name>-<sha>
+#       捕获当前工作树 -> commit + tag pre-<name>-<sha>
+#       ⚠ 只捕获**已跟踪文件的改动** (git add -u); untracked **不进 commit**,
+#         但完整 dump 在 .git/snapshots/<tag>.diff (见下方 nuankebao 适配 ③)
 #   scripts/task-snapshot.sh list
 #       最近 10 个任务快照 (序号/标签/绝对时间/相对时间/commit 标题)
 #   scripts/task-snapshot.sh find <time-spec>
@@ -28,8 +30,8 @@
 #   - 不删旧 tag: 让 git reflog + tag 历史当"自然保留策略" (90+ 天可用)
 #   - 重启 systemd 用 sudo, 失败不阻断 (可能服务根本没启)
 #
-# ADR 0020 caveat — 实际覆盖范围 (2026-08-15 改):
-#   - 在工作树 dirty 时, snapshot commit 是否捕获改动, 依赖 git 的 `git add -A` 是否被任何
+# ADR 0020 caveat — 实际覆盖范围 (2026-08-15 改; 2026-09-23 nuankebao 改):
+#   - 在工作树 dirty 时, snapshot commit 是否捕获改动, 依赖 git 的 `git add -u` 是否被任何
 #     `filter.<driver>.process` (例如 git-lfs) 跳过; 全局 git config 下可能 silent skip.
 #   - 作为兜底, dirty 改动一定被 dump 到 `.git/snapshots/<tag>.diff` (含 untracked).
 #   - rollback 在 checkout 之后检查 working tree 仍 dirty 时, 自动 `git apply` 该 diff.
@@ -65,6 +67,21 @@ cd "$PROJECT" || { echo "❌ 无法 cd $PROJECT" >&2; exit 1; }
 #   1. glob: sales-ai-*.service → nuankebao-*.service (对齐主人机器 service 命名, 见 AGENTS.md §6.1)
 #   2. 保留 --user (nuankebao deploy/systemd/*.service 设计为 user-level; 见 deploy/README.md §10.4)
 #   3. 当前 dev 机器 systemd --user 实际有的 nuankebao service: nuankebao-nextjs.service (部署栈启了才更多)
+#
+# nuankebao 适配 (2026-09-23, 主人拍板): `start` 的 `git add -A` → **`git add -u`**
+#   背景: 本仓经常**多个 pi/codex session 同时在同一工作目录**干活, 而 `git add -A`
+#     会把**别人新加的 untracked 文件**一并 stage + commit → 别人的在制品被扫进
+#     本次快照 commit (实测发生过: 把另一 session 的 /admin/plam 未提交改动扫进别人 commit)。
+#   改法: 只暂存**已跟踪文件的改动/删除** (`-u` = --update, 天然忽略 untracked)。
+#     untracked 不丢失 —— 它们在 `start` 开头已完整 dump 到
+#     `.git/snapshots/<tag>.diff` (逐文件内容都写进去了)。
+#   ⚠ 代价 (已知取舍, 不是 bug): **任务开始时就存在的 untracked 文件, 若任务中被删掉,
+#     `rollback` 不会自动恢复它** (它不在 tag 指向的 commit 里, 而 checkout 后工作树
+#     与 HEAD 一致 → 不会触发动 diff 兜底)。要恢复就去
+#     `.git/snapshots/<tag>.diff` 里捞 (rollback 会把路径打出来)。
+#   为什么接受这个代价: "扫走别人在制品"是**不可逆的数据事故**(别人的新文件被提交进
+#     你的 commit, 且 message 与内容无关); 而"任务中删掉一个 task-start 就存在的
+#     untracked 文件且需要回滚恢复"是**极罕**且**有 dump 可手捞**的场景。
 SERVICES=($(systemctl --user list-unit-files 'nuankebao-*.service' --no-legend 2>/dev/null \
     | awk '{print $1}' \
     | sed 's/\.service$//'))
@@ -114,9 +131,11 @@ case "$action" in
             } > "$snap_diff" || echo "⚠️  dirty 备份失败 (不影响 snapshot, 仅 rollback 时无 diff 兜底)" >&2
         fi
 
-        # 捕获完整工作树 (含 untracked) — 注意: 在全局 git-lfs filter.process 下可能 silent skip,
-        # 所以 dirty 真实状态靠上面 .git/snapshots/<tag>.diff 兜底 (ADR 0020).
-        git add -A
+        # 捕获已跟踪文件的改动/删除 (**不用 `git add -A`**) ——
+        #   -A 会把 untracked 一并 stage: 本仓多 session 同工作目录时,
+        #   会把**别人新加的文件**扫进本次快照 commit (实测事故, 见文件头 nuankebao 适配 ③)。
+        #   untracked 不会丢: 上面已完整 dump 到 .git/snapshots/<tag>.diff。
+        git add -u
         # --no-verify: 元提交, 跳过 pre-commit CHARTER 检查
         # --allow-empty: 即使没改动也能打 tag (dirty 已被 .git/snapshots/ 备份)
         git commit --no-verify --allow-empty \
@@ -228,6 +247,15 @@ case "$action" in
             else
                 echo "   ⚠️  diff 应用失败 (可能有冲突), 请手动: less ${snap_diff}"
             fi
+        fi
+        # === untracked 提示 (2026-09-23 nuankebao 适配 ③) ===
+        # start 现在用 `git add -u` —— **untracked 不进 commit**(避免扫走别的 session 的新文件),
+        # 所以任务中若删过"快照时就存在的 untracked 文件", 这里不会自动恢复它
+        # (checkout 后工作树与 HEAD 一致 → 不会触发上面的 diff 兜底)。
+        # 别让人干着急: 直接把备份路径打出来。
+        if [ -f "$snap_diff" ] && grep -q '^=== untracked files ===' "$snap_diff" 2>/dev/null; then
+            echo "   ℹ️  快照含 untracked 文件 —— 它们**不在 commit 里**, 备份在: ${snap_diff}"
+            echo "      (若任务中删过其中某个, 需要手动从该文件的 '=== untracked files ===' 段抄回来)"
         fi
         for svc in "${SERVICES[@]}"; do
             if sudo systemctl restart "$svc" 2>/dev/null; then
