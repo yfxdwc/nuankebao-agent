@@ -385,6 +385,27 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   **修法**: 建档案的同时把 `user.customer_id` 也连上; 而且**反向的那条也要连**
   (验"连了但不是会员"而不是"压根没连"), 否则连接逻辑坏掉时用例仍会假绿。
 
+- ❌ **并发 session 同工作区时 `git add -A` / `commit -a` = 把别人的在制品扫进自己的 commit (2026-09-23)** —
+  本仓经常有多个 pi/codex session 同时在同一个工作目录干活 (主人会并行开任务),
+  而 `.pi/extensions/auto-task-snapshot.ts` 的 hook 会**各自**把整棵工作树提交成
+  `[SNAPSHOT] ...`。两者叠加的后果:
+  - 我跑 `git add -A` 时, 把另一个 session 未提交的 `/admin/plan` 新页面扫进了“记录页完善”的
+    commit → **message 与内容完全无关** (考古时最坑)
+  - 我自己的工作日却又被别人的 snapshot hook 提前提交了 → 我的语义 message 挂到了别人头上
+
+  **铁律 (并发环境提交前只做这两件事其一)**:
+  1. `git add <具体路径…>` —— 只加自己改的文件 (推荐)
+  2. 先 `git status` 确认没有不相干的东西, 再用 `git add -A`
+
+  **已经错位的怎么救 (本次用法, 已验证)**:
+  ```bash
+  git rev-parse HEAD^{tree} > /tmp/tree-before.txt   # ① 先存重排前的树哈希
+  git reset --mixed <最后一个干净 commit>              # ② 把错位 commit 变回未提交
+  # ③ 分文件提交成两个语义化 commit (各自 add 具体路径)
+  git rev-parse HEAD^{tree} | diff /tmp/tree-before.txt -   # ④ 必须为空 = 文件一字未改
+  ```
+  第 ④ 步是关键: **树哈希相同才算“只改了 commit 边界”**; 不同就说明丢/改了内容, 立即停手。
+
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
 > **历史**:
