@@ -2,6 +2,58 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — UI 令牌全变量化 + 运行时换肤 (2026-09-23)
+
+> **主人拍板**: ① 跨端单一真相源 (`design-tokens.json` → 脚本生成两端) ② 暂不开 dark mode
+> ③ 换肤能力到「运行时可切多主题 (品牌色 + 季节主题)」④ `_deprecated/` 也一并变量化 ⑤ 全面变量化
+
+**审计结论 (改造前)**: 项目**没有**全变量化 —— 颜色主干约 80%, 字号部分, 间距/圆角/阴影/动效/状态色基本没有;
+两端硬编码共 **1265 处**, 且三处「养生绿」互不相同 (Flutter `#4A7C59` / Web `#248F4B` / themeColor `#1f8a4c`)。
+`Theme.of(context)` 全项目只用 2 次 → 主题是"照着抄的常量", 不是"运行时活的"。
+
+**地基 (L0/L1/L2 三层令牌)**
+- `design/tokens/design-tokens.json` = 唯一真源 (87 调色板槽 + 5 主题 + 67 语义色槽 + 8 组尺度);
+  唯一允许出现字面 hex 的地方
+- `scripts/generate-tokens.ts` → 3 份产物: Flutter token / Web CSS 变量 / Web TS 色值镜像;
+  `pnpm tokens:build` / `:check` / `:contrast`
+- **`on*` 前景色由生成器按 WCAG 亮度自动推导** (手写 JSON 会被拒绝) → 机制上消灭「白字白底」
+- 自动区分「跨主题恒定」与「随主题变」: 前者生成 `AppColors.*` const (存量代码零成本替换),
+  后者必须 `context.tokens.*`
+- `tailwind.config.ts` 零字面色值; shadcn 兼容层 (607 处存量用法) 保留
+
+**运行时换肤 (主人拍板的第 ③ 项)**
+- 5 主题: 品牌 `养生绿` + 季节 `春·新芽 / 夏·青荷 / 秋·琥珀 / 冬·苏木`
+- Flutter: `ThemeExtension` + `context.tokens` + Riverpod 持久化 + 「我的 → 主题配色」
+- Web: `<html data-theme>` + CSS 变量覆盖 + `<head>` 内联防闪脚本 + admin topbar 下拉 + 跨标签页同步
+- 图表也跟随换肤: `useChartColors()` 从 CSS 变量运行时读 (以前 recharts 色写死, 换肤不变)
+- 加主题 = JSON 加一项 + `tokens:build`, **两端零改动**
+
+**存量迁移 (1265 → 0)**
+- Web: 调色板类 135→0 / 任意值 67→0 / 字面 hex 13→0
+- Flutter: 色 44→0 / 字号 31→0 / 圆角 88→0 / 间距 709→0
+- `_deprecated/` 171 处一并变量化 (用 `package:` 绝对导入, 兼容 README 的回滚流程)
+- 8 种散落高度 (36/40/44/48/52/56/68/80) 收成语义档; 6 种近似浅灰合并
+
+**顺带修的真 bug (护栏/测试当场抓到)**
+- 边框对卡片仅 **1.32:1** (中老年低视力等于没画线) → 收紧到 1.54:1 并与输入框边框统一
+- 暖橙 accent 配白字 **2.21:1** (不可读) → 自动推导深前景 7.87:1
+- 底部导航 / TabBar 的 label 样式**漏写 color** (4 处) —— 与 2026-09-22「chip 白字」同一类
+- `from-danger/10` / `shadow-danger/30` 曾**静默不生成** (透明度修饰符对 hex CSS 变量无效)
+  → 生成器补 `--*-rgb` 通道变量
+
+**护栏 (防复发)**
+- `tools/check-ui-tokens.sh` 硬编码**棘轮**: 存量登记, 只许下降, 上涨即 exit 1
+- `tools/verify-ui-tokens.mjs` 真浏览器视觉验收 20 项 (含「令牌链路端到端」: 断言用了
+  `bg-primary` 的元素的**计算样式**真的跟着换, 不只看 CSS 变量)
+- `docs/ui-tokens.md` 令牌系统 canonical 文档
+
+**验证 (全过)**
+- `npx tsc --noEmit` / `flutter analyze` (仅 3 条存量警告) / `next build` 均过
+- Vitest 令牌契约 **56 例** + Flutter 令牌契约 **41 例** = **97 例**
+- Flutter 全量测试 **189 例** 全过 (顺带修掉 `profile_page_test` 对 ListView 缓存区的隐式依赖)
+- 视觉验收 **20/20**; web 6 个页面冒烟 200
+- 护栏 **1265 → 0**
+
 ## [Unreleased] — web admin 解冻 + 真实用户使用数据采集模块 (2026-09-22)
 
 > **主人拍板**: ①「"web admin 冻结中"这是个错误，需要解冻结。新模块接入 web admin」

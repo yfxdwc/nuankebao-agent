@@ -319,6 +319,16 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   - **修法 = `git restore --staged <files>` + 留 working dir**, 不用 bypass, 不写 commit, deploy 仍生效
   - `--no-verify` 仅在「主人拍板要动 preview framework 本身」时用 (AGENTS §9.2), 图省事 = 复发温床。涉及路径: AGENTS §9.1 冻结清单第 9 项 + `tools/pre-commit-preview-guard.sh` 头部注释。
 
+- ❌ **不要在 `next dev` 跑着的时候执行 `next build` (2026-09-23 自己踩的)** — 两者**共用 `.next/` 目录**。
+  dev 进程正在写 chunk, build 把目录当自己的输出重建 → 运行中的 dev server 立刻崩:
+  `Cannot find module './8495.js'` (webpack-runtime 找不到自己刚写的 chunk), 同时 next-server
+  RSS 膨到 **1.62 GB**, `/admin` 直接 500 或挂死 (实测 167s 超时)。修法 = `systemctl --user stop
+  nuankebao-nextjs` → `rm -rf .next` → `start` → 冷编译预热 (单条 curl, 不并发)。
+  **要验证 production build 就单独找台机器 / 先停 dev**, 别图省事在同一个工作目录来回切。
+  同根: §5「Next.js dev mode 下不要并发打 30+ API 请求」—— 都是把 dev 模式当 production 用。
+  另: 这类崩塌的表征是「我改的页面 500」, 很容易误判成自己的代码 bug (我就误判了),
+  所以**改前端前先确认 dev server 是活的**: `curl -s -o /dev/null -w '%{http_code}' localhost:3003/login`。
+
 - ❌ **APK 分发走 volume mount, 不靠 commit 不靠 rebuild image (2026-09-21/22 两次 prod-deploy 后沉淀)** — Flutter 重 build 出新 APK 在 `flutter_app/build/app/outputs/flutter-apk/app-release.apk`, 但 prod `/api/apk-download` 服务的是容器内 `/app/public/downloads/NUANKEBAO-release.apk`:
   - `docker-compose.prod.yml` 挂 `./data/prod/downloads:/app/public/downloads:ro` (host → container)
   - `src/lib/apk.ts::apkCandidates()` 列 7 个候选, env > mtime 排序选最新 (md5 缓存按 mtime 失效)
