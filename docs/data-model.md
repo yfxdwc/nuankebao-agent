@@ -374,19 +374,35 @@ CREATE INDEX idx_followup_due ON follow_up_task(due_at) WHERE status = 'pending'
 
 ## 数据迁移
 
-`drizzle-kit` 自动生成迁移文件:
-
 ```bash
-pnpm db:generate    # 生成迁移
-pnpm db:migrate     # 应用迁移
+pnpm db:migrate     # 应用迁移 (migration 后自动挂审计触发器)
+pnpm db:compat      # 迁移兼容性检查 (CHARTER §3.5 红线, CI 会跑)
 pnpm db:studio      # 打开 Drizzle Studio (Web GUI)
+pnpm db:generate    # ⚠ 不是生成工具! 见下
 ```
 
-迁移流程:
-1. 改 `schema.ts`
-2. `pnpm db:generate` 自动生成 SQL
-3. 主人 review SQL 文件
-4. `pnpm db:migrate` 应用
+> ⚠ **不要用 `drizzle-kit generate` 生成迁移** (2026-09-23 立)
+>
+> 本仓 `drizzle/meta/` 的 snapshot 只到 `0016`，之后 `0017-0024` 都是**手写迁移**
+> （原因 + 护栏 + 正确姿势: `docs/backlog.md` 技术债条目）。
+> 直接跑 `drizzle-kit generate` 会拿 `schema.ts` 跟 0016 做 diff，**把 0020-0023 的
+> 变更整段重放**（重复建表 + 重复 ALTER）—— apply 到已有库就是事故。
+> `pnpm db:generate` 现在包了一层护栏（`tools/check-drizzle-generate.sh`）会在这种
+> 情况下 **exit 1 拒收**，所以它现在的定位是「**体检**」不是「生成」。
+
+**新增迁移的正确流程**:
+1. 改 `src/lib/db/schema.ts`
+2. **手写** `drizzle/<NNNN>_your_change.sql`（格式参考 `drizzle/0024_app_config.sql`）
+3. 往 `drizzle/meta/_journal.json` **追加一条**
+   （`migrate()` 靠 journal 找文件，漏了这步 = 你的迁移不会被应用）:
+   ```json
+   { "idx": 25, "version": "7", "when": 1790346000000,
+     "tag": "0025_your_change", "breakpoints": true }
+   ```
+4. 破坏性变更（DROP / RENAME / ALTER TYPE / SET NOT NULL）→ 补
+   `drizzle/down/<同名>.down.sql`（CHARTER §3.5）
+5. `pnpm db:compat` 必须过（CI `db-compat` job 失败 = PR 阻断）
+6. 主人 review SQL → `pnpm db:migrate`
 
 ## 字典数据 seed (W2 一次性导入)
 
