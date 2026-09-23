@@ -11,6 +11,10 @@
 //   - /admin/dev/* 页: 左侧 DevTabsNav (替代版本文字), 右侧 退出登录
 //
 // DevTabsNav 内部判断 active, 这里只负责"要不要显示"。
+//
+// B3 重构 (2026-09-23):
+//   - 高度统一 h-12 (与 sidebar 头同高)
+//   - 去掉 backdrop-blur 多余描边, 简化 1px border-b
 // ============================================
 
 "use client";
@@ -28,11 +32,11 @@ export function AdminTopbar() {
   const isDevPage = pathname?.startsWith("/admin/dev") ?? false;
 
   return (
-    <header className="sticky top-0 z-30 flex h-12 md:h-14 shrink-0 items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 px-3 md:px-6">
+    <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center justify-between border-b bg-background px-3 md:px-6">
       {/* 左: 移动显 logo, 桌面: dev 页面显 tab (替代原版本文字) */}
       <div className="flex items-center gap-2 min-w-0">
-        <Sparkles className="h-4 w-4 md:hidden text-primary shrink-0" />
-        <span className="md:hidden text-sm font-bold text-primary truncate">
+        <Sparkles className="h-4 w-4 md:hidden text-brand shrink-0" />
+        <span className="md:hidden text-body font-semibold text-content-primary truncate">
           暖客宝
         </span>
         {isDevPage && <DevTabsNav className="hidden md:flex" />}
@@ -44,7 +48,7 @@ export function AdminTopbar() {
       <Button
         variant="ghost"
         size="icon"
-        className="md:hidden h-9 w-9 text-muted-foreground"
+        className="md:hidden h-9 w-9 text-content-secondary"
         onClick={() => signOut({ callbackUrl: "/login" })}
         aria-label="退出登录"
       >
@@ -53,7 +57,7 @@ export function AdminTopbar() {
       <Button
         variant="ghost"
         size="sm"
-        className="hidden md:inline-flex"
+        className="hidden md:inline-flex text-content-secondary"
         onClick={() => signOut({ callbackUrl: "/login" })}
       >
         <LogOut className="h-4 w-4 mr-2" />

@@ -1,9 +1,10 @@
 import { listInteractionsByCustomer } from "@/lib/db/queries/interaction";
-import { listAllDictionaries } from "@/lib/db/queries/dictionary";
 import { db } from "@/lib/db";
 import { interaction } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
 import { Phone, MessageCircle, MapPin, Gift, MoreHorizontal } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Section } from "@/components/ui/section";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
@@ -13,11 +14,11 @@ const TYPE_META: Record<
   string,
   { label: string; icon: React.ComponentType<{ className?: string }>; tone: string }
 > = {
-  phone: { label: "电话", icon: Phone, tone: "bg-info-light text-info" },
+  phone: { label: "电话", icon: Phone, tone: "bg-info-light text-brand" },
   wechat: { label: "微信", icon: MessageCircle, tone: "bg-success-light text-success" },
   visit: { label: "到店", icon: MapPin, tone: "bg-danger-light text-danger" },
   holiday_greeting: { label: "节日", icon: Gift, tone: "bg-warning-surface text-warning" },
-  other: { label: "其他", icon: MoreHorizontal, tone: "bg-muted text-muted-foreground" },
+  other: { label: "其他", icon: MoreHorizontal, tone: "bg-surface-subtle text-content-secondary" },
 };
 
 function groupByDate<T extends { createdAt: Date | string }>(items: T[]) {
@@ -33,10 +34,6 @@ function groupByDate<T extends { createdAt: Date | string }>(items: T[]) {
 
 function relativeDay(dateStr: string, today: Date): string {
   const d = new Date(dateStr);
-  const diff = Math.floor(
-    (today.getTime() - new Date(today.getTime()).setHours(0, 0, 0, 0)) / 86400000
-  );
-  // 简化: 用 today midnight 和 d midnight 差天数
   const todayMid = new Date(today);
   todayMid.setHours(0, 0, 0, 0);
   const dMid = new Date(d);
@@ -59,34 +56,28 @@ export default async function InteractionsPage() {
   const groups = groupByDate(recent);
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      <div>
-        <h1 className="text-xl md:text-3xl font-bold tracking-tight">联系记录</h1>
-        <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1">
-          最近 {recent.length} 条 · 按时间倒序
-        </p>
-      </div>
+    <div className="space-y-section-y">
+      <PageHeader
+        title="联系记录"
+        description={`最近 ${recent.length} 条 · 按时间倒序`}
+      />
 
       {recent.length === 0 ? (
-        <div className="rounded-lg border border-dashed py-8 md:py-12 text-center text-muted-foreground text-sm">
+        <div className="py-10 text-center text-body text-content-secondary">
           暂无联系记录
         </div>
       ) : (
-        <div className="space-y-4 md:space-y-6">
+        <div className="space-y-section-y">
           {groups.map(([dateKey, items]) => (
-            <section key={dateKey}>
-              {/* 日期标题 (sticky 效果: 移动滑动不丢上下文) */}
-              <div className="sticky top-12 md:top-14 z-20 -mx-3 md:mx-0 px-3 md:px-0 py-2 bg-background/95 backdrop-blur">
-                <h2 className="text-xs md:text-sm font-medium text-muted-foreground">
-                  {relativeDay(dateKey, today)} · {dateKey}
-                </h2>
-              </div>
-
-              {/* 时间线 (左侧竖线 + 节点圆点) */}
-              <ol className="relative space-y-2 md:space-y-3 ml-3 md:ml-4">
-                {/* 竖线 (absolute, 从第一个 item 到最后一个) */}
+            <Section
+              key={dateKey}
+              title={`${relativeDay(dateKey, today)} · ${dateKey}`}
+            >
+              {/* 时间线 (左侧竖线 + 节点圆点), 内容用 divide-y 分隔线列表 (无 Card) */}
+              <ol className="relative ml-3 md:ml-4">
+                {/* 竖线 */}
                 <div
-                  className="absolute left-2.5 md:left-3 top-3 bottom-3 w-px bg-border"
+                  className="absolute left-2.5 md:left-3 top-3 bottom-3 w-px bg-divider"
                   aria-hidden="true"
                 />
                 {items.map((i) => {
@@ -97,43 +88,44 @@ export default async function InteractionsPage() {
                     .split("T")[1]
                     ?.slice(0, 5); // HH:MM
                   return (
-                    <li key={i.id.toString()} className="relative pl-8 md:pl-10">
+                    <li
+                      key={i.id.toString()}
+                      className="relative pl-8 md:pl-10 py-3 first:pt-0 last:pb-0"
+                    >
                       {/* 节点圆点 */}
                       <div
                         className={cn(
-                          "absolute left-0 top-1.5 md:top-2 h-5 w-5 md:h-6 md:w-6 rounded-full flex items-center justify-center ring-2 ring-background",
+                          "absolute left-0 top-3 h-5 w-5 md:h-6 md:w-6 rounded-full flex items-center justify-center ring-2 ring-background",
                           meta.tone
                         )}
                         aria-hidden="true"
                       >
                         <Icon className="h-3 w-3 md:h-3.5 md:w-3.5" />
                       </div>
-                      {/* 内容 */}
-                      <div className="bg-card border rounded-lg p-2.5 md:p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs md:text-sm font-medium">
-                              {meta.label}
-                            </span>
-                            <span className="text-micro md:text-xs text-muted-foreground">
-                              客户 #{i.customerId.toString()}
-                            </span>
-                          </div>
-                          <span className="text-micro md:text-xs text-muted-foreground tabular-nums shrink-0">
-                            {time}
+                      {/* 内容 (无 bg-card border 包裹; 同质列表 = divide-y) */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-body-lg text-content-primary">
+                            {meta.label}
+                          </span>
+                          <span className="text-caption text-content-tertiary tabular-nums">
+                            客户 #{i.customerId.toString()}
                           </span>
                         </div>
-                        {i.summaryEncrypted && (
-                          <p className="text-micro md:text-xs text-muted-foreground mt-1 italic">
-                            (内容已加密,详情见客户详情页)
-                          </p>
-                        )}
+                        <span className="text-caption text-content-tertiary tabular-nums shrink-0">
+                          {time}
+                        </span>
                       </div>
+                      {i.summaryEncrypted && (
+                        <p className="text-caption text-content-tertiary mt-1 italic">
+                          (内容已加密,详情见客户详情页)
+                        </p>
+                      )}
                     </li>
                   );
                 })}
               </ol>
-            </section>
+            </Section>
           ))}
         </div>
       )}

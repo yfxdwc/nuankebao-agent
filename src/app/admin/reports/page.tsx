@@ -1,8 +1,9 @@
 import { getOverviewReport } from "@/lib/db/queries/reports";
 import { getServiceDistribution } from "@/lib/db/queries/dashboard";
 import { listAllDictionaries } from "@/lib/db/queries/dictionary";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { Section } from "@/components/ui/section";
+import { StatGroup, StatRow } from "@/components/ui/stat-row";
 import { MonthlyTrendChart, RepurchaseChart } from "@/components/business/charts";
 
 export const dynamic = "force-dynamic";
@@ -19,82 +20,46 @@ export default async function ReportsPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">报表中心</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          月度趋势 + 复购周期 + 客户活跃度
-        </p>
-      </div>
+    <div className="space-y-section-y">
+      <PageHeader
+        title="报表中心"
+        description="月度趋势 + 复购周期 + 客户活跃度"
+      />
 
-      {/* 客户活跃度 */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card variant="outlined">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">本月新增客户</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{overview.customerActivity.newCustomersThis}</div>
-          </CardContent>
-        </Card>
-        <Card variant="outlined">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">本月回访客户</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{overview.customerActivity.returningCustomers}</div>
-          </CardContent>
-        </Card>
-        <Card variant="outlined">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">总活跃客户</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {overview.customerActivity.totalActiveCustomers}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* 客户活跃度 (StatGroup 横排; 不要 3 张卡片墙) */}
+      <StatGroup title="客户活跃度">
+        <StatRow label="本月新增客户" value={overview.customerActivity.newCustomersThis} />
+        <StatRow label="本月回访客户" value={overview.customerActivity.returningCustomers} />
+        <StatRow label="总活跃客户" value={overview.customerActivity.totalActiveCustomers} />
+      </StatGroup>
 
       {/* 月度趋势 */}
-      <Card variant="outlined">
-        <CardHeader>
-          <CardTitle className="text-base">最近 6 个月到店趋势</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <MonthlyTrendChart data={overview.monthlyVisits} />
-        </CardContent>
-      </Card>
+      <Section title="最近 6 个月到店趋势">
+        <MonthlyTrendChart data={overview.monthlyVisits} />
+      </Section>
 
-      {/* 项目分布 */}
+      {/* 项目分布 (Top 5) — 同质列表 = divide-y */}
       {distribution.length > 0 && (
-        <Card variant="outlined">
-          <CardHeader>
-            <CardTitle className="text-base">本月项目分布 (Top 5)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {distribution.map((d) => (
-                <div key={d.serviceItemId} className="flex items-center justify-between text-sm">
-                  <span>{serviceMap.get(d.serviceItemId) ?? `#${d.serviceItemId}`}</span>
-                  <Badge variant="secondary">{d.count} 次</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <Section title="本月项目分布 (Top 5)">
+          <ul className="divide-y divide-divider">
+            {distribution.map((d) => (
+              <li key={d.serviceItemId} className="py-2.5 flex items-center justify-between gap-3">
+                <span className="text-body-lg text-content-primary truncate min-w-0 flex-1">
+                  {serviceMap.get(d.serviceItemId) ?? `#${d.serviceItemId}`}
+                </span>
+                <span className="text-caption text-content-tertiary tabular-nums shrink-0">
+                  {d.count} 次
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Section>
       )}
 
       {/* 复购周期 */}
-      <Card variant="outlined">
-        <CardHeader>
-          <CardTitle className="text-base">客户复购周期分布</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RepurchaseChart data={overview.repurchaseIntervals} />
-        </CardContent>
-      </Card>
+      <Section title="客户复购周期分布">
+        <RepurchaseChart data={overview.repurchaseIntervals} />
+      </Section>
     </div>
   );
 }

@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Phone, Loader2 } from "lucide-react";
 
 interface CustomerView {
@@ -101,74 +99,71 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
 
   if (items.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-8 md:py-12 text-center text-muted-foreground text-sm">
-          {search
-            ? `未找到包含 "${search}" 的客户`
-            : "暂无客户,点击右下角 + 开始"}
-        </CardContent>
-      </Card>
+      <div className="py-10 text-center text-body text-content-secondary">
+        {search
+          ? `未找到包含 "${search}" 的客户`
+          : "暂无客户,点击右下角 + 开始"}
+      </div>
     );
   }
 
   return (
     <>
-      <ul className="divide-y divide-divider rounded-lg border border-border-default bg-card overflow-hidden">
+      {/* B3: 同质列表 = divide-y 分隔线, 不再包 border + bg-card (反 SaaS 观感) */}
+      <ul className="divide-y divide-divider">
         {items.map((customer) => (
           <Link
             key={customer.id}
             href={`/admin/customers/${customer.id}`}
-            className="block hover:bg-surface-subtle transition-colors active:scale-[0.99]"
+            className="block hover:bg-surface-subtle transition-colors active:bg-surface-sunken"
           >
-            <div className="px-3 md:px-4 py-2.5 md:py-3">
-                <div className="flex items-start gap-3">
-                  <div
-                    className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center text-base md:text-lg font-medium shrink-0"
-                    aria-hidden="true"
-                  >
-                    {customer.name.slice(0, 1)}
+            {/* B3: min-h-control-lg 行高 (44px) 兜底热区, 移动/桌面统一 */}
+            <div className="px-1 py-3 min-h-control-lg flex items-start gap-3">
+                <div
+                  className="h-10 w-10 rounded-full bg-brand-surface text-brand flex items-center justify-center text-body-lg font-medium shrink-0"
+                  aria-hidden="true"
+                >
+                  {customer.name.slice(0, 1)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-medium text-body-lg text-content-primary truncate">
+                      {customer.name}
+                    </h3>
+                    <span className="text-caption text-content-tertiary shrink-0 tabular-nums">
+                      {customer.gender === "F"
+                        ? "女"
+                        : customer.gender === "M"
+                          ? "男"
+                          : "-"}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-medium text-sm md:text-base truncate">
-                        {customer.name}
-                      </h3>
-                      <Badge variant="outline" className="text-micro md:text-xs shrink-0">
-                        {customer.gender === "F"
-                          ? "女"
-                          : customer.gender === "M"
-                            ? "男"
-                            : "-"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                      <Phone className="h-3 w-3 shrink-0" />
-                      <span className="truncate">
-                        {customer.phone.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2")}
-                      </span>
-                    </div>
-                    {customer.healthTags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {customer.healthTags.slice(0, 2).map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="secondary"
-                            className="text-micro md:text-xs"
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                        {customer.healthTags.length > 2 && (
-                          <span className="text-micro text-muted-foreground self-center">
-                            +{customer.healthTags.length - 2}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    <p className="text-micro md:text-xs text-muted-foreground mt-1.5 md:hidden">
+                  <div className="flex items-center gap-1.5 text-caption text-content-secondary mt-0.5">
+                    <Phone className="h-3 w-3 shrink-0" />
+                    <span className="truncate tabular-nums">
+                      {customer.phone.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2")}
+                    </span>
+                    <span className="ml-auto tabular-nums">
                       {customer.createdAt.split("T")[0]}
-                    </p>
+                    </span>
                   </div>
+                  {customer.healthTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {customer.healthTags.slice(0, 2).map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-caption text-content-secondary bg-surface-subtle px-1.5 py-0.5 rounded"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {customer.healthTags.length > 2 && (
+                        <span className="text-caption text-content-tertiary self-center">
+                          +{customer.healthTags.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
           </Link>
@@ -179,7 +174,7 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
       <div ref={sentinelRef} className="h-4" aria-hidden="true" />
 
       {loading && (
-        <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 py-4 text-body text-content-secondary">
           <Loader2 className="h-4 w-4 animate-spin" />
           加载更多…
         </div>
@@ -187,11 +182,11 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
 
       {error && !loading && (
         <div className="text-center py-3">
-          <p className="text-sm text-destructive mb-2">加载失败: {error}</p>
+          <p className="text-body text-danger mb-2">加载失败: {error}</p>
           <button
             type="button"
             onClick={loadMore}
-            className="text-sm text-primary underline min-h-tap-compact px-4"
+            className="text-body text-brand underline min-h-tap-compact px-4"
           >
             重试
           </button>
@@ -199,7 +194,7 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
       )}
 
       {!hasMore && !loading && items.length > 0 && (
-        <p className="text-center text-xs text-muted-foreground py-4">
+        <p className="text-center text-caption text-content-tertiary py-4">
           — 共 {total} 位客户，已加载完毕 —
         </p>
       )}

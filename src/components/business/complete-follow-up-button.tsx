@@ -46,7 +46,7 @@ export function CompleteFollowUpButton({ taskId }: { taskId: string }) {
   }
 
   return (
-    <div className="space-y-2 pt-2 border-t">
+    <div className="space-y-2 pt-2 border-t border-divider">
       <Textarea
         placeholder="完成备注 (可选)"
         value={notes}

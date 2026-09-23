@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { listFollowUpTasks } from "@/lib/db/queries/follow-up-task";
 import { getCustomerById } from "@/lib/db/queries/customer";
-import { Card, CardContent } from "@/components/ui/card";
-import { FollowUpSwipeableCard } from "@/components/business/follow-up-swipeable-card";
+import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
+import { FollowUpSwipeableCard } from "@/components/business/follow-up-swipeable-card";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +20,11 @@ function classifyBucket(dueMs: number, now: number): "today" | "week" | "overdue
   return "future";
 }
 
-const FILTERS: { value: Filter; label: string; tone: string }[] = [
-  { value: "today", label: "今天", tone: "bg-warning-surface text-warning border-warning-light" },
-  { value: "week", label: "本周", tone: "bg-info-surface text-info border-info-light" },
-  { value: "overdue", label: "逾期", tone: "bg-danger-surface text-danger border-danger-light" },
-  { value: "all", label: "全部", tone: "bg-muted text-foreground border-border" },
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: "today", label: "今天" },
+  { value: "week", label: "本周" },
+  { value: "overdue", label: "逾期" },
+  { value: "all", label: "全部" },
 ];
 
 export default async function FollowUpsPage({
@@ -68,20 +68,22 @@ export default async function FollowUpsPage({
           ? buckets.week
           : buckets.today;
 
-  return (
-    <div className="space-y-3 md:space-y-6">
-      <div>
-        <h1 className="text-xl md:text-3xl font-bold tracking-tight">跟进任务</h1>
-        <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1">
-          {activeFilter === "today" && `今天 ${buckets.today.length} 个待办`}
-          {activeFilter === "week" && `本周 ${buckets.week.length} 个待办`}
-          {activeFilter === "overdue" && `已逾期 ${buckets.overdue.length} 个 (需立即处理)`}
-          {activeFilter === "all" && `全部 ${items.length} 个待跟进`}
-        </p>
-      </div>
+  const descriptionText =
+    activeFilter === "today" ? `今天 ${buckets.today.length} 个待办` :
+    activeFilter === "week" ? `本周 ${buckets.week.length} 个待办` :
+    activeFilter === "overdue" ? `已逾期 ${buckets.overdue.length} 个 (需立即处理)` :
+    `全部 ${items.length} 个待跟进`;
 
-      {/* Filter chips (横向滚动, 移动友好) */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 md:flex-wrap">
+  return (
+    <div className="space-y-section-y">
+      <PageHeader
+        title="跟进任务"
+        description={descriptionText}
+      />
+
+      {/* B3: FilterBar + filter chips (FilterChip 是 button; 这里用 Link 实现 URL 切换,
+          视觉对齐 chip 规范: active 主色实底 + 反白, inactive 中性浅底, 不要描边) */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-divider pb-3">
         {FILTERS.map((f) => {
           const count =
             f.value === "all" ? items.length : buckets[f.value].length;
@@ -90,21 +92,23 @@ export default async function FollowUpsPage({
             <Link
               key={f.value}
               href={f.value === "today" ? "/admin/follow-ups" : `/admin/follow-ups?filter=${f.value}`}
+              aria-pressed={isActive}
               className={cn(
-                "shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs md:text-sm font-medium transition-colors min-h-control-sm",
+                "inline-flex items-center gap-1.5 rounded-chip h-7 px-3 text-caption font-medium",
+                "transition-colors min-h-control-sm",
                 isActive
-                  ? f.tone + " shadow-sm"
-                  : "bg-background text-muted-foreground hover:bg-muted"
+                  ? "bg-brand text-brand-foreground"
+                  : "bg-surface-subtle text-content-secondary hover:bg-surface-sunken"
               )}
             >
               <span>{f.label}</span>
               <span
                 className={cn(
-                  "inline-flex items-center justify-center min-w-badge-lg h-5 px-1.5 rounded-full text-micro font-semibold",
-                  isActive ? "bg-white/60" : "bg-muted"
+                  "tabular-nums opacity-70",
+                  isActive && "text-brand-foreground"
                 )}
               >
-                {count}
+                ({count})
               </span>
             </Link>
           );
@@ -112,14 +116,12 @@ export default async function FollowUpsPage({
       </div>
 
       {filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 md:py-12 text-center text-muted-foreground text-sm">
-            {activeFilter === "today" && "今天没有待跟进任务 🎉"}
-            {activeFilter === "week" && "本周剩余没有待跟进任务"}
-            {activeFilter === "overdue" && "没有逾期任务, 保持得很好 ✓"}
-            {activeFilter === "all" && "暂无待跟进任务"}
-          </CardContent>
-        </Card>
+        <div className="py-10 text-center text-body text-content-secondary">
+          {activeFilter === "today" && "今天没有待跟进任务 🎉"}
+          {activeFilter === "week" && "本周剩余没有待跟进任务"}
+          {activeFilter === "overdue" && "没有逾期任务, 保持得很好 ✓"}
+          {activeFilter === "all" && "暂无待跟进任务"}
+        </div>
       ) : (
         <div className="space-y-2 md:space-y-3">
           {filtered.map((t) => {

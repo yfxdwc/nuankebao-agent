@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Section } from "@/components/ui/section";
 import { Phone, Pencil, Heart, MessageCircle, Plus } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -15,10 +14,11 @@ import { cn } from "@/lib/utils";
  * 移动端: 顶部 3 tab 切换, 内容区只有当前 tab (避免长页滚动)
  * 桌面端: 也用 tab, 但每个 tab 内是 1-2 列
  *
- * 设计原则:
+ * B3 设计原则:
  *   - sticky tab 头, 滚动不丢
- *   - 暖绿 active 态
+ *   - active 态走 brand 色 (border-b-2 + text-brand)
  *   - 触摸 ≥44px
+ *   - 同质列表 (养生 / 联系) 用 divide-y 分隔线, 不画 Card (原则 4)
  */
 
 type Gender = "F" | "M" | "U" | null | undefined;
@@ -82,9 +82,9 @@ export function CustomerDetailTabs({
   const [tab, setTab] = useState<(typeof TABS)[number]["value"]>("profile");
 
   return (
-    <div className="space-y-3 md:space-y-6">
+    <div className="space-y-section-y">
       {/* Tab 头 (sticky) */}
-      <div className="sticky top-12 md:top-14 z-20 -mx-3 md:mx-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b md:border-b-0">
+      <div className="sticky top-12 z-20 -mx-3 md:mx-0 bg-background border-b border-divider">
         <div className="flex px-3 md:px-0" role="tablist">
           {TABS.map((t) => {
             const Icon = t.icon;
@@ -97,18 +97,18 @@ export function CustomerDetailTabs({
                 aria-selected={isActive}
                 onClick={() => setTab(t.value)}
                 className={cn(
-                  "flex-1 md:flex-none md:px-6 flex items-center justify-center gap-1.5 py-3 min-h-tap-compact text-sm font-medium border-b-2 transition-colors",
+                  "flex-1 md:flex-none md:px-6 flex items-center justify-center gap-1.5 py-3 min-h-tap-compact text-body-lg font-medium border-b-2 transition-colors",
                   isActive
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    ? "border-brand text-brand"
+                    : "border-transparent text-content-secondary hover:text-content-primary"
                 )}
               >
                 <Icon className="h-4 w-4" />
                 {t.label}
                 <span
                   className={cn(
-                    "ml-1 inline-flex items-center justify-center min-w-badge h-4 px-1 rounded-full text-micro font-semibold",
-                    isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                    "ml-1 inline-flex items-center justify-center min-w-badge h-4 px-1 rounded-full text-micro font-semibold tabular-nums",
+                    isActive ? "bg-brand-surface text-brand" : "bg-surface-subtle text-content-secondary"
                   )}
                 >
                   {t.value === "profile" && "·"}
@@ -138,88 +138,80 @@ export function CustomerDetailTabs({
 
 function ProfileTab({ customer }: { customer: CustomerLite }) {
   return (
-    <div className="space-y-2 md:space-y-4">
-      {/* 基本信息 */}
-      <Card>
-        <CardContent className="p-3 md:p-6 space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="h-12 w-12 md:h-16 md:w-16 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl md:text-2xl font-medium shrink-0">
-              {customer.name.slice(0, 1)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg md:text-2xl font-bold">{customer.name}</h2>
-                <Badge variant="outline" className="text-micro">
-                  {customer.gender === "F" ? "女" : customer.gender === "M" ? "男" : "-"}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                注册于 {formatDate(customer.createdAt)}
-              </p>
-            </div>
+    <div className="space-y-section-y">
+      {/* 基本信息 (Section, 无 Card 边框) */}
+      <Section title="基本信息">
+        <div className="flex items-start gap-3">
+          <div className="h-12 w-12 rounded-full bg-brand-surface text-brand flex items-center justify-center text-title-sm font-semibold shrink-0">
+            {customer.name.slice(0, 1)}
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 pt-2 border-t">
-            <div className="flex items-center gap-2 text-sm">
-              <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-              <a href={`tel:${customer.phone}`} className="text-primary">
-                {customer.phone}
-              </a>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-title-sm font-semibold text-content-primary">
+                {customer.name}
+              </span>
+              <span className="text-caption text-content-tertiary">
+                {customer.gender === "F" ? "女" : customer.gender === "M" ? "男" : "-"}
+              </span>
             </div>
-            {customer.birthYear && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">出生年: </span>
-                {customer.birthYear}
-              </div>
-            )}
+            <p className="text-caption text-content-secondary mt-0.5 tabular-nums">
+              注册于 {formatDate(customer.createdAt)}
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 pt-section-y border-t border-divider">
+          <div className="flex items-center gap-2 text-body-lg">
+            <Phone className="h-3.5 w-3.5 text-content-secondary" />
+            <a href={`tel:${customer.phone}`} className="text-brand tabular-nums">
+              {customer.phone}
+            </a>
+          </div>
+          {customer.birthYear && (
+            <div className="text-body-lg">
+              <span className="text-content-secondary">出生年: </span>
+              <span className="tabular-nums">{customer.birthYear}</span>
+            </div>
+          )}
+        </div>
+      </Section>
 
       {/* 健康标签 */}
       {customer.healthTags.length > 0 && (
-        <Card>
-          <CardContent className="p-3 md:p-6">
-            <h3 className="text-xs md:text-sm font-medium text-muted-foreground mb-2">
-              健康标签
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {customer.healthTags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-xs">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <Section title="健康标签">
+          <div className="flex flex-wrap gap-1.5">
+            {customer.healthTags.map((tag) => (
+              <span
+                key={tag}
+                className="text-caption text-content-secondary bg-surface-subtle px-2 py-1 rounded"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </Section>
       )}
 
       {/* 既往病史 */}
       {customer.diseaseHistory && (
-        <Card>
-          <CardContent className="p-3 md:p-6">
-            <h3 className="text-xs md:text-sm font-medium text-muted-foreground mb-2">
-              既往病史 / 过敏
-            </h3>
-            <p className="text-sm whitespace-pre-wrap">{customer.diseaseHistory}</p>
-          </CardContent>
-        </Card>
+        <Section title="既往病史 / 过敏">
+          <p className="text-body-lg text-content-primary whitespace-pre-wrap">
+            {customer.diseaseHistory}
+          </p>
+        </Section>
       )}
 
       {/* 备注 */}
       {customer.notes && (
-        <Card>
-          <CardContent className="p-3 md:p-6">
-            <h3 className="text-xs md:text-sm font-medium text-muted-foreground mb-2">
-              备注
-            </h3>
-            <p className="text-sm whitespace-pre-wrap">{customer.notes}</p>
-          </CardContent>
-        </Card>
+        <Section title="备注">
+          <p className="text-body-lg text-content-primary whitespace-pre-wrap">
+            {customer.notes}
+          </p>
+        </Section>
       )}
 
-      {/* 编辑按钮 (移动底部大按钮) */}
+      {/* 编辑按钮 */}
       <div className="pt-2">
-        <Button asChild className="w-full md:w-auto h-11">
+        <Button asChild>
           <Link href={`/admin/customers/${customer.id}/edit`}>
             <Pencil className="h-4 w-4 mr-2" />
             编辑客户档案
@@ -242,54 +234,52 @@ function WellnessTab({
   bodyPartMap: Record<string, string>;
 }) {
   return (
-    <div className="space-y-2 md:space-y-3">
+    <div className="space-y-section-y">
       {records.items.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 md:py-12 text-center text-muted-foreground text-sm">
-            暂无养生记录
-          </CardContent>
-        </Card>
+        <div className="py-10 text-center text-body text-content-secondary">
+          暂无养生记录
+        </div>
       ) : (
-        records.items.map((r) => (
-          <Link
-            key={r.id}
-            href={`/admin/wellness-records/${r.id}`}
-            className="block active:scale-[0.99] transition-transform"
-          >
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm md:text-base font-medium">
+        // B3: 同质列表 = divide-y 分隔线, 无 Card 边框
+        <ul className="divide-y divide-divider">
+          {records.items.map((r) => (
+            <li key={r.id}>
+              <Link
+                href={`/admin/wellness-records/${r.id}`}
+                className="block px-1 py-3 hover:bg-surface-subtle transition-colors active:bg-surface-sunken min-h-control-lg"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-body-lg font-medium text-content-primary">
                     {formatDate(r.serviceDate)}
-                  </h3>
-                  <Badge variant="outline" className="text-micro shrink-0">
+                  </span>
+                  <span className="text-caption text-content-tertiary tabular-nums shrink-0">
                     {serviceMap[r.serviceItemId] ?? `项目 ${r.serviceItemId}`}
-                  </Badge>
+                  </span>
                 </div>
                 {r.bodyPartIds.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {r.bodyPartIds.map((id) => (
-                      <Badge key={id} variant="secondary" className="text-micro">
+                      <span
+                        key={id}
+                        className="text-caption text-content-secondary bg-surface-subtle px-1.5 py-0.5 rounded"
+                      >
                         {bodyPartMap[id] ?? `#${id}`}
-                      </Badge>
+                      </span>
                     ))}
                   </div>
                 )}
                 {r.customerFeedback && (
-                  <p className="text-xs text-muted-foreground line-clamp-2 mt-1.5 italic">
-                    "{r.customerFeedback}"
+                  <p className="text-caption text-content-tertiary line-clamp-2 mt-1 italic">
+                    &ldquo;{r.customerFeedback}&rdquo;
                   </p>
                 )}
-              </CardContent>
-            </Card>
-          </Link>
-        ))
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
 
-      <Button
-        asChild
-        className="w-full md:w-auto h-11 bg-danger hover:bg-danger"
-      >
+      <Button asChild className="bg-danger hover:bg-danger">
         <Link href={`/admin/wellness-records/new?customerId=${customerId}`}>
           <Plus className="h-4 w-4 mr-2" />
           新增养生记录
@@ -302,17 +292,17 @@ function WellnessTab({
 function InteractionsTab({ interactions }: { interactions: InteractionLite[] }) {
   if (interactions.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-8 md:py-12 text-center text-muted-foreground text-sm">
-          暂无联系记录
-        </CardContent>
-      </Card>
+      <div className="py-10 text-center text-body text-content-secondary">
+        暂无联系记录
+      </div>
     );
   }
   return (
-    <ol className="relative space-y-2 md:space-y-3 ml-3 md:ml-4">
+    // B3: 同质列表用 divide-y 分隔线, 不要再套 bg-card border (反 SaaS 观感)
+    <ol className="relative ml-3 md:ml-4">
+      {/* 时间线竖线 (绝对定位) */}
       <div
-        className="absolute left-2.5 md:left-3 top-3 bottom-3 w-px bg-border"
+        className="absolute left-2.5 md:left-3 top-3 bottom-3 w-px bg-divider"
         aria-hidden="true"
       />
       {interactions.map((i) => {
@@ -321,27 +311,25 @@ function InteractionsTab({ interactions }: { interactions: InteractionLite[] }) 
           .split("T")[1]
           ?.slice(0, 5);
         return (
-          <li key={i.id} className="relative pl-8 md:pl-10">
-            <div className="absolute left-0 top-1.5 h-5 w-5 md:h-6 md:w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center ring-2 ring-background">
+          <li key={i.id} className="relative pl-8 md:pl-10 py-3 first:pt-0 last:pb-0">
+            <div className="absolute left-0 top-3 h-5 w-5 md:h-6 md:w-6 rounded-full bg-brand-surface text-brand flex items-center justify-center ring-2 ring-background">
               <MessageCircle className="h-3 w-3" />
             </div>
-            <div className="bg-card border rounded-lg p-2.5 md:p-3">
-              <div className="flex items-center justify-between gap-2">
-                <Badge variant="outline" className="text-micro">
-                  {TYPE_LABELS[i.type] ?? i.type}
-                </Badge>
-                <span className="text-micro text-muted-foreground tabular-nums">
-                  {formatDate(i.createdAt)} {time}
-                </span>
-              </div>
-              {i.summary ? (
-                <p className="text-xs mt-1.5">{i.summary}</p>
-              ) : (
-                <p className="text-micro text-muted-foreground mt-1 italic">
-                  (无内容记录)
-                </p>
-              )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-body-lg text-content-primary">
+                {TYPE_LABELS[i.type] ?? i.type}
+              </span>
+              <span className="text-caption text-content-tertiary tabular-nums">
+                {formatDate(i.createdAt)} {time}
+              </span>
             </div>
+            {i.summary ? (
+              <p className="text-body text-content-primary mt-1">{i.summary}</p>
+            ) : (
+              <p className="text-caption text-content-tertiary mt-1 italic">
+                (无内容记录)
+              </p>
+            )}
           </li>
         );
       })}

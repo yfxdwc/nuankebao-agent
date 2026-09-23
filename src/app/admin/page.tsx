@@ -4,9 +4,11 @@ import {
   getServiceDistribution,
 } from "@/lib/db/queries/dashboard";
 import { listAllDictionaries } from "@/lib/db/queries/dictionary";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Users, Heart, Bell, MessageCircle, ArrowUpRight, Plus, Activity } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Section } from "@/components/ui/section";
+import { StatRow, StatGroup } from "@/components/ui/stat-row";
+import { Button } from "@/components/ui/button";
+import { Plus, Activity, ArrowUpRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -19,166 +21,113 @@ export default async function AdminDashboardPage() {
 
   const serviceMap = new Map(dict.serviceItems.map((s) => [s.id, s.name]));
 
-  const statsCards = [
-    {
-      label: "客户总数",
-      value: stats.customerCount,
-      icon: Users,
-      href: "/admin/customers",
-      note: "查看全部客户",
-      tone: "bg-info-surface text-info",
-    },
-    {
-      label: "本月到店",
-      value: stats.thisMonthVisits,
-      icon: Heart,
-      href: "/admin/wellness-records",
-      note: "本月养生记录",
-      tone: "bg-danger-surface text-danger",
-    },
-    {
-      label: "待跟进",
-      value: stats.pendingFollowUps,
-      icon: Bell,
-      href: "/admin/follow-ups",
-      note: "需要联系的客户",
-      tone: "bg-warning-surface text-warning",
-    },
-    {
-      label: "联系记录",
-      value: stats.totalInteractions,
-      icon: MessageCircle,
-      href: "/admin/interactions",
-      note: "总联系次数",
-      tone: "bg-success-surface text-success",
-    },
-  ];
-
   return (
-    <div className="space-y-4 md:space-y-6">
-      {/* 标题区: 移动短, 桌面详细 */}
-      <div>
-        <h1 className="text-xl md:text-3xl font-bold tracking-tight">
-          仪表盘
-        </h1>
-        <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1">
-          暖客宝 v0.1 · 今天有 {stats.pendingFollowUps} 位客户待跟进
-        </p>
-      </div>
+    <div className="space-y-section-y">
+      {/* PageHeader (B 档: 20/600 + 描述 13) */}
+      <PageHeader
+        title="仪表盘"
+        description={`暖客宝 v0.1 · 今天有 ${stats.pendingFollowUps} 位客户待跟进`}
+        actions={
+          <div className="flex gap-2">
+            <Button asChild>
+              <Link href="/admin/customers/new">
+                <Plus className="h-4 w-4 mr-2" />
+                新增客户
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/admin/wellness-records/new">
+                <Activity className="h-4 w-4 mr-2" />
+                新增养生
+              </Link>
+            </Button>
+          </div>
+        }
+      />
 
-      {/* 4 个 stat card:
-          移动 1 列 (大触摸区)
-          平板 2 列
-          桌面 4 列 */}
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {statsCards.map((s) => {
-          const Icon = s.icon;
-          return (
+      {/* 统计条: StatGroup (divide-y 分隔线, 不画卡片; 原则 4) */}
+      <StatGroup title="核心数据">
+        <StatRow
+          label={
             <Link
-              key={s.label}
-              href={s.href}
-              className="block active:scale-[0.98] transition-transform"
+              href="/admin/customers"
+              className="hover:underline flex items-center gap-1"
             >
-              <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-                <CardContent className="p-3 md:p-6">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs md:text-sm text-muted-foreground font-medium">
-                        {s.label}
-                      </p>
-                      <p className="text-2xl md:text-3xl font-bold mt-1 md:mt-2 truncate">
-                        {s.value}
-                      </p>
-                      <p className="text-micro md:text-xs text-muted-foreground mt-1 flex items-center">
-                        {s.note}
-                        <ArrowUpRight className="h-3 w-3 ml-0.5" />
-                      </p>
-                    </div>
-                    <div
-                      className={`h-9 w-9 md:h-10 md:w-10 rounded-lg flex items-center justify-center shrink-0 ${s.tone}`}
-                    >
-                      <Icon className="h-4 w-4 md:h-5 md:w-5" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              客户总数
+              <ArrowUpRight className="h-3 w-3 text-content-tertiary" />
             </Link>
-          );
-        })}
-      </div>
+          }
+          value={stats.customerCount}
+        />
+        <StatRow
+          label={
+            <Link
+              href="/admin/wellness-records"
+              className="hover:underline flex items-center gap-1"
+            >
+              本月到店
+              <ArrowUpRight className="h-3 w-3 text-content-tertiary" />
+            </Link>
+          }
+          value={stats.thisMonthVisits}
+        />
+        <StatRow
+          label={
+            <Link
+              href="/admin/follow-ups"
+              className="hover:underline flex items-center gap-1"
+            >
+              待跟进
+              <ArrowUpRight className="h-3 w-3 text-content-tertiary" />
+            </Link>
+          }
+          value={stats.pendingFollowUps}
+          tone="warning"
+        />
+        <StatRow
+          label={
+            <Link
+              href="/admin/interactions"
+              className="hover:underline flex items-center gap-1"
+            >
+              联系记录
+              <ArrowUpRight className="h-3 w-3 text-content-tertiary" />
+            </Link>
+          }
+          value={stats.totalInteractions}
+        />
+      </StatGroup>
 
-      {/* 快捷操作 (移动常驻, 桌面用): 大按钮 + 全宽 */}
-      <div className="grid gap-2 md:gap-3 grid-cols-2 md:grid-cols-2">
-        <Link
-          href="/admin/customers/new"
-          className="flex items-center gap-2 md:gap-3 p-3 md:p-4 border-2 border-dashed border-primary/30 bg-primary/5 rounded-lg hover:bg-primary/10 active:scale-[0.98] transition-all min-h-field md:min-h-0"
-        >
-          <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-            <Plus className="h-4 w-4 md:h-5 md:w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm md:text-base font-medium text-foreground leading-tight">
-              新增客户
-            </h3>
-            <p className="text-micro md:text-xs text-muted-foreground mt-0.5 truncate">
-              录入健康档案
-            </p>
-          </div>
-        </Link>
-        <Link
-          href="/admin/wellness-records/new"
-          className="flex items-center gap-2 md:gap-3 p-3 md:p-4 border-2 border-dashed border-danger-light bg-danger-surface/50 rounded-lg hover:bg-danger-surface active:scale-[0.98] transition-all min-h-field md:min-h-0"
-        >
-          <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-danger text-white flex items-center justify-center shrink-0">
-            <Activity className="h-4 w-4 md:h-5 md:w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm md:text-base font-medium text-foreground leading-tight">
-              新增养生
-            </h3>
-            <p className="text-micro md:text-xs text-muted-foreground mt-0.5 truncate">
-              理疗过程记录
-            </p>
-          </div>
-        </Link>
-      </div>
-
-      {/* 本月项目分布 */}
+      {/* 本月项目分布 (Section + 同质列表 = divide-y; 无卡片) */}
       {distribution.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2 md:pb-6">
-            <CardTitle className="text-sm md:text-base">
-              本月项目分布 (Top 5)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 md:pb-6">
-            <div className="space-y-2 md:space-y-2.5">
-              {distribution.map((d, idx) => {
-                const maxCount = distribution[0]?.count || 1;
-                const pct = Math.round((d.count / maxCount) * 100);
-                return (
-                  <div key={d.serviceItemId} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs md:text-sm">
-                      <span className="truncate flex-1">
-                        {serviceMap.get(d.serviceItemId) ?? `#${d.serviceItemId}`}
-                      </span>
-                      <Badge variant="secondary" className="ml-2 shrink-0">
-                        {d.count} 次
-                      </Badge>
-                    </div>
-                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                      {/* ui-style-allow-inline-style: 动态百分比宽度 */}
-                      <div
-                        className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
+        <Section title="本月项目分布 (Top 5)">
+          {/* divide-y 分隔线列表 (无 Card 容器; 原则 4) */}
+          <ul className="divide-y divide-divider -mx-1">
+            {distribution.map((d) => {
+              const maxCount = distribution[0]?.count || 1;
+              const pct = Math.round((d.count / maxCount) * 100);
+              return (
+                <li key={d.serviceItemId} className="py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-body-lg text-content-primary truncate min-w-0 flex-1">
+                      {serviceMap.get(d.serviceItemId) ?? `#${d.serviceItemId}`}
+                    </span>
+                    <span className="text-body tabular-nums text-content-secondary shrink-0">
+                      {d.count} 次
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                  {/* 进度条 (1.5px, bg-primary fill; 视觉分量小, 不抢主区) */}
+                  <div className="h-1 bg-surface-sunken rounded-full overflow-hidden mt-1.5">
+                    <div
+                      className="h-full bg-brand rounded-full transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
       )}
 
       {/* 移动专属: 底部呼吸区, 避免最后一项贴 Tab Bar */}
@@ -186,4 +135,3 @@ export default async function AdminDashboardPage() {
     </div>
   );
 }
-

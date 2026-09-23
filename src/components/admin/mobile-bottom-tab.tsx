@@ -75,8 +75,7 @@ export function MobileBottomTab() {
       <nav
         className={cn(
           "fixed bottom-0 left-0 right-0 z-40 md:hidden",
-          "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80",
-          "border-t border-border",
+          "bg-background border-t border-divider",
           // iOS safe area
           "pb-[env(safe-area-inset-bottom)]"
         )}
@@ -96,8 +95,8 @@ export function MobileBottomTab() {
                   "min-h-tap-compact min-w-tap-compact",  // Apple HIG
                   "transition-colors",
                   isActive
-                    ? "text-primary"
-                    : "text-muted-foreground active:text-foreground"
+                    ? "text-brand"
+                    : "text-content-secondary active:text-content-primary"
                 )}
                 aria-label={tab.label}
                 aria-current={isActive ? "page" : undefined}
@@ -105,7 +104,7 @@ export function MobileBottomTab() {
                 <Icon
                   className={cn(
                     "h-5 w-5",
-                    isActive && "fill-primary/20"
+                    isActive && "fill-brand/20"
                   )}
                   strokeWidth={isActive ? 2.5 : 2}
                 />
@@ -125,8 +124,8 @@ export function MobileBottomTab() {
               "min-h-tap-compact min-w-tap-compact",
               "transition-colors",
               isMoreActive
-                ? "text-primary"
-                : "text-muted-foreground active:text-foreground"
+                ? "text-brand"
+                : "text-content-secondary active:text-content-primary"
             )}
             aria-label="更多菜单"
             aria-expanded={moreOpen}
@@ -176,23 +175,23 @@ export function MobileBottomTab() {
           >
             {/* 把手 */}
             <div className="flex justify-center pt-3 pb-1">
-              <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
+              <div className="h-1 w-10 rounded-full bg-divider" />
             </div>
 
             {/* 标题栏 */}
-            <div className="flex items-center justify-between px-5 py-3 border-b">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-divider">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">
+                <h2 className="text-title-sm font-semibold text-content-primary">
                   更多功能
                 </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-caption text-content-secondary mt-0.5">
                   暖客宝 · 销售助手
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setMoreOpen(false)}
-                className="p-2 -m-2 text-muted-foreground active:text-foreground"
+                className="p-2 -m-2 text-content-secondary active:text-content-primary"
                 aria-label="关闭"
               >
                 <X className="h-5 w-5" />
@@ -216,16 +215,16 @@ export function MobileBottomTab() {
                       "min-h-control-lg",  // 大触摸区
                       "transition-colors",
                       isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-foreground active:bg-muted"
+                        ? "bg-brand-surface text-brand"
+                        : "text-content-primary active:bg-surface-subtle"
                     )}
                   >
                     <div
                       className={cn(
                         "flex h-10 w-10 items-center justify-center rounded-lg shrink-0",
                         isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
+                          ? "bg-brand text-brand-foreground"
+                          : "bg-surface-subtle text-content-secondary"
                       )}
                     >
                       <Icon className="h-5 w-5" />
@@ -253,8 +252,8 @@ export function MobileBottomTab() {
                 className={cn(
                   "flex items-center justify-center gap-2 w-full",
                   "min-h-tap px-4 rounded-lg",
-                  "text-sm font-medium",
-                  "text-destructive active:bg-destructive/10",
+                  "text-body-lg font-medium",
+                  "text-danger active:bg-danger-surface",
                   "transition-colors"
                 )}
               >

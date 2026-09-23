@@ -12,14 +12,7 @@
 //   DELETE /api/admin/insight-config          → 重置为默认 (删覆盖行)
 //   POST   /api/admin/insight-config/impact   → 保存前预览: 抽样算一遍会动多少客户
 //
-// 设计取舍:
-//   - 表单按「组」折叠 (6 组): 一屏铺开 46 个数字没人看得下去。
-//   - 每行都显示 **当前值 / 默认值 / 区间 / 单位** —— 调节参数的人要能自己判断
-//     "改这个会不会离谱", 而不是靠猜。
-//   - 「改过」的行高亮 + 一键还原该行 (比整组重置好用)。
-//   - 保存前先看影响面 (抽样): 「会改掉 8 位客户的行动指引」比任何说明都直观。
-//   - ⚠ 参数是**全局一套** (CHARTER §3.6 门店维度已冻结), 页面上明说, 免得店长以为
-//     自己只在改本店。
+// B3 重构 (2026-09-23): Card (有 bg-card) → Section (无 bg-card, 仅 gap-section-y 拉开; 反 vibe)
 // ============================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -35,9 +28,10 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Section } from "@/components/ui/section";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import type { InsightConfig } from "@/lib/customer/insight-config";
 import {
   INSIGHT_PARAM_GROUPS,
@@ -209,47 +203,46 @@ export function InsightConfigEditor() {
     });
 
   if (!view && busy === "load") {
-    return <div className="p-6 text-muted-foreground">加载中…</div>;
+    return <div className="py-10 text-center text-content-secondary">加载中…</div>;
   }
 
   return (
-    <div className="space-y-4 max-w-4xl">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+    <div className="space-y-section-y max-w-4xl">
+      {/* 头部 + 操作区 */}
+      <Section
+        title={
+          <span className="flex flex-wrap items-center gap-2">
             客户管理参数
             {view?.isCustomized ? (
-              <Badge variant="secondary">已自定义</Badge>
+              <Badge variant="secondary" className="text-caption">已自定义</Badge>
             ) : (
-              <Badge variant="outline">使用系统默认</Badge>
+              <Badge variant="outline" className="text-caption">使用系统默认</Badge>
             )}
             {view?.config.scoring.version && (
-              <span className="text-xs font-normal text-muted-foreground">
+              <span className="text-caption font-normal text-content-tertiary tabular-nums">
                 参数版本 {view.config.scoring.version} / {view.config.actions.version}
               </span>
             )}
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            这里的参数决定「客户评分怎么算」和「什么时候提醒销售做什么」。
-            改动会影响<strong>全店所有客户</strong>（参数不按门店区分），
-            每次保存都会记入审计日志。
+          </span>
+        }
+        description="这里的参数决定「客户评分怎么算」和「什么时候提醒销售做什么」。改动会影响全店所有客户（参数不按门店区分），每次保存都会记入审计日志。"
+      >
+        {view?.updatedAt && (
+          <p className="text-caption text-content-tertiary tabular-nums">
+            最后修改：{new Date(view.updatedAt).toLocaleString("zh-CN")}
+            {view.updatedBy ? `（用户 #${view.updatedBy}）` : ""}
           </p>
-          {view?.updatedAt && (
-            <p className="text-xs text-muted-foreground">
-              最后修改：{new Date(view.updatedAt).toLocaleString("zh-CN")}
-              {view.updatedBy ? `（用户 #${view.updatedBy}）` : ""}
-            </p>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-3">
+        )}
+
+        <div className="space-y-3 pt-section-y border-t border-divider">
           {msg && (
             <div
-              className={
-                "flex items-start gap-2 rounded-md border p-3 text-sm " +
-                (msg.kind === "ok"
-                  ? "border-success bg-success-surface text-success-foreground"
-                  : "border-danger bg-danger-surface text-danger-foreground")
-              }
+              className={cn(
+                "flex items-start gap-2 rounded-md p-3 text-body",
+                msg.kind === "ok"
+                  ? "bg-success-light text-success-foreground"
+                  : "bg-danger-surface text-danger"
+              )}
             >
               {msg.kind === "ok" ? (
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
@@ -278,34 +271,30 @@ export function InsightConfigEditor() {
               重置为默认
             </Button>
             {changedPaths.size > 0 && (
-              <span className="text-sm text-warning-foreground">
+              <span className="text-body-lg text-warning">
                 已改动 {changedPaths.size} 项（未保存）
               </span>
             )}
           </div>
 
           {impact && <ImpactPanel impact={impact} />}
-        </CardContent>
-      </Card>
+        </div>
+      </Section>
 
       {/* 分档 (数组, 单独渲染) */}
       {view && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">分数分档</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              分数落到哪一档显示什么标签。<strong>必须有一个档的下限是 0</strong>
-              （否则低分客户没有档可落，系统会自动补一个「需关注」）。
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-2">
+        <Section
+          title="分数分档"
+          description="必须有一个档的下限是 0（否则低分客户没有档可落，系统会自动补一个「需关注」）。"
+        >
+          <ul className="divide-y divide-divider">
             {bands.map((b, i) => (
-              <div key={b.band} className="flex items-center gap-2">
-                <span className="w-24 text-sm text-muted-foreground">{b.band}</span>
-                <span className="text-sm">≥</span>
+              <li key={b.band} className="py-2.5 flex items-center gap-2 flex-wrap">
+                <span className="w-24 text-body text-content-secondary shrink-0">{b.band}</span>
+                <span className="text-body text-content-tertiary shrink-0">≥</span>
                 <Input
                   type="number"
-                  className="w-24"
+                  className="w-24 min-h-control"
                   min={0}
                   max={100}
                   value={String(b.min)}
@@ -318,7 +307,7 @@ export function InsightConfigEditor() {
                   }
                 />
                 <Input
-                  className="w-40"
+                  className="w-40 min-h-control"
                   value={b.label}
                   maxLength={16}
                   onChange={(e) =>
@@ -330,46 +319,56 @@ export function InsightConfigEditor() {
                   }
                 />
                 {!isSame(b.min, view.defaults.scoring.bands[i]?.min) && (
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge variant="secondary" className="text-caption">
                     已改（默认 {view.defaults.scoring.bands[i]?.min}）
                   </Badge>
                 )}
-              </div>
+              </li>
             ))}
-          </CardContent>
-        </Card>
+          </ul>
+        </Section>
       )}
 
-      {/* 6 组可调参数 */}
+      {/* 6 组可调参数 (Section + 可折叠) */}
       {INSIGHT_PARAM_GROUPS.map((g) => {
         const items = paramsOfGroup(g.id);
         const groupChanged = items.filter((p) => changedPaths.has(p.path)).length;
         const isOpen = open.has(g.id);
         return (
-          <Card key={g.id}>
-            <button
-              type="button"
-              onClick={() => toggle(g.id)}
-              className="flex w-full items-center gap-2 p-4 text-left"
-            >
-              {isOpen ? (
-                <ChevronDown className="h-4 w-4 shrink-0" />
-              ) : (
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              )}
-              <span className="font-medium">{g.title}</span>
-              <span className="text-xs text-muted-foreground">
-                {items.length} 项
+          <Section
+            key={g.id}
+            title={
+              <span className="flex items-center gap-2">
+                {isOpen ? (
+                  <ChevronDown className="h-4 w-4 shrink-0" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0" />
+                )}
+                <span>{g.title}</span>
+                <span className="text-caption text-content-tertiary tabular-nums">
+                  {items.length} 项
+                </span>
+                {groupChanged > 0 && (
+                  <Badge variant="secondary" className="text-caption">
+                    改 {groupChanged} 项
+                  </Badge>
+                )}
               </span>
-              {groupChanged > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  改 {groupChanged} 项
-                </Badge>
-              )}
-            </button>
+            }
+            description={g.desc}
+            action={
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => toggle(g.id)}
+                className="text-caption"
+              >
+                {isOpen ? "收起" : "展开"}
+              </Button>
+            }
+          >
             {isOpen && (
-              <CardContent className="space-y-3 border-t pt-3">
-                <p className="text-sm text-muted-foreground">{g.desc}</p>
+              <div className="divide-y divide-divider">
                 {items.map((p) => (
                   <ParamRow
                     key={p.path}
@@ -385,9 +384,9 @@ export function InsightConfigEditor() {
                     }
                   />
                 ))}
-              </CardContent>
+              </div>
             )}
-          </Card>
+          </Section>
         );
       })}
     </div>
@@ -411,22 +410,24 @@ function ParamRow({
 }) {
   return (
     <div
-      className={
-        "flex flex-wrap items-center gap-3 rounded-md border p-3 " +
-        (changed ? "border-warning bg-warning-surface" : "border-transparent")
-      }
+      className={cn(
+        "flex flex-wrap items-center gap-3 py-3",
+        changed && "bg-warning-surface/40 -mx-2 px-2 rounded"
+      )}
     >
       <div className="min-w-64 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{meta.label}</span>
+          <span className="text-body-lg font-medium text-content-primary">
+            {meta.label}
+          </span>
           {meta.unit && (
-            <span className="text-xs text-muted-foreground">（{meta.unit}）</span>
+            <span className="text-caption text-content-tertiary">（{meta.unit}）</span>
           )}
         </div>
         {meta.hint && (
-          <p className="mt-0.5 text-xs text-muted-foreground">{meta.hint}</p>
+          <p className="mt-0.5 text-caption text-content-secondary">{meta.hint}</p>
         )}
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="mt-0.5 text-caption text-content-tertiary tabular-nums">
           默认 {String(defaultValue)}
           {meta.type === "number" && ` ｜ 可填 ${meta.min} ~ ${meta.max}`}
         </p>
@@ -435,7 +436,7 @@ function ParamRow({
       {meta.type === "number" ? (
         <Input
           type="number"
-          className="w-28"
+          className="w-28 min-h-control"
           min={meta.min}
           max={meta.max}
           step={meta.step}
@@ -447,7 +448,7 @@ function ParamRow({
         />
       ) : (
         <Select
-          className="w-28"
+          className="w-28 min-h-control"
           value={String(value ?? "medium")}
           onChange={(e) => onChange(e.target.value)}
         >
@@ -472,32 +473,32 @@ function ImpactPanel({ impact }: { impact: Impact }) {
   const nothing =
     impact.changedScores === 0 && impact.changedActions === 0;
   return (
-    <div className="rounded-md border bg-muted/40 p-3 text-sm">
+    <div className="rounded-md border border-divider bg-surface-subtle p-3 text-body-lg">
       <div className="mb-1 font-medium">影响面预估</div>
       {nothing ? (
-        <p className="text-muted-foreground">
+        <p className="text-content-secondary">
           抽样 {impact.sampled} 位客户，<strong>没有一位客户的分数或行动会变</strong>
           。（说明这次改的参数对现有数据没实际影响，或改的是当前用不到的项）
         </p>
       ) : (
         <p>
           抽样 <strong>{impact.sampled}</strong> 位客户中：
-          <strong className="text-warning-foreground"> {impact.changedScores} 位分数会变</strong>
+          <strong className="text-warning"> {impact.changedScores} 位分数会变</strong>
           、
-          <strong className="text-warning-foreground">
+          <strong className="text-warning">
             {" "}
             {impact.changedActions} 位的「该做的事」会变
           </strong>
           。
         </p>
       )}
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="mt-1 text-caption text-content-secondary">
         ⚠ 这是<strong>抽样估算</strong>（最多 {impact.sampleSize} 位
         {impact.sampledAll ? "，本页已覆盖全部客户" : "，按最近更新排序取前若干"}），
         不是全量重算。
       </p>
       {impact.examples.length > 0 && (
-        <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+        <ul className="mt-2 space-y-0.5 text-caption text-content-secondary tabular-nums">
           {impact.examples.map((e) => (
             <li key={e.customerId}>
               客户 #{e.customerId}：分数 {e.scoreBefore ?? "—"} →{" "}

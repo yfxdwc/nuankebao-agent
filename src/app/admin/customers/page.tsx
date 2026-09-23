@@ -1,5 +1,6 @@
 import { listCustomers } from "@/lib/db/queries/customer";
 import { Fab } from "@/components/ui/fab";
+import { PageHeader } from "@/components/ui/page-header";
 import { CustomerSearch } from "@/components/business/customer-search";
 import { CustomerListInfinite } from "@/components/business/customer-list-infinite";
 
@@ -25,13 +26,11 @@ export default async function CustomersPage({
   }));
 
   return (
-    <div className="space-y-3 md:space-y-6">
-      <div>
-        <h1 className="text-xl md:text-3xl font-bold tracking-tight">客户管理</h1>
-        <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1">
-          共 {total} 位客户
-        </p>
-      </div>
+    <div className="space-y-section-y">
+      <PageHeader
+        title="客户管理"
+        description={`共 ${total} 位客户`}
+      />
 
       <CustomerSearch initial={search ?? ""} />
 

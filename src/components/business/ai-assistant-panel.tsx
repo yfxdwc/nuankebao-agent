@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Section } from "@/components/ui/section";
 import { cn } from "@/lib/utils";
 import { Loader2, Sparkles, RefreshCw, Copy, User, MessageCircle, TrendingDown, BarChart3, ArrowRight } from "lucide-react";
 
@@ -13,7 +13,8 @@ interface ScenarioMeta {
   label: string;
   desc: string;
   icon: React.ComponentType<{ className?: string }>;
-  tone: string;
+  /** 浅底 token, 不画彩图标底 (原则 5: 颜色是信号, 不是装饰) */
+  surface: string;
 }
 
 const SCENARIOS: ScenarioMeta[] = [
@@ -22,28 +23,28 @@ const SCENARIOS: ScenarioMeta[] = [
     label: "客户画像",
     desc: "健康趋势 / 偏好 / 风险标签",
     icon: User,
-    tone: "from-info/10 to-info/5 text-info border-info-light",
+    surface: "bg-brand-surface text-brand",
   },
   {
     value: "followup",
     label: "跟进话术",
     desc: "基于距上次到店 + 性格生成",
     icon: MessageCircle,
-    tone: "from-success/10 to-success/5 text-success border-success-light",
+    surface: "bg-success-light text-success",
   },
   {
     value: "repurchase",
     label: "复购预测",
     desc: "客户流失风险 + 复购概率",
     icon: TrendingDown,
-    tone: "from-danger/10 to-danger/5 text-danger border-danger-light",
+    surface: "bg-warning-surface text-warning",
   },
   {
     value: "effect",
     label: "效果分析",
     desc: "近 N 次理疗效果趋势",
     icon: BarChart3,
-    tone: "from-warning/10 to-warning/5 text-warning border-warning-light",
+    surface: "bg-info-light text-brand",
   },
 ];
 
@@ -112,8 +113,8 @@ export function AIAssistantPanel({ customerId }: AIAssistantPanelProps) {
   const activeMeta = SCENARIOS.find((s) => s.value === scenario);
 
   return (
-    <div className="space-y-3 md:space-y-4">
-      {/* 场景选择: 2x2 卡片 (移动单列 stack) */}
+    <div className="space-y-section-y">
+      {/* 场景选择: 2x2 网格 (移动单列 stack), active = 浅底 + 主色, 不画 ring + shadow (反 vibe) */}
       <div className="grid grid-cols-2 gap-2 md:gap-3">
         {SCENARIOS.map((s) => {
           const Icon = s.icon;
@@ -124,32 +125,19 @@ export function AIAssistantPanel({ customerId }: AIAssistantPanelProps) {
               type="button"
               onClick={() => pickScenario(s.value)}
               className={cn(
-                "text-left p-2.5 md:p-3 rounded-lg border transition-all",
-                "active:scale-[0.98] min-h-field-lg md:min-h-0",
+                "text-left p-3 rounded-md transition-colors min-h-control-lg",
                 isActive
-                  ? `bg-gradient-to-br ${s.tone} ring-2 ring-primary/30 shadow-sm`
-                  : "bg-card border-border hover:bg-muted/50"
+                  ? `${s.surface} font-medium`
+                  : "bg-surface-subtle text-content-secondary hover:bg-surface-sunken"
               )}
             >
               <div className="flex items-start gap-2">
-                <div
-                  className={cn(
-                    "h-7 w-7 md:h-8 md:w-8 rounded-md flex items-center justify-center shrink-0",
-                    isActive ? "bg-current/10" : "bg-muted"
-                  )}
-                >
-                  <Icon className={cn("h-3.5 w-3.5 md:h-4 md:w-4", isActive ? "" : "text-muted-foreground")} />
-                </div>
+                <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", isActive ? "" : "text-content-tertiary")} />
                 <div className="min-w-0 flex-1">
-                  <p
-                    className={cn(
-                      "text-xs md:text-sm font-medium leading-tight",
-                      isActive ? "" : "text-foreground"
-                    )}
-                  >
+                  <p className={cn("text-body-lg leading-tight", isActive ? "text-current" : "text-content-primary")}>
                     {s.label}
                   </p>
-                  <p className="text-micro md:text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
+                  <p className={cn("text-caption mt-0.5 line-clamp-2 leading-snug", isActive ? "opacity-80" : "text-content-tertiary")}>
                     {s.desc}
                   </p>
                 </div>
@@ -161,29 +149,19 @@ export function AIAssistantPanel({ customerId }: AIAssistantPanelProps) {
 
       {/* 选场景后才显示运行区 */}
       {scenario && (
-        <div className="rounded-lg border bg-muted/30 p-3 md:p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              {activeMeta && <activeMeta.icon className="h-4 w-4 text-primary shrink-0" />}
-              <span className="text-sm font-medium truncate">
-                {activeMeta?.label} · 客户 #{customerId}
-              </span>
-            </div>
-            {data && !loading && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={load}
-                className="h-8 px-2 text-xs"
-              >
+        <Section
+          title={`${activeMeta?.label} · 客户 #${customerId}`}
+          action={
+            data && !loading ? (
+              <Button size="sm" variant="ghost" onClick={load}>
                 <RefreshCw className="h-3 w-3 mr-1" />
                 重新生成
               </Button>
-            )}
-          </div>
-
+            ) : undefined
+          }
+        >
           {error && (
-            <p className="text-sm text-destructive bg-destructive/10 rounded-md p-2">
+            <p className="text-body text-danger bg-danger-surface rounded-md p-2 mb-2">
               {error}
             </p>
           )}
@@ -197,18 +175,18 @@ export function AIAssistantPanel({ customerId }: AIAssistantPanelProps) {
           )}
 
           {loading && (
-            <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-2 py-6 text-body text-content-secondary">
               <Loader2 className="h-4 w-4 animate-spin" />
               AI 分析中...
             </div>
           )}
 
           {data && !loading && <ScenarioResult scenario={scenario} data={data} />}
-        </div>
+        </Section>
       )}
 
       {!scenario && (
-        <p className="text-xs text-muted-foreground text-center py-2">
+        <p className="text-caption text-content-tertiary text-center py-2">
           ↑ 选择一个分析场景开始
         </p>
       )}
@@ -222,15 +200,15 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {data.aiMock && (
-            <Badge className="bg-warning-surface text-warning text-micro">Mock 模式</Badge>
+            <span className="text-caption text-warning bg-warning-surface px-1.5 py-0.5 rounded">Mock 模式</span>
           )}
           {data.recentRecords?.length > 0 && (
-            <Badge variant="outline" className="text-micro">
+            <span className="text-caption text-content-secondary border border-divider px-1.5 py-0.5 rounded">
               基于 {data.recentRecords.length} 条记录
-            </Badge>
+            </span>
           )}
         </div>
-        <div className="bg-card rounded-md p-3 text-sm whitespace-pre-wrap border">
+        <div className="bg-surface-subtle rounded-md p-3 text-body-lg text-content-primary whitespace-pre-wrap">
           {data.aiSummary}
         </div>
       </div>
@@ -242,17 +220,17 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {data.daysSinceLastVisit !== null && (
-            <Badge variant="secondary" className="text-micro">
+            <span className="text-caption text-content-secondary bg-surface-subtle px-1.5 py-0.5 rounded">
               距上次 {data.daysSinceLastVisit} 天
-            </Badge>
+            </span>
           )}
           {data.avgInterval !== null && (
-            <Badge variant="outline" className="text-micro">
+            <span className="text-caption text-content-secondary border border-divider px-1.5 py-0.5 rounded">
               平均 {data.avgInterval} 天复购
-            </Badge>
+            </span>
           )}
         </div>
-        <div className="bg-card rounded-md p-3 text-sm whitespace-pre-wrap border">
+        <div className="bg-surface-subtle rounded-md p-3 text-body-lg text-content-primary whitespace-pre-wrap">
           {data.suggestion}
         </div>
         <Button
@@ -273,15 +251,15 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {data.aiMock && (
-            <Badge className="bg-warning-surface text-warning text-micro">Mock 模式</Badge>
+            <span className="text-caption text-warning bg-warning-surface px-1.5 py-0.5 rounded">Mock 模式</span>
           )}
           {data.probability !== undefined && (
-            <Badge variant="outline" className="text-micro">
+            <span className="text-caption text-content-secondary border border-divider px-1.5 py-0.5 rounded">
               复购概率 {Math.round((data.probability ?? 0) * 100)}%
-            </Badge>
+            </span>
           )}
         </div>
-        <div className="bg-card rounded-md p-3 text-sm whitespace-pre-wrap border">
+        <div className="bg-surface-subtle rounded-md p-3 text-body-lg text-content-primary whitespace-pre-wrap">
           {data.summary || data.aiSummary || JSON.stringify(data, null, 2)}
         </div>
       </div>
@@ -290,10 +268,8 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
 
   if (scenario === "effect") {
     return (
-      <div className="space-y-2">
-        <div className="bg-card rounded-md p-3 text-sm whitespace-pre-wrap border">
-          {data.summary || data.aiSummary || JSON.stringify(data, null, 2)}
-        </div>
+      <div className="bg-surface-subtle rounded-md p-3 text-body-lg text-content-primary whitespace-pre-wrap">
+        {data.summary || data.aiSummary || JSON.stringify(data, null, 2)}
       </div>
     );
   }

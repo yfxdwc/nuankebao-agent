@@ -46,14 +46,14 @@ export function CustomerSearch({ initial }: { initial: string }) {
 
   return (
     <div className="relative">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-content-tertiary pointer-events-none" />
       <Input
         type="search"
         inputMode="search"
         placeholder="搜索客户姓名/手机号…"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="pl-9 pr-9 h-11 md:h-10 text-sm md:text-base"
+        className="pl-9 pr-9 min-h-control text-body-lg"
         aria-label="搜索客户"
       />
       {value && (

@@ -2,11 +2,10 @@ import Link from "next/link";
 import { listWellnessRecords } from "@/lib/db/queries/wellness-record";
 import { getCustomerById } from "@/lib/db/queries/customer";
 import { listAllDictionaries } from "@/lib/db/queries/dictionary";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
 import { Fab } from "@/components/ui/fab";
 import { formatDate } from "@/lib/utils";
-import { Heart, ArrowRight } from "lucide-react";
+import { Heart } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -35,21 +34,17 @@ export default async function WellnessRecordsPage({
   const bodyPartMap = new Map(dict.bodyParts.map((b) => [b.id, b.name]));
 
   return (
-    <div className="space-y-3 md:space-y-6">
-      <div>
-        <h1 className="text-xl md:text-3xl font-bold tracking-tight">
-          养生记录
-        </h1>
-        <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1">
-          共 {records.total} 条{customerId && " (按客户筛选)"}
-        </p>
-      </div>
+    <div className="space-y-section-y">
+      <PageHeader
+        title="养生记录"
+        description={`共 ${records.total} 条${customerId ? " (按客户筛选)" : ""}`}
+      />
 
       {/* 客户筛选 chip (按客户查看时显示清除) */}
       {customerId && (
         <Link
           href="/admin/wellness-records"
-          className="inline-flex items-center gap-1.5 text-xs text-primary px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all"
+          className="inline-flex items-center gap-1.5 text-caption text-brand px-3 py-1.5 rounded-full bg-brand-surface hover:bg-brand-surface/80 min-h-control-sm"
         >
           <span>正在按客户筛选 (ID: {customerId})</span>
           <span className="font-medium">×</span>
@@ -57,13 +52,12 @@ export default async function WellnessRecordsPage({
       )}
 
       {records.items.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 md:py-12 text-center text-muted-foreground text-sm">
-            暂无养生记录
-          </CardContent>
-        </Card>
+        <div className="py-10 text-center text-body text-content-secondary">
+          暂无养生记录
+        </div>
       ) : (
-        <div className="space-y-2 md:space-y-3">
+        // B3: 同质列表 = divide-y 分隔线, 不画 Card (原则 4)
+        <ul className="divide-y divide-divider">
           {records.items.map((r) => {
             const customer = customerMap.get(r.customerId);
             const painBefore = r.preCondition.pain_level as number | undefined;
@@ -77,74 +71,72 @@ export default async function WellnessRecordsPage({
               sleepAfter !== undefined;
 
             return (
-              <Link
-                key={r.id}
-                href={`/admin/wellness-records/${r.id}`}
-                className="block active:scale-[0.99] transition-transform"
-              >
-                <div className="px-3 md:px-4 py-2.5 md:py-3">
-                    {/* 头: 客户 + 日期 */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-sm md:text-base font-medium truncate">
-                          {customer?.name ?? `客户 ${r.customerId}`}
-                        </h3>
-                        <p className="text-micro md:text-xs text-muted-foreground mt-0.5">
-                          {formatDate(r.serviceDate)}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-micro md:text-xs shrink-0">
-                        {serviceMap.get(r.serviceItemId) ?? `项目 ${r.serviceItemId}`}
-                      </Badge>
-                    </div>
+              <li key={r.id}>
+                <Link
+                  href={`/admin/wellness-records/${r.id}`}
+                  className="block px-1 py-3 hover:bg-surface-subtle transition-colors active:bg-surface-sunken min-h-control-lg"
+                >
+                  {/* 头: 客户 + 日期 (右侧等宽对齐) */}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-body-lg font-medium text-content-primary truncate min-w-0 flex-1">
+                      {customer?.name ?? `客户 ${r.customerId}`}
+                    </span>
+                    <span className="text-caption text-content-tertiary tabular-nums shrink-0">
+                      {formatDate(r.serviceDate)}
+                    </span>
+                  </div>
 
-                    {/* 部位 tags */}
+                  {/* 项目 + 部位 (服务名 + 部位 tags 一行) */}
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-body text-content-secondary">
+                      {serviceMap.get(r.serviceItemId) ?? `项目 ${r.serviceItemId}`}
+                    </span>
                     {r.bodyPartIds.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
+                      <>
                         {r.bodyPartIds.slice(0, 3).map((id) => (
-                          <Badge
+                          <span
                             key={id}
-                            variant="secondary"
-                            className="text-micro md:text-xs"
+                            className="text-caption text-content-secondary bg-surface-subtle px-1.5 py-0.5 rounded"
                           >
                             {bodyPartMap.get(id) ?? `#${id}`}
-                          </Badge>
+                          </span>
                         ))}
                         {r.bodyPartIds.length > 3 && (
-                          <span className="text-micro text-muted-foreground self-center">
+                          <span className="text-caption text-content-tertiary">
                             +{r.bodyPartIds.length - 3}
                           </span>
                         )}
-                      </div>
-                    )}
-
-                    {/* 效果对比: 疼痛 + 睡眠 (移动极简, 桌面详细) */}
-                    {hasMetrics && (
-                      <div className="mt-2 flex items-center gap-3 text-micro md:text-xs">
-                        {painBefore !== undefined || painAfter !== undefined ? (
-                          <span className="text-danger">
-                            疼痛 {String(painBefore ?? "-")} → {String(painAfter ?? "-")}
-                          </span>
-                        ) : null}
-                        {sleepBefore !== undefined || sleepAfter !== undefined ? (
-                          <span className="text-info">
-                            睡眠 {String(sleepBefore ?? "-")} → {String(sleepAfter ?? "-")}
-                          </span>
-                        ) : null}
-                      </div>
-                    )}
-
-                    {/* 反馈 (line-clamp 1) */}
-                    {r.customerFeedback && (
-                      <p className="text-micro md:text-xs text-muted-foreground line-clamp-1 mt-1.5 italic">
-                        "{r.customerFeedback}"
-                      </p>
+                      </>
                     )}
                   </div>
-              </Link>
+
+                  {/* 效果对比: 疼痛 + 睡眠 (tabular-nums 等宽) */}
+                  {hasMetrics && (
+                    <div className="mt-1.5 flex items-center gap-3 text-caption tabular-nums">
+                      {painBefore !== undefined || painAfter !== undefined ? (
+                        <span className="text-danger">
+                          疼痛 {String(painBefore ?? "-")} → {String(painAfter ?? "-")}
+                        </span>
+                      ) : null}
+                      {sleepBefore !== undefined || sleepAfter !== undefined ? (
+                        <span className="text-info">
+                          睡眠 {String(sleepBefore ?? "-")} → {String(sleepAfter ?? "-")}
+                        </span>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {/* 反馈 (line-clamp 1) */}
+                  {r.customerFeedback && (
+                    <p className="text-caption text-content-tertiary line-clamp-1 mt-1 italic">
+                      &ldquo;{r.customerFeedback}&rdquo;
+                    </p>
+                  )}
+                </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
 
       <div className="h-16 md:hidden" aria-hidden="true" />

@@ -25,6 +25,8 @@
 import Link from "next/link";
 import { loadPlanData } from "./plan-loader";
 import { Badge } from "@/components/ui/badge";
+import { Section } from "@/components/ui/section";
+import { PageHeader } from "@/components/ui/page-header";
 import { IdeaList } from "@/components/admin/idea-list";
 
 // SSR 强制 — 跟 /admin/dev 系列保持一致
@@ -45,30 +47,22 @@ export default async function PlanPage() {
   const overallPct = totalTasks > 0 ? Math.round((totalDone / totalTasks) * 100) : 0;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 md:space-y-10">
-      {/* ========== 1. Header (页面标题 + 总进度) ========== */}
-      <header className="space-y-3">
-        <div className="flex items-baseline justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-xl md:text-2xl font-semibold text-foreground">
-              开发计划
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              主人自用的项目计划 · {data.meta.phase} · 当前{" "}
-              <span className="font-mono">{data.meta.version}</span>
-            </p>
-          </div>
-          {/* 总进度 (用 div 模拟进度条, 不依赖 shadcn Progress 组件) */}
+    <div className="mx-auto max-w-5xl space-y-section-y">
+      {/* ========== 1. Header (PageHeader + 总进度) ========== */}
+      <PageHeader
+        title="开发计划"
+        description={`主人自用的项目计划 · ${data.meta.phase} · 当前 ${data.meta.version}`}
+        actions={
           <div className="text-right">
-            <div className="text-xs text-muted-foreground">路线图进度</div>
-            <div className="text-2xl font-semibold tabular-nums text-primary">
+            <div className="text-caption text-content-tertiary">路线图进度</div>
+            <div className="text-title-sm font-semibold tabular-nums text-brand">
               {overallPct}%
             </div>
           </div>
-        </div>
-
-        {/* 进度条 (原则 5: 状态色只在有状态时出现 — 用 success 色做"已完成"语义) */}
-        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+        }
+      >
+        {/* 进度条 (原则 5: 状态色只在有状态时出现) */}
+        <div className="h-1.5 w-full rounded-full bg-surface-sunken overflow-hidden">
           <div
             className="h-full bg-success transition-all"
             style={{ width: `${overallPct}%` }}
@@ -79,22 +73,22 @@ export default async function PlanPage() {
             aria-label="Phase 1 MVP 路线图总进度"
           />
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-caption text-content-tertiary tabular-nums">
           {totalDone} / {totalTasks} 路线图任务已完成 ·{" "}
           <span className="font-mono">
             {data.meta.fetchedAt.slice(0, 16).replace("T", " ")}
           </span>{" "}
           刷新
         </div>
-      </header>
+      </PageHeader>
 
       {/* ========== Warnings (解析失败的提示块) ========== */}
       {data.meta.warnings.length > 0 && (
-        <div className="rounded-md border border-warning/40 bg-warning-surface p-3 text-sm">
-          <div className="font-medium text-warning-foreground mb-1">
+        <div className="rounded-md border border-warning/40 bg-warning-surface p-3 text-body">
+          <div className="font-medium text-warning mb-1">
             ⚠ 路线图数据源读取失败:
           </div>
-          <ul className="list-disc pl-5 text-muted-foreground">
+          <ul className="list-disc pl-5 text-content-secondary">
             {data.meta.warnings.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
@@ -103,38 +97,35 @@ export default async function PlanPage() {
       )}
 
       {/* ========== 2. 待开发想法 (主人日常用, client CRUD) ========== */}
-      <section>
-        <h2 className="text-lg font-semibold text-foreground mb-3">
-          待开发想法
-        </h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          主人手动记录的待办 / 备忘 — 顶部一行新增, 状态三选 (待办/完成/丢弃), 真删需二次确认。
-        </p>
+      <Section
+        title="待开发想法"
+        description="主人手动记录的待办 / 备忘 — 顶部一行新增, 状态三选 (待办/完成/丢弃), 真删需二次确认。"
+      >
         <IdeaList />
-      </section>
+      </Section>
 
       {/* ========== 3. 周里程碑 (Phase 1 大盘, 只读) ========== */}
-      <section>
-        <h2 className="text-lg font-semibold text-foreground mb-3">
-          路线图 · Phase 1 MVP (6 周)
-        </h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          数据来源:{" "}
-          <Link
-            href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/phase-1-mvp.md"
-            className="text-info hover:underline font-mono"
-            target="_blank"
-            rel="noreferrer"
-          >
-            docs/phase-1-mvp.md
-          </Link>{" "}
-          · 主人每周拍板, 任务勾选 = CHANGELOG 反映
-        </p>
-
+      <Section
+        title="路线图 · Phase 1 MVP (6 周)"
+        description={
+          <>
+            数据来源:{" "}
+            <Link
+              href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/phase-1-mvp.md"
+              className="text-brand hover:underline font-mono"
+              target="_blank"
+              rel="noreferrer"
+            >
+              docs/phase-1-mvp.md
+            </Link>{" "}
+            · 主人每周拍板, 任务勾选 = CHANGELOG 反映
+          </>
+        }
+      >
         {/* ★ 列表页不套 Card (原则 4), 用 1px 分隔线分组 */}
-        <ul className="divide-y divide-border border-y border-border">
+        <ul className="divide-y divide-divider">
           {data.weeks.length === 0 ? (
-            <li className="py-4 text-sm text-muted-foreground">
+            <li className="py-4 text-body text-content-secondary">
               暂无周计划数据
             </li>
           ) : (
@@ -145,20 +136,20 @@ export default async function PlanPage() {
                   {/* 行头: code (等宽) + 标题 + 完成度 (右对齐数字) */}
                   <div className="flex items-baseline justify-between gap-3 flex-wrap">
                     <div className="flex items-baseline gap-3 min-w-0">
-                      <span className="font-mono text-sm font-semibold text-primary shrink-0">
+                      <span className="font-mono text-body font-semibold text-brand shrink-0">
                         {w.code}
                       </span>
-                      <h3 className="text-base font-medium text-foreground truncate">
+                      <h3 className="text-body-lg font-medium text-content-primary truncate">
                         {w.title}
                       </h3>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs tabular-nums text-muted-foreground">
+                      <span className="text-caption tabular-nums text-content-tertiary">
                         {w.done}/{w.total}
                       </span>
                       <Badge
                         variant={pct === 100 ? "default" : "outline"}
-                        className="text-xs tabular-nums"
+                        className="text-caption tabular-nums"
                       >
                         {pct}%
                       </Badge>
@@ -166,37 +157,36 @@ export default async function PlanPage() {
                   </div>
 
                   {/* 行内进度条 (迷你版, h-1) */}
-                  <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                  <div className="h-1 w-full rounded-full bg-surface-sunken overflow-hidden">
                     <div
                       className={
                         pct === 100
                           ? "h-full bg-success"
                           : pct > 0
-                          ? "h-full bg-primary"
+                          ? "h-full bg-brand"
                           : "h-full bg-transparent"
                       }
                       style={{ width: `${pct}%` }}
                     />
                   </div>
 
-                  {/* 任务列表 (默认折叠前 3 条, 多了有溢出感)
-                      这里简化为全展开, 因为任务数都不大 (<20) */}
+                  {/* 任务列表 */}
                   {w.tasks.length > 0 && (
-                    <details className="text-sm">
-                      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground select-none">
+                    <details className="text-body">
+                      <summary className="cursor-pointer text-caption text-content-tertiary hover:text-content-primary select-none">
                         {w.tasks.length} 个任务
                       </summary>
                       <ul className="mt-2 space-y-1 pl-1">
                         {w.tasks.map((t, i) => (
                           <li
                             key={i}
-                            className="flex items-start gap-2 text-sm"
+                            className="flex items-start gap-2 text-body"
                           >
                             <span
                               className={
                                 t.done
                                   ? "text-success shrink-0"
-                                  : "text-muted-foreground shrink-0"
+                                  : "text-content-tertiary shrink-0"
                               }
                               aria-hidden="true"
                             >
@@ -205,8 +195,8 @@ export default async function PlanPage() {
                             <span
                               className={
                                 t.done
-                                  ? "text-muted-foreground line-through"
-                                  : "text-foreground"
+                                  ? "text-content-secondary line-through"
+                                  : "text-content-primary"
                               }
                             >
                               {t.text}
@@ -221,28 +211,29 @@ export default async function PlanPage() {
             })
           )}
         </ul>
-      </section>
+      </Section>
 
       {/* ========== 4. 最近变更 (CHANGELOG 头部) ========== */}
-      <section>
-        <h2 className="text-lg font-semibold text-foreground mb-3">最近变更</h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          数据来源:{" "}
-          <Link
-            href="https://github.com/tooyan/nuankebao-agent/blob/main/CHANGELOG.md"
-            className="text-info hover:underline font-mono"
-            target="_blank"
-            rel="noreferrer"
-          >
-            CHANGELOG.md
-          </Link>{" "}
-          · 仅展示最近 8 条
-        </p>
-
-        {/* ★ 同样不套 Card, 用分隔线 */}
-        <ul className="divide-y divide-border border-y border-border">
+      <Section
+        title="最近变更"
+        description={
+          <>
+            数据来源:{" "}
+            <Link
+              href="https://github.com/tooyan/nuankebao-agent/blob/main/CHANGELOG.md"
+              className="text-brand hover:underline font-mono"
+              target="_blank"
+              rel="noreferrer"
+            >
+              CHANGELOG.md
+            </Link>{" "}
+            · 仅展示最近 8 条
+          </>
+        }
+      >
+        <ul className="divide-y divide-divider">
           {data.changes.length === 0 ? (
-            <li className="py-4 text-sm text-muted-foreground">
+            <li className="py-4 text-body text-content-secondary">
               暂无变更数据
             </li>
           ) : (
@@ -253,27 +244,26 @@ export default async function PlanPage() {
                   className={
                     c.kind === "unreleased"
                       ? "mt-1.5 h-2 w-2 rounded-full bg-warning shrink-0"
-                      : "mt-1.5 h-2 w-2 rounded-full bg-muted-foreground shrink-0"
+                      : "mt-1.5 h-2 w-2 rounded-full bg-content-tertiary shrink-0"
                   }
                   aria-hidden="true"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                    <p className="text-sm text-foreground">{c.title}</p>
-                    <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                    <p className="text-body-lg text-content-primary">{c.title}</p>
+                    <span className="text-caption text-content-tertiary tabular-nums shrink-0">
                       {c.date ?? "—"}
                     </span>
                   </div>
-                  {/* Tag: unreleased = 黄牌 "进行中", versioned = 灰底 "vX.Y.Z" */}
                   {c.kind === "unreleased" ? (
                     <Badge
                       variant="outline"
-                      className="mt-1 text-xs border-warning/50 text-warning-foreground"
+                      className="mt-1 text-caption border-warning/50 text-warning"
                     >
                       Unreleased · 待发版
                     </Badge>
                   ) : (
-                    <span className="mt-1 inline-block text-xs font-mono text-muted-foreground">
+                    <span className="mt-1 inline-block text-caption font-mono text-content-tertiary">
                       {c.tag}
                     </span>
                   )}
@@ -282,29 +272,29 @@ export default async function PlanPage() {
             ))
           )}
         </ul>
-      </section>
+      </Section>
 
       {/* ========== 5. 最近 ADR (决策时间线) ========== */}
-      <section>
-        <h2 className="text-lg font-semibold text-foreground mb-3">
-          最近 ADR 决策
-        </h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          数据来源:{" "}
-          <Link
-            href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/adr/INDEX.md"
-            className="text-info hover:underline font-mono"
-            target="_blank"
-            rel="noreferrer"
-          >
-            docs/adr/INDEX.md
-          </Link>{" "}
-          · 仅展示最近 10 条 · 跳 GitHub 阅读完整内容
-        </p>
-
-        <ul className="divide-y divide-border border-y border-border">
+      <Section
+        title="最近 ADR 决策"
+        description={
+          <>
+            数据来源:{" "}
+            <Link
+              href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/adr/INDEX.md"
+              className="text-brand hover:underline font-mono"
+              target="_blank"
+              rel="noreferrer"
+            >
+              docs/adr/INDEX.md
+            </Link>{" "}
+            · 仅展示最近 10 条 · 跳 GitHub 阅读完整内容
+          </>
+        }
+      >
+        <ul className="divide-y divide-divider">
           {data.adrs.length === 0 ? (
-            <li className="py-4 text-sm text-muted-foreground">
+            <li className="py-4 text-body text-content-secondary">
               暂无 ADR 数据
             </li>
           ) : (
@@ -316,20 +306,19 @@ export default async function PlanPage() {
                   rel="noreferrer"
                   className="group flex items-start gap-3"
                 >
-                  {/* ADR id (等宽, 偏深色, 像 commit short-sha 视觉) */}
-                  <span className="font-mono text-xs font-semibold text-primary shrink-0 mt-0.5">
+                  <span className="font-mono text-caption font-semibold text-brand shrink-0 mt-0.5">
                     {a.id}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground group-hover:text-primary transition-colors">
+                    <p className="text-body-lg text-content-primary group-hover:text-brand transition-colors">
                       {a.title}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-caption text-content-secondary">
                         {a.status}
                       </span>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
+                      <span className="text-caption text-content-tertiary">·</span>
+                      <span className="text-caption text-content-tertiary tabular-nums">
                         {a.date}
                       </span>
                     </div>
@@ -339,15 +328,15 @@ export default async function PlanPage() {
             ))
           )}
         </ul>
-      </section>
+      </Section>
 
       {/* ========== 6. Footer (数据来源说明 + 渲染时间) ========== */}
-      <footer className="text-xs text-muted-foreground border-t pt-4 space-y-1">
+      <footer className="text-caption text-content-secondary border-t border-divider pt-section-y space-y-1">
         <p>
           完整路线图见{" "}
           <Link
             href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/phase-1-mvp.md"
-            className="text-info hover:underline"
+            className="text-brand hover:underline"
             target="_blank"
             rel="noreferrer"
           >
@@ -356,7 +345,7 @@ export default async function PlanPage() {
           +{" "}
           <Link
             href="https://github.com/tooyan/nuankebao-agent/blob/main/CHANGELOG.md"
-            className="text-info hover:underline"
+            className="text-brand hover:underline"
             target="_blank"
             rel="noreferrer"
           >
@@ -365,14 +354,14 @@ export default async function PlanPage() {
           +{" "}
           <Link
             href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/adr/INDEX.md"
-            className="text-info hover:underline"
+            className="text-brand hover:underline"
             target="_blank"
             rel="noreferrer"
           >
             docs/adr/INDEX.md
           </Link>
         </p>
-        <p className="font-mono">
+        <p className="font-mono tabular-nums">
           数据刷新于 {data.meta.fetchedAt.replace("T", " ").slice(0, 19)} UTC
         </p>
       </footer>

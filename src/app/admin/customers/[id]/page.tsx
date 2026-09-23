@@ -35,23 +35,21 @@ export default async function CustomerDetailPage({
   );
 
   return (
-    <div className="space-y-3 md:space-y-6">
-      {/* 顶栏: 返回 + 名字 + (桌面) 编辑 */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 md:gap-3 min-w-0">
-          <Button variant="ghost" size="icon" asChild className="shrink-0 h-9 w-9 md:h-10 md:w-10">
-            <Link href="/admin/customers" aria-label="返回客户列表">
-              <ArrowLeft className="h-4 w-4 md:h-5 md:w-5" />
-            </Link>
-          </Button>
-          <div className="min-w-0">
-            <h1 className="text-lg md:text-3xl font-bold tracking-tight truncate">
-              {customer.name}
-            </h1>
-            <p className="text-micro md:text-sm text-muted-foreground truncate">
-              注册于 {new Date(customer.createdAt).toISOString().split("T")[0]}
-            </p>
-          </div>
+    <div className="space-y-section-y">
+      {/* 顶栏: 返回 + 名字 (B 档: 紧凑, 字号档 5 个以内) */}
+      <div className="flex items-center gap-2 md:gap-3 min-w-0">
+        <Button variant="ghost" size="icon" asChild className="shrink-0 h-9 w-9 md:h-10 md:w-10">
+          <Link href="/admin/customers" aria-label="返回客户列表">
+            <ArrowLeft className="h-4 w-4 md:h-5 md:w-5" />
+          </Link>
+        </Button>
+        <div className="min-w-0">
+          <h1 className="text-title font-semibold text-content-primary truncate">
+            {customer.name}
+          </h1>
+          <p className="text-caption text-content-secondary mt-0.5 truncate tabular-nums">
+            注册于 {new Date(customer.createdAt).toISOString().split("T")[0]}
+          </p>
         </div>
       </div>
 

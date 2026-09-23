@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { CustomerForm } from "@/components/business/customer-form";
 import { getCustomerById } from "@/lib/db/queries/customer";
 import { ArrowLeft } from "lucide-react";
@@ -17,15 +18,18 @@ export default async function EditCustomerPage({
   if (!customer) notFound();
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href={`/admin/customers/${id}`}>
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <h1 className="text-3xl font-bold tracking-tight">编辑客户</h1>
-      </div>
+    <div className="space-y-section-y max-w-2xl">
+      <PageHeader
+        title="编辑客户"
+        actions={
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={`/admin/customers/${id}`}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              返回详情
+            </Link>
+          </Button>
+        }
+      />
       <CustomerForm
         mode="edit"
         initial={{

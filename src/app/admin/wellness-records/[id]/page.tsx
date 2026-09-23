@@ -5,9 +5,10 @@ import {
 } from "@/lib/db/queries/wellness-record";
 import { getCustomerById } from "@/lib/db/queries/customer";
 import { listAllDictionaries } from "@/lib/db/queries/dictionary";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
+import { Section } from "@/components/ui/section";
+import { StatGroup, StatRow } from "@/components/ui/stat-row";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Pencil } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -28,153 +29,120 @@ export default async function WellnessRecordDetailPage({
 
   const serviceName =
     dict.serviceItems.find((s) => s.id === record.serviceItemId)?.name ?? `项目 ${record.serviceItemId}`;
-  const bodyPartNames = record.bodyPartIds
-    .map((id) => dict.bodyParts.find((b) => b.id === id)?.name ?? `#${id}`)
-    .join("、");
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/admin/wellness-records">
-              <ArrowLeft className="h-4 w-4" />
+    <div className="space-y-section-y max-w-3xl">
+      <PageHeader
+        title={record.serviceDate}
+        description={serviceName}
+        actions={
+          <Button asChild variant="outline">
+            <Link href={`/admin/wellness-records/${record.id}/edit`}>
+              <Pencil className="h-4 w-4 mr-2" />
+              编辑
             </Link>
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{record.serviceDate}</h1>
-            <p className="text-sm text-muted-foreground">
-              {serviceName}
-            </p>
-          </div>
-        </div>
-        <Button asChild>
-          <Link href={`/admin/wellness-records/${record.id}/edit`}>
-            <Pencil className="h-4 w-4 mr-2" />
-            编辑
+        }
+      >
+        {/* 返回按钮 (放在 PageHeader children 区, 不在主标题区抢位) */}
+        <Button variant="ghost" size="sm" asChild className="-ml-3">
+          <Link href="/admin/wellness-records">
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            返回列表
           </Link>
         </Button>
-      </div>
+      </PageHeader>
 
       {customer && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">客户</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Link
-              href={`/admin/customers/${customer.id}`}
-              className="text-primary hover:underline"
-            >
-              {customer.name} · {customer.phone}
-            </Link>
-          </CardContent>
-        </Card>
+        <Section title="客户">
+          <Link
+            href={`/admin/customers/${customer.id}`}
+            className="text-body-lg text-brand hover:underline"
+          >
+            {customer.name} · {customer.phone}
+          </Link>
+        </Section>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">身体部位</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
+      {record.bodyPartIds.length > 0 && (
+        <Section title="身体部位">
+          <div className="flex flex-wrap gap-1.5">
             {record.bodyPartIds.map((id) => (
-              <Badge key={id} variant="secondary">
+              <span
+                key={id}
+                className="text-caption text-content-secondary bg-surface-subtle px-2 py-1 rounded"
+              >
                 {dict.bodyParts.find((b) => b.id === id)?.name ?? `#${id}`}
-              </Badge>
+              </span>
             ))}
           </div>
-        </CardContent>
-      </Card>
-
-      {record.productUsages.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">使用耗材</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-1 text-sm">
-              {record.productUsages.map((p, idx) => {
-                const product = dict.products.find((prod) => prod.id === p.productId);
-                return (
-                  <li key={idx}>
-                    {product?.name ?? `#${p.productId}`} · 用量 {p.quantity ?? "-"}{" "}
-                    {product?.unit}
-                  </li>
-                );
-              })}
-            </ul>
-          </CardContent>
-        </Card>
+        </Section>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">状态对比</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 text-sm">
-            <div>
-              <p className="font-medium text-muted-foreground">理疗前</p>
-              <ul className="mt-1 space-y-0.5">
-                {Object.entries(record.preCondition).map(([k, v]) => (
-                  <li key={k}>
-                    {k}: {String(v)}
-                  </li>
-                ))}
-                {Object.keys(record.preCondition).length === 0 && (
-                  <li className="text-muted-foreground">无</li>
-                )}
-              </ul>
-            </div>
-            <div>
-              <p className="font-medium text-muted-foreground">理疗后</p>
-              <ul className="mt-1 space-y-0.5">
-                {Object.entries(record.postCondition).map(([k, v]) => (
-                  <li key={k}>
-                    {k}: {String(v)}
-                  </li>
-                ))}
-                {Object.keys(record.postCondition).length === 0 && (
-                  <li className="text-muted-foreground">无</li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {record.productUsages.length > 0 && (
+        <Section title="使用耗材">
+          <ul className="divide-y divide-divider">
+            {record.productUsages.map((p, idx) => {
+              const product = dict.products.find((prod) => prod.id === p.productId);
+              return (
+                <li key={idx} className="py-2 flex items-center justify-between gap-2">
+                  <span className="text-body-lg text-content-primary">
+                    {product?.name ?? `#${p.productId}`}
+                  </span>
+                  <span className="text-caption text-content-tertiary tabular-nums shrink-0">
+                    用量 {p.quantity ?? "-"} {product?.unit}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
+
+      {/* 状态对比: StatGroup (左 label / 右 value; 字段多时不挤) */}
+      <Section title="状态对比">
+        <div className="grid gap-section-y sm:grid-cols-2">
+          <StatGroup title="理疗前">
+            {Object.keys(record.preCondition).length === 0 ? (
+              <StatRow label="—" value="无" />
+            ) : (
+              Object.entries(record.preCondition).map(([k, v]) => (
+                <StatRow key={k} label={k} value={String(v)} />
+              ))
+            )}
+          </StatGroup>
+          <StatGroup title="理疗后">
+            {Object.keys(record.postCondition).length === 0 ? (
+              <StatRow label="—" value="无" />
+            ) : (
+              Object.entries(record.postCondition).map(([k, v]) => (
+                <StatRow key={k} label={k} value={String(v)} />
+              ))
+            )}
+          </StatGroup>
+        </div>
+      </Section>
 
       {record.processNote && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">理疗过程</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm whitespace-pre-wrap">
+        <Section title="理疗过程">
+          <p className="text-body-lg text-content-primary whitespace-pre-wrap">
             {record.processNote}
-          </CardContent>
-        </Card>
+          </p>
+        </Section>
       )}
 
       {record.customerFeedback && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">客户反馈</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm whitespace-pre-wrap">
+        <Section title="客户反馈">
+          <p className="text-body-lg text-content-primary whitespace-pre-wrap">
             {record.customerFeedback}
-          </CardContent>
-        </Card>
+          </p>
+        </Section>
       )}
 
       {record.nextAdviceDate && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">下次建议</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm">
-            建议下次到店日期: <strong>{record.nextAdviceDate}</strong>
-          </CardContent>
-        </Card>
+        <Section title="下次建议">
+          <StatRow label="建议下次到店" value={record.nextAdviceDate} tone="brand" />
+        </Section>
       )}
     </div>
   );
