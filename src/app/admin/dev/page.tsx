@@ -31,6 +31,7 @@ import {
   BookOpen,
   Package,
   ServerCog,
+  Palette,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +65,17 @@ const implementedModules = [
     description: "列出 git tag pre-* 历史 + diff 预览 + rollback 按钮",
     color: "bg-warning-surface text-warning",
     badge: "⚠ 危险操作",
+  },
+  {
+    // B0b 新增: UI 组件语言层验收靶子 (PageHeader / Section / DataTable / EmptyState / FilterBar / StatRow / Skeleton)
+    // 注意: ui-kit 之前归在 cliOnlyModules (无独立页); 现在改为有独立页, 但 cliOnlyModules 那行
+    // 故意保留以满足硬约束 §4 「不要重构那个页面」(语义矛盾但稳定优先)
+    href: "/admin/dev/ui-kit",
+    icon: Palette,
+    title: "UI 套件",
+    description: "Web 组件语言层验收靶子 — 7 个基础组件 + 规格对照",
+    color: "bg-brand-surface text-brand-dark",
+    badge: "★ B0b",
   },
 ];
 
