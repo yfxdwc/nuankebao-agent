@@ -1,4 +1,9 @@
-// 加盟徽章 (紫色色块, 中老年清晰)
+// 加盟徽章 (紫色色块)
+//
+// ⚠ B2 迁移: 本组件内部颜色块与 [AppBadge] (app_badge.dart) 的实现思路重复
+//   (色 + 文字双编码, 圆角 4-16 范围). B2 批次会把现有调用点统一迁到
+//   AppBadge (tone=brand/success/info), 这里**暂时保留**避免影响存量页面.
+//   B0a 不动本组件 —— 只在本注释里留迁移提示.
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 

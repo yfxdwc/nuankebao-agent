@@ -1,4 +1,4 @@
-// 空状态 / 加载失败 (中老年大白话)
+// 空状态 / 加载失败 (大白话; B 档兼容入口)
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -10,6 +10,15 @@ class EmptyState extends StatelessWidget {
   final VoidCallback? onAction;
   final String? actionLabel;
 
+  /// 自定义主操作 widget —— 给 null 时走 `[onAction] + [actionLabel]` 的内建按钮;
+  /// 给非 null 时**完全替换**内建按钮 (允许任意样式, 如次按钮 / Row 双按钮 / 图标按钮)
+  ///
+  /// 优先级: `action` > `[onAction] + [actionLabel]` (B0a 加; 兼容存量调用点)
+  final Widget? action;
+
+  /// 自定义副操作 widget (可选) —— 比如「导入」「了解详情」
+  final Widget? secondaryAction;
+
   const EmptyState({
     super.key,
     this.icon = Icons.inbox_outlined,
@@ -17,6 +26,8 @@ class EmptyState extends StatelessWidget {
     this.hint,
     this.onAction,
     this.actionLabel,
+    this.action,
+    this.secondaryAction,
   });
 
   @override
@@ -49,7 +60,10 @@ class EmptyState extends StatelessWidget {
                 ),
               ),
             ],
-            if (onAction != null && actionLabel != null) ...[
+            if (action != null) ...[
+              const SizedBox(height: AppSpace.s16),
+              action!,
+            ] else if (onAction != null && actionLabel != null) ...[
               const SizedBox(height: AppSpace.s16),
               ElevatedButton(
                 onPressed: onAction,
@@ -61,6 +75,10 @@ class EmptyState extends StatelessWidget {
                   style: const TextStyle(fontSize: AppTheme.fontMd),
                 ),
               ),
+            ],
+            if (secondaryAction != null) ...[
+              const SizedBox(height: AppSpace.inlineGap),
+              secondaryAction!,
             ],
           ],
         ),

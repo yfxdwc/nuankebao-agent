@@ -4,8 +4,11 @@ import 'theme_ext.dart';
 import 'tokens.g.dart';
 
 /// ============================================
-/// 暖客宝 主题工厂 (中老年极易用版本 / Plan F2)
+/// 暖客宝 主题工厂 (B 档 · 紧凑专业)
 /// ============================================
+///
+/// 目标气质 = **微信 × Linear × Things 3** —— 简洁 + 克制 + 信息密度高。
+/// 完整设计原则与 B 档规格见 [`docs/ui-principles.md`](../../../docs/ui-principles.md)。
 ///
 /// **真源**: `design/tokens/design-tokens.json` → `pnpm tokens:build` → `tokens.g.dart`
 /// 本文件只做「令牌 → ThemeData」的装配, **不含任何字面色值/数值**。
@@ -251,8 +254,10 @@ class AppTheme {
       ),
 
       // ---- 卡片 ----
+      //   默认 elevation 走 e0 (原则 4「容器越少，内容越强」+ 层次一节「默认全部 0, 阴影
+      //   只保留在弹层」)。shadowColor 字段保留, 弹层会再读它。
       cardTheme: CardTheme(
-        elevation: AppElevation.e1,
+        elevation: AppElevation.e0,
         color: t.surfaceCard,
         surfaceTintColor: Colors.transparent,
         shadowColor: t.shadowColor,
@@ -352,7 +357,7 @@ class AppTheme {
         ),
       ),
 
-      // ---- FAB (80pt 大圆形, 中老年) ----
+      // ---- FAB (56pt 紧凑尺寸; 视觉小但 hit box ≥48) ----
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: t.primary,
         foregroundColor: t.onPrimary,
@@ -429,7 +434,7 @@ class AppTheme {
         ),
       ),
 
-      // ---- Bottom Nav (中老年图标 + 文字) ----
+      // ---- Bottom Nav (B 档紧凑; 标签始终可见, 选中用品牌色 + semibold) ----
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: t.surface,
         selectedItemColor: t.primary,

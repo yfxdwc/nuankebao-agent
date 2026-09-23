@@ -195,6 +195,44 @@
 卡片、按钮、列表一律**无阴影**。
 
 ---
+### 层次 `scales.elevation`
+
+**默认全部 0**。阴影只保留在：弹层（Dialog / Sheet / PopupMenu / FAB）。
+
+卡片、按钮、列表一律**无阴影**。
+
+---
+
+## §2.5 组件契约（B0 已落地）
+
+> **后续所有页面重写必须用下表组件，禁止自己拼 `Row + Card` + 分隔线 / 自造徽章 / 自造骨架。**
+> B0a 落地 7 个 Flutter 组件（`flutter_app/lib/core/widgets/app_*.dart`）。
+> B0b 同步落地 web 侧同名组件（`src/components/ui/*.tsx`）—— 任一端遗漏 = UI 漂移。
+> 令牌来源一律 `tokens.g.dart` / Tailwind 语义类，不允许字面值（护栏：`tools/check-ui-tokens.sh`，基线 0）。
+
+| 组件 | 一句话职责 | 关键参数（契约） |
+|---|---|---|
+| **AppListRow** | 同质列表的唯一行组件（客户 / 跟进 / 记录 / 沙龙 列表） | `leading` (44pt)、`title` (md+medium)、`subtitle` (sm+secondary)、`meta` (sm+tertiary)、`trailing`、`onTap`、`dense` (60/52)、`showDivider`。无卡片/无圆角；分隔线随 leading 左缩进；热区 ≥48 |
+| **AppSectionHeader** | 区块标题（纯文字 + 可选 action + 可选副标题） | `title` (lg+semibold)、`subtitle` (sm+secondary)、`action`、`padding`。无装饰条/色块/图标前缀 |
+| **AppSection** | AppSectionHeader + 子内容一站式容器 | `title`、`subtitle`、`action`、`child`、`childPadding`、`outerPadding`（默认 pagePadding）。不画边框/阴影/卡片背景 |
+| **AppStatRow** | 详情页一行键值对（左 label / 右 value） | `label` (sm+secondary)、`value` (md+medium+textPrimary+**等宽数字**)、`valueColor`、`trailing`、`onTap`、`dense` (40 vs 48)、`showDivider` |
+| **AppStatGroup** | 多行 AppStatRow 视觉组（组内 8, 组间 20） | `children`、`gap`、`padding` |
+| **AppSheetHeader** | 底部弹层统一头部（配合 dragHandle=true） | `title` (lg+semibold)、`subtitle` (sm+secondary)、`actions: List<Widget>`、`padding`、`showDivider`。不自画手柄（走 BottomSheetThemeData） |
+| **AppSkeleton** | 单块骨架占位（静止，无动画） | `width`、`height`、`radius` (默认 r6)、`color` (默认 surfaceSunken) |
+| **AppSkeletonList** | 模拟 AppListRow 的骨架列表（行高一致避免跳动） | `rows` (默认 5)、`showLeading`、`showSubtitle`、`dense` |
+| **AppBadge** | 统一状态徽章（色 + 文字双编码，色弱也能分） | `label`、`tone ∈ {neutral, brand, success, warning, danger, info, gold}`、`dense`、`foreground`、`background`。圆角 4, 字号 xs, color **必显式写** |
+| **AppEmptyState** | B 档空态组件（原则 8：必须告诉「下一步做什么」） | `icon`、`title` (必填)、`hint`、`action`、`secondaryAction`、`padding` |
+| **EmptyState** *(兼容入口)* | 旧空态组件（保留兼容），**新代码优先用 AppEmptyState** | 原 `onAction` + `actionLabel` 仍可用；新增 `action` / `secondaryAction` widget 参数可替换默认按钮 |
+| **franchise_chip.dart** *(待迁移)* | 旧加盟徽章；B2 迁移到 AppBadge (tone=brand/success/info) | B0a **不动** —— 仅在注释里留迁移提示 |
+
+**硬规则（每个组件都遵守）**：
+
+- 每个 `TextStyle` **必须显式写 color**。`test/app_kit_test.dart` 已用 `DefaultTextStyle.of(context)` 验证解析后样式。
+- 所有数值（间距/字号/圆角/颜色/尺寸/层次）从 `tokens.g.dart` 取；品牌色走 `context.tokens.xxx`。
+- 不引入新依赖。
+- 触摸底线 ≥ 48（`AppSize.tapMin`）。
+
+---
 
 ## §3 三条**不要丢**（它们不是适老化）
 
@@ -246,6 +284,8 @@ IconButton(
 - [ ] **层级**：整屏字号档 ≤ 5 个？遮住字号仍能分辨层级？
 - [ ] **分组**：组内间距 ≤ 组间间距的 1/2？
 - [ ] **容器**：一屏有边框/阴影的元素 ≤ 2 个？列表页无卡片？
+- [ ] **组件契约**：列表行用了 `AppListRow` 而不是自己拼 `Row` + `Card`？
+- [ ] **容器计数**：列表页一屏「有边框或有阴影」的元素 ≤ 2？
 - [ ] **颜色**：转灰度后信息不丢？饱和色块 ≤ 3 处？
 - [ ] **热区**：所有可点元素 hit box ≥ 48×48？（不是视觉尺寸）
 - [ ] **对比度**：`pnpm tokens:contrast` 无 FAIL？
