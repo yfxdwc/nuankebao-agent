@@ -234,6 +234,7 @@ tools/check-ui-tokens.sh --by-file    列每个文件的明细
 | `src/components/ui/theme-switcher.tsx` | 换肤 UI |
 | `src/styles/globals.css` | 生成块注入 + base layer |
 | `tailwind.config.ts` | CSS 变量 → 类名映射（零字面色值） |
+| `flutter_app/web/{index.html,manifest.json}` | PWA 启动壳的 `theme-color`（生成器**外科式**改色，保住 name/description/icons 等人工字段） |
 | `tests/design-tokens.test.ts` | 契约测试 56 例 |
 | `flutter_app/test/theme_tokens_test.dart` | 契约测试 41 例 |
 
@@ -247,6 +248,9 @@ tools/check-ui-tokens.sh --by-file    列每个文件的明细
   再 `git checkout <该commit>^ -- flutter_app/lib/_deprecated/`。
 - **Web 字号 `--text-micro` (10px)** ×42 处来自 web admin 密集表格。Flutter 可读性底线仍是 14px；
   web admin 是主人自用脚手架，暂许更小。要统一抬高 → 改 `scales.type.micro` 一个数。
+- **PWA 启动壳的颜色是静态的**（`index.html` / `manifest.json`）：浏览器在 Dart 引擎启动前就读它们，
+  那时没有 CSS 变量也没有 localStorage → 只能给品牌默认色。生成器会同步它们，
+  `tokens:check` 漂移即 fail（下次改 `scales`/主色时自动跟随）。
 - **`sage` 的 `primary` 对白字 4.86:1**（AA，未达 AAA 7:1）。基础字号 18pt 属 WCAG 大字号，AA-large 达标；
   需要 AAA 的场景用 `primaryDark`（7.95:1）。`pnpm tokens:contrast` 会列出全部。
 - 未做 dark mode（主人 2026-09-23 拍板）。

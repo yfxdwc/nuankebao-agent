@@ -843,6 +843,58 @@ function writeOrCheck(path: string, next: string, results: string[]): void {
   results.push(`  ✎ ${path.replace(ROOT + "/", "")} (${prev ? "已更新" : "已创建"})`);
 }
 
+// ============================================
+// ④ Flutter web PWA 外壳 (静态文件: 在 Dart 跑之前就已加载, 拿不到运行时主题)
+// ============================================
+//
+// 这两处只在**外科式**地改颜色字段, 不整文件重写 ——
+// manifest.json 里还有 name/description/icons 等人工维护的内容 (而且别的 agent 可能正在改),
+// 整文件生成会把他们的改动吃掉。
+//
+// 为什么不去掉硬编码: index.html / manifest.json 是 PWA 启动壳 (Splash + 状态栏),
+//   浏览器在 Dart 引擎启动前就读它们 —— 那时候没有 CSS 变量也没有 localStorage,
+//   只能给一个静态值。**品牌默认色**是唯一正确答案。
+function syncStaticShell(primary: string, results: string[]): void {
+  const targets: Array<{ path: string; pattern: RegExp; label: string }> = [
+    {
+      path: pathResolve(ROOT, "flutter_app/web/index.html"),
+      pattern: /(<meta name="theme-color" content=")#[0-9A-Fa-f]{3,8}(")/,
+      label: "theme-color",
+    },
+    {
+      path: pathResolve(ROOT, "flutter_app/web/manifest.json"),
+      pattern: /("(?:background_color|theme_color)": ")#[0-9A-Fa-f]{3,8}(")/g,
+      label: "background_color/theme_color",
+    },
+  ];
+
+  const changed: string[] = [];
+  for (const { path, pattern, label } of targets) {
+    let cur: string;
+    try {
+      cur = readFileSync(path, "utf8");
+    } catch {
+      results.push(`  ⚠ ${path.replace(ROOT + "/", "")} 不存在, 跳过 PWA 外壳同步`);
+      continue;
+    }
+    const next = cur.replace(pattern, `$1${primary}$2`);
+    if (next === cur) {
+      results.push(`  ✓ ${path.replace(ROOT + "/", "")} (${label} = ${primary})`);
+      continue;
+    }
+    if (MODE === "check") {
+      const found = [...cur.matchAll(/#[0-9A-Fa-f]{3,8}/g)].map((m) => m[0]).join(", ");
+      results.push(
+        `  ✗ ${path.replace(ROOT + "/", "")} —— ${label} 不是品牌主色 ${primary} (现有: ${found})`,
+      );
+      continue;
+    }
+    writeFileSync(path, next, "utf8");
+    changed.push(path.replace(ROOT + "/", ""));
+  }
+  if (changed.length) results.push(`  ✎ PWA 外壳已同步: ${changed.join(", ")}`);
+}
+
 if (MODE === "contrast") {
   console.log("\n暖客宝 主题对比度体检 (WCAG 2.1)\n");
   console.log("  目标: 正文 ≥ 4.5:1 (AA) · 理想 ≥ 7:1 (AAA)\n");
@@ -880,6 +932,7 @@ if (MODE === "contrast") {
 const results: string[] = [];
 writeOrCheck(OUT_FLUTTER, emitFlutter(), results);
 writeOrCheck(OUT_TS, emitTs(), results);
+syncStaticShell(themeColors[DEFAULT_THEME.id].primary, results);
 
 const cssBlock = emitCssBlock();
 let cssNext: string;

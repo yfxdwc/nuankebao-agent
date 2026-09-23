@@ -6,12 +6,14 @@
     "generatedArtifacts": [
       "flutter_app/lib/core/theme/tokens.g.dart",
       "src/lib/design-tokens.g.ts",
-      "src/styles/globals.css (标记注入块)"
+      "src/styles/globals.css (标记注入块)",
+      "flutter_app/web/index.html + manifest.json (外科式改 theme-color, 保住其余人工字段)"
     ],
     "neverEdit": [
       "flutter_app/lib/core/theme/tokens.g.dart",
       "src/lib/design-tokens.g.ts",
-      "src/styles/globals.css 中 BEGIN/END GENERATED 之间的内容"
+      "src/styles/globals.css 中 BEGIN/END GENERATED 之间的内容",
+      "flutter_app/web/index.html 与 manifest.json 里的 theme-color / background_color / theme_color"
     ],
     "rules": [
       "本文件是唯一允许出现字面 hex 色值的地方 (mermaid classDef 字符串例外, 见 docs/ui-tokens.md §例外)",
