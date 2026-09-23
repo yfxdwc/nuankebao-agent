@@ -17,6 +17,7 @@ import {
   X,
   ChevronRight,
   Activity,
+  ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
@@ -52,6 +53,9 @@ const MORE_ITEMS = [
   { href: "/admin/import", label: "导入客户", icon: Upload, desc: "Excel 批量导入" },
   { href: "/admin/ai", label: "AI 助手", icon: Brain, desc: "跟进建议 + 话术生成" },
   { href: "/admin/download", label: "App 下载", icon: Download, desc: "暖客宝 APK" },
+  // 开发计划 (v0.1.5 主人 2026-09-23 拍板 d3e7f2a1, ask_user 「admin 端增加开发计划模块」)
+  // 仅 admin 看, 销售员无 — 按主人拍板"可见性 a" 仅 admin (主人自己用)
+  { href: "/admin/plan", label: "开发计划", icon: ListChecks, desc: "项目路线图 (主人自用)" },
 ];
 
 export function MobileBottomTab() {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Users, Heart, Bell, FileText, Sparkles, BarChart3, Upload, MessageCircle, Brain, Download, Wrench, Activity,
-  SlidersHorizontal,
+  SlidersHorizontal, ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +27,13 @@ const navItems = [
 // - /dev 工具门户在 v0.1.4 已迁到 /admin/dev/ (物理位置: src/app/admin/dev/), 这里 href 同步更新
 // - /dev 老 URL 重定向到 /admin/dev (per src/app/dev/page.tsx)
 // - 定位: “工具”类别, 区别于 8 个产品 nav, 视觉上分隔
-const toolNavItem = { href: "/admin/dev", label: "开发工具", icon: Wrench };
+const toolNavItems: { href: string; label: string; icon: typeof Wrench }[] = [
+  // 开发计划 (v0.1.5 主人 2026-09-23 拍板 d3e7f2a1, ask_user 「admin 端增加开发计划模块」)
+  // 位置选 a: 独立 /admin/plan, 跟 /admin/dev 平级, 跟"开发工具"同组 (都属于 admin 自用工具型菜单)
+  // 排序: 计划(看接下来做什么) 在 工具(运维当前) 之前 — 读序优先
+  { href: "/admin/plan", label: "开发计划", icon: ListChecks },
+  { href: "/admin/dev", label: "开发工具", icon: Wrench },
+];
 
 export function AdminSidebar() {
   const pathname = usePathname();
@@ -66,16 +72,18 @@ export function AdminSidebar() {
             </Link>
           );
         })}
-        {/* 工具分隔: 主人 2026-09-14 override, 加 /admin/dev 入口 (v0.1.4 master-decide) */}
+        {/* 工具分隔: 主人 2026-09-14 override, 加 /admin/dev 入口 (v0.1.4 master-decide)
+            + 2026-09-23 主人拍板 (ask_user d3e7f2a1) 加 /admin/plan (v0.1.5) */}
         <div className="my-3 border-t border-border/60" aria-hidden="true" />
-        {(() => {
-          const Icon = toolNavItem.icon;
+        {toolNavItems.map((item) => {
+          const Icon = item.icon;
           const isActive =
-            pathname === toolNavItem.href ||
-            pathname.startsWith(toolNavItem.href + "/");
+            pathname === item.href ||
+            pathname.startsWith(item.href + "/");
           return (
             <Link
-              href={toolNavItem.href}
+              key={item.href}
+              href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                 isActive
@@ -84,10 +92,10 @@ export function AdminSidebar() {
               )}
             >
               <Icon className="h-4 w-4" />
-              {toolNavItem.label}
+              {item.label}
             </Link>
           );
-        })()}
+        })}
       </nav>
       <div className="absolute bottom-4 left-3 right-3 text-xs text-muted-foreground">
         <p className="px-3">v0.1 · Phase 1 W1</p>
