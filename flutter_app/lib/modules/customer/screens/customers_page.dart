@@ -190,7 +190,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('客户'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
         actions: [
           // 落位「三方确认」待办入口 (主人 2026-09-18 拍) — 有待确认时红点
           Consumer(
@@ -1933,7 +1933,7 @@ class CustomerDetailPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('客户详情'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
         actions: [
           IconButton(
             icon: const Icon(Icons.edit, size: 28),
@@ -3197,7 +3197,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.customerId == null ? '添加客户' : '编辑客户'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
       ),
       body: Form(
         key: _formKey,

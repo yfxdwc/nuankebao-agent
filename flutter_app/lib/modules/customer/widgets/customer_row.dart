@@ -112,7 +112,7 @@ class CustomerRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // 大头像 (56pt) —— 客户类型直接标在头像上 (主人 2026-09-19 拍:
+            // 头像 = AppTheme.avatarMd (B 档 44, 视觉 44 但 hit box ≥48) —— 客户类型直接标在头像上 (主人 2026-09-19 拍:
             //   列表不再显示「加盟/种子/普通」标签, 改由 头像环 + 角标 区分)
             TypedUserAvatar(
               avatarUrl: customer.avatar,

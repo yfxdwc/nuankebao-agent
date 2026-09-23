@@ -23,11 +23,11 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s32),
+        padding: const EdgeInsets.all(AppSpace.s24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 80, color: AppTheme.textSecondary),
+            Icon(icon, size: 64, color: AppTheme.textSecondary),
             const SizedBox(height: AppSpace.s16),
             Text(
               title,
@@ -50,11 +50,11 @@ class EmptyState extends StatelessWidget {
               ),
             ],
             if (onAction != null && actionLabel != null) ...[
-              const SizedBox(height: AppSpace.s24),
+              const SizedBox(height: AppSpace.s16),
               ElevatedButton(
                 onPressed: onAction,
                 style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(180, 56),
+                  minimumSize: const Size(160, AppSize.buttonLgHeight),
                 ),
                 child: Text(
                   actionLabel!,
@@ -77,9 +77,9 @@ class LoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Center(
       child: SizedBox(
-        width: AppSpace.s56,
-        height: AppSpace.s56,
-        child: CircularProgressIndicator(strokeWidth: 4),
+        width: AppSize.buttonLgHeight,
+        height: AppSize.buttonLgHeight,
+        child: const CircularProgressIndicator(strokeWidth: 3),
       ),
     );
   }
