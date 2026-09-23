@@ -142,7 +142,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
                 ),
               ),
               const Spacer(),
-              const FranchiseChip(type: 'franchisee', fontSize: AppType.tiny),
+              const FranchiseChip(type: 'franchisee', fontSize: AppType.micro),
             ],
           ),
         );

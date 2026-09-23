@@ -109,7 +109,11 @@
     "green-450": "#6B9E7A",
     "teal-500": "#2F7D6F",
     "indigo-500": "#5C6BC0",
-    "neutral-cool-500": "#9AA5A0"
+    "neutral-cool-500": "#9AA5A0",
+    "spring-800": "#2F4620",
+    "summer-800": "#16403B",
+    "autumn-800": "#5C3113",
+    "winter-800": "#4A2222"
   },
   "scales": {
     "space": {
@@ -170,8 +174,7 @@
       "r2": 2
     },
     "type": {
-      "micro": 10,
-      "tiny": 12,
+      "micro": 12,
       "xs": 14,
       "sm": 16,
       "md": 18,
@@ -333,9 +336,9 @@
       "isDefault": true,
       "flutterKey": "sage",
       "colors": {
-        "primary": "{palette.green-500}",
+        "primary": "{palette.green-700}",
         "primaryLight": "{palette.green-200}",
-        "primaryDark": "{palette.green-700}",
+        "primaryDark": "{palette.green-800}",
         "primarySurface": "{palette.green-50}",
         "accent": "{palette.amber-500}",
         "accentLight": "{palette.amber-100}",
@@ -347,9 +350,9 @@
       "label": "春 · 新芽",
       "group": "季节",
       "colors": {
-        "primary": "{palette.spring-500}",
+        "primary": "{palette.spring-700}",
         "primaryLight": "{palette.spring-200}",
-        "primaryDark": "{palette.spring-700}",
+        "primaryDark": "{palette.spring-800}",
         "primarySurface": "{palette.spring-50}",
         "accent": "{palette.springAccent-500}",
         "accentLight": "{palette.springAccent-100}",
@@ -361,9 +364,9 @@
       "label": "夏 · 青荷",
       "group": "季节",
       "colors": {
-        "primary": "{palette.summer-500}",
+        "primary": "{palette.summer-700}",
         "primaryLight": "{palette.summer-200}",
-        "primaryDark": "{palette.summer-700}",
+        "primaryDark": "{palette.summer-800}",
         "primarySurface": "{palette.summer-50}",
         "accent": "{palette.summerAccent-500}",
         "accentLight": "{palette.summerAccent-100}",
@@ -375,9 +378,9 @@
       "label": "秋 · 琥珀",
       "group": "季节",
       "colors": {
-        "primary": "{palette.autumn-500}",
+        "primary": "{palette.autumn-700}",
         "primaryLight": "{palette.autumn-200}",
-        "primaryDark": "{palette.autumn-700}",
+        "primaryDark": "{palette.autumn-800}",
         "primarySurface": "{palette.autumn-50}",
         "accent": "{palette.autumnAccent-500}",
         "accentLight": "{palette.autumnAccent-100}",
@@ -389,9 +392,9 @@
       "label": "冬 · 苏木",
       "group": "季节",
       "colors": {
-        "primary": "{palette.winter-500}",
+        "primary": "{palette.winter-700}",
         "primaryLight": "{palette.winter-200}",
-        "primaryDark": "{palette.winter-700}",
+        "primaryDark": "{palette.winter-800}",
         "primarySurface": "{palette.winter-50}",
         "accent": "{palette.winterAccent-500}",
         "accentLight": "{palette.winterAccent-100}",
@@ -403,6 +406,10 @@
     "minOnColorRatio": 4.5,
     "preferRatio": 7.0,
     "lightForeground": "{palette.neutral-0}",
-    "darkForeground": "{palette.neutral-900}"
+    "darkForeground": "{palette.neutral-900}",
+    "requiredRatio": {
+      "primary": 7.0
+    },
+    "_requiredRatioNote": "硬门槛: 不达标 → 生成器直接报错 (不是 warning)。primary 是按钮底色, 上面永远压白字; 中老年视力对 4.86:1 的绿底白字实际偏吃力。"
   }
 }

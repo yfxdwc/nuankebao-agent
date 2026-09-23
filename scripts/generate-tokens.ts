@@ -134,6 +134,8 @@ const LIGHT_FG: string = resolveRef(doc.contrast.lightForeground) as string;
 const DARK_FG: string = resolveRef(doc.contrast.darkForeground) as string;
 const MIN_RATIO: number = doc.contrast.minOnColorRatio ?? 4.5;
 const PREFER_RATIO: number = doc.contrast.preferRatio ?? 7;
+/** 按槽位的**硬门槛** —— 不达标直接抛错, 不是 warning。加主题时不会静默退化。 */
+const REQUIRED_RATIO: Record<string, number> = doc.contrast.requiredRatio ?? {};
 
 /** 需要自动配前景色的底: 令牌键 → 生成的前景键名 */
 const FG_PAIRS: Array<[string, string]> = [
@@ -146,12 +148,28 @@ const FG_PAIRS: Array<[string, string]> = [
 ];
 
 const contrastWarnings: string[] = [];
+const contrastErrors: string[] = [];
 
 function deriveForeground(bgHex: string, label: string): string {
   const cLight = contrastRatio(bgHex, LIGHT_FG.toUpperCase());
   const cDark = contrastRatio(bgHex, DARK_FG.toUpperCase());
   const pickLight = cLight >= cDark;
   const best = pickLight ? cLight : cDark;
+  const fg = pickLight ? LIGHT_FG.toUpperCase() : DARK_FG.toUpperCase();
+
+  // 硬门槛 (design-tokens.json → contrast.requiredRatio)
+  const slot = label.split(".").pop() ?? "";
+  const required = REQUIRED_RATIO[slot];
+  if (required !== undefined && best < required) {
+    contrastErrors.push(
+      `✗ ${label} (${bgHex}) 对比度 ${best.toFixed(2)}:1 < 硬门槛 ${required}:1 —— ` +
+        (slot === "primary"
+          ? "primary 是按钮底色, 上面永远压白字; 把该主题的 primary 换成更深一档的色板槽"
+          : "降低该槽亮度, 或让生成器改选深色前景"),
+    );
+    return fg;
+  }
+
   if (best < MIN_RATIO) {
     contrastWarnings.push(
       `⚠ ${label} (${bgHex}) 最优前景对比度仅 ${best.toFixed(2)}:1 < ${MIN_RATIO}:1 (WCAG AA)`,
@@ -199,7 +217,8 @@ function buildThemeColors(t: ThemeDef): Record<string, string> {
         `themes.${t.id}.colors.${fgKey} 不该手写 —— on* 前景色由生成器按对比度自动推导`,
       );
     }
-    merged[fgKey] = deriveForeground(merged[bgKey], `${t.label}.${fgKey}`);
+    // ⚠ 第 2 参传给的是**底色槽名** (不是 on* 名) —— 硬门槛是按槽位配的
+    merged[fgKey] = deriveForeground(merged[bgKey], `${t.label}.${bgKey}`);
   }
   merged.focusRing = merged.primary;
   return merged;
@@ -930,6 +949,15 @@ if (MODE === "contrast") {
 }
 
 const results: string[] = [];
+
+// 硬门槛先拦: 色板本身不合格就别浪费时间生成产出了
+if (contrastErrors.length) {
+  console.error("\n✗ 对比度硬门槛未通过:\n");
+  for (const e of contrastErrors) console.error("  " + e);
+  console.error("\n  修法: 改 design/tokens/design-tokens.json 的 palette / themes, 再跑 tokens:build\n");
+  process.exit(1);
+}
+
 writeOrCheck(OUT_FLUTTER, emitFlutter(), results);
 writeOrCheck(OUT_TS, emitTs(), results);
 syncStaticShell(themeColors[DEFAULT_THEME.id].primary, results);

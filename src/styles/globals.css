@@ -98,6 +98,10 @@
   --palette-teal-500: #2F7D6F;
   --palette-indigo-500: #5C6BC0;
   --palette-neutral-cool-500: #9AA5A0;
+  --palette-spring-800: #2F4620;
+  --palette-summer-800: #16403B;
+  --palette-autumn-800: #5C3113;
+  --palette-winter-800: #4A2222;
 
   /* ---- L1 尺度 ---- */
   /* 密度旋钮: 改这一个数就能整体收紧/放松全站间距 (JS: setProperty('--density', '0.9')) */
@@ -155,8 +159,7 @@
   --radius-40: 2.5rem;
   --radius-full: 9999px;
   --radius-2: 0.125rem;
-  --text-micro: 0.625rem;
-  --text-tiny: 0.75rem;
+  --text-micro: 0.75rem;
   --text-xs: 0.875rem;
   --text-sm: 1rem;
   --text-md: 1.125rem;
@@ -250,7 +253,7 @@
   --card-foreground: #1A1A1A;
   --popover: #FFFFFF;
   --popover-foreground: #1A1A1A;
-  --primary: #4A7C59;
+  --primary: #2D5A3D;
   --primary-foreground: #FFFFFF;
   --secondary: #F7F2EA;
   --secondary-foreground: #1A1A1A;
@@ -262,7 +265,7 @@
   --destructive-foreground: #FFFFFF;
   --border: #D0D0D0;
   --input: #D0D0D0;
-  --ring: #4A7C59;
+  --ring: #2D5A3D;
 
   --background-rgb: 255 251 245;
   --foreground-rgb: 26 26 26;
@@ -270,7 +273,7 @@
   --card-foreground-rgb: 26 26 26;
   --popover-rgb: 255 255 255;
   --popover-foreground-rgb: 26 26 26;
-  --primary-rgb: 74 124 89;
+  --primary-rgb: 45 90 61;
   --primary-foreground-rgb: 255 255 255;
   --secondary-rgb: 247 242 234;
   --secondary-foreground-rgb: 26 26 26;
@@ -282,13 +285,13 @@
   --destructive-foreground-rgb: 255 255 255;
   --border-rgb: 208 208 208;
   --input-rgb: 208 208 208;
-  --ring-rgb: 74 124 89;
+  --ring-rgb: 45 90 61;
   --radius: 0.5rem;
 
   /* ---- L2 语义令牌 (默认主题: 养生绿) ---- */
-  --brand: #4A7C59;
+  --brand: #2D5A3D;
   --brand-light: #A8D5BA;
-  --brand-dark: #2D5A3D;
+  --brand-dark: #234631;
   --brand-surface: #F0F7F2;
   --brand-foreground: #FFFFFF;
   --brand-accent: #E89F4D;
@@ -308,7 +311,7 @@
   --border-default: #D0D0D0;
   --border-strong: #8A8A8A;
   --divider: #EDE6DA;
-  --focus-ring: #4A7C59;
+  --focus-ring: #2D5A3D;
   --success: #2D5A3D;
   --success-light: #A8D5BA;
   --success-surface: #F0F7F2;
@@ -337,16 +340,16 @@
   --graph-line-soft: #EDE6DA;
   --shadow-color: #000000;
   --scrim: #0F0F0F;
-  --chart-1: #4A7C59;
+  --chart-1: #2D5A3D;
   --chart-2: #A8D5BA;
   --chart-3: #E89F4D;
   --chart-4: #1F4E80;
   --chart-5: #8E5BA8;
   --chart-6: #6B6B6B;
 
-  --brand-rgb: 74 124 89;
+  --brand-rgb: 45 90 61;
   --brand-light-rgb: 168 213 186;
-  --brand-dark-rgb: 45 90 61;
+  --brand-dark-rgb: 35 70 49;
   --brand-surface-rgb: 240 247 242;
   --brand-foreground-rgb: 255 255 255;
   --brand-accent-rgb: 232 159 77;
@@ -366,7 +369,7 @@
   --border-default-rgb: 208 208 208;
   --border-strong-rgb: 138 138 138;
   --divider-rgb: 237 230 218;
-  --focus-ring-rgb: 74 124 89;
+  --focus-ring-rgb: 45 90 61;
   --success-rgb: 45 90 61;
   --success-light-rgb: 168 213 186;
   --success-surface-rgb: 240 247 242;
@@ -395,7 +398,7 @@
   --graph-line-soft-rgb: 237 230 218;
   --shadow-color-rgb: 0 0 0;
   --scrim-rgb: 15 15 15;
-  --chart-1-rgb: 74 124 89;
+  --chart-1-rgb: 45 90 61;
   --chart-2-rgb: 168 213 186;
   --chart-3-rgb: 232 159 77;
   --chart-4-rgb: 31 78 128;
@@ -412,7 +415,7 @@
   --card-foreground: #1A1A1A;
   --popover: #FFFFFF;
   --popover-foreground: #1A1A1A;
-  --primary: #5A7D3C;
+  --primary: #3D5A28;
   --primary-foreground: #FFFFFF;
   --secondary: #F7F2EA;
   --secondary-foreground: #1A1A1A;
@@ -424,7 +427,7 @@
   --destructive-foreground: #FFFFFF;
   --border: #D0D0D0;
   --input: #D0D0D0;
-  --ring: #5A7D3C;
+  --ring: #3D5A28;
 
   --background-rgb: 255 251 245;
   --foreground-rgb: 26 26 26;
@@ -432,7 +435,7 @@
   --card-foreground-rgb: 26 26 26;
   --popover-rgb: 255 255 255;
   --popover-foreground-rgb: 26 26 26;
-  --primary-rgb: 90 125 60;
+  --primary-rgb: 61 90 40;
   --primary-foreground-rgb: 255 255 255;
   --secondary-rgb: 247 242 234;
   --secondary-foreground-rgb: 26 26 26;
@@ -444,11 +447,11 @@
   --destructive-foreground-rgb: 255 255 255;
   --border-rgb: 208 208 208;
   --input-rgb: 208 208 208;
-  --ring-rgb: 90 125 60;
+  --ring-rgb: 61 90 40;
   /* 语义层 */
-  --brand: #5A7D3C;
+  --brand: #3D5A28;
   --brand-light: #C3DFA6;
-  --brand-dark: #3D5A28;
+  --brand-dark: #2F4620;
   --brand-surface: #F2F8EB;
   --brand-foreground: #FFFFFF;
   --brand-accent: #B3536C;
@@ -468,7 +471,7 @@
   --border-default: #D0D0D0;
   --border-strong: #8A8A8A;
   --divider: #EDE6DA;
-  --focus-ring: #5A7D3C;
+  --focus-ring: #3D5A28;
   --success: #2D5A3D;
   --success-light: #A8D5BA;
   --success-surface: #F0F7F2;
@@ -497,16 +500,16 @@
   --graph-line-soft: #EDE6DA;
   --shadow-color: #000000;
   --scrim: #0F0F0F;
-  --chart-1: #5A7D3C;
+  --chart-1: #3D5A28;
   --chart-2: #C3DFA6;
   --chart-3: #B3536C;
   --chart-4: #1F4E80;
   --chart-5: #8E5BA8;
   --chart-6: #6B6B6B;
 
-  --brand-rgb: 90 125 60;
+  --brand-rgb: 61 90 40;
   --brand-light-rgb: 195 223 166;
-  --brand-dark-rgb: 61 90 40;
+  --brand-dark-rgb: 47 70 32;
   --brand-surface-rgb: 242 248 235;
   --brand-foreground-rgb: 255 255 255;
   --brand-accent-rgb: 179 83 108;
@@ -526,7 +529,7 @@
   --border-default-rgb: 208 208 208;
   --border-strong-rgb: 138 138 138;
   --divider-rgb: 237 230 218;
-  --focus-ring-rgb: 90 125 60;
+  --focus-ring-rgb: 61 90 40;
   --success-rgb: 45 90 61;
   --success-light-rgb: 168 213 186;
   --success-surface-rgb: 240 247 242;
@@ -555,7 +558,7 @@
   --graph-line-soft-rgb: 237 230 218;
   --shadow-color-rgb: 0 0 0;
   --scrim-rgb: 15 15 15;
-  --chart-1-rgb: 90 125 60;
+  --chart-1-rgb: 61 90 40;
   --chart-2-rgb: 195 223 166;
   --chart-3-rgb: 179 83 108;
   --chart-4-rgb: 31 78 128;
@@ -571,7 +574,7 @@
   --card-foreground: #1A1A1A;
   --popover: #FFFFFF;
   --popover-foreground: #1A1A1A;
-  --primary: #2F7A72;
+  --primary: #1F574F;
   --primary-foreground: #FFFFFF;
   --secondary: #F7F2EA;
   --secondary-foreground: #1A1A1A;
@@ -583,7 +586,7 @@
   --destructive-foreground: #FFFFFF;
   --border: #D0D0D0;
   --input: #D0D0D0;
-  --ring: #2F7A72;
+  --ring: #1F574F;
 
   --background-rgb: 255 251 245;
   --foreground-rgb: 26 26 26;
@@ -591,7 +594,7 @@
   --card-foreground-rgb: 26 26 26;
   --popover-rgb: 255 255 255;
   --popover-foreground-rgb: 26 26 26;
-  --primary-rgb: 47 122 114;
+  --primary-rgb: 31 87 79;
   --primary-foreground-rgb: 255 255 255;
   --secondary-rgb: 247 242 234;
   --secondary-foreground-rgb: 26 26 26;
@@ -603,11 +606,11 @@
   --destructive-foreground-rgb: 255 255 255;
   --border-rgb: 208 208 208;
   --input-rgb: 208 208 208;
-  --ring-rgb: 47 122 114;
+  --ring-rgb: 31 87 79;
   /* 语义层 */
-  --brand: #2F7A72;
+  --brand: #1F574F;
   --brand-light: #A6D6CE;
-  --brand-dark: #1F574F;
+  --brand-dark: #16403B;
   --brand-surface: #EEF7F5;
   --brand-foreground: #FFFFFF;
   --brand-accent: #B07E1E;
@@ -627,7 +630,7 @@
   --border-default: #D0D0D0;
   --border-strong: #8A8A8A;
   --divider: #EDE6DA;
-  --focus-ring: #2F7A72;
+  --focus-ring: #1F574F;
   --success: #2D5A3D;
   --success-light: #A8D5BA;
   --success-surface: #F0F7F2;
@@ -656,16 +659,16 @@
   --graph-line-soft: #EDE6DA;
   --shadow-color: #000000;
   --scrim: #0F0F0F;
-  --chart-1: #2F7A72;
+  --chart-1: #1F574F;
   --chart-2: #A6D6CE;
   --chart-3: #B07E1E;
   --chart-4: #1F4E80;
   --chart-5: #8E5BA8;
   --chart-6: #6B6B6B;
 
-  --brand-rgb: 47 122 114;
+  --brand-rgb: 31 87 79;
   --brand-light-rgb: 166 214 206;
-  --brand-dark-rgb: 31 87 79;
+  --brand-dark-rgb: 22 64 59;
   --brand-surface-rgb: 238 247 245;
   --brand-foreground-rgb: 255 255 255;
   --brand-accent-rgb: 176 126 30;
@@ -685,7 +688,7 @@
   --border-default-rgb: 208 208 208;
   --border-strong-rgb: 138 138 138;
   --divider-rgb: 237 230 218;
-  --focus-ring-rgb: 47 122 114;
+  --focus-ring-rgb: 31 87 79;
   --success-rgb: 45 90 61;
   --success-light-rgb: 168 213 186;
   --success-surface-rgb: 240 247 242;
@@ -714,7 +717,7 @@
   --graph-line-soft-rgb: 237 230 218;
   --shadow-color-rgb: 0 0 0;
   --scrim-rgb: 15 15 15;
-  --chart-1-rgb: 47 122 114;
+  --chart-1-rgb: 31 87 79;
   --chart-2-rgb: 166 214 206;
   --chart-3-rgb: 176 126 30;
   --chart-4-rgb: 31 78 128;
@@ -730,7 +733,7 @@
   --card-foreground: #1A1A1A;
   --popover: #FFFFFF;
   --popover-foreground: #1A1A1A;
-  --primary: #A65E24;
+  --primary: #7A421A;
   --primary-foreground: #FFFFFF;
   --secondary: #F7F2EA;
   --secondary-foreground: #1A1A1A;
@@ -742,7 +745,7 @@
   --destructive-foreground: #FFFFFF;
   --border: #D0D0D0;
   --input: #D0D0D0;
-  --ring: #A65E24;
+  --ring: #7A421A;
 
   --background-rgb: 255 251 245;
   --foreground-rgb: 26 26 26;
@@ -750,7 +753,7 @@
   --card-foreground-rgb: 26 26 26;
   --popover-rgb: 255 255 255;
   --popover-foreground-rgb: 26 26 26;
-  --primary-rgb: 166 94 36;
+  --primary-rgb: 122 66 26;
   --primary-foreground-rgb: 255 255 255;
   --secondary-rgb: 247 242 234;
   --secondary-foreground-rgb: 26 26 26;
@@ -762,11 +765,11 @@
   --destructive-foreground-rgb: 255 255 255;
   --border-rgb: 208 208 208;
   --input-rgb: 208 208 208;
-  --ring-rgb: 166 94 36;
+  --ring-rgb: 122 66 26;
   /* 语义层 */
-  --brand: #A65E24;
+  --brand: #7A421A;
   --brand-light: #E8C79E;
-  --brand-dark: #7A421A;
+  --brand-dark: #5C3113;
   --brand-surface: #FBF2E7;
   --brand-foreground: #FFFFFF;
   --brand-accent: #A9791F;
@@ -786,7 +789,7 @@
   --border-default: #D0D0D0;
   --border-strong: #8A8A8A;
   --divider: #EDE6DA;
-  --focus-ring: #A65E24;
+  --focus-ring: #7A421A;
   --success: #2D5A3D;
   --success-light: #A8D5BA;
   --success-surface: #F0F7F2;
@@ -815,16 +818,16 @@
   --graph-line-soft: #EDE6DA;
   --shadow-color: #000000;
   --scrim: #0F0F0F;
-  --chart-1: #A65E24;
+  --chart-1: #7A421A;
   --chart-2: #E8C79E;
   --chart-3: #A9791F;
   --chart-4: #1F4E80;
   --chart-5: #8E5BA8;
   --chart-6: #6B6B6B;
 
-  --brand-rgb: 166 94 36;
+  --brand-rgb: 122 66 26;
   --brand-light-rgb: 232 199 158;
-  --brand-dark-rgb: 122 66 26;
+  --brand-dark-rgb: 92 49 19;
   --brand-surface-rgb: 251 242 231;
   --brand-foreground-rgb: 255 255 255;
   --brand-accent-rgb: 169 121 31;
@@ -844,7 +847,7 @@
   --border-default-rgb: 208 208 208;
   --border-strong-rgb: 138 138 138;
   --divider-rgb: 237 230 218;
-  --focus-ring-rgb: 166 94 36;
+  --focus-ring-rgb: 122 66 26;
   --success-rgb: 45 90 61;
   --success-light-rgb: 168 213 186;
   --success-surface-rgb: 240 247 242;
@@ -873,7 +876,7 @@
   --graph-line-soft-rgb: 237 230 218;
   --shadow-color-rgb: 0 0 0;
   --scrim-rgb: 15 15 15;
-  --chart-1-rgb: 166 94 36;
+  --chart-1-rgb: 122 66 26;
   --chart-2-rgb: 232 199 158;
   --chart-3-rgb: 169 121 31;
   --chart-4-rgb: 31 78 128;
@@ -889,7 +892,7 @@
   --card-foreground: #1A1A1A;
   --popover: #FFFFFF;
   --popover-foreground: #1A1A1A;
-  --primary: #8C4A4A;
+  --primary: #632F2F;
   --primary-foreground: #FFFFFF;
   --secondary: #F7F2EA;
   --secondary-foreground: #1A1A1A;
@@ -901,7 +904,7 @@
   --destructive-foreground: #FFFFFF;
   --border: #D0D0D0;
   --input: #D0D0D0;
-  --ring: #8C4A4A;
+  --ring: #632F2F;
 
   --background-rgb: 255 251 245;
   --foreground-rgb: 26 26 26;
@@ -909,7 +912,7 @@
   --card-foreground-rgb: 26 26 26;
   --popover-rgb: 255 255 255;
   --popover-foreground-rgb: 26 26 26;
-  --primary-rgb: 140 74 74;
+  --primary-rgb: 99 47 47;
   --primary-foreground-rgb: 255 255 255;
   --secondary-rgb: 247 242 234;
   --secondary-foreground-rgb: 26 26 26;
@@ -921,11 +924,11 @@
   --destructive-foreground-rgb: 255 255 255;
   --border-rgb: 208 208 208;
   --input-rgb: 208 208 208;
-  --ring-rgb: 140 74 74;
+  --ring-rgb: 99 47 47;
   /* 语义层 */
-  --brand: #8C4A4A;
+  --brand: #632F2F;
   --brand-light: #DFB9B9;
-  --brand-dark: #632F2F;
+  --brand-dark: #4A2222;
   --brand-surface: #FAF1F1;
   --brand-foreground: #FFFFFF;
   --brand-accent: #4A6E8C;
@@ -945,7 +948,7 @@
   --border-default: #D0D0D0;
   --border-strong: #8A8A8A;
   --divider: #EDE6DA;
-  --focus-ring: #8C4A4A;
+  --focus-ring: #632F2F;
   --success: #2D5A3D;
   --success-light: #A8D5BA;
   --success-surface: #F0F7F2;
@@ -974,16 +977,16 @@
   --graph-line-soft: #EDE6DA;
   --shadow-color: #000000;
   --scrim: #0F0F0F;
-  --chart-1: #8C4A4A;
+  --chart-1: #632F2F;
   --chart-2: #DFB9B9;
   --chart-3: #4A6E8C;
   --chart-4: #1F4E80;
   --chart-5: #8E5BA8;
   --chart-6: #6B6B6B;
 
-  --brand-rgb: 140 74 74;
+  --brand-rgb: 99 47 47;
   --brand-light-rgb: 223 185 185;
-  --brand-dark-rgb: 99 47 47;
+  --brand-dark-rgb: 74 34 34;
   --brand-surface-rgb: 250 241 241;
   --brand-foreground-rgb: 255 255 255;
   --brand-accent-rgb: 74 110 140;
@@ -1003,7 +1006,7 @@
   --border-default-rgb: 208 208 208;
   --border-strong-rgb: 138 138 138;
   --divider-rgb: 237 230 218;
-  --focus-ring-rgb: 140 74 74;
+  --focus-ring-rgb: 99 47 47;
   --success-rgb: 45 90 61;
   --success-light-rgb: 168 213 186;
   --success-surface-rgb: 240 247 242;
@@ -1032,7 +1035,7 @@
   --graph-line-soft-rgb: 237 230 218;
   --shadow-color-rgb: 0 0 0;
   --scrim-rgb: 15 15 15;
-  --chart-1-rgb: 140 74 74;
+  --chart-1-rgb: 99 47 47;
   --chart-2-rgb: 223 185 185;
   --chart-3-rgb: 74 110 140;
   --chart-4-rgb: 31 78 128;

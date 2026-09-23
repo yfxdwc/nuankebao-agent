@@ -104,6 +104,10 @@ abstract final class AppPalette {
   static const Color teal500 = Color(0xFF2F7D6F);
   static const Color indigo500 = Color(0xFF5C6BC0);
   static const Color neutralCool500 = Color(0xFF9AA5A0);
+  static const Color spring800 = Color(0xFF2F4620);
+  static const Color summer800 = Color(0xFF16403B);
+  static const Color autumn800 = Color(0xFF5C3113);
+  static const Color winter800 = Color(0xFF4A2222);
 }
 
 /// L1 尺度 —— 间距 (中老年友好: 主档 8/12/16, 触控留白充足)
@@ -188,8 +192,7 @@ abstract final class AppRadius {
 
 /// L1 尺度 —— 字号 (中老年: 正文 18 起步, Material 默认是 14)
 abstract final class AppType {
-  static const double micro = 10.0;
-  static const double tiny = 12.0;
+  static const double micro = 12.0;
   static const double xs = 14.0;
   static const double sm = 16.0;
   static const double md = 18.0;
@@ -541,7 +544,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFF4A7C59),
+    focusRing: Color(0xFF2D5A3D),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -581,9 +584,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFF4A7C59),
+    primary: Color(0xFF2D5A3D),
     primaryLight: Color(0xFFA8D5BA),
-    primaryDark: Color(0xFF2D5A3D),
+    primaryDark: Color(0xFF234631),
     primarySurface: Color(0xFFF0F7F2),
     accent: Color(0xFFE89F4D),
     accentLight: Color(0xFFFAE9D0),
@@ -615,7 +618,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFF5A7D3C),
+    focusRing: Color(0xFF3D5A28),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -655,9 +658,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFF5A7D3C),
+    primary: Color(0xFF3D5A28),
     primaryLight: Color(0xFFC3DFA6),
-    primaryDark: Color(0xFF3D5A28),
+    primaryDark: Color(0xFF2F4620),
     primarySurface: Color(0xFFF2F8EB),
     accent: Color(0xFFB3536C),
     accentLight: Color(0xFFF0D2DB),
@@ -689,7 +692,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFF2F7A72),
+    focusRing: Color(0xFF1F574F),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -729,9 +732,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFF2F7A72),
+    primary: Color(0xFF1F574F),
     primaryLight: Color(0xFFA6D6CE),
-    primaryDark: Color(0xFF1F574F),
+    primaryDark: Color(0xFF16403B),
     primarySurface: Color(0xFFEEF7F5),
     accent: Color(0xFFB07E1E),
     accentLight: Color(0xFFF0E0B8),
@@ -763,7 +766,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFFA65E24),
+    focusRing: Color(0xFF7A421A),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -803,9 +806,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFFA65E24),
+    primary: Color(0xFF7A421A),
     primaryLight: Color(0xFFE8C79E),
-    primaryDark: Color(0xFF7A421A),
+    primaryDark: Color(0xFF5C3113),
     primarySurface: Color(0xFFFBF2E7),
     accent: Color(0xFFA9791F),
     accentLight: Color(0xFFEFDDAE),
@@ -837,7 +840,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFF8C4A4A),
+    focusRing: Color(0xFF632F2F),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -877,9 +880,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFF8C4A4A),
+    primary: Color(0xFF632F2F),
     primaryLight: Color(0xFFDFB9B9),
-    primaryDark: Color(0xFF632F2F),
+    primaryDark: Color(0xFF4A2222),
     primarySurface: Color(0xFFFAF1F1),
     accent: Color(0xFF4A6E8C),
     accentLight: Color(0xFFCBDCE9),

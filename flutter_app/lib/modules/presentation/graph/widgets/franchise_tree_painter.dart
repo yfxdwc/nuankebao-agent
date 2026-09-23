@@ -673,7 +673,7 @@ class FranchiseTreePainter extends CustomPainter {
       text: TextSpan(
         text: label,
         style: TextStyle(
-          fontSize: AppType.tiny * boost,
+          fontSize: AppType.micro * boost,
           color: AppTheme.accent,
           fontWeight: FontWeight.w600,
         ),
@@ -705,7 +705,7 @@ class FranchiseTreePainter extends CustomPainter {
         text: TextSpan(
           text: hint,
           style: TextStyle(
-            fontSize: AppType.tiny * boost,
+            fontSize: AppType.micro * boost,
             color: AppTheme.textSecondary,
           ),
         ),
@@ -811,7 +811,7 @@ class FranchiseTreePainter extends CustomPainter {
         text: TextSpan(
           text: '⏳ ${p.label}',
           style: TextStyle(
-            fontSize: AppType.tiny * boost,
+            fontSize: AppType.micro * boost,
             color: ghostColor,
             fontWeight: FontWeight.w600,
           ),
@@ -1234,7 +1234,7 @@ class FranchiseTreePainter extends CustomPainter {
         text: TextSpan(
           text: '(我)',
           style: TextStyle(
-            fontSize: AppType.tiny,
+            fontSize: AppType.micro,
             color: isFaded
                 ? AppTheme.primary.withOpacity(0.5)
                 : AppTheme.primary,
@@ -1264,7 +1264,7 @@ class FranchiseTreePainter extends CustomPainter {
         text: TextSpan(
           text: node.placementSide == 'left' ? '← A线' : 'B线 →',
           style: TextStyle(
-            fontSize: AppType.tiny,
+            fontSize: AppType.micro,
             color: node.placementSide == 'left'
                 ? (isFaded
                     ? AppTheme.franchiseeA.withOpacity(0.4)

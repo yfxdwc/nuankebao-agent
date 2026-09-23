@@ -113,7 +113,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   // 诊断信息: 当前连的后端地址 (登录不上时对照确认装对 APK)
                   Text(
                     ApiClient.baseUrl,
-                    style: TextStyle(fontSize: AppType.tiny, color: Colors.grey.shade500),
+                    style: TextStyle(fontSize: AppType.micro, color: Colors.grey.shade500),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -196,7 +196,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: AppSpace.s12),
         const Text(
           '老账号忘记密码请联系管理员重置; 新用户需要朋友的推荐码才能注册',
-          style: TextStyle(fontSize: AppType.tiny, color: Colors.black45),
+          style: TextStyle(fontSize: AppType.micro, color: Colors.black45),
           textAlign: TextAlign.center,
         ),
       ],
