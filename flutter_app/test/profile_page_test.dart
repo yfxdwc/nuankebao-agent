@@ -188,27 +188,46 @@ void main() {
     final container = await _container(_fullProfile());
     await _pumpProfile(tester, container);
 
-    // 显示与存储 (字号档位)
+    // ⚠ 这个页面比视口高很多, ListView 只构建 视口+缓存区 内的 item ——
+    //   所以下面一律用 scrollUntilVisible 显式滚到目标, 不靠"恰好落在缓存区里"。
+    //   (2026-09-23 加了「主题配色」卡后, 原先靠缓存区侥幸通过的断言就全断了)
+    Future<void> see(String text) async {
+      await tester.scrollUntilVisible(
+        find.text(text),
+        120,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 40,
+      );
+      expect(find.text(text), findsOneWidget, reason: '滚到「$text」后应可见');
+    }
+
+    // 显示与存储 (字号档位) —— 首屏可见
     expect(find.text('显示与存储'), findsOneWidget);
     expect(find.text('标准'), findsOneWidget);
-    expect(find.text('大'), findsOneWidget);
-    expect(find.text('特大'), findsOneWidget);
-    expect(find.text('清理图片缓存'), findsOneWidget);
+
+    // 主题配色 (2026-09-23 换肤入口)
+    await see('主题配色');
+    await see('养生绿');
+    await see('春 · 新芽');
+
+    // 字号档位下半 + 清缓存
+    await see('特大');
+    await see('清理图片缓存');
 
     // 账号与安全
-    expect(find.text('账号与安全'), findsOneWidget);
-    expect(find.text('30 天 (期间不用重复登录)'), findsOneWidget);
-    expect(find.text('#1 · 销售员'), findsOneWidget);
+    await see('账号与安全');
+    await see('30 天 (期间不用重复登录)');
+    await see('#1 · 销售员');
 
     // 关于与帮助
-    expect(find.text('关于与帮助'), findsOneWidget);
+    await see('关于与帮助');
     // 2026-09-21 主人: 独立的「检查更新」入口已并进「当前版本」行 (点一下 = 检查更新)
-    expect(find.text('当前版本'), findsOneWidget);
-    expect(find.text('使用帮助 / 数据安全'), findsOneWidget);
-    expect(find.text('网络自检'), findsOneWidget);
+    await see('当前版本');
+    await see('使用帮助 / 数据安全');
+    await see('网络自检');
 
     // 退出登录
-    expect(find.text('退出登录'), findsOneWidget);
+    await see('退出登录');
   });
 
   testWidgets('点「特大」→ 字号设置真被改掉', (tester) async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 class StatCard extends StatelessWidget {
   final String label;
   final int value;
@@ -22,7 +23,7 @@ class StatCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpace.s16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -30,15 +31,15 @@ class StatCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(label, style: const TextStyle(color: Colors.black54, fontSize: 13)),
-                  Icon(icon, color: color, size: 20),
+                  Text(label, style: const TextStyle(color: Colors.black54, fontSize: AppType.xs)),
+                  Icon(icon, color: color, size: AppSpace.s20),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Text(
                 value.toString(),
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: AppType.xl,
                   fontWeight: FontWeight.bold,
                   color: color,
                 ),

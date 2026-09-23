@@ -35,6 +35,7 @@ import '../../modules/salon/screens/salon_form_page.dart';
 import '../../modules/salon/screens/salon_manage_page.dart';
 import '../../modules/salon/screens/salon_guests_page.dart';
 
+import '../theme/tokens.g.dart';
 /// 未登录也能访问的公开路由 (改这里 = 改鉴权门 → 必须同步改 test/app_router_test.dart)
 ///
 /// 2026-09-21 修 bug: 加上 `/register` 时**漏了这个白名单** → redirect 把未登录用户
@@ -69,26 +70,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       appBar: AppBar(title: const Text('页面不存在'), toolbarHeight: 64),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpace.s24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(
                 Icons.explore_off_outlined,
-                size: 56,
-                color: Color(0xFF4A4A4A),
+                size: AppSize.avatarMd,
+                color: AppColors.textSecondary,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               Text(
                 '找不到这个页面\n${state.uri}',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, color: Color(0xFF4A4A4A)),
+                style: const TextStyle(fontSize: AppType.sm, color: AppColors.textSecondary),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpace.s20),
               FilledButton.icon(
                 onPressed: () => context.go('/customers'),
                 icon: const Icon(Icons.home_outlined, size: 22),
-                label: const Text('回客户页', style: TextStyle(fontSize: 18)),
+                label: const Text('回客户页', style: TextStyle(fontSize: AppType.md)),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(200, 56),
                 ),
@@ -277,7 +278,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             return Scaffold(
               appBar: AppBar(title: const Text('错误'), toolbarHeight: 64),
               body: const Center(
-                child: Text('请从客户详情页"添加记录"进入', style: TextStyle(fontSize: 18)),
+                child: Text('请从客户详情页"添加记录"进入', style: TextStyle(fontSize: AppType.md)),
               ),
             );
           }

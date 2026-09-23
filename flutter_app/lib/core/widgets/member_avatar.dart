@@ -20,8 +20,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'user_avatar.dart';
 
+import '../theme/tokens.g.dart';
 /// 会员金 (与 AppTheme.accent 区分开: 这是"付费"的信号色, 不是强调色)
-const Color kMemberGold = Color(0xFFC89A2B);
+const Color kMemberGold = AppColors.memberGold;
 
 /// 👑 会员角标 (右上角) —— 会员标识的**形状**编码, 全 App 一套
 ///
@@ -67,10 +68,10 @@ class MemberRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(2),
+      padding: const EdgeInsets.all(AppSpace.s2),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: kMemberGold, width: 2),
+        border: Border.all(color: kMemberGold, width: AppSpace.s2),
       ),
       child: child,
     );
@@ -136,9 +137,9 @@ class _NoAccountAvatar extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F1EF),
+        color: AppColors.surfaceSubtle,
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFBFC6C1), width: 1.5),
+        border: Border.all(color: AppColors.border, width: 1.5),
       ),
       child: Text(
         initial,

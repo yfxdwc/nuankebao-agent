@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers/service_providers.dart';
 import '../../services/prediction_service.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 /// 复购预测小卡片 (在客户详情 / 跟进页面显示)
 class RepurchasePredictionCard extends ConsumerStatefulWidget {
   final String customerId;
@@ -55,7 +56,7 @@ class _RepurchasePredictionCardState extends ConsumerState<RepurchasePredictionC
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -65,29 +66,29 @@ class _RepurchasePredictionCardState extends ConsumerState<RepurchasePredictionC
                 Row(
                   children: const [
                     Icon(Icons.trending_up, color: Colors.indigo),
-                    SizedBox(width: 8),
-                    Text('复购预测', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                    SizedBox(width: AppSpace.s8),
+                    Text('复购预测', style: TextStyle(fontWeight: FontWeight.w600, fontSize: AppType.sm)),
                   ],
                 ),
                 if (_data != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: AppSpace.s2),
                     decoration: BoxDecoration(
                       color: _confidenceColor().withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(AppRadius.r4),
                     ),
                     child: Text(
                       '置信度 ${_data!.confidence}',
-                      style: TextStyle(fontSize: 11, color: _confidenceColor()),
+                      style: TextStyle(fontSize: AppType.tiny, color: _confidenceColor()),
                     ),
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             if (_loading)
-              const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+              const Center(child: Padding(padding: EdgeInsets.all(AppSpace.s16), child: CircularProgressIndicator()))
             else if (_error != null)
-              Text('加载失败: $_error', style: const TextStyle(color: Colors.red, fontSize: 12))
+              Text('加载失败: $_error', style: const TextStyle(color: Colors.red, fontSize: AppType.tiny))
             else if (_data == null)
               const Text('暂无数据', style: TextStyle(color: Colors.black54))
             else ...[
@@ -97,34 +98,34 @@ class _RepurchasePredictionCardState extends ConsumerState<RepurchasePredictionC
                 Text('平均复购周期: ${_data!.avgIntervalDays} 天'),
               if (_data!.predictedNextVisit != null)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.s4),
                   child: Text(
                     '预计下次: ${_data!.predictedNextVisit}',
                     style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.indigo),
                   ),
                 ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(AppSpace.s10),
                 decoration: BoxDecoration(
                   color: Colors.indigo.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(AppRadius.r6),
                 ),
-                child: Text(_data!.reason, style: const TextStyle(fontSize: 13)),
+                child: Text(_data!.reason, style: const TextStyle(fontSize: AppType.xs)),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Row(
                 children: [
                   if (_data!.daysUntilPredicted != null && _data!.daysUntilPredicted! <= 7)
                     OutlinedButton.icon(
                       onPressed: () => context.push('/follow-ups?customerId=${_data!.customerId}'),
-                      icon: const Icon(Icons.add, size: 16),
+                      icon: const Icon(Icons.add, size: AppSpace.s16),
                       label: const Text('创建跟进'),
                     ),
                   const Spacer(),
                   IconButton(
                     onPressed: _load,
-                    icon: const Icon(Icons.refresh, size: 18),
+                    icon: const Icon(Icons.refresh, size: AppSpace.s18),
                   ),
                 ],
               ),
@@ -210,7 +211,7 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -220,8 +221,8 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
                 Row(
                   children: const [
                     Icon(Icons.analytics, color: Colors.deepPurple),
-                    SizedBox(width: 8),
-                    Text('效果分析', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                    SizedBox(width: AppSpace.s8),
+                    Text('效果分析', style: TextStyle(fontWeight: FontWeight.w600, fontSize: AppType.sm)),
                   ],
                 ),
                 if (_data != null)
@@ -229,26 +230,26 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
                     children: [
                       if (_data!.aiMock)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s6, vertical: AppSpace.s2),
                           decoration: BoxDecoration(
                             color: Colors.amber.shade100,
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(AppRadius.r4),
                           ),
-                          child: const Text('Mock', style: TextStyle(fontSize: 10)),
+                          child: const Text('Mock', style: TextStyle(fontSize: AppType.micro)),
                         ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: AppSpace.s4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s6, vertical: AppSpace.s2),
                         decoration: BoxDecoration(
                           color: _trendColor().withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(AppRadius.r4),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(_trendIcon(), color: _trendColor(), size: 12),
-                            const SizedBox(width: 2),
-                            Text(_trendLabel(), style: TextStyle(fontSize: 10, color: _trendColor())),
+                            Icon(_trendIcon(), color: _trendColor(), size: AppSpace.s12),
+                            const SizedBox(width: AppSpace.s2),
+                            Text(_trendLabel(), style: TextStyle(fontSize: AppType.micro, color: _trendColor())),
                           ],
                         ),
                       ),
@@ -256,38 +257,38 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             if (_loading)
-              const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+              const Center(child: Padding(padding: EdgeInsets.all(AppSpace.s16), child: CircularProgressIndicator()))
             else if (_error != null)
-              Text('加载失败: $_error', style: const TextStyle(color: Colors.red, fontSize: 12))
+              Text('加载失败: $_error', style: const TextStyle(color: Colors.red, fontSize: AppType.tiny))
             else if (_data == null)
               const Text('暂无数据', style: TextStyle(color: Colors.black54))
             else ...[
               Text(
                 '共 ${_data!.totalVisits} 次到店',
-                style: const TextStyle(fontSize: 12, color: Colors.black54),
+                style: const TextStyle(fontSize: AppType.tiny, color: Colors.black54),
               ),
               if (_data!.dateFrom != null)
                 Text(
                   '时间: ${_data!.dateFrom} ~ ${_data!.dateTo}',
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  style: const TextStyle(fontSize: AppType.tiny, color: Colors.black54),
                 ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(AppSpace.s10),
                 decoration: BoxDecoration(
                   color: Colors.deepPurple.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(AppRadius.r6),
                 ),
-                child: Text(_data!.aiSummary, style: const TextStyle(fontSize: 13)),
+                child: Text(_data!.aiSummary, style: const TextStyle(fontSize: AppType.xs)),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Align(
                 alignment: Alignment.centerRight,
                 child: IconButton(
                   onPressed: _load,
-                  icon: const Icon(Icons.refresh, size: 18),
+                  icon: const Icon(Icons.refresh, size: AppSpace.s18),
                 ),
               ),
             ],

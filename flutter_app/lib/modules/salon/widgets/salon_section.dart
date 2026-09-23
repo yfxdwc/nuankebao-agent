@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
+import '../../../core/theme/tokens.g.dart';
 /// 白色卡片区块: 标题行 (图标 + 标题) + 内容, 可带右侧 trailing
 class SalonSection extends StatelessWidget {
   final String title;
@@ -30,14 +31,14 @@ class SalonSection extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Icon(icon, size: 26, color: AppTheme.primary),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
                     title,
@@ -50,7 +51,7 @@ class SalonSection extends StatelessWidget {
                 if (trailing != null) trailing!,
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s10),
             child,
           ],
         ),
@@ -80,12 +81,12 @@ class SalonInfoRow extends StatelessWidget {
     if (text == null || text.isEmpty) return const SizedBox.shrink();
 
     final row = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, size: 22, color: AppTheme.textSecondary),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpace.s8),
           Text(
             label,
             style: const TextStyle(
@@ -93,7 +94,7 @@ class SalonInfoRow extends StatelessWidget {
               color: AppTheme.textSecondary,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpace.s12),
           Expanded(
             child: Text(
               text,
@@ -105,7 +106,7 @@ class SalonInfoRow extends StatelessWidget {
             ),
           ),
           if (onTap != null) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: AppSpace.s4),
             const Icon(Icons.chevron_right, size: 24, color: AppTheme.textSecondary),
           ],
         ],
@@ -115,7 +116,7 @@ class SalonInfoRow extends StatelessWidget {
     if (onTap == null) return row;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AppRadius.r10),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 56),
         child: row,

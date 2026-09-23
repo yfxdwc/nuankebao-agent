@@ -24,6 +24,7 @@ import '../core/widgets/member_avatar.dart';
 import 'admin_reparent_sheet.dart';
 import 'admin_users_graph.dart';
 
+import '../core/theme/tokens.g.dart';
 class AdminUsersPage extends ConsumerStatefulWidget {
   const AdminUsersPage({super.key});
 
@@ -79,7 +80,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                 '根没有上级, 所以不需要三方确认 (后续节点照旧要走确认)。',
                 style: const TextStyle(fontSize: AppTheme.fontSm),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextField(
                 controller: ctrl,
                 autofocus: true,
@@ -137,7 +138,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
       showDragHandle: true,
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s20, 4, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,7 +151,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                     size: 56,
                     isMember: u.member.isMember,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpace.s12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,7 +163,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpace.s2),
                         Text(
                           _memberText(u),
                           style: TextStyle(
@@ -178,14 +179,14 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               _kv('手机号', u.phoneMasked.isEmpty ? '—' : u.phoneMasked),
               _kv('推荐码', u.referralCode ?? '—'),
               _kv('账号角色', u.isAdmin ? '系统管理员' : '销售员'),
               _kv('加盟状态', u.isJoined ? '已加盟 (节点 #${u.franchiseeId})' : '未加盟'),
               _kv('注册时间', u.createdDate.isEmpty ? '—' : u.createdDate),
               if (!u.isJoined) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpace.s16),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
@@ -200,7 +201,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
               ],
               // 已加盟 → 节点操作 (改上层). 这里找不到节点行 (脏数据) 就不显示, 免得点了报错
               if (u.isJoined && _nodeOfUser(u) != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpace.s16),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -227,7 +228,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
       showDragHandle: true,
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s20, 4, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,7 +240,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               _kv('节点编号', '#${n.fid}'),
               if (n.accountName != null) _kv('账号', n.accountName!),
               _kv(
@@ -251,7 +252,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
               _kv('位置', n.isRoot ? '根节点 (没有上级)' : '第 ${n.depth + 1} 层'),
               _kv('会员', n.member ? '会员' : '免费'),
               _kv('账号状态', n.hasAccount ? '有账号' : '无账号 (历史/脚本站的节点)'),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               if (n.hasAccount)
                 SizedBox(
                   width: double.infinity,
@@ -311,12 +312,12 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   }
 
   Widget _kv(String k, String v) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.only(bottom: AppSpace.s8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 76,
+              width: AppSpace.s76,
               child: Text(
                 k,
                 style: const TextStyle(
@@ -373,7 +374,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
             children: [
               _summaryBar(s),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                padding: const EdgeInsets.fromLTRB(AppSpace.s16, 8, 16, 8),
                 child: SegmentedButton<_View>(
                   segments: const [
                     ButtonSegment(
@@ -393,12 +394,12 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
               // 多棵树时给一句方向提示: 中老年用户不会自己想到"往右拖还有树"
               if (_view == _View.graph && s.roots > 1)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                  padding: const EdgeInsets.fromLTRB(AppSpace.s16, 0, 16, 6),
                   child: Row(
                     children: [
                       const Icon(Icons.swipe_outlined,
                           size: 18, color: AppTheme.textSecondary),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: AppSpace.s6),
                       Expanded(
                         child: Text(
                           '图谱里有 ${s.roots} 棵加盟树 (不同系统 / 不同枝) · 左右拖动看其它树',
@@ -431,8 +432,8 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                           // 两个视图按钮 (中老年用户不熟双指缩放复位, 得给按钮):
                           //   适应屏幕 = 看整张图 (结构) / 回到树根 = 回 1:1 看名字
                           Positioned(
-                            right: 12,
-                            bottom: 12,
+                            right: AppSpace.s12,
+                            bottom: AppSpace.s12,
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -445,7 +446,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                                   }),
                                   child: const Icon(Icons.zoom_out_map),
                                 ),
-                                const SizedBox(height: 10),
+                                const SizedBox(height: AppSpace.s10),
                                 FloatingActionButton.small(
                                   heroTag: 'admin-users-graph-root',
                                   tooltip: '回到树根 (1:1 看名字)',
@@ -481,11 +482,11 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
     if (s.nodesWithoutAccount > 0) parts.add('树里 ${s.nodesWithoutAccount} 个无账号节点');
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s14, vertical: AppSpace.s10),
       decoration: BoxDecoration(
         color: AppTheme.primary.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.r10),
       ),
       child: Text(
         parts.join(' · '),
@@ -509,7 +510,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
           return InkWell(
             onTap: () => _showUserSheet(u),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s12),
               child: Row(
                 children: [
                   MemberAvatar(
@@ -518,7 +519,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                     size: 48,
                     isMember: u.member.isMember,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpace.s12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,12 +538,12 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                               ),
                             ),
                             if (u.isAdmin) ...[
-                              const SizedBox(width: 6),
+                              const SizedBox(width: AppSpace.s6),
                               _chip('管理员', AppTheme.danger),
                             ],
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: AppSpace.s4),
                         Text(
                           [
                             if (u.phoneMasked.isNotEmpty) u.phoneMasked,
@@ -559,7 +560,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpace.s8),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -571,14 +572,14 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                         TextButton(
                           onPressed: _busy == u.id ? null : () => _buildRoot(u),
                           style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpace.s6),
                             minimumSize: const Size(0, 32),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           child: _busy == u.id
                               ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
+                                  width: AppSpace.s16,
+                                  height: AppSpace.s16,
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Text(
@@ -598,10 +599,10 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   }
 
   Widget _chip(String text, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: AppSpace.s2),
         decoration: BoxDecoration(
           color: color.withOpacity(0.14),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.r10),
         ),
         child: Text(
           text,

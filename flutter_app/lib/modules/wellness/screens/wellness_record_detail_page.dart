@@ -14,6 +14,7 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class WellnessRecordDetailPage extends ConsumerWidget {
   final String recordId;
   const WellnessRecordDetailPage({super.key, required this.recordId});
@@ -59,28 +60,28 @@ class WellnessRecordDetailPage extends ConsumerWidget {
           .name;
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpace.s16),
       children: [
         // 头部
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Container(
-                      width: 64,
-                      height: 64,
+                      width: AppSpace.s64,
+                      height: AppSpace.s64,
                       decoration: BoxDecoration(
                         color: AppTheme.accent.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(32),
+                        borderRadius: BorderRadius.circular(AppRadius.r32),
                       ),
                       child: const Icon(Icons.favorite, color: AppTheme.accent, size: 36),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: AppSpace.s16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,7 +93,7 @@ class WellnessRecordDetailPage extends ConsumerWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: AppSpace.s4),
                           Text(
                             dateFmt.format(DateTime.parse(r.serviceDate)),
                             style: const TextStyle(
@@ -109,7 +110,7 @@ class WellnessRecordDetailPage extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.s16),
 
         // 部位
         if (bodyPartNames.isNotEmpty) ...[
@@ -117,7 +118,7 @@ class WellnessRecordDetailPage extends ConsumerWidget {
           Card(
             margin: EdgeInsets.zero,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpace.s16),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -128,7 +129,7 @@ class WellnessRecordDetailPage extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s16),
         ],
 
         // 理疗前状态
@@ -136,7 +137,7 @@ class WellnessRecordDetailPage extends ConsumerWidget {
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             child: Column(
               children: [
                 _statRow('疼痛', '${r.preCondition['pain_level'] ?? '-'}'),
@@ -146,14 +147,14 @@ class WellnessRecordDetailPage extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.s16),
 
         // 理疗后效果
         _section('理疗后效果'),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             child: Column(
               children: [
                 _statRow('疼痛', '${r.postCondition['pain_level'] ?? '-'}'),
@@ -163,21 +164,21 @@ class WellnessRecordDetailPage extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.s16),
 
         if (r.processNote != null && r.processNote!.isNotEmpty) ...[
           _section('操作过程'),
           Card(
             margin: EdgeInsets.zero,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpace.s16),
               child: Text(
                 r.processNote!,
                 style: const TextStyle(fontSize: AppTheme.fontMd),
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s16),
         ],
 
         if (r.customerFeedback != null && r.customerFeedback!.isNotEmpty) ...[
@@ -185,14 +186,14 @@ class WellnessRecordDetailPage extends ConsumerWidget {
           Card(
             margin: EdgeInsets.zero,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpace.s16),
               child: Text(
                 r.customerFeedback!,
                 style: const TextStyle(fontSize: AppTheme.fontMd),
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s16),
         ],
 
         if (r.photos.isNotEmpty) ...[
@@ -200,7 +201,7 @@ class WellnessRecordDetailPage extends ConsumerWidget {
           Card(
             margin: EdgeInsets.zero,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpace.s16),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -211,15 +212,15 @@ class WellnessRecordDetailPage extends ConsumerWidget {
                       ? url
                       : '${ApiClient.baseOrigin}$url';
                   return ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(AppRadius.r8),
                     child: Image.network(
                       fullUrl,
-                      width: 100,
-                      height: 100,
+                      width: AppSpace.s100,
+                      height: AppSpace.s100,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
-                        width: 100,
-                        height: 100,
+                        width: AppSpace.s100,
+                        height: AppSpace.s100,
                         color: AppTheme.bgWarm,
                         child: const Icon(Icons.broken_image),
                       ),
@@ -235,7 +236,7 @@ class WellnessRecordDetailPage extends ConsumerWidget {
   }
 
   Widget _section(String title) => Padding(
-        padding: const EdgeInsets.only(bottom: 8, top: 4),
+        padding: const EdgeInsets.only(bottom: AppSpace.s8, top: AppSpace.s4),
         child: Text(
           title,
           style: const TextStyle(
@@ -247,11 +248,11 @@ class WellnessRecordDetailPage extends ConsumerWidget {
       );
 
   Widget _statRow(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.s6),
         child: Row(
           children: [
             SizedBox(
-              width: 64,
+              width: AppSpace.s64,
               child: Text(label, style: const TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
             ),
             Text(value, style: const TextStyle(fontSize: AppTheme.fontMd, fontWeight: FontWeight.w500)),

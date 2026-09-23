@@ -20,6 +20,7 @@ import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import 'customer_activity_cards.dart' show showAddFollowUpSheet;
 
+import '../../../core/theme/tokens.g.dart';
 // ============================================
 // 用量埋点 helper (主人 2026-09-22: 用真实数据回答「AI 卡片到底有没有人点」)
 // ============================================
@@ -134,11 +135,11 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
                 highlight: d.isDue),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: AppSpace.s10),
         Row(
           children: [
             _confidenceChip(d.confidence),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.s8),
             if (d.daysUntilPredicted != null)
               Text(
                 d.daysUntilPredicted! < 0
@@ -153,11 +154,11 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
           ],
         ),
         if (d.reason.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpace.s10),
           _AiBody(text: d.reason),
         ],
         if (d.isDue) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           BigActionButton(
             icon: Icons.add_task,
             label: '建一条跟进任务',
@@ -171,12 +172,12 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
 
   Widget _metric(String label, String value, {bool highlight = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s8),
       decoration: BoxDecoration(
         color: highlight
             ? AppTheme.danger.withOpacity(0.08)
             : AppTheme.primaryLight.withOpacity(0.35),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.r10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -184,7 +185,7 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
           Text(label,
               style: const TextStyle(
                   fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpace.s2),
           Text(value,
               style: TextStyle(
                 fontSize: AppTheme.fontMd,
@@ -203,10 +204,10 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
       _ => ('数据较少', AppTheme.textSecondary),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.r8),
       ),
       child: Text(label,
           style: TextStyle(
@@ -282,14 +283,14 @@ class _AiProfileCardState extends ConsumerState<AiProfileCard> {
                       children: [
                         _AiBody(text: _data!.aiSummary),
                         if (_data!.recentSummaries.isNotEmpty) ...[
-                          const SizedBox(height: 12),
+                          const SizedBox(height: AppSpace.s12),
                           const Text('参考的近期记录',
                               style: TextStyle(
                                   fontSize: AppTheme.fontXs,
                                   color: AppTheme.textSecondary)),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: AppSpace.s4),
                           ..._data!.recentSummaries.take(5).map((s) => Padding(
-                                padding: const EdgeInsets.only(bottom: 2),
+                                padding: const EdgeInsets.only(bottom: AppSpace.s2),
                                 child: Text('· $s',
                                     style: const TextStyle(
                                         fontSize: AppTheme.fontXs,
@@ -297,7 +298,7 @@ class _AiProfileCardState extends ConsumerState<AiProfileCard> {
                               )),
                         ],
                         if (_data!.aiMock) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: AppSpace.s8),
                           const _AiMockBadge(),
                         ],
                       ],
@@ -380,7 +381,7 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
                     ))
                 .toList(),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           if (_loading)
             const _AiLoading('AI 正在写话术...')
           else if (_error != null)
@@ -393,7 +394,7 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
             )
           else ...[
             _AiBody(text: _data!.suggestion),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -405,7 +406,7 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
                 if (_data!.reason.isNotEmpty) _pill(_data!.reason),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             Row(
               children: [
                 Expanded(
@@ -422,7 +423,7 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
                     },
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: BigActionButton(
                     icon: Icons.add_task,
@@ -436,7 +437,7 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
               ],
             ),
             if (_data!.aiMock) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               const _AiMockBadge(),
             ],
           ],
@@ -446,11 +447,11 @@ class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
   }
 
   Widget _pill(String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s4),
         decoration: BoxDecoration(
           color: AppTheme.bgWarm,
-          border: Border.all(color: const Color(0xFFE0E0E0)),
-          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(AppRadius.r12),
         ),
         child: Text(text,
             style: const TextStyle(
@@ -532,18 +533,18 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
                           ],
                         ),
                         if (_data!.from != null && _data!.to != null) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: AppSpace.s8),
                           Text('统计区间: ${_data!.from} ~ ${_data!.to}',
                               style: const TextStyle(
                                   fontSize: AppTheme.fontXs,
                                   color: AppTheme.textSecondary)),
                         ],
                         if (_data!.aiSummary.isNotEmpty) ...[
-                          const SizedBox(height: 10),
+                          const SizedBox(height: AppSpace.s10),
                           _AiBody(text: _data!.aiSummary),
                         ],
                         if (_data!.aiMock) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: AppSpace.s8),
                           const _AiMockBadge(),
                         ],
                       ],
@@ -552,10 +553,10 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
   }
 
   Widget _metric(String label, String value) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s8),
         decoration: BoxDecoration(
           color: AppTheme.primaryLight.withOpacity(0.35),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.r10),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -563,7 +564,7 @@ class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
             Text(label,
                 style: const TextStyle(
                     fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
-            const SizedBox(height: 2),
+            const SizedBox(height: AppSpace.s2),
             Text(value,
                 style: const TextStyle(
                     fontSize: AppTheme.fontMd,
@@ -598,16 +599,16 @@ class _AiCardShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Icon(icon, size: 26, color: iconColor),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
                     title,
@@ -621,11 +622,11 @@ class _AiCardShell extends StatelessWidget {
                 if (trailing != null) trailing!,
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpace.s4),
             Text(subtitle,
                 style: const TextStyle(
                     fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             child,
           ],
         ),
@@ -643,11 +644,11 @@ class _AiLoading extends StatelessWidget {
     return Row(
       children: [
         const SizedBox(
-          width: 20,
-          height: 20,
+          width: AppSpace.s20,
+          height: AppSpace.s20,
           child: CircularProgressIndicator(strokeWidth: 2.5),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpace.s12),
         Text(label,
             style: const TextStyle(
                 fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
@@ -669,7 +670,7 @@ class _AiError extends StatelessWidget {
         Text('生成失败: $message',
             style: const TextStyle(
                 fontSize: AppTheme.fontSm, color: AppTheme.danger)),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.s8),
         BigActionButton(
           icon: Icons.refresh,
           label: '重试',
@@ -699,11 +700,11 @@ class _AiBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpace.s14),
       decoration: BoxDecoration(
         color: AppTheme.bgWarm,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEDE6DA)),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        border: Border.all(color: AppColors.divider),
       ),
       child: SelectableText(
         text,
@@ -723,10 +724,10 @@ class _AiMockBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: 3),
       decoration: BoxDecoration(
         color: AppTheme.accent.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.r6),
       ),
       child: const Text('示例数据 (AI 未接入时)',
           style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
@@ -778,7 +779,7 @@ class BigActionButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppTheme.primaryDark,
           side: const BorderSide(color: AppTheme.primary, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.r12)),
         ),
       ),
     );

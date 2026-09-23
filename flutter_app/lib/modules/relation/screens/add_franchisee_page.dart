@@ -16,6 +16,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/empty_state.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class AddFranchiseePage extends ConsumerStatefulWidget {
   /// 预填的推荐人 ID (从"加到空位"进入)
   final String? parentId;
@@ -126,15 +127,15 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpace.s16),
           children: [
             // 推荐人选择
             _buildParentSelector(),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
 
             // 位置选择
             _buildSideSelector(),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
 
             // 姓名
             TextFormField(
@@ -144,7 +145,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? '请输入姓名' : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
 
             // 手机号
             TextFormField(
@@ -159,7 +160,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
                 return null;
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
 
             // 备注
             TextFormField(
@@ -171,7 +172,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
                 hintText: '如: 介绍人 / 备注',
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: AppSpace.s32),
 
             BigButton(
               label: _isSlotMode ? '添加为下线' : '添加',
@@ -179,7 +180,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
               onPressed: _submit,
               loading: _loading,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpace.s24),
           ],
         ),
       ),
@@ -193,16 +194,16 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
       return asyncParent.maybeWhen(
         data: (parent) {
           return Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             decoration: BoxDecoration(
               color: AppTheme.franchisee.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.franchisee, width: 2),
+              borderRadius: BorderRadius.circular(AppRadius.r12),
+              border: Border.all(color: AppTheme.franchisee, width: AppSpace.s2),
             ),
             child: Row(
               children: [
                 const Icon(Icons.arrow_downward, color: AppTheme.franchisee, size: 28),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpace.s12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,7 +246,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.s8),
         asyncFranchisees.when(
           loading: () => const LoadingState(),
           error: (e, _) => Text('加载失败: $e'),
@@ -274,11 +275,11 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
     if (_isSlotMode) {
       // 空位模式: 位置只读
       return Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         decoration: BoxDecoration(
           color: AppTheme.franchisee.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.franchisee, width: 2),
+          borderRadius: BorderRadius.circular(AppRadius.r12),
+          border: Border.all(color: AppTheme.franchisee, width: AppSpace.s2),
         ),
         child: Row(
           children: [
@@ -287,7 +288,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
               color: AppTheme.franchisee,
               size: 28,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpace.s12),
             Text(
               '位置: ${_selectedSide == 'left' ? 'A线' : 'B线'}',
               style: const TextStyle(
@@ -312,11 +313,11 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.s8),
         Row(
           children: [
             Expanded(child: _sideButton('A线', 'left', Icons.arrow_back)),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.s8),
             Expanded(child: _sideButton('B线', 'right', Icons.arrow_forward)),
           ],
         ),
@@ -336,7 +337,7 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
         foregroundColor: selected ? Colors.white : AppTheme.primary,
         side: BorderSide(
           color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.4),
-          width: 2,
+          width: AppSpace.s2,
         ),
       ),
     );

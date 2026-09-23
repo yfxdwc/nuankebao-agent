@@ -26,6 +26,7 @@ import '../core/providers/service_providers.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/user_avatar.dart';
 
+import '../core/theme/tokens.g.dart';
 // ============================================
 // 1. 编辑我的资料 (姓名 + 备注)
 // ============================================
@@ -75,8 +76,8 @@ Future<bool> showEditMyProfileSheet(
 
         return Padding(
           padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
+            left: AppSpace.s16,
+            right: AppSpace.s16,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
           child: Column(
@@ -90,7 +91,7 @@ Future<bool> showEditMyProfileSheet(
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               const Text(
                 '姓名会显示在加盟网络 / 图谱里, 备注只有自己看得到',
                 style: TextStyle(
@@ -98,7 +99,7 @@ Future<bool> showEditMyProfileSheet(
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               TextField(
                 controller: nameCtrl,
                 style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -109,7 +110,7 @@ Future<bool> showEditMyProfileSheet(
                   counterText: '',
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextField(
                 controller: notesCtrl,
                 style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -120,7 +121,7 @@ Future<bool> showEditMyProfileSheet(
                   hintText: '例: 负责 A 线团队 / 门店在城南',
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               SizedBox(
                 width: double.infinity,
                 height: AppTheme.buttonLgHeight,
@@ -128,8 +129,8 @@ Future<bool> showEditMyProfileSheet(
                   onPressed: saving ? null : save,
                   icon: saving
                       ? const SizedBox(
-                          width: 22,
-                          height: 22,
+                          width: AppSpace.s22,
+                          height: AppSpace.s22,
                           child: CircularProgressIndicator(
                             strokeWidth: 3,
                             color: Colors.white,
@@ -142,7 +143,7 @@ Future<bool> showEditMyProfileSheet(
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
             ],
           ),
         );
@@ -178,7 +179,7 @@ class _UpdateSheetBody extends ConsumerWidget {
     final infoAsync = ref.watch(_packageInfoProvider);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 0, 16, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,7 +191,7 @@ class _UpdateSheetBody extends ConsumerWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           // 本机版本
           infoAsync.when(
             loading: () => const _Line(label: '当前版本', value: '读取中...'),
@@ -203,13 +204,13 @@ class _UpdateSheetBody extends ConsumerWidget {
           // 服务器版本
           releaseAsync.when(
             loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
+              padding: EdgeInsets.symmetric(vertical: AppSpace.s16),
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 const Text(
                   '没拿到服务器版本信息 (网络或服务器暂时不可用)',
                   style: TextStyle(
@@ -217,7 +218,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                     color: AppTheme.danger,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 OutlinedButton.icon(
                   onPressed: () => ref.invalidate(appReleaseProvider),
                   icon: const Icon(Icons.refresh, size: 22),
@@ -242,13 +243,13 @@ class _UpdateSheetBody extends ConsumerWidget {
                     _Line(label: '安装包大小', value: release.apk!.sizeLabel),
                   ],
                   if (hasNewer) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpace.s8),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(AppSpace.s12),
                       decoration: BoxDecoration(
                         color: AppTheme.accent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.r12),
                       ),
                       child: const Text(
                         '服务器上的版本比您手机里的新, 可以下载更新',
@@ -260,7 +261,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                     ),
                   ],
                   if (release.apk == null) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpace.s8),
                     const Text(
                       '服务器上还没有可下载的安装包 (部署时把 APK 放到 flutter_app/build 或 public/downloads 即可)',
                       style: TextStyle(
@@ -269,7 +270,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                       ),
                     ),
                   ] else ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpace.s16),
                     SizedBox(
                       width: double.infinity,
                       height: AppTheme.buttonLgHeight,
@@ -283,7 +284,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpace.s8),
                     Row(
                       children: [
                         Expanded(
@@ -303,7 +304,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: AppSpace.s8),
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () => showDialog<void>(
@@ -335,7 +336,7 @@ class _UpdateSheetBody extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpace.s8),
                     const Text(
                       '提示: 下载后点安装包按提示覆盖安装即可, 数据不会丢',
                       style: TextStyle(
@@ -448,7 +449,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
     final profileAsync = ref.watch(meProfileProvider);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 0, 16, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -460,7 +461,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           _Line(label: '服务地址', value: ApiClient.baseUrl),
           // 安装包信息: 升级/发版前对照签名 (签名变了 = 覆盖安装会失败, 必须卸载 = 掉登录)
           FutureBuilder<PackageInfo>(
@@ -500,15 +501,15 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
           ),
           healthAsync.when(
             loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.symmetric(vertical: AppSpace.s12),
               child: Row(
                 children: [
                   SizedBox(
-                    width: 22,
-                    height: 22,
+                    width: AppSpace.s22,
+                    height: AppSpace.s22,
                     child: CircularProgressIndicator(strokeWidth: 3),
                   ),
-                  SizedBox(width: 12),
+                  SizedBox(width: AppSpace.s12),
                   Text('正在连接服务器...',
                       style: TextStyle(fontSize: AppTheme.fontMd)),
                 ],
@@ -517,11 +518,11 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
             error: (e, _) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 Row(
                   children: const [
                     Icon(Icons.error_outline, color: AppTheme.danger, size: 26),
-                    SizedBox(width: 8),
+                    SizedBox(width: AppSpace.s8),
                     Text(
                       '连不上服务器',
                       style: TextStyle(
@@ -532,7 +533,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.s4),
                 const Text(
                   '请检查手机网络 / WiFi, 或让管理员确认服务在跑',
                   style: TextStyle(
@@ -545,7 +546,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
             data: (h) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 Row(
                   children: [
                     Icon(
@@ -553,7 +554,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
                       color: h.healthy ? AppTheme.primary : AppTheme.danger,
                       size: 26,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpace.s8),
                     Text(
                       h.healthy ? '服务器正常' : '服务器异常',
                       style: TextStyle(
@@ -565,7 +566,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.s4),
                 Text(
                   '响应 ${h.latencyMs} 毫秒 · 数据库 ${h.db} · 服务端 ${h.serverVersion}',
                   style: const TextStyle(
@@ -576,7 +577,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s16),
           Row(
             children: [
               Expanded(
@@ -587,7 +588,7 @@ class _DiagnosticsSheetBody extends ConsumerWidget {
                       style: TextStyle(fontSize: AppTheme.fontSm)),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.s8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () async {
@@ -667,12 +668,12 @@ class _Line extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 84,
+            width: AppSpace.s84,
             child: Text(
               label,
               style: const TextStyle(
@@ -808,8 +809,8 @@ Future<bool> showAvatarPickerSheet(
 
         return Padding(
           padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
+            left: AppSpace.s16,
+            right: AppSpace.s16,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
           child: Column(
@@ -823,7 +824,7 @@ Future<bool> showAvatarPickerSheet(
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Text(
                 subtitle,
                 style: const TextStyle(
@@ -831,7 +832,7 @@ Future<bool> showAvatarPickerSheet(
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
 
               // 当前头像 + 拍照/相册
               Row(
@@ -853,8 +854,8 @@ Future<bool> showAvatarPickerSheet(
                             ),
                             child: Center(
                               child: SizedBox(
-                                width: 26,
-                                height: 26,
+                                width: AppSpace.s26,
+                                height: AppSpace.s26,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 3,
                                   color: Colors.white,
@@ -865,7 +866,7 @@ Future<bool> showAvatarPickerSheet(
                         ),
                     ],
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: AppSpace.s16),
                   Expanded(
                     child: Column(
                       children: [
@@ -881,7 +882,7 @@ Future<bool> showAvatarPickerSheet(
                                 style: TextStyle(fontSize: AppTheme.fontMd)),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpace.s8),
                         SizedBox(
                           width: double.infinity,
                           height: AppTheme.buttonMinHeight,
@@ -899,7 +900,7 @@ Future<bool> showAvatarPickerSheet(
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpace.s20),
 
               const Text(
                 '或者挑一个现成的',
@@ -908,7 +909,7 @@ Future<bool> showAvatarPickerSheet(
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               Wrap(
                 spacing: 14,
                 runSpacing: 14,
@@ -921,7 +922,7 @@ Future<bool> showAvatarPickerSheet(
                       onTap: busy
                           ? null
                           : () => apply('preset:${p.id}', '头像已换成「${p.label}」'),
-                      borderRadius: BorderRadius.circular(40),
+                      borderRadius: BorderRadius.circular(AppRadius.r40),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -935,7 +936,7 @@ Future<bool> showAvatarPickerSheet(
                                 width: 3,
                               ),
                             ),
-                            padding: const EdgeInsets.all(2),
+                            padding: const EdgeInsets.all(AppSpace.s2),
                             child: UserAvatar(
                               avatarUrl: 'preset:${p.id}',
                               name: name,
@@ -943,7 +944,7 @@ Future<bool> showAvatarPickerSheet(
                               showLoadingIndicator: false,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: AppSpace.s4),
                           Text(
                             p.label,
                             style: TextStyle(
@@ -961,7 +962,7 @@ Future<bool> showAvatarPickerSheet(
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               const Divider(height: 1),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -1061,7 +1062,7 @@ Future<void> showChangePasswordSheet(
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               const Text(
                 '至少 8 位, 需同时包含字母和数字',
                 style: TextStyle(
@@ -1069,7 +1070,7 @@ Future<void> showChangePasswordSheet(
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               TextField(
                 controller: oldCtrl,
                 obscureText: true,
@@ -1078,7 +1079,7 @@ Future<void> showChangePasswordSheet(
                   prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextField(
                 controller: newCtrl,
                 obscureText: true,
@@ -1087,7 +1088,7 @@ Future<void> showChangePasswordSheet(
                   prefixIcon: Icon(Icons.password_outlined),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextField(
                 controller: confirmCtrl,
                 obscureText: true,
@@ -1096,15 +1097,15 @@ Future<void> showChangePasswordSheet(
                   prefixIcon: Icon(Icons.check_circle_outline),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpace.s20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: submitting ? null : submit,
                   child: submitting
                       ? const SizedBox(
-                          width: 20,
-                          height: 20,
+                          width: AppSpace.s20,
+                          height: AppSpace.s20,
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         )
@@ -1209,7 +1210,7 @@ Future<void> showChangePhoneSheet(
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               const Text(
                 '改完下次登录请用新手机号; 同手机号的客户档案会一起改',
                 style: TextStyle(
@@ -1217,7 +1218,7 @@ Future<void> showChangePhoneSheet(
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               TextField(
                 controller: pwdCtrl,
                 obscureText: true,
@@ -1226,7 +1227,7 @@ Future<void> showChangePhoneSheet(
                   prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextField(
                 controller: phoneCtrl,
                 keyboardType: TextInputType.phone,
@@ -1236,7 +1237,7 @@ Future<void> showChangePhoneSheet(
                   hintText: '11 位, 1[3-9] 开头',
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextField(
                 controller: confirmCtrl,
                 keyboardType: TextInputType.phone,
@@ -1245,15 +1246,15 @@ Future<void> showChangePhoneSheet(
                   prefixIcon: Icon(Icons.check_circle_outline),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpace.s20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: submitting ? null : submit,
                   child: submitting
                       ? const SizedBox(
-                          width: 20,
-                          height: 20,
+                          width: AppSpace.s20,
+                          height: AppSpace.s20,
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         )
@@ -1397,7 +1398,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
     final infoAsync = ref.watch(manualPayInfoProvider);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s20, 0, 20, 28),
       child: infoAsync.when(
         loading: () => const SizedBox(
           height: 200,
@@ -1406,15 +1407,15 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
         error: (e, _) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpace.s20),
             const Text('没拿到收款信息, 请检查网络后重试',
                 style: TextStyle(fontSize: AppTheme.fontMd)),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             OutlinedButton(
               onPressed: () => ref.invalidate(manualPayInfoProvider),
               child: const Text('重试', style: TextStyle(fontSize: AppTheme.fontMd)),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
           ],
         ),
         data: (info) {
@@ -1434,47 +1435,47 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.s4),
                 Text(
                   '内测期间用管理员微信收款, 付款后点「我已支付」, 管理员核对到账立刻开通',
                   style: const TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpace.s16),
 
                 // 待确认提示 (最近一条 pending)
                 if (latest != null && latest.status == 'pending') ...[
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(AppSpace.s12),
                     decoration: BoxDecoration(
                       color: AppTheme.accent.withOpacity(0.16),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.r12),
                     ),
                     child: const Text(
                       '你已经提交过付款申请, 等管理员确认 (通常几分钟内)',
                       style: TextStyle(fontSize: AppTheme.fontSm),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpace.s12),
                 ] else if (latest != null && latest.status == 'rejected') ...[
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(AppSpace.s12),
                     decoration: BoxDecoration(
                       color: AppTheme.danger.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.r12),
                     ),
                     child: Text(
                       '上次申请未通过${latest.rejectReason == null ? '' : ': ${latest.rejectReason}'}\n可以核对后重新提交',
                       style: const TextStyle(fontSize: AppTheme.fontSm),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpace.s12),
                 ],
 
                 // 金额选择
                 const Text('选一个', style: TextStyle(fontSize: AppTheme.fontMd, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 Wrap(
                   spacing: 10,
                   children: products
@@ -1486,7 +1487,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                           ))
                       .toList(),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpace.s16),
 
                 // 收款码
                 Center(
@@ -1496,14 +1497,14 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                         width: 220,
                         height: 220,
                         decoration: BoxDecoration(
-                          border: Border.all(color: AppTheme.primaryLight, width: 2),
-                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.primaryLight, width: AppSpace.s2),
+                          borderRadius: BorderRadius.circular(AppRadius.r12),
                           color: Colors.white,
                         ),
                         clipBehavior: Clip.antiAlias,
                         child: _QrImageLarge(url: info.qrUrl),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.s8),
                       Text(
                         '收款人: ${info.payeeName}',
                         style: const TextStyle(
@@ -1514,7 +1515,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                       // 只有"真的取不到码"才提示 (静态兜底文件存在时不再误报)
                       if (!info.qrAvailable)
                         const Padding(
-                          padding: EdgeInsets.only(top: 6),
+                          padding: EdgeInsets.only(top: AppSpace.s6),
                           child: Text(
                             '管理员还没设置收款码 (设置后这里会显示二维码)',
                             textAlign: TextAlign.center,
@@ -1524,7 +1525,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpace.s16),
 
                 // 备注 + 截图
                 TextField(
@@ -1535,7 +1536,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                     hintText: info.noteHint.isEmpty ? '微信昵称 / 手机号后 4 位' : info.noteHint,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 // 全宽 = 用 SizedBox 而不是 Row: 主题里 OutlinedButton 的
                 //   minimumSize 是 Size(double.infinity, 56) (大按钮语义), 放进 Row 的
                 //   children 会拿到**无界宽度**约束 → debug 直接断言
@@ -1552,7 +1553,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpace.s16),
                 SizedBox(
                   width: double.infinity,
                   height: AppTheme.buttonLgHeight,
@@ -1568,8 +1569,8 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                           },
                     icon: _busy
                         ? const SizedBox(
-                            width: 22,
-                            height: 22,
+                            width: AppSpace.s22,
+                            height: AppSpace.s22,
                             child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
                           )
                         : const Icon(Icons.check_circle_outline, size: 26),
@@ -1579,7 +1580,7 @@ class _PurchaseSheetBodyState extends ConsumerState<_PurchaseSheetBody> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 const Text(
                   '说明: 内测阶段暂不支持自动续费; 需要 ¥49/月 的连续包月价, 等微信支付上线后可直接开通',
                   style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
@@ -1610,7 +1611,7 @@ class _QrImageLarge extends StatelessWidget {
       // ⚠ 两种失败要分开说: "没配置" 由外面那段红字提示; 这里是"图片拉不到"(断网/文件被删)
       errorBuilder: (c, _, __) => const Center(
         child: Padding(
-          padding: EdgeInsets.all(12),
+          padding: EdgeInsets.all(AppSpace.s12),
           child: Text(
             '收款码加载不出来\n请检查网络, 或让管理员重新上传',
             textAlign: TextAlign.center,

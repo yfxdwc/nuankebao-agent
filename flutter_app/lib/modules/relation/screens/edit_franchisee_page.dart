@@ -19,6 +19,7 @@ import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../lib/franchisee_detail_provider.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class EditFranchiseePage extends ConsumerStatefulWidget {
   final String franchiseeId;
   const EditFranchiseePage({super.key, required this.franchiseeId});
@@ -138,7 +139,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
     return Form(
       key: _formKey,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
         children: [
           TextFormField(
             controller: _nameCtrl,
@@ -147,7 +148,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? '请输入姓名' : null,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s16),
           TextFormField(
             controller: _phoneCtrl,
             style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -160,7 +161,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
               return null;
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s16),
           TextFormField(
             controller: _notesCtrl,
             style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -172,7 +173,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
               counterText: '',
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           // 启用 / 停用
           Card(
             margin: EdgeInsets.zero,
@@ -189,12 +190,12 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
 
           // 只读信息: 推荐人 / 位置 (建树后不可改)
           if (f != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             Card(
               margin: EdgeInsets.zero,
               color: AppTheme.primaryLight.withOpacity(0.25),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpace.s16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -202,7 +203,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
                       children: [
                         const Icon(Icons.info_outline,
                             size: 18, color: AppTheme.primaryDark),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: AppSpace.s6),
                         const Text(
                           '推荐人 / 位置 不可修改',
                           style: TextStyle(
@@ -213,7 +214,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpace.s4),
                     const Text(
                       '二叉树位置定了就固定 (换位置 = 先软删再加)',
                       style: TextStyle(
@@ -221,7 +222,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
                         color: AppTheme.textSecondary,
                       ),
                     ),
-                    const Divider(height: 20),
+                    const Divider(height: AppSpace.s20),
                     _roRow('层级',
                         f.placementDepth == 0 ? '顶级 (root)' : '第 ${f.placementDepth} 层'),
                     _roRow('位置',
@@ -233,7 +234,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
             ),
           ],
 
-          const SizedBox(height: 32),
+          const SizedBox(height: AppSpace.s32),
           BigButton(
             label: '保存修改',
             icon: Icons.check,
@@ -247,11 +248,11 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
 
   Widget _roRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s4),
       child: Row(
         children: [
           SizedBox(
-            width: 84,
+            width: AppSpace.s84,
             child: Text(
               label,
               style: const TextStyle(

@@ -17,6 +17,7 @@ import '../../../core/widgets/empty_state.dart';
 import '../lib/franchisee_detail_provider.dart';
 import '../../../core/widgets/franchise_chip.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class FranchiseeDetailPage extends ConsumerWidget {
   final String franchiseeId;
   const FranchiseeDetailPage({super.key, required this.franchiseeId});
@@ -54,11 +55,11 @@ class FranchiseeDetailPage extends ConsumerWidget {
 
   Widget _buildBody(BuildContext context, WidgetRef ref, Franchisee f) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
       children: [
         // 头部
         _buildHeader(context, ref, f),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.s16),
 
         // 上级信息 (「上级加盟商」= **点位父** placement_parent_id, 不是推荐人 referrer_id;
         //   拆栏 2026-09-21 见 ADR-0014 §3.9)
@@ -68,7 +69,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
         // 位置信息
         _positionCard(f),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.s16),
 
         // 联系按钮
         BigButton(
@@ -86,7 +87,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
           },
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.s16),
 
         // 二叉树位置可视化（文字版）
         _treePositionCard(f),
@@ -98,7 +99,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpace.s20),
         child: Column(
           children: [
             CircleAvatar(
@@ -107,13 +108,13 @@ class FranchiseeDetailPage extends ConsumerWidget {
               child: Text(
                 f.name.isNotEmpty ? f.name[0] : '?',
                 style: const TextStyle(
-                  fontSize: 36,
+                  fontSize: AppType.xxl,
                   color: AppTheme.franchisee,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             Text(
               f.name,
               style: const TextStyle(
@@ -121,7 +122,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             // 解除加盟入口 = 长按「加盟」标签 (主人 2026-09-19 拍:
             //   不再放右上角图标; 点位不能直接移动 —— 必须先解除, 再重新加盟落位)
             Semantics(
@@ -140,7 +141,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Text(
               _maskPhone(f.phone),
               style: const TextStyle(
@@ -162,7 +163,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
         return Card(
           margin: EdgeInsets.zero,
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),
             leading: CircleAvatar(
               backgroundColor: AppTheme.franchisee.withOpacity(0.2),
               child: Text(
@@ -189,9 +190,9 @@ class FranchiseeDetailPage extends ConsumerWidget {
 
   Widget _positionCard(Franchisee f) {
     return Card(
-      margin: const EdgeInsets.only(top: 12),
+      margin: const EdgeInsets.only(top: AppSpace.s12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -202,7 +203,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             _row('层级', f.placementDepth == 0 ? '顶级 (root)' : '第 ${f.placementDepth} 层'),
             _row('位置', f.placementSide == null ? '顶级' : (f.placementSide == 'left' ? 'A线' : 'B线')),
             _row('路径', f.placementPath.isEmpty ? '(顶级)' : f.placementPath),
@@ -228,7 +229,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -239,12 +240,12 @@ class FranchiseeDetailPage extends ConsumerWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(AppSpace.s12),
               decoration: BoxDecoration(
                 color: AppTheme.bgWarm,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.r8),
               ),
               child: Text(
                 '$indent$sideArrow ${f.name}',
@@ -261,11 +262,11 @@ class FranchiseeDetailPage extends ConsumerWidget {
   }
 
   Widget _row(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.s6),
         child: Row(
           children: [
             SizedBox(
-              width: 80,
+              width: AppSpace.s80,
               child: Text(
                 label,
                 style: const TextStyle(

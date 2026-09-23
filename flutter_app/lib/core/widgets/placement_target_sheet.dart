@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../models/franchisee.dart';
 import '../theme/app_theme.dart';
 
+import '../theme/tokens.g.dart';
 // ============================================
 // 「发展为加盟商」选点位弹层 (主人 2026-09-18 拍 Q1)
 // 先选上级节点 → 再选 A线/B线 → 返回 PlacementTarget 供上层发起三方确认
@@ -82,7 +83,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
       builder: (context, scrollController) => Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -93,7 +94,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.s4),
                 Text(
                   widget.hint,
                   style: const TextStyle(
@@ -102,7 +103,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
                   ),
                 ),
                 if (hiddenCount > 0) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpace.s2),
                   Text(
                     '已隐藏 $hiddenCount 个「两层已满」的节点（要挂到更深的位置，请先在该节点下级腾位置）',
                     style: const TextStyle(
@@ -116,7 +117,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
           ),
           if (_picked == null) ...[
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16),
               child: TextField(
                 style: const TextStyle(fontSize: AppTheme.fontMd),
                 decoration: const InputDecoration(
@@ -160,7 +161,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
             ),
           ] else ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.fromLTRB(AppSpace.s16, 8, 16, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -171,7 +172,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpace.s8),
                   SegmentedButton<String>(
                     segments: const [
                       ButtonSegment(value: 'left', label: Text('A线')),
@@ -181,7 +182,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
                     showSelectedIcon: false,
                     onSelectionChanged: (v) => setState(() => _side = v.first),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpace.s16),
                   FilledButton.icon(
                     onPressed: () => Navigator.of(context).pop(
                       PlacementTarget(_picked!.id, _picked!.name, _side),

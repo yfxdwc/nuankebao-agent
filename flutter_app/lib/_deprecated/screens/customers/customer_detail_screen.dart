@@ -10,6 +10,7 @@ import '../../widgets/photo_picker.dart';
 import '../../widgets/prediction_widgets.dart';
 import '../customers/customers_list_screen.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 final customerDetailProvider = FutureProvider.family<Customer, String>(
   (ref, id) => ref.watch(customerServiceProvider).getById(id),
 );
@@ -41,25 +42,25 @@ class CustomerDetailScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('加载失败: $e')),
         data: (customer) => ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpace.s16),
           children: [
             _buildHeader(customer),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             if (customer.healthTags.isNotEmpty) _buildHealthTags(customer),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             _buildSectionTitle('养生记录', onTap: () => context.push(
               '/wellness-records/new?customerId=$customerId',
             )),
             asyncRecords.when(
               loading: () => const Padding(
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.all(AppSpace.s16),
                 child: Center(child: CircularProgressIndicator()),
               ),
               error: (e, _) => Text('加载失败: $e'),
               data: (records) {
                 if (records.isEmpty) {
                   return const Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: EdgeInsets.all(AppSpace.s16),
                     child: Text('暂无养生记录', style: TextStyle(color: Colors.black54)),
                   );
                 }
@@ -79,29 +80,29 @@ class CustomerDetailScreen extends ConsumerWidget {
                           // 照片缩略图
                           if (r.photos.isNotEmpty)
                             SizedBox(
-                              height: 80,
+                              height: AppSpace.s80,
                               child: ListView.builder(
                                 scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12),
                                 itemCount: r.photos.length,
                                 itemBuilder: (ctx, i) {
                                   final url = r.photos[i].startsWith('http')
                                       ? r.photos[i]
                                       : 'http://192.168.1.200:3003${r.photos[i]}';
                                   return Padding(
-                                    padding: const EdgeInsets.only(right: 6),
+                                    padding: const EdgeInsets.only(right: AppSpace.s6),
                                     child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(6),
+                                      borderRadius: BorderRadius.circular(AppRadius.r6),
                                       child: Image.network(
                                         url,
-                                        width: 80,
-                                        height: 80,
+                                        width: AppSpace.s80,
+                                        height: AppSpace.s80,
                                         fit: BoxFit.cover,
                                         errorBuilder: (_, __, ___) => Container(
-                                          width: 80,
-                                          height: 80,
+                                          width: AppSpace.s80,
+                                          height: AppSpace.s80,
                                           color: Colors.grey[300],
-                                          child: const Icon(Icons.broken_image, size: 20),
+                                          child: const Icon(Icons.broken_image, size: AppSpace.s20),
                                         ),
                                       ),
                                     ),
@@ -109,7 +110,7 @@ class CustomerDetailScreen extends ConsumerWidget {
                                 },
                               ),
                             ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: AppSpace.s8),
                         ],
                       ),
                     );
@@ -117,7 +118,7 @@ class CustomerDetailScreen extends ConsumerWidget {
                 );
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             // AI 客户画像按钮
             Card(
               child: ListTile(
@@ -152,7 +153,7 @@ class CustomerDetailScreen extends ConsumerWidget {
   Widget _buildHeader(Customer c) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -162,21 +163,21 @@ class CustomerDetailScreen extends ConsumerWidget {
                   radius: 28,
                   backgroundColor: AppTheme.primaryLight,
                   child: Text(c.name.isNotEmpty ? c.name[0] : '?',
-                    style: const TextStyle(fontSize: 24, color: Colors.white)),
+                    style: const TextStyle(fontSize: AppType.lg, color: Colors.white)),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpace.s12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(c.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                      Text(c.name, style: const TextStyle(fontSize: AppType.lg, fontWeight: FontWeight.w600)),
                       Text(c.phone, style: const TextStyle(color: Colors.black54)),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             if (c.gender != null || c.birthYear != null)
               Wrap(
                 spacing: 8,
@@ -186,12 +187,12 @@ class CustomerDetailScreen extends ConsumerWidget {
                 ],
               ),
             if (c.diseaseHistory != null && c.diseaseHistory!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text('既往病史: ${c.diseaseHistory}', style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: AppSpace.s8),
+              Text('既往病史: ${c.diseaseHistory}', style: const TextStyle(fontSize: AppType.xs)),
             ],
             if (c.notes != null && c.notes!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text('备注: ${c.notes}', style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: AppSpace.s4),
+              Text('备注: ${c.notes}', style: const TextStyle(fontSize: AppType.xs)),
             ],
           ],
         ),
@@ -202,12 +203,12 @@ class CustomerDetailScreen extends ConsumerWidget {
   Widget _buildHealthTags(Customer c) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('健康标签', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -223,11 +224,11 @@ class CustomerDetailScreen extends ConsumerWidget {
 
   Widget _buildSectionTitle(String title, {VoidCallback? onTap}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: AppSpace.s8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          Text(title, style: const TextStyle(fontSize: AppType.sm, fontWeight: FontWeight.w600)),
           if (onTap != null)
             TextButton(onPressed: onTap, child: const Text('+ 添加')),
         ],

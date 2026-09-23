@@ -17,6 +17,7 @@ import '../../../core/widgets/big_button.dart';
 import '../widgets/rating_slider.dart';
 import '../widgets/wellness_photo_uploader.dart';
 
+import '../../../core/theme/tokens.g.dart';
 /// 新增记录时默认选中的服务项目 (主人 2026-09-18 拍: 「碧波庭-脉动负压提拉按摩」置顶 + 下拉 + 默认选中)
 /// 字典里找不到 → 不预选 (不硬编码假项目), 用户自己选
 const String _defaultServiceItemName = '碧波庭-脉动负压提拉按摩';
@@ -188,36 +189,36 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
           : WellnessPhotoUploaderScope(
               upload: (b64) => ref.read(photoServiceProvider).upload(b64),
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpace.s16),
                 children: [
                   _buildServiceSelector(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpace.s20),
                   _buildBodyPartSelector(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpace.s20),
                   _buildConditionSection('理疗前状态'),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpace.s20),
                   _buildConditionSection('理疗后效果', isPost: true),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpace.s20),
                   _buildTextField('操作过程', _processCtrl, hint: '可记录理疗手法、特殊处理等'),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpace.s20),
                   _buildTextField('客户反馈', _feedbackCtrl, hint: '客户说的原话'),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpace.s20),
                   _buildDatePicker(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpace.s20),
                   WellnessPhotoUploader(
                     existingUrls: _photoUrls,
                     onChanged: (urls) => setState(() => _photoUrls = urls),
                     onPhotoUploaded: () =>
                         ref.read(usageServiceProvider).track('record_photo_taken'),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: AppSpace.s32),
                   BigButton(
                     label: widget.recordId == null ? '保存' : '保存修改',
                     icon: Icons.check,
                     onPressed: _submit,
                     loading: _loading,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.s24),
                 ],
               ),
             ),
@@ -235,7 +236,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpace.s4),
         Text(
           '已选 ${_bodyPartIds.length} 个',
           style: const TextStyle(
@@ -243,7 +244,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
             color: AppTheme.textSecondary,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -267,7 +268,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
               }),
               selectedColor: AppTheme.primary,
               checkmarkColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s8),
             );
           }).toList(),
         ),
@@ -291,7 +292,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.s8),
         DropdownButtonFormField<String>(
           value: value,
           isExpanded: true,
@@ -327,7 +328,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -338,7 +339,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             PainSlider(
               label: '疼痛程度',
               value: isPost ? _postPainLevel : _prePainLevel,
@@ -350,7 +351,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                 }
               }),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             FiveRatingSlider(
               label: '睡眠质量',
               value: isPost ? _postSleep : _preSleep,
@@ -362,7 +363,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                 }
               }),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             FiveRatingSlider(
               label: '情绪',
               value: isPost ? _postMood : _preMood,
@@ -391,7 +392,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.s8),
         TextField(
           controller: ctrl,
           style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -399,7 +400,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
           minLines: 2,
           decoration: InputDecoration(
             hintText: hint,
-            contentPadding: const EdgeInsets.all(16),
+            contentPadding: const EdgeInsets.all(AppSpace.s16),
           ),
         ),
       ],
@@ -417,7 +418,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.s8),
         OutlinedButton.icon(
           onPressed: () async {
             final picked = await showDatePicker(

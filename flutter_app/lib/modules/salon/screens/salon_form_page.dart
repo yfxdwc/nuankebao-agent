@@ -16,6 +16,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../providers/salon_providers.dart';
 
+import '../../../core/theme/tokens.g.dart';
 /// 预设主题标签 (可自定义追加)
 const List<String> _presetTags = <String>[
   '沙龙',
@@ -366,7 +367,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
           _buildStepBar(),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 24),
               children: _buildStepChildren(),
             ),
           ),
@@ -396,7 +397,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     const titles = <String>['基础信息', '时间地点', '服务安排', '会务日程'];
     return Container(
       color: AppTheme.bgCard,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s12, 12, 12, 12),
       child: Row(
         children: List<Widget>.generate(titles.length, (i) {
           final active = i == _step;
@@ -408,7 +409,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                   radius: 16,
                   backgroundColor: (active || done)
                       ? AppTheme.primary
-                      : const Color(0xFFE0E0E0),
+                      : AppColors.border,
                   child: done
                       ? const Icon(Icons.check, size: 20, color: Colors.white)
                       : Text(
@@ -422,7 +423,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                           ),
                         ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.s4),
                 Text(
                   titles[i],
                   textAlign: TextAlign.center,
@@ -447,7 +448,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     final isLast = _step == 3;
     return Container(
       color: AppTheme.bgCard,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 12),
       child: SafeArea(
         top: false,
         child: isLast
@@ -465,7 +466,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                           child: const Text('存草稿'),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: AppSpace.s12),
                       Expanded(
                         child: ElevatedButton(
                           onPressed:
@@ -478,7 +479,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpace.s8),
                   OutlinedButton(
                     onPressed: _saving
                         ? null
@@ -505,7 +506,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                         child: const Text('上一步'),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpace.s12),
                   ],
                   Expanded(
                     child: ElevatedButton(
@@ -569,7 +570,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         style:
             TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: AppSpace.s8),
       Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -591,7 +592,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
           );
         }).toList(),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpace.s12),
       Row(
         children: [
           Expanded(
@@ -602,14 +603,14 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
               onSubmitted: (_) => _addCustomTag(),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpace.s8),
           SizedBox(
-            height: 56,
+            height: AppSpace.s56,
             child: ElevatedButton(
               onPressed: _saving ? null : _addCustomTag,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(88, 56),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16),
               ),
               child: const Text('添加'),
             ),
@@ -759,12 +760,12 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         style: TextStyle(
             fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpace.s12),
       if (_quickInviteLoading)
         const Padding(
-          padding: EdgeInsets.symmetric(vertical: 16),
+          padding: EdgeInsets.symmetric(vertical: AppSpace.s16),
           child: Center(child: SizedBox(
-            width: 32, height: 32,
+            width: AppSpace.s32, height: AppSpace.s32,
             child: CircularProgressIndicator(strokeWidth: 3),
           )),
         )
@@ -772,7 +773,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         Text(_quickInviteError!,
             style: const TextStyle(
                 fontSize: AppTheme.fontSm, color: AppTheme.danger)),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.s8),
         OutlinedButton.icon(
           onPressed: _loadQuickInvite,
           icon: const Icon(Icons.refresh, size: 18),
@@ -780,7 +781,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         ),
       ] else if (_quickInvite == null || _quickInvite!.isEmpty) ...[
         const Padding(
-          padding: EdgeInsets.symmetric(vertical: 12),
+          padding: EdgeInsets.symmetric(vertical: AppSpace.s12),
           child: Text(
             '暂无可邀请的人——客户表里还没成员, 且未加入任何加盟树',
             style: TextStyle(
@@ -793,7 +794,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
             title: '我的客户',
             entries: _quickInvite!.customers,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
         ],
         if (_quickInvite!.ancestors.isNotEmpty)
           _buildInviteSubCard(
@@ -812,10 +813,10 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         .where((e) => _quickInviteSelected.contains(e.id))
         .length;
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s12, 8, 12, 4),
       decoration: BoxDecoration(
         color: AppTheme.bgWarm,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -840,7 +841,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpace.s4),
           for (final e in entries) _buildInviteRow(e),
         ],
       ),
@@ -860,7 +861,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         });
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.s6),
         child: Row(
           children: [
             Checkbox(
@@ -892,12 +893,12 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                       ),
                       if (e.isMember)
                         Container(
-                          margin: const EdgeInsets.only(left: 6),
+                          margin: const EdgeInsets.only(left: AppSpace.s6),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                              horizontal: AppSpace.s6, vertical: AppSpace.s2),
                           decoration: BoxDecoration(
                             color: AppTheme.primaryLight,
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(AppRadius.r6),
                           ),
                           child: const Text(
                             'app 会员',
@@ -909,7 +910,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpace.s2),
                   Text(
                     '${e.phone} · ${e.badge}',
                     style: const TextStyle(
@@ -937,7 +938,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
           color: AppTheme.textSecondary,
         ),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpace.s12),
       for (int i = 0; i < _staff.length; i++) _buildStaffRow(i),
       OutlinedButton.icon(
         onPressed:
@@ -954,11 +955,11 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
   Widget _buildStaffRow(int i) {
     final row = _staff[i];
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s12, 4, 12, 12),
       decoration: BoxDecoration(
         color: AppTheme.bgWarm,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
       ),
       child: Column(
         children: [
@@ -991,14 +992,14 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
             decoration:
                 const InputDecoration(labelText: '姓名', hintText: '如: 张老师'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           TextField(
             controller: row.phone,
             keyboardType: TextInputType.phone,
             style: const TextStyle(fontSize: AppTheme.fontMd),
             decoration: const InputDecoration(labelText: '手机号'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           // 常用角色快速预设 (点击填充到下方输入框, 仍可继续手动改)
           Wrap(
             spacing: 8,
@@ -1019,7 +1020,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           TextField(
             controller: row.staffRole,
             style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -1040,7 +1041,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
         style:
             TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpace.s12),
       for (int i = 0; i < _agenda.length; i++) _buildAgendaRow(i),
       OutlinedButton.icon(
         onPressed:
@@ -1057,11 +1058,11 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
   Widget _buildAgendaRow(int i) {
     final row = _agenda[i];
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s12, 4, 12, 12),
       decoration: BoxDecoration(
         color: AppTheme.bgWarm,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
       ),
       child: Column(
         children: [
@@ -1094,7 +1095,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
             decoration:
                 const InputDecoration(labelText: '时间', hintText: '如: 14:00'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           _label('标题', required: true),
           TextField(
             controller: row.title,
@@ -1102,7 +1103,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
             decoration:
                 const InputDecoration(hintText: '如: 养生知识分享'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           TextField(
             controller: row.desc,
             style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -1119,9 +1120,9 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
   // ============================================
   Widget _card(String title, List<Widget> children) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: AppSpace.s16),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1132,7 +1133,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             ...children,
           ],
         ),
@@ -1142,7 +1143,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
 
   Widget _label(String text, {bool required = false}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: AppSpace.s8),
       child: Text.rich(
         TextSpan(
           children: [
@@ -1177,7 +1178,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     TextInputType? keyboard,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: AppSpace.s16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1215,7 +1216,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     required ValueChanged<String?> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: AppSpace.s16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1257,7 +1258,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
     bool required = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: AppSpace.s16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

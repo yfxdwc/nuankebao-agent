@@ -148,8 +148,8 @@ class _Swatch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 34,
-      height: 22,
+      width: AppSpace.s34,
+      height: AppSpace.s22,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.r6),
         border: Border.all(color: theme.border, width: AppSize.borderHairline),

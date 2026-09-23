@@ -22,6 +22,7 @@ import '../core/models/admin_user.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/member_avatar.dart';
 
+import '../core/theme/tokens.g.dart';
 class AdminUsersGraph extends StatefulWidget {
   final AdminUsersOverview data;
   final void Function(AdminNode node) onTapNode;
@@ -201,7 +202,7 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
         constrained: false,
         minScale: 0.4,
         maxScale: 2.5,
-        boundaryMargin: const EdgeInsets.all(80),
+        boundaryMargin: const EdgeInsets.all(AppSpace.s80),
         child: SizedBox(
           width: canvasW,
           height: canvasH,
@@ -257,10 +258,10 @@ class _AdminUsersGraphState extends State<AdminUsersGraph> {
                   right: _padX,
                   top: tree.size.height + 4,
                   height: 1,
-                  child: Container(color: const Color(0xFFE6E9E5)),
+                  child: Container(color: AppColors.divider),
                 ),
                 Positioned(
-                  left: 0,
+                  left: AppSpace.s0,
                   width: canvasW,
                   top: tree.size.height + 12,
                   child: Text(
@@ -345,7 +346,7 @@ class _NodeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.r12),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -356,7 +357,7 @@ class _NodeCard extends StatelessWidget {
             isMember: isMember,
             noAccount: noAccount,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpace.s6),
           Text(
             title,
             maxLines: 1,
@@ -393,7 +394,7 @@ class _EdgePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFFC3CDC6)
+      ..color = AppColors.border
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
     for (final n in nodes) {

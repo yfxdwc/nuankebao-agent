@@ -8,6 +8,7 @@ import '../../providers/service_providers.dart';
 import '../../theme/app_theme.dart';
 import '../customers/customers_list_screen.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 class AiAssistantScreen extends ConsumerStatefulWidget {
   const AiAssistantScreen({super.key});
 
@@ -79,12 +80,12 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
         error: (e, _) => Center(child: Text('加载失败: $e')),
         data: (customers) {
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('选择客户', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
@@ -101,18 +102,18 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppSpace.s24),
 
                 if (_selectedCustomerId == null)
                   const Padding(
-                    padding: EdgeInsets.all(24),
+                    padding: EdgeInsets.all(AppSpace.s24),
                     child: Text('请先选择客户', style: TextStyle(color: Colors.black54)),
                   )
                 else ...[
                   // 客户画像
                   Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(AppSpace.s16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -122,8 +123,8 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                               const Row(
                                 children: [
                                   Icon(Icons.auto_awesome, color: AppTheme.primary),
-                                  SizedBox(width: 8),
-                                  Text('客户画像', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                                  SizedBox(width: AppSpace.s8),
+                                  Text('客户画像', style: TextStyle(fontWeight: FontWeight.w600, fontSize: AppType.sm)),
                                 ],
                               ),
                               ElevatedButton(
@@ -132,23 +133,23 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: AppSpace.s12),
                           if (_profileLoading)
                             const Center(child: CircularProgressIndicator())
                           else if (_profile != null) ...[
                             if (_profileMock)
                               const Padding(
-                                padding: EdgeInsets.only(bottom: 8),
+                                padding: EdgeInsets.only(bottom: AppSpace.s8),
                                 child: Chip(
-                                  label: Text('Mock 模式', style: TextStyle(fontSize: 11)),
-                                  backgroundColor: Color(0xFFFFF3CD),
+                                  label: Text('Mock 模式', style: TextStyle(fontSize: AppType.tiny)),
+                                  backgroundColor: AppColors.warningSurface,
                                 ),
                               ),
                             Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(AppSpace.s12),
                               decoration: BoxDecoration(
                                 color: AppTheme.primaryLight.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(AppRadius.r8),
                               ),
                               child: Text(_profile!),
                             ),
@@ -157,12 +158,12 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpace.s16),
 
                   // 跟进话术
                   Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(AppSpace.s16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -172,8 +173,8 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                               const Row(
                                 children: [
                                   Icon(Icons.chat, color: AppTheme.primary),
-                                  SizedBox(width: 8),
-                                  Text('跟进话术', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                                  SizedBox(width: AppSpace.s8),
+                                  Text('跟进话术', style: TextStyle(fontWeight: FontWeight.w600, fontSize: AppType.sm)),
                                 ],
                               ),
                               ElevatedButton(
@@ -182,27 +183,27 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: AppSpace.s12),
                           if (_followUpLoading)
                             const Center(child: CircularProgressIndicator())
                           else if (_followUp != null) ...[
                             if (_followUpMock)
                               const Padding(
-                                padding: EdgeInsets.only(bottom: 8),
+                                padding: EdgeInsets.only(bottom: AppSpace.s8),
                                 child: Chip(
-                                  label: Text('Mock 模式', style: TextStyle(fontSize: 11)),
-                                  backgroundColor: Color(0xFFFFF3CD),
+                                  label: Text('Mock 模式', style: TextStyle(fontSize: AppType.tiny)),
+                                  backgroundColor: AppColors.warningSurface,
                                 ),
                               ),
                             Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(AppSpace.s12),
                               decoration: BoxDecoration(
                                 color: AppTheme.primaryLight.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(AppRadius.r8),
                               ),
                               child: Text(_followUp!),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: AppSpace.s8),
                             OutlinedButton.icon(
                               onPressed: () async {
                                 await Clipboard.setData(ClipboardData(text: _followUp!));
@@ -212,7 +213,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                                   );
                                 }
                               },
-                              icon: const Icon(Icons.copy, size: 16),
+                              icon: const Icon(Icons.copy, size: AppSpace.s16),
                               label: const Text('复制话术'),
                             ),
                           ],

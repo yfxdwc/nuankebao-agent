@@ -12,6 +12,7 @@ import '../../../core/theme/app_theme.dart';
 import 'salon_section.dart';
 import 'salon_status_chip.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class SalonCard extends StatelessWidget {
   final Salon salon;
   final VoidCallback onTap;
@@ -31,7 +32,7 @@ class SalonCard extends StatelessWidget {
         child: Opacity(
           opacity: dim ? 0.6 : 1.0,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -50,12 +51,12 @@ class SalonCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpace.s8),
                     SalonStatusChip(status: salon.status),
                   ],
                 ),
                 if (salon.subtitle != null && salon.subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpace.s4),
                   Text(
                     salon.subtitle!,
                     maxLines: 1,
@@ -66,7 +67,7 @@ class SalonCard extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 10),
+                const SizedBox(height: AppSpace.s10),
 
                 // 我的身份 / 我的回复 / 带约任务
                 Wrap(
@@ -82,7 +83,7 @@ class SalonCard extends StatelessWidget {
                       _QuotaBadge(value: viewer.myQuotaValue!),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: AppSpace.s10),
 
                 // 时间
                 _IconLine(
@@ -91,13 +92,13 @@ class SalonCard extends StatelessWidget {
                 ),
                 // 地点 (空则不显示)
                 if (salon.addressLine.isNotEmpty) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: AppSpace.s6),
                   _IconLine(
                     icon: Icons.place_outlined,
                     text: salon.addressLine,
                   ),
                 ],
-                const SizedBox(height: 10),
+                const SizedBox(height: AppSpace.s10),
 
                 // 人数统计小字
                 Text(
@@ -151,7 +152,7 @@ class _IconLine extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(icon, size: 22, color: AppTheme.textSecondary),
-        const SizedBox(width: 6),
+        const SizedBox(width: AppSpace.s6),
         Expanded(
           child: Text(
             text,
@@ -172,23 +173,23 @@ class _QuotaBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s4),
       decoration: BoxDecoration(
         color: AppTheme.accent.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.r14),
         border: Border.all(color: AppTheme.accent, width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.flag_outlined, size: 16, color: Color(0xFF8A5A1F)),
-          const SizedBox(width: 4),
+          const Icon(Icons.flag_outlined, size: 16, color: AppColors.warningDark),
+          const SizedBox(width: AppSpace.s4),
           Text(
             '带约 $value 人',
             style: const TextStyle(
               fontSize: AppTheme.fontXs,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF8A5A1F),
+              color: AppColors.warningDark,
             ),
           ),
         ],

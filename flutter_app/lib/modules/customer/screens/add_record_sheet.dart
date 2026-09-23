@@ -13,6 +13,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/widgets/big_button.dart';
 
+import '../../../core/theme/tokens.g.dart';
 enum RecordType { wellness, interaction, followUp }
 
 /// 显示底部弹窗 (从客户详情"+"按钮调用)
@@ -22,7 +23,7 @@ Future<void> showAddRecordSheet(BuildContext context, {required String customerI
     isScrollControlled: true,
     backgroundColor: AppTheme.bgWarm,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.r20)),
     ),
     builder: (ctx) => _AddRecordSheet(customerId: customerId),
   );
@@ -36,7 +37,7 @@ class _AddRecordSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s20, 20, 20, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -62,7 +63,7 @@ class _AddRecordSheet extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
 
             // 3 选 1 大按钮 (每个 80pt 高)
             _recordButton(
@@ -76,7 +77,7 @@ class _AddRecordSheet extends ConsumerWidget {
                 context.push('/wellness-records/new?customerId=$customerId');
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
 
             _recordButton(
               context,
@@ -89,7 +90,7 @@ class _AddRecordSheet extends ConsumerWidget {
                 _showInteractionDialog(context, ref, customerId);
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
 
             _recordButton(
               context,
@@ -118,25 +119,25 @@ class _AddRecordSheet extends ConsumerWidget {
   }) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.r16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.r16),
         child: Container(
-          height: 80,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          height: AppSpace.s80,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s20),
           child: Row(
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: AppSpace.s56,
+                height: AppSpace.s56,
                 decoration: BoxDecoration(
                   color: iconColor.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(AppRadius.r28),
                 ),
                 child: Icon(icon, color: iconColor, size: 32),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: AppSpace.s16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,7 +151,7 @@ class _AddRecordSheet extends ConsumerWidget {
                         color: AppTheme.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpace.s4),
                     Text(
                       hint,
                       style: const TextStyle(
@@ -239,7 +240,7 @@ class _AddRecordSheet extends ConsumerWidget {
                   hintText: '如: 提醒复购',
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               OutlinedButton.icon(
                 onPressed: () async {
                   final picked = await showDatePicker(

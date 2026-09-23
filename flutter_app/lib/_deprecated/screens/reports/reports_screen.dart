@@ -7,6 +7,7 @@ import '../../providers/service_providers.dart';
 import '../../theme/app_theme.dart';
 import '../wellness/wellness_records_list_screen.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 final reportOverviewProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   // 简版: 复用 dashboard stats + 字典
   final dashboard = ref.watch(dashboardServiceProvider);
@@ -39,7 +40,7 @@ class ReportsScreen extends ConsumerWidget {
           final sMap = {for (final s in sItems) s.id: s.name};
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -47,18 +48,18 @@ class ReportsScreen extends ConsumerWidget {
                 Row(
                   children: [
                     _MetricCard(label: '本月新增', value: stats.customerCount),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpace.s12),
                     _MetricCard(label: '本月回访', value: stats.thisMonthVisits),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpace.s12),
                     _MetricCard(label: '总活跃', value: stats.totalInteractions),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppSpace.s24),
 
                 // 项目分布
                 if (distribution.isNotEmpty) ...[
-                  const Text('本月项目分布', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 12),
+                  const Text('本月项目分布', style: TextStyle(fontSize: AppType.sm, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: AppSpace.s12),
                   SizedBox(
                     height: 220,
                     child: BarChart(
@@ -71,8 +72,8 @@ class ReportsScreen extends ConsumerWidget {
                               BarChartRodData(
                                 toY: e.value.count.toDouble(),
                                 color: AppTheme.primary,
-                                width: 24,
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                                width: AppSpace.s24,
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.r4)),
                               ),
                             ],
                           );
@@ -88,10 +89,10 @@ class ReportsScreen extends ConsumerWidget {
                                 final i = value.toInt();
                                 if (i < 0 || i >= distribution.length) return const SizedBox();
                                 return Padding(
-                                  padding: const EdgeInsets.only(top: 4),
+                                  padding: const EdgeInsets.only(top: AppSpace.s4),
                                   child: Text(
                                     sMap[distribution[i].serviceItemId] ?? '#${i}',
-                                    style: const TextStyle(fontSize: 9),
+                                    style: const TextStyle(fontSize: AppType.micro),
                                   ),
                                 );
                               },
@@ -122,13 +123,13 @@ class _MetricCard extends StatelessWidget {
     return Expanded(
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpace.s12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(color: Colors.black54, fontSize: 12)),
-              const SizedBox(height: 4),
-              Text(value.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppTheme.primary)),
+              Text(label, style: const TextStyle(color: Colors.black54, fontSize: AppType.tiny)),
+              const SizedBox(height: AppSpace.s4),
+              Text(value.toString(), style: const TextStyle(fontSize: AppType.lg, fontWeight: FontWeight.bold, color: AppTheme.primary)),
             ],
           ),
         ),

@@ -15,6 +15,7 @@ import '../../../core/models/follow_up_info.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class FollowUpAnalysisCard extends ConsumerStatefulWidget {
   final String customerId;
   const FollowUpAnalysisCard({super.key, required this.customerId});
@@ -55,16 +56,16 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 const Icon(Icons.insights, size: 26, color: AppTheme.primary),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text(
                     '跟进分析',
@@ -82,7 +83,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpace.s4),
             const Text(
               '客观记录: 联系频次 / 到店节奏 / 待办',
               style: TextStyle(
@@ -90,18 +91,18 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
                 color: AppTheme.textSecondary,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             if (_loading)
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
+                padding: EdgeInsets.symmetric(vertical: AppSpace.s12),
                 child: Row(
                   children: [
                     SizedBox(
-                      width: 20,
-                      height: 20,
+                      width: AppSpace.s20,
+                      height: AppSpace.s20,
                       child: CircularProgressIndicator(strokeWidth: 2.5),
                     ),
-                    SizedBox(width: 10),
+                    SizedBox(width: AppSpace.s10),
                     Text('正在算跟进情况...',
                         style: TextStyle(
                             fontSize: AppTheme.fontSm,
@@ -116,7 +117,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
                   Text('加载失败: $_error',
                       style: const TextStyle(
                           fontSize: AppTheme.fontXs, color: AppTheme.danger)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpace.s8),
                   OutlinedButton(onPressed: _load, child: const Text('重试')),
                 ],
               )
@@ -141,10 +142,10 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
         // 一句话总结 (免费层, 服务端拼的)
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpace.s12),
           decoration: BoxDecoration(
             color: AppTheme.bgWarm,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.r10),
           ),
           child: Text(
             a.headline,
@@ -155,7 +156,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // 趋势 (颜色 + 文字双编码)
         if (a.trend != 'unknown')
@@ -170,7 +171,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
                 size: 22,
                 color: trendColor,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: AppSpace.s6),
               Text(
                 a.trendText,
                 style: TextStyle(
@@ -181,7 +182,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
               ),
             ],
           ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // 指标网格
         Wrap(
@@ -233,16 +234,16 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // AI 解读: 会员提示 (客观指标不锁, 只锁解读)
         if (!a.aiTipAvailable)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(AppSpace.s10),
             decoration: BoxDecoration(
               color: AppTheme.accent.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.r10),
             ),
             child: const Text(
               '🔒 升级会员可看 AI 解读 (该聊什么 / 开场话术)',
@@ -286,7 +287,7 @@ class _Metric extends StatelessWidget {
               color: AppTheme.textSecondary,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpace.s2),
           Text(
             value,
             style: TextStyle(
@@ -298,7 +299,7 @@ class _Metric extends StatelessWidget {
           Text(
             sub,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: AppType.xs,
               color: danger ? AppTheme.danger : AppTheme.textSecondary,
             ),
           ),

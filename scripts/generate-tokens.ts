@@ -373,8 +373,42 @@ function emitFlutter(): string {
   p("}");
   p("");
 
-  // ---- L2 AppTokens ----
+  // ---- L2 AppTokens (逐主题) ----
   const colorKeys = Object.keys(themeColors[DEFAULT_THEME.id]);
+
+  // 哪些颜色槽**跨主题完全一致**? 那些可以做成编译期常量 (const),
+  //   → 存量代码里大量 `const TextStyle(color: Color(0xFF8A8A8A))` 能零成本换成令牌
+  //   → 而真正随主题变的品牌槽 (primary/accent/...) 必须走 context.tokens
+  // 这个判定是**自动**的: 往 design-tokens.json 把某个共享槽挪进 themes, 它就自动变成运行时令牌。
+  const themeInvariantKeys = colorKeys.filter((k) =>
+    themeDefs.every((t) => themeColors[t.id][k] === themeColors[DEFAULT_THEME.id][k]),
+  );
+  const themeVariantKeys = colorKeys.filter((k) => !themeInvariantKeys.includes(k));
+
+  p("/// L2 语义令牌 —— **跨主题不变**的那部分 (中性色 / 文字色 / 状态色 / 图谱色)");
+  p("///");
+  p("/// 为什么这层是 const 而不是 context.tokens:");
+  p("///   design-tokens.json 的规则是「themes 只覆盖品牌槽, 中性/文字/状态色在 shared 里共用」——");
+  p("///   也就是说这些颜色**本来就不随换肤变**。做成常量后, 存量代码里大量");
+  p("///   `const TextStyle(color: Color(0xFF8A8A8A))` 能直接换成 `AppColors.textTertiary`,");
+  p("///   既不用拿 context, 也不会因为少写 const 而丢编译期优化。");
+  p("///");
+  p("/// 判定是自动的 (见生成器): 把某个槽从 shared 挪进 themes, 它就自动降级成运行时令牌。");
+  p("abstract final class AppColors {");
+  for (const k of themeInvariantKeys) {
+    p(`  static const Color ${k} = Color(${toDartHex(themeColors[DEFAULT_THEME.id][k])});`);
+  }
+  p("}");
+  p("");
+  p("/// 随主题变化的品牌槽 —— 只能用 `context.tokens.<名>` (取到当前主题的值)");
+  p("///");
+  p(`/// 共 ${themeVariantKeys.length} 个: ${themeVariantKeys.join(", ")}`);
+  p(`const List<String> kThemeVariantTokenKeys = <String>[`);
+  for (const k of themeVariantKeys) p(`  '${k}',`);
+  p("  'id', 'label', 'group',");
+  p("];");
+  p("");
+
   p("/// L2 语义令牌 —— 一个主题一份 (运行时可变, 用于换肤)");
   p("///");
   p("/// 取用方式 (业务代码唯一正确姿势):");

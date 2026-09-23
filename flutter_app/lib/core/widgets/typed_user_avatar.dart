@@ -26,6 +26,7 @@ import '../theme/app_theme.dart';
 import 'member_avatar.dart';
 import 'user_avatar.dart';
 
+import '../theme/tokens.g.dart';
 class TypedUserAvatar extends StatelessWidget {
   final String? avatarUrl;
   final String name;
@@ -62,7 +63,7 @@ class TypedUserAvatar extends StatelessWidget {
       case 'seed':
         return (AppTheme.accent, '🌱', '种子客户');
       default:
-        return (const Color(0xFF9AA5A0), '👤', '普通客户');
+        return (AppColors.avatarSlotNeutral, '👤', '普通客户');
     }
   }
 
@@ -117,7 +118,7 @@ class TypedUserAvatar extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: badgeColor,
-                    border: Border.all(color: Colors.white, width: 2),
+                    border: Border.all(color: Colors.white, width: AppSpace.s2),
                   ),
                   alignment: Alignment.center,
                   // emoji 角标: 字号比汉字大一点才看得清 (emoji 自带留白)

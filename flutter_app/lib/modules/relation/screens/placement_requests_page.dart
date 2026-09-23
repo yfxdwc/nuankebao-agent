@@ -15,6 +15,7 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class PlacementRequestsPage extends ConsumerStatefulWidget {
   const PlacementRequestsPage({super.key});
 
@@ -108,11 +109,11 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
       context: context,
       backgroundColor: AppTheme.bgWarm,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.r20)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s20, 20, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -124,7 +125,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpace.s6),
               Text(
                 '${r.initiatorName} 认领您为上级, 她整棵树会接在您选的那条线下面。'
                 '接上以后不能撤换 (确需调整请联系系统管理员)。',
@@ -133,7 +134,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               for (final sd in sides) ...[
                 FilledButton(
                   onPressed: () => Navigator.of(ctx).pop(sd),
@@ -143,7 +144,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                     style: const TextStyle(fontSize: AppTheme.fontMd),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: AppSpace.s10),
               ],
               OutlinedButton(
                 onPressed: () => Navigator.of(ctx).pop(null),
@@ -212,7 +213,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
         onRefresh: _load,
         child: ListView(
           children: [
-            const SizedBox(height: 80),
+            const SizedBox(height: AppSpace.s80),
             EmptyState(
               icon: Icons.check_circle_outline,
               title: mine ? '没有进行中的申请' : '没有等我确认的申请',
@@ -227,7 +228,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 32),
         itemCount: items.length,
         itemBuilder: (context, i) => _buildCard(items[i], mine: mine),
       ),
@@ -236,9 +237,9 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
 
   Widget _buildCard(PlacementRequest r, {required bool mine}) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -251,7 +252,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                   size: 22,
                   color: AppTheme.primary,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
                     r.summary,
@@ -263,7 +264,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Text(
               '${r.progressText} · 状态 ${_statusLabel(r.status)}',
               style: const TextStyle(
@@ -272,7 +273,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
               ),
             ),
             if (r.expiresAt != null && r.isPending) ...[
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpace.s2),
               Text(
                 '${_hoursLeft(r.expiresAt!)} 小时内未确认将自动失效',
                 style: const TextStyle(
@@ -282,7 +283,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
               ),
             ],
             if (r.needsSidePick && r.awaitingMe) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               const Text(
                 '同意时请挑一条线: 她接在您的 A线 还是 B线, 由您决定',
                 style: TextStyle(
@@ -292,7 +293,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                 ),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             if (!mine && r.awaitingMe)
               Row(
                 children: [
@@ -307,7 +308,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpace.s12),
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _decide(r, false),

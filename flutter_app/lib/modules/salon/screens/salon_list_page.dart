@@ -16,6 +16,7 @@ import '../../../core/widgets/empty_state.dart';
 import '../providers/salon_providers.dart';
 import '../widgets/salon_card.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class SalonListPage extends ConsumerStatefulWidget {
   const SalonListPage({super.key});
 
@@ -97,12 +98,12 @@ class _SalonListPageState extends ConsumerState<SalonListPage>
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(label),
-        const SizedBox(width: 6),
+        const SizedBox(width: AppSpace.s6),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: AppSpace.s2),
           decoration: BoxDecoration(
             color: AppTheme.primary,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.r10),
           ),
           child: Text(
             '$count',
@@ -164,12 +165,12 @@ class _SalonListPageState extends ConsumerState<SalonListPage>
           onRefresh: () => ref.refresh(salonsProvider(role).future),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(top: 8, bottom: 96),
+            padding: const EdgeInsets.only(top: AppSpace.s8, bottom: AppSpace.s96),
             children: [
               ...active.map(_buildCard),
               if (past.isNotEmpty) ...[
                 const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+                  padding: EdgeInsets.fromLTRB(AppSpace.s20, 16, 20, 4),
                   child: Text(
                     '已结束/已取消',
                     style: TextStyle(

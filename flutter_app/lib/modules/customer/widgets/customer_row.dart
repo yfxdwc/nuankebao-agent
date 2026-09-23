@@ -6,6 +6,7 @@ import '../../../core/utils/birthday.dart';
 import '../../../core/widgets/typed_user_avatar.dart';
 import '../../../core/models/follow_up_info.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class CustomerRow extends StatelessWidget {
   final Customer customer;
   /// @deprecated 改用 [customerType] (保留兼容旧调用点; 两者不一致时以 customerType 为准)
@@ -59,8 +60,8 @@ class CustomerRow extends StatelessWidget {
     return isFranchisee ? 'franchisee' : 'normal';
   }
 
-  static const Color _levelP2 = Color(0xFFD9B23D);
-  static const Color _levelP4 = Color(0xFF9AA5A0);
+  static const Color _levelP2 = AppColors.memberGoldLight;
+  static const Color _levelP4 = AppColors.avatarSlotNeutral;
 
   /// 分档颜色 (与方案 §3.2 一致; 色 + 文字双编码, 色弱也能分)
   static Color levelColor(String? level) {
@@ -102,10 +103,10 @@ class CustomerRow extends StatelessWidget {
         children: [
       Container(
         constraints: const BoxConstraints(minHeight: AppTheme.listRowHeight),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s12),
         decoration: const BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: Color(0xFFEEEEEE), width: 1),
+            bottom: BorderSide(color: AppColors.divider, width: 1),
           ),
         ),
         child: Row(
@@ -122,7 +123,7 @@ class CustomerRow extends StatelessWidget {
               // 会员 = 金环 + 右上角 👑 (客户类型角标仍在右下角, 互不遮挡)
               isMember: isMember,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpace.s12),
 
             // 中间信息
             Expanded(
@@ -155,7 +156,7 @@ class CustomerRow extends StatelessWidget {
                             ),
                           ),
                           if (_rowTail.isNotEmpty) ...<Widget>[
-                            const SizedBox(width: 6),
+                            const SizedBox(width: AppSpace.s6),
                             // 尾巴吃满剩余宽度; 实在放不下时可横向滑动 (不裁字/不报 overflow)
                             Expanded(
                               child: SingleChildScrollView(
@@ -171,7 +172,7 @@ class CustomerRow extends StatelessWidget {
                       );
                     },
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpace.s4),
                   // 第二行: 跟进信息优先 (主人 2026-09-20 拍 Q3: 动作在标签, 数据在这一行)
                   if (f?.contactLine != null)
                     Text(
@@ -206,12 +207,12 @@ class CustomerRow extends StatelessWidget {
 
             // 右侧: 待办红点
             if (pendingCount > 0) ...[
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.s8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s4),
                 decoration: BoxDecoration(
                   color: AppTheme.danger,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.r12),
                 ),
                 child: Text(
                   '•$pendingCount',
@@ -224,7 +225,7 @@ class CustomerRow extends StatelessWidget {
               ),
             ],
 
-            const SizedBox(width: 4),
+            const SizedBox(width: AppSpace.s4),
             const Icon(
               Icons.chevron_right,
               color: AppTheme.textSecondary,
@@ -237,10 +238,10 @@ class CustomerRow extends StatelessWidget {
           //   4pt 竖条 + 第二行文字也是同色 (色 + 文字双编码)
           if (barColor != null)
             Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: 4,
+              left: AppSpace.s0,
+              top: AppSpace.s0,
+              bottom: AppSpace.s0,
+              width: AppSpace.s4,
               child: Container(color: barColor),
             ),
         ],
@@ -256,14 +257,14 @@ class CustomerRow extends StatelessWidget {
     return <Widget>[
       for (final t in tags) ...[
         _FollowUpTagChip(tag: t),
-        const SizedBox(width: 6),
+        const SizedBox(width: AppSpace.s6),
       ],
       if (_birthdayDays != null) ...[
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: 5),
           decoration: BoxDecoration(
             color: AppTheme.accent,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.r14),
           ),
           child: Text(
             _birthdayDays == 0 ? '🎂 今天' : '🎂 ${_birthdayDays}天',
@@ -274,16 +275,16 @@ class CustomerRow extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: AppSpace.s6),
       ],
       // ★ 已注册用户标记 (ADR-0016 D8, 主人 2026-09-22 拍「UI 上要有区别」)
       //   true = 她是 app 用户 (有账号) / 不显示 = 凭空建档的客户
       if (customer.hasAccount) ...[
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: AppSpace.s4),
           decoration: BoxDecoration(
             color: AppTheme.primaryLight,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.r12),
           ),
           child: const Text(
             '已注册',
@@ -295,7 +296,7 @@ class CustomerRow extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: AppSpace.s6),
       ],
     ];
   }
@@ -312,10 +313,10 @@ class _FollowUpTagChip extends StatelessWidget {
     return Tooltip(
       message: tag.hint.isEmpty ? tag.label : tag.hint,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: 3),
         decoration: BoxDecoration(
           color: color.withOpacity(0.14),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.r12),
         ),
         child: Text(
           '${tag.emoji}${tag.label}',

@@ -25,6 +25,7 @@ import '../../presentation/graph/widgets/franchise_tree_painter.dart';
 // fix-graph-zoom-pan v2 (2026-09-16): auto-fit initial scale
 import 'dart:math' as math;
 
+import '../../../core/theme/tokens.g.dart';
 // W5 RBAC: ≤3 层硬限 (ADR-0006 / 《禁止传销条例》红线)
 const int _maxAllowedDepth = 3;
 
@@ -118,12 +119,12 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
         if (!snap.hasData) return const SizedBox.shrink();
         final me = snap.data!;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s10),
           color: AppTheme.franchisee.withOpacity(0.08),
           child: Row(
             children: [
               const Icon(Icons.arrow_upward, size: 20, color: AppTheme.franchisee),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.s8),
               const Text(
                 '我的上级',
                 style: TextStyle(
@@ -131,7 +132,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.s8),
               Text(
                 me.name,
                 style: const TextStyle(
@@ -141,7 +142,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
                 ),
               ),
               const Spacer(),
-              const FranchiseChip(type: 'franchisee', fontSize: 12),
+              const FranchiseChip(type: 'franchisee', fontSize: AppType.tiny),
             ],
           ),
         );
@@ -151,7 +152,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
 
   Widget _buildDepthSelector() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s12),
       color: AppTheme.bgWarm,
       child: Row(
         children: [
@@ -163,17 +164,17 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
               color: AppTheme.textPrimary,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpace.s12),
           for (final d in [1, 2, _maxAllowedDepth]) ...[
             _depthChip(d),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.s8),
           ],
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpace.s8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s8),
             decoration: BoxDecoration(
               color: AppTheme.franchisee.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(AppRadius.r20),
             ),
             child: const Text(
               '≤3 层',
@@ -202,14 +203,14 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
     return GestureDetector(
       onTap: () => setState(() => _depth = d),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),
         decoration: BoxDecoration(
           color: selected ? AppTheme.primary : Colors.white,
           border: Border.all(
             color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.4),
-            width: 2,
+            width: AppSpace.s2,
           ),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.r20),
         ),
         child: Text(
           '$d层',
@@ -229,7 +230,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
     final matchCount =
         q.isEmpty ? 0 : _countMatches(tree, q.toLowerCase());
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 8, 16, 8),
       child: TextField(
         controller: _searchController,
         style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -243,12 +244,12 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
                   children: [
                     if (matchCount > 0)
                       Container(
-                        margin: const EdgeInsets.only(right: 4),
+                        margin: const EdgeInsets.only(right: AppSpace.s4),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                            horizontal: AppSpace.s8, vertical: AppSpace.s2),
                         decoration: BoxDecoration(
                           color: AppTheme.primary,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppRadius.r10),
                         ),
                         child: Text(
                           '$matchCount',
@@ -295,7 +296,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
     if (count > 0) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s6),
       color: AppTheme.danger.withOpacity(0.08),
       child: Text(
         '没有匹配「$q」的加盟商',
@@ -381,7 +382,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
           scaleEnabled: true,
           minScale: 0.1,
           maxScale: 3.0,
-          boundaryMargin: const EdgeInsets.all(80),
+          boundaryMargin: const EdgeInsets.all(AppSpace.s80),
           child: SizedBox(
             width: canvasSize.width,
             height: canvasSize.height,
@@ -476,8 +477,8 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
     return Positioned(
       left: position.dx - 32,
       top: position.dy - 32,
-      width: 64,
-      height: 64,
+      width: AppSpace.s64,
+      height: AppSpace.s64,
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
@@ -486,7 +487,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
             shape: BoxShape.circle,
             border: Border.all(
               color: AppTheme.primary.withOpacity(0.4),
-              width: 2,
+              width: AppSpace.s2,
               style: BorderStyle.solid,
             ),
             color: Colors.white.withOpacity(0.5),
@@ -502,7 +503,7 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
               Text(
                 '空$label',
                 style: const TextStyle(
-                  fontSize: 10,
+                  fontSize: AppType.micro,
                   color: AppTheme.primary,
                   fontWeight: FontWeight.w500,
                 ),

@@ -15,6 +15,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import '../providers/salon_providers.dart';
 
+import '../../../core/theme/tokens.g.dart';
 /// 弹层只允许 3 个选项 → API 字符串 (model 里只有 SalonStatus.apiValue)
 String _apiValueOf(SalonInvitationStatus status) {
   switch (status) {
@@ -45,7 +46,7 @@ Future<void> showSalonRsvpSheet(
     isScrollControlled: true,
     backgroundColor: AppTheme.bgCard,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.r20)),
     ),
     builder: (_) => _SalonRsvpSheet(ref: ref, salon: salon),
   );
@@ -102,7 +103,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s20, 12, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,15 +111,15 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
               // 顶部把手
               Center(
                 child: Container(
-                  width: 48,
+                  width: AppSpace.s48,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD0D0D0),
-                    borderRadius: BorderRadius.circular(3),
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(AppRadius.r3),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               const Text(
                 '回复邀请',
                 style: TextStyle(
@@ -126,7 +127,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Text(
                 widget.salon.title,
                 maxLines: 1,
@@ -136,7 +137,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpace.s20),
               const Text(
                 '您能来吗?',
                 style: TextStyle(
@@ -144,7 +145,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               Row(
                 children: [
                   Expanded(
@@ -157,7 +158,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                           () => _status = SalonInvitationStatus.accepted),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: AppSpace.s10),
                   Expanded(
                     child: _RsvpChoice(
                       label: '待定',
@@ -168,7 +169,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                           () => _status = SalonInvitationStatus.tentative),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: AppSpace.s10),
                   Expanded(
                     child: _RsvpChoice(
                       label: '婉拒',
@@ -182,7 +183,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                 ],
               ),
               if (_showGuestCount) ...[
-                const SizedBox(height: 24),
+                const SizedBox(height: AppSpace.s24),
                 const Text(
                   '预计带约人数',
                   style: TextStyle(
@@ -190,7 +191,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.s4),
                 const Text(
                   '您打算邀请几位客户/朋友一起来?',
                   style: TextStyle(
@@ -198,10 +199,10 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 _buildGuestStepper(),
               ],
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpace.s24),
               const Text(
                 '留言给主理人',
                 style: TextStyle(
@@ -209,7 +210,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               TextField(
                 controller: _notesCtrl,
                 maxLines: 3,
@@ -219,7 +220,7 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                   hintText: '有什么想说的 (可不填)',
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               BigButton(
                 label: '提交',
                 icon: Icons.send,
@@ -270,15 +271,15 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
     return Material(
       color: enabled
           ? AppTheme.primaryLight.withOpacity(0.5)
-          : const Color(0xFFEDEDED),
+          : AppColors.divider,
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: SizedBox(
-          width: 64,
-          height: 64,
+          width: AppSpace.s64,
+          height: AppSpace.s64,
           child: Icon(
             icon,
             size: 32,
@@ -347,22 +348,22 @@ class _RsvpChoice extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.r12),
       child: Container(
-        height: 88,
+        height: AppSpace.s88,
         decoration: BoxDecoration(
           color: selected ? color : Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.r12),
           border: Border.all(
-            color: selected ? color : const Color(0xFFD0D0D0),
-            width: 2,
+            color: selected ? color : AppColors.border,
+            width: AppSpace.s2,
           ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 30, color: selected ? Colors.white : color),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpace.s6),
             Text(
               label,
               style: TextStyle(

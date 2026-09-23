@@ -23,6 +23,7 @@ import '../core/theme/app_theme.dart';
 import 'profile_sheets.dart';
 import 'profile_widgets.dart';
 
+import '../core/theme/tokens.g.dart';
 final _packageInfoProvider = FutureProvider<PackageInfo>(
   (ref) => PackageInfo.fromPlatform(),
 );
@@ -37,26 +38,26 @@ class AboutPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('关于与帮助'), toolbarHeight: 64),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
         children: [
           // 顶部: 品牌 + 版本
           Card(
             margin: EdgeInsets.zero,
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(AppSpace.s20),
               child: Column(
                 children: [
                   Container(
-                    width: 72,
-                    height: 72,
+                    width: AppSpace.s72,
+                    height: AppSpace.s72,
                     decoration: BoxDecoration(
                       color: AppTheme.primaryLight.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(AppRadius.r20),
                     ),
                     child: const Icon(Icons.spa,
                         size: 44, color: AppTheme.primaryDark),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpace.s12),
                   const Text(
                     '暖客宝',
                     style: TextStyle(
@@ -65,7 +66,7 @@ class AboutPage extends ConsumerWidget {
                       color: AppTheme.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpace.s4),
                   const Text(
                     '大健康销售 · 客户维护 · 养生记录',
                     style: TextStyle(
@@ -73,7 +74,7 @@ class AboutPage extends ConsumerWidget {
                       color: AppTheme.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpace.s12),
                   infoAsync.when(
                     loading: () => const Text(
                       '版本读取中...',
@@ -93,7 +94,7 @@ class AboutPage extends ConsumerWidget {
                             color: AppTheme.primaryDark,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: AppSpace.s4),
                         Text(
                           installInfoLine(
                             packageName: info.packageName,
@@ -110,7 +111,7 @@ class AboutPage extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpace.s4),
                   Text(
                     kIsWeb
                         ? '运行环境: Web 预览'
@@ -237,7 +238,7 @@ class AboutPage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpace.s24),
           const Center(
             child: Text(
               '暖客宝 · 数据自托管',
@@ -267,7 +268,7 @@ class _HelpItem extends StatelessWidget {
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
         tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(bottom: 12),
+        childrenPadding: const EdgeInsets.only(bottom: AppSpace.s12),
         iconColor: AppTheme.primary,
         collapsedIconColor: AppTheme.textSecondary,
         title: Text(
@@ -311,12 +312,12 @@ class _FactItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, size: 24, color: AppTheme.primary),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpace.s12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,7 +330,7 @@ class _FactItem extends StatelessWidget {
                     color: AppTheme.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpace.s2),
                 Text(
                   detail,
                   style: const TextStyle(

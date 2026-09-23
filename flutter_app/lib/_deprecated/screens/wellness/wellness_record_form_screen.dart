@@ -8,6 +8,7 @@ import '../../providers/service_providers.dart';
 import '../wellness/wellness_records_list_screen.dart';
 import '../wellness/wellness_record_detail_screen.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 class WellnessRecordFormScreen extends ConsumerStatefulWidget {
   final String? recordId; // null = 新增
   final String? customerId; // 新增时预选客户
@@ -149,7 +150,7 @@ class _WellnessRecordFormScreenState extends ConsumerState<WellnessRecordFormScr
     return Scaffold(
       appBar: AppBar(title: Text(widget.recordId == null ? '新增养生记录' : '编辑养生记录')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -159,12 +160,12 @@ class _WellnessRecordFormScreenState extends ConsumerState<WellnessRecordFormScr
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: '客户 ID *'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             TextField(
               controller: _serviceDateController,
               decoration: const InputDecoration(labelText: '服务日期 * (YYYY-MM-DD)'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             DropdownButtonFormField<String>(
               value: _serviceItemId,
               decoration: const InputDecoration(labelText: '服务项目 *'),
@@ -173,11 +174,11 @@ class _WellnessRecordFormScreenState extends ConsumerState<WellnessRecordFormScr
                   .toList(),
               onChanged: (v) => setState(() => _serviceItemId = v),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
 
             // 身体部位 (多选)
             const Text('身体部位 (多选) *', style: TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -196,11 +197,11 @@ class _WellnessRecordFormScreenState extends ConsumerState<WellnessRecordFormScr
                 );
               }).toList(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
 
             // 状态评分
             const Text('理疗前', style: TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Row(
               children: [
                 Expanded(child: _NumberField(
@@ -208,7 +209,7 @@ class _WellnessRecordFormScreenState extends ConsumerState<WellnessRecordFormScr
                   value: _painLevelPre,
                   onChanged: (v) => setState(() => _painLevelPre = v),
                 )),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpace.s12),
                 Expanded(child: _NumberField(
                   label: '睡眠质量 (0-10)',
                   value: _sleepQualityPre,
@@ -216,9 +217,9 @@ class _WellnessRecordFormScreenState extends ConsumerState<WellnessRecordFormScr
                 )),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             const Text('理疗后', style: TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Row(
               children: [
                 Expanded(child: _NumberField(
@@ -226,7 +227,7 @@ class _WellnessRecordFormScreenState extends ConsumerState<WellnessRecordFormScr
                   value: _painLevelPost,
                   onChanged: (v) => setState(() => _painLevelPost = v),
                 )),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpace.s12),
                 Expanded(child: _NumberField(
                   label: '睡眠质量 (0-10)',
                   value: _sleepQualityPost,
@@ -234,7 +235,7 @@ class _WellnessRecordFormScreenState extends ConsumerState<WellnessRecordFormScr
                 )),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
 
             // 过程 + 反馈
             TextField(
@@ -242,27 +243,27 @@ class _WellnessRecordFormScreenState extends ConsumerState<WellnessRecordFormScr
               maxLines: 3,
               decoration: const InputDecoration(labelText: '理疗过程'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             TextField(
               controller: _feedbackController,
               maxLines: 2,
               decoration: const InputDecoration(labelText: '客户反馈'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             TextField(
               controller: _nextAdviceDateController,
               decoration: const InputDecoration(labelText: '下次建议日期 (YYYY-MM-DD)'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             PhotoPicker(
               photoUrls: _photos,
               onChanged: (newPhotos) => setState(() => _photos = newPhotos),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpace.s24),
             ElevatedButton(
               onPressed: _loading ? null : _save,
               child: _loading
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(width: AppSpace.s20, height: AppSpace.s20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Text('保存'),
             ),
           ],

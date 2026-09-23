@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import '../http/api_client.dart';
 import '../theme/app_theme.dart';
 
+import '../theme/tokens.g.dart';
 /// 内置候选头像 (id 必须与后端 AVATAR_PRESETS 一致, 顺序 = 展示顺序)
 class AvatarPreset {
   final String id;
@@ -31,14 +32,14 @@ class AvatarPreset {
 
 /// 8 个候选: 花草茶禅 + 心阳水 (全养生语义, 无真人脸, 男女通用)
 const List<AvatarPreset> kAvatarPresets = [
-  AvatarPreset('leaf', Icons.eco, Color(0xFF4A7C59), '绿叶'),
-  AvatarPreset('blossom', Icons.local_florist, Color(0xFFC2185B), '花朵'),
-  AvatarPreset('tea', Icons.emoji_food_beverage, Color(0xFF8D6E63), '喝茶'),
-  AvatarPreset('zen', Icons.self_improvement, Color(0xFF2F7D6F), '静心'),
-  AvatarPreset('heart', Icons.favorite, Color(0xFFD3545C), '爱心'),
-  AvatarPreset('sun', Icons.wb_sunny, Color(0xFFE89F4D), '暖阳'),
-  AvatarPreset('sprout', Icons.spa, Color(0xFF6B9E7A), '养生'),
-  AvatarPreset('water', Icons.water_drop, Color(0xFF2B6CB0), '清泉'),
+  AvatarPreset('leaf', Icons.eco, AppColors.avatarSlot1, '绿叶'),
+  AvatarPreset('blossom', Icons.local_florist, AppColors.avatarSlot2, '花朵'),
+  AvatarPreset('tea', Icons.emoji_food_beverage, AppColors.avatarSlot3, '喝茶'),
+  AvatarPreset('zen', Icons.self_improvement, AppColors.avatarSlot4, '静心'),
+  AvatarPreset('heart', Icons.favorite, AppColors.dangerBright, '爱心'),
+  AvatarPreset('sun', Icons.wb_sunny, AppColors.avatarSlot6, '暖阳'),
+  AvatarPreset('sprout', Icons.spa, AppColors.avatarSlot7, '养生'),
+  AvatarPreset('water', Icons.water_drop, AppColors.avatarSlot8, '清泉'),
 ];
 
 AvatarPreset? presetOf(String? avatarUrl) {

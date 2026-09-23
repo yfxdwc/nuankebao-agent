@@ -23,6 +23,7 @@ import '../widgets/salon_rsvp_sheet.dart';
 import '../widgets/salon_section.dart';
 import '../widgets/salon_status_chip.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class SalonDetailPage extends ConsumerStatefulWidget {
   final String salonId;
 
@@ -98,53 +99,53 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
       onRefresh: _refreshAll,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 96),
         children: [
           _header(salon),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           if (salon.status == SalonStatus.cancelled) ...[
             _cancelledBanner(activities),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           if (isInvitee) ...[
             _myReplyCard(salon),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           _timePlaceSection(salon, invitations),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           if (salon.agenda.isNotEmpty) ...[
             _agendaSection(salon),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           if (_hasTransport(salon)) ...[
             _transportSection(salon),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           if (_hasCatering(salon)) ...[
             _cateringSection(salon),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           if (_hasLodging(salon)) ...[
             _lodgingSection(salon),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           _dressFeeSection(salon),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           if (staffs.isNotEmpty) ...[
             _staffSection(staffs),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           if (invitations.isNotEmpty) ...[
             _inviteeSection(invitations),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           if (isInvitee) ...[
             _myGuestsSection(),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           if (attachments.isNotEmpty) ...[
             _attachmentsSection(attachments),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
           ],
           _activitiesSection(salon, activities),
         ],
@@ -160,7 +161,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpace.s20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -172,7 +173,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
               ),
             ),
             if (salon.subtitle != null && salon.subtitle!.isNotEmpty) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpace.s6),
               Text(
                 salon.subtitle!,
                 style: const TextStyle(
@@ -181,7 +182,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                 ),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -193,12 +194,12 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                   SalonInviteStatusChip(status: salon.viewer.myStatus!),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             Row(
               children: [
                 const Icon(Icons.person_outline,
                     size: 22, color: AppTheme.textSecondary),
-                const SizedBox(width: 6),
+                const SizedBox(width: AppSpace.s6),
                 Expanded(
                   child: Text(
                     '主理人: ${salon.organizerName ?? '—'}',
@@ -208,7 +209,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
               ],
             ),
             if (salon.description != null && salon.description!.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               Text(
                 salon.description!,
                 style: const TextStyle(
@@ -242,10 +243,10 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
       reason = '主理人取消了这场沙龙';
     }
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpace.s14),
       decoration: BoxDecoration(
         color: AppTheme.danger.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
         border: Border.all(color: AppTheme.danger.withOpacity(0.4)),
       ),
       child: Row(
@@ -253,7 +254,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
         children: [
           const Icon(Icons.cancel_outlined,
               size: 24, color: AppTheme.danger),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppSpace.s10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,7 +267,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                     color: AppTheme.danger,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.s4),
                 Text(
                   reason,
                   style: const TextStyle(
@@ -291,14 +292,14 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 const Icon(Icons.reply, size: 26, color: AppTheme.primary),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 const Text(
                   '我的回复',
                   style: TextStyle(
@@ -308,7 +309,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s10),
             Text(
               '我的回复: ${status.label}',
               style: const TextStyle(
@@ -317,32 +318,32 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
               ),
             ),
             if (guestCount > 0) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Text(
                 '预计带约 $guestCount 人',
                 style: const TextStyle(fontSize: AppTheme.fontMd),
               ),
             ],
             if (viewer.myQuotaValue != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.s12),
                 decoration: BoxDecoration(
                   color: AppTheme.accent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppRadius.r10),
                 ),
                 child: Row(
                   children: [
                     const Icon(Icons.flag_outlined,
                         size: 22, color: AppTheme.accent),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpace.s8),
                     Expanded(
                       child: Text(
                         '主理人请您邀约 ${viewer.myQuotaValue} 人到场',
                         style: const TextStyle(
                           fontSize: AppTheme.fontMd,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF8A5A1F),
+                          color: AppColors.warningDark,
                         ),
                       ),
                     ),
@@ -350,7 +351,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                 ),
               ),
             ],
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpace.s14),
             BigButton(
               label: '修改我的回复',
               icon: Icons.edit_note,
@@ -455,7 +456,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (showDivider) const Divider(height: 21),
+        if (showDivider) const Divider(height: AppSpace.s21),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -483,7 +484,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                     ),
                   ),
                   if (item.desc != null && item.desc!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpace.s4),
                     Text(
                       item.desc!,
                       style: const TextStyle(
@@ -682,7 +683,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
     final phone = staff.inviteePhone;
     final name = staff.inviteeName;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s6),
       child: Row(
         children: [
           CircleAvatar(
@@ -697,7 +698,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpace.s12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -754,7 +755,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
         children: [
           for (final inv in shown) _inviteeRow(inv),
           if (invitations.length > maxShown) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Text(
               '仅显示前 $maxShown 位, 共 ${invitations.length} 人',
               style: const TextStyle(
@@ -770,7 +771,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
 
   Widget _inviteeRow(SalonInvitation inv) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s6),
       child: Row(
         children: [
           Expanded(
@@ -781,10 +782,10 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
           ),
           if (inv.isStaff) ...[
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: 3),
               decoration: BoxDecoration(
                 color: AppTheme.franchiseeA.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.r10),
               ),
               child: const Text(
                 '会务',
@@ -795,7 +796,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.s8),
           ],
           SalonInviteStatusChip(status: inv.status),
         ],
@@ -822,11 +823,11 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
       ),
       child: asyncGuests.when(
         loading: () => const Padding(
-          padding: EdgeInsets.symmetric(vertical: 12),
+          padding: EdgeInsets.symmetric(vertical: AppSpace.s12),
           child: Center(
             child: SizedBox(
-              width: 32,
-              height: 32,
+              width: AppSpace.s32,
+              height: AppSpace.s32,
               child: CircularProgressIndicator(strokeWidth: 3),
             ),
           ),
@@ -860,7 +861,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
 
   Widget _guestRow(SalonGuest guest) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s4),
       child: Row(
         children: [
           Expanded(
@@ -874,7 +875,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpace.s2),
                 Text(
                   '${guest.relationLabel} · ${guest.status.label}',
                   style: const TextStyle(
@@ -909,9 +910,9 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
           for (final attachment in attachments)
             InkWell(
               onTap: () => _openAttachment(attachment),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.r10),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: AppSpace.s10),
                 child: Row(
                   children: [
                     Icon(
@@ -921,7 +922,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                       size: 26,
                       color: AppTheme.primary,
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpace.s12),
                     Expanded(
                       child: Text(
                         attachment.name,
@@ -966,7 +967,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
             )
           else
             for (final activity in sorted) _activityRow(activity),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           Row(
             children: [
               Expanded(
@@ -978,7 +979,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                   decoration: const InputDecoration(hintText: '说点什么...'),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppSpace.s10),
               ElevatedButton(
                 onPressed: _sendingActivity
                     ? null
@@ -990,13 +991,13 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                   backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.r12),
                   ),
                 ),
                 child: _sendingActivity
                     ? const SizedBox(
-                        width: 22,
-                        height: 22,
+                        width: AppSpace.s22,
+                        height: AppSpace.s22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
@@ -1007,7 +1008,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
             ],
           ),
           if (salon.viewer.canManage) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s10),
             OutlinedButton.icon(
               onPressed: _sendingActivity
                   ? null
@@ -1031,7 +1032,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
     final timeText = formatSalonMonthDayTime(activity.createdAt);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1047,7 +1048,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppSpace.s10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1066,7 +1067,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                       ),
                     ),
                     if (activity.type != 'comment') ...[
-                      const SizedBox(width: 6),
+                      const SizedBox(width: AppSpace.s6),
                       _activityTypeTag(activity.type),
                     ],
                     const Spacer(),
@@ -1080,7 +1081,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.s4),
                 Text(
                   activity.content,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -1107,14 +1108,14 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
         break;
       default:
         label = '系统';
-        color = const Color(0xFF6B6B6B);
+        color = AppColors.textTertiary;
         break;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: AppSpace.s2),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.r10),
       ),
       child: Text(
         label,
@@ -1338,14 +1339,14 @@ class _AddGuestDialogState extends State<_AddGuestDialog> {
               style: const TextStyle(fontSize: AppTheme.fontMd),
               decoration: const InputDecoration(labelText: '姓名'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             TextField(
               controller: _phoneCtrl,
               style: const TextStyle(fontSize: AppTheme.fontMd),
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(labelText: '手机号'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             DropdownButtonFormField<String>(
               value: _relation,
               style: const TextStyle(

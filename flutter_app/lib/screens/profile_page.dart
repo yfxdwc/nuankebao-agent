@@ -38,6 +38,7 @@ import 'profile_sheets.dart';
 import 'profile_widgets.dart';
 import 'theme_picker_card.dart';
 
+import '../core/theme/tokens.g.dart';
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
@@ -65,7 +66,7 @@ class ProfilePage extends ConsumerWidget {
         child: profileAsync.when(
           loading: () => const _ProfileSkeleton(),
           error: (e, _) => ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             children: [
               ErrorState(
                 error: e,
@@ -87,12 +88,12 @@ class _ProfileSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
       children: const [
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.all(AppSpace.s20),
             child: SizedBox(
               height: 220,
               child: Center(child: CircularProgressIndicator()),
@@ -113,7 +114,7 @@ class _ProfileBody extends ConsumerWidget {
     return ListView(
       // AlwaysScrollable: 内容不满一屏也要能下拉刷新 (RefreshIndicator 需要可滚动)
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
       children: [
         _HeaderCard(profile: profile),
         profileSectionGap,
@@ -138,7 +139,7 @@ class _ProfileBody extends ConsumerWidget {
         _AccountCard(profile: profile),
         profileSectionGap,
         _AboutCard(profile: profile),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpace.s20),
         const _LogoutButton(),
       ],
     );
@@ -171,7 +172,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpace.s20),
         child: Column(
           children: [
             // 头像可点: 换头像 (上传照片 / 挑候选) —— 角标用相机小圆点提示"这个能点"
@@ -199,10 +200,10 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                       isMember: p.isMember,
                     ),
                     Positioned(
-                      right: 0,
-                      bottom: 0,
+                      right: AppSpace.s0,
+                      bottom: AppSpace.s0,
                       child: Container(
-                        padding: const EdgeInsets.all(6),
+                        padding: const EdgeInsets.all(AppSpace.s6),
                         decoration: const BoxDecoration(
                           color: AppTheme.primary,
                           shape: BoxShape.circle,
@@ -218,7 +219,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                 ),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpace.s6),
             TextButton.icon(
               onPressed: () => showAvatarPickerSheet(
                 context,
@@ -234,7 +235,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                 visualDensity: VisualDensity.compact,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpace.s6),
             Text(
               name,
               textAlign: TextAlign.center,
@@ -245,7 +246,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
               ),
             ),
             if (p.accountAlias != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Text(
                 '账号: ${p.accountAlias}',
                 style: const TextStyle(
@@ -254,7 +255,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                 ),
               ),
             ],
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s10),
             Wrap(
               alignment: WrapAlignment.center,
               spacing: 8,
@@ -273,20 +274,20 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
               ],
             ),
             if (phone != null && !phone.isEmpty) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: AppSpace.s14),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s6),
                 decoration: BoxDecoration(
                   color: AppTheme.bgWarm,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.r12),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.phone_iphone,
                         size: 22, color: AppTheme.primaryDark),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpace.s8),
                     // Flexible + ellipsis: 号码在窄屏/特大字号下能缩, 不把这一行顶爆
                     // (号码本身很短, 正常手机永不会真的省略)
                     Flexible(
@@ -331,7 +332,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
             ],
             // 账号资料不全 (dev mock 登录没落 user 行) → 明确告诉用户, 别装作正常
             if (p.user != null && !p.user!.hasUserRecord) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               const Text(
                 '账号资料还没建全 (开发模式登录), 加盟信息可能显示不全',
                 textAlign: TextAlign.center,
@@ -342,7 +343,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
               ),
             ],
             if (franchisee != null) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: AppSpace.s14),
               SizedBox(
                 width: double.infinity,
                 height: AppTheme.buttonMinHeight,
@@ -394,10 +395,10 @@ class _PhoneAction extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(AppRadius.r22),
         child: SizedBox(
-          width: 44,
-          height: 44,
+          width: AppSpace.s44,
+          height: AppSpace.s44,
           child: Icon(icon, size: 24, color: AppTheme.primaryDark),
         ),
       ),
@@ -414,10 +415,10 @@ class _Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s6),
       decoration: BoxDecoration(
         color: color.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.r8),
       ),
       child: Text(
         text,
@@ -502,14 +503,14 @@ class _NotFranchiseeCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: const [
                 Icon(Icons.info_outline, size: 24, color: AppTheme.accent),
-                SizedBox(width: 8),
+                SizedBox(width: AppSpace.s8),
                 Text(
                   '还没绑定加盟关系',
                   style: TextStyle(
@@ -519,7 +520,7 @@ class _NotFranchiseeCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             const Text(
               '账号还没挂到加盟网络上 (不影响录客户/记养生)。'
               '需要挂靠的话找管理员, 在加盟网络里把您加进去。',
@@ -547,16 +548,16 @@ class _AdminNoFranchiseeCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
-      color: const Color(0xFFE9F4EE), // 很浅的绿 (primaryLight #A8D5BA 当整卡底色太扎眼)
+      color: AppColors.successLight, // 很浅的绿 (primaryLight #A8D5BA 当整卡底色太扎眼)
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: const [
                 Icon(Icons.shield_outlined, size: 24, color: AppTheme.primaryDark),
-                SizedBox(width: 8),
+                SizedBox(width: AppSpace.s8),
                 Text(
                   '系统管理员',
                   style: TextStyle(
@@ -566,7 +567,7 @@ class _AdminNoFranchiseeCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             const Text(
               '管理员不挂在加盟网络上 (不参与分佣/上下级), 但能看整个系统的注册用户与加盟商。'
               '要新开一棵加盟树: 先让本人注册, 再到「管理员工具 → 用户管理」把他设为根节点。',
@@ -613,7 +614,7 @@ class _StatsCard extends StatelessWidget {
         }),
         if (s == null)
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+            padding: EdgeInsets.symmetric(vertical: AppSpace.s12),
             child: Text(
               '这次没拿到统计数据, 下拉页面刷新试试',
               style: TextStyle(
@@ -642,7 +643,7 @@ class _StatsCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpace.s4),
           const Divider(height: 1),
           InfoRow(label: '累计互动', value: '${s.totalInteractions} 次'),
           // 加盟网络入口只给**非管理员**: 管理员不挂加盟网络 (看自己的上下级没意义),
@@ -687,7 +688,7 @@ class _DisplaySettingsCardState extends ConsumerState<_DisplaySettingsCard> {
       hint: '本机设置',
       children: [
         const Padding(
-          padding: EdgeInsets.only(top: 4, bottom: 8),
+          padding: EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s8),
           child: Text(
             '字大看不全 / 字小看不清? 选一档 (选完立即生效, 全 App 都变)',
             style: TextStyle(
@@ -719,7 +720,7 @@ class _DisplaySettingsCardState extends ConsumerState<_DisplaySettingsCard> {
             );
           }).toList(),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.s8),
         ProfileTile(
           icon: Icons.photo_library_outlined,
           title: _clearing ? '正在清理...' : '清理图片缓存',
@@ -911,7 +912,7 @@ class _AccountCard extends ConsumerWidget {
           onTap: () => showChangePhoneSheet(context, ref),
         ),
         const Padding(
-          padding: EdgeInsets.only(top: 4, bottom: 8),
+          padding: EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s8),
           child: Text(
             '登录账号由管理员开通; 停用账号请联系管理员',
             style: TextStyle(
@@ -1047,7 +1048,7 @@ class _InviteCard extends ConsumerWidget {
       hint: '扫码下载暖客宝',
       children: [
         const Padding(
-          padding: EdgeInsets.only(top: 4, bottom: 12),
+          padding: EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s12),
           child: Text(
             '把下面的二维码发给被推荐人；他们扫码下载 App 后, 用你的推荐码注册 (双方各得 15 天会员)',
             style: TextStyle(
@@ -1059,11 +1060,11 @@ class _InviteCard extends ConsumerWidget {
         ),
         releaseAsync.when(
           loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
+            padding: EdgeInsets.symmetric(vertical: AppSpace.s32),
             child: Center(child: CircularProgressIndicator()),
           ),
           error: (e, _) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding: const EdgeInsets.symmetric(vertical: AppSpace.s16),
             child: Text(
               '获取 APK 信息失败, 请下拉刷新页面重试 ($e)',
               style: const TextStyle(
@@ -1076,7 +1077,7 @@ class _InviteCard extends ConsumerWidget {
             final apk = release.apk;
             if (apk == null || apk.downloadUrl.isEmpty) {
               return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
+                padding: EdgeInsets.symmetric(vertical: AppSpace.s16),
                 child: Text(
                   '服务器上还没发布 APK, 请联系管理员',
                   style: TextStyle(
@@ -1092,16 +1093,16 @@ class _InviteCard extends ConsumerWidget {
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.r12),
                     border: Border.all(
                       color: AppTheme.primaryLight,
-                      width: 2,
+                      width: AppSpace.s2,
                     ),
                   ),
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpace.s16),
                   child: QrImage(url: apk.downloadUrl, size: 180),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 // 版本 + 大小 (用户问"这是最新版本吗?" 不必再翻)
                 Text(
                   '${release.label} · ${_formatSize(apk.sizeBytes)}',
@@ -1110,7 +1111,7 @@ class _InviteCard extends ConsumerWidget {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 // 备用: 复制链接 (二维码看不清 / 短信/微信直接发)
                 SizedBox(
                   width: double.infinity,
@@ -1176,7 +1177,7 @@ class _LogoutButton extends ConsumerWidget {
         label: const Text('退出登录', style: TextStyle(fontSize: AppTheme.fontMd)),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppTheme.danger,
-          side: const BorderSide(color: AppTheme.danger, width: 2),
+          side: const BorderSide(color: AppTheme.danger, width: AppSpace.s2),
         ),
       ),
     );
@@ -1237,11 +1238,11 @@ class _MembershipCard extends ConsumerWidget {
       children: [
         if (isAdminMember) ...[
           const Padding(
-            padding: EdgeInsets.only(top: 4, bottom: 8),
+            padding: EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s8),
             child: Row(
               children: [
                 Icon(Icons.verified_user, size: 26, color: AppTheme.primary),
-                SizedBox(width: 8),
+                SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
                     '管理员账号 · 永久会员 (无需付费, 不会到期)',
@@ -1261,11 +1262,11 @@ class _MembershipCard extends ConsumerWidget {
           ),
         ] else if (isMember) ...[
           Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 8),
+            padding: const EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s8),
             child: Row(
               children: [
                 const Icon(Icons.verified, size: 26, color: AppTheme.primary),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
                     daysLeft != null && daysLeft >= 0
@@ -1287,7 +1288,7 @@ class _MembershipCard extends ConsumerWidget {
           ),
         ] else ...[
           const Padding(
-            padding: EdgeInsets.only(top: 4, bottom: 8),
+            padding: EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s8),
             child: Text(
               '免费版能用: 客户档案 / 养生记录 / 跟进任务 / 图谱 / 加盟网络\n'
               '会员功能 (9 项): AI 助手 · 跟进建议 · 客户画像 · 效果分析 · 跟进推荐 · '
@@ -1361,11 +1362,11 @@ class _ReferralCodeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(top: AppSpace.s4),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s10),
       decoration: BoxDecoration(
         color: AppTheme.primaryLight.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1373,7 +1374,7 @@ class _ReferralCodeRow extends StatelessWidget {
           Row(
             children: [
               const Icon(Icons.group_add, size: 24, color: AppTheme.primaryDark),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.s8),
               // Expanded: 窄屏/特大字号下让标题列先缩, 保住推荐码本身完整可读
               const Expanded(
                 child: Text(

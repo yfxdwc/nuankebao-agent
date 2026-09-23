@@ -9,6 +9,7 @@ import '../../providers/service_providers.dart';
 import '../../theme/app_theme.dart';
 import '../customers/customers_list_screen.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 final pendingFollowUpsProvider = FutureProvider<List<FollowUpTask>>((ref) async {
   return ref.watch(followUpServiceProvider).list();
 });
@@ -106,11 +107,11 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 8),
       child: Text(
         title,
         style: TextStyle(
-          fontSize: 14,
+          fontSize: AppType.xs,
           fontWeight: FontWeight.w600,
           color: color,
         ),
@@ -128,14 +129,14 @@ class _TaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s4),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: isOverdue ? AppTheme.danger.withOpacity(0.1) : AppTheme.primaryLight.withOpacity(0.2),
           child: Icon(
             isOverdue ? Icons.priority_high : Icons.notifications,
             color: isOverdue ? AppTheme.danger : AppTheme.primary,
-            size: 20,
+            size: AppSpace.s20,
           ),
         ),
         title: Text('客户 #${task.customerId}'),
@@ -143,26 +144,26 @@ class _TaskTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(task.reason),
-            const SizedBox(height: 2),
+            const SizedBox(height: AppSpace.s2),
             Text(
               DateFormat('MM-dd HH:mm').format(task.dueAt),
               style: TextStyle(
-                fontSize: 12,
+                fontSize: AppType.tiny,
                 color: isOverdue ? AppTheme.danger : Colors.black54,
                 fontWeight: isOverdue ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
             if (task.aiSuggestion != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(AppSpace.s6),
                 decoration: BoxDecoration(
                   color: AppTheme.primaryLight.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(AppRadius.r4),
                 ),
                 child: Text(
                   '🤖 ${task.aiSuggestion!}',
-                  style: const TextStyle(fontSize: 11),
+                  style: const TextStyle(fontSize: AppType.tiny),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -211,7 +212,7 @@ Future<void> _showCreateDialog(BuildContext context, WidgetRef ref) async {
               children: [
                 asyncCustomers.when(
                   loading: () => const Padding(
-                    padding: EdgeInsets.all(8),
+                    padding: EdgeInsets.all(AppSpace.s8),
                     child: Center(child: CircularProgressIndicator()),
                   ),
                   error: (e, _) => Text('加载客户失败: $e'),
@@ -225,18 +226,18 @@ Future<void> _showCreateDialog(BuildContext context, WidgetRef ref) async {
                     onChanged: (c) => setState(() => selectedCustomer = c),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 TextField(
                   controller: reasonController,
                   decoration: const InputDecoration(labelText: '跟进原因 *'),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 TextField(
                   controller: suggestionController,
                   maxLines: 2,
                   decoration: const InputDecoration(labelText: 'AI 建议 (可选)'),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('到期时间'),

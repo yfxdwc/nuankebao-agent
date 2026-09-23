@@ -17,6 +17,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/big_button.dart';
 import 'ai_insight_cards.dart' show BigActionButton;
 
+import '../../../core/theme/tokens.g.dart';
 // ============================================
 // 建跟进任务 弹层 (客户详情页 / AI 跟进卡共用)
 //
@@ -41,8 +42,8 @@ Future<void> showAddFollowUpSheet(
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setSheetState) => Padding(
         padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
+          left: AppSpace.s16,
+          right: AppSpace.s16,
           bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
         ),
         child: Column(
@@ -52,7 +53,7 @@ Future<void> showAddFollowUpSheet(
             const Text('新建跟进任务',
                 style: TextStyle(
                     fontSize: AppTheme.fontLg, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             TextField(
               controller: reasonCtrl,
               style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -61,11 +62,11 @@ Future<void> showAddFollowUpSheet(
                 hintText: '例: 打电话问腰疼好点没',
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             const Text('什么时候跟进',
                 style: TextStyle(
                     fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Wrap(
               spacing: 8,
               children: [1, 2, 3, 7, 14]
@@ -83,7 +84,7 @@ Future<void> showAddFollowUpSheet(
                       ))
                   .toList(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             BigButton(
               label: saving ? '保存中...' : '保存',
               icon: Icons.check,
@@ -127,7 +128,7 @@ Future<void> showAddFollowUpSheet(
                       }
                     },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
           ],
         ),
       ),
@@ -184,16 +185,16 @@ class _CustomerFollowUpSectionState
     final async = ref.watch(customerFollowUpTasksProvider(widget.customerId));
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 const Icon(Icons.task_alt, size: 26, color: AppTheme.primary),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text('跟进任务',
                       style: TextStyle(
@@ -213,7 +214,7 @@ class _CustomerFollowUpSectionState
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             async.when(
               loading: () => const _SectionLoading('加载跟进任务...'),
               error: (e, _) => _SectionError(
@@ -228,7 +229,7 @@ class _CustomerFollowUpSectionState
                           color: AppTheme.textSecondary))
                   : Column(children: tasks.map((t) => _tile(t, fmt)).toList()),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             BigActionButton(
               icon: Icons.add_task,
               label: '新建跟进任务',
@@ -245,15 +246,15 @@ class _CustomerFollowUpSectionState
   Widget _tile(FollowUpTask t, DateFormat fmt) {
     final overdue = t.dueAt.isBefore(DateTime.now());
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s8),
+      padding: const EdgeInsets.all(AppSpace.s12),
       decoration: BoxDecoration(
         color: overdue ? AppTheme.danger.withOpacity(0.06) : AppTheme.bgWarm,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.r10),
         border: Border.all(
           color: overdue
               ? AppTheme.danger.withOpacity(0.3)
-              : const Color(0xFFEDE6DA),
+              : AppColors.divider,
         ),
       ),
       child: Row(
@@ -269,7 +270,7 @@ class _CustomerFollowUpSectionState
                       fontSize: AppTheme.fontSm,
                       fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.s4),
                 Text(
                   '${fmt.format(t.dueAt)} ${overdue ? '· 已过期' : '到期'}',
                   style: TextStyle(
@@ -282,8 +283,8 @@ class _CustomerFollowUpSectionState
           ),
           if (_completingId == t.id)
             const SizedBox(
-              width: 20,
-              height: 20,
+              width: AppSpace.s20,
+              height: AppSpace.s20,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           else
@@ -337,16 +338,16 @@ class _CustomerInteractionSectionState
     final items = async.valueOrNull ?? const <Interaction>[];
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 const Icon(Icons.forum_outlined, size: 26, color: AppTheme.accent),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text('互动记录',
                       style: TextStyle(
@@ -364,7 +365,7 @@ class _CustomerInteractionSectionState
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             async.when(
               loading: () => const _SectionLoading('加载互动记录...'),
               error: (e, _) => _SectionError(
@@ -382,13 +383,13 @@ class _CustomerInteractionSectionState
                       children: items
                           .take(5)
                           .map((i) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.only(bottom: AppSpace.s8),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Icon(_typeIcon[i.type] ?? Icons.more_horiz,
                                         size: 22, color: AppTheme.textSecondary),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: AppSpace.s8),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -435,8 +436,8 @@ class _SectionLoading extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         children: [
           const SizedBox(
-              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-          const SizedBox(width: 10),
+              width: AppSpace.s18, height: AppSpace.s18, child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: AppSpace.s10),
           Text(label,
               style: const TextStyle(
                   fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
@@ -456,7 +457,7 @@ class _SectionError extends StatelessWidget {
           Text('加载失败: $message',
               style: const TextStyle(
                   fontSize: AppTheme.fontSm, color: AppTheme.danger)),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           BigActionButton(
               icon: Icons.refresh, label: '重试', compact: true, onTap: onRetry),
         ],

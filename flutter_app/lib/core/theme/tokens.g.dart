@@ -98,6 +98,12 @@ abstract final class AppPalette {
   static const Color winterAccent500 = Color(0xFF4A6E8C);
   static const Color winterAccent100 = Color(0xFFCBDCE9);
   static const Color winterAccent50 = Color(0xFFF0F5F9);
+  static const Color amber25 = Color(0xFFFFF8E8);
+  static const Color brown400 = Color(0xFF8D6E63);
+  static const Color green450 = Color(0xFF6B9E7A);
+  static const Color teal500 = Color(0xFF2F7D6F);
+  static const Color indigo500 = Color(0xFF5C6BC0);
+  static const Color neutralCool500 = Color(0xFF9AA5A0);
 }
 
 /// L1 尺度 —— 间距 (中老年友好: 主档 8/12/16, 触控留白充足)
@@ -111,15 +117,33 @@ abstract final class AppSpace {
   static const double s12 = 12.0;
   static const double s14 = 14.0;
   static const double s16 = 16.0;
+  static const double s18 = 18.0;
   static const double s20 = 20.0;
+  static const double s21 = 21.0;
+  static const double s22 = 22.0;
   static const double s24 = 24.0;
+  static const double s26 = 26.0;
+  static const double s28 = 28.0;
   static const double s32 = 32.0;
+  static const double s34 = 34.0;
   static const double s40 = 40.0;
+  static const double s44 = 44.0;
   static const double s48 = 48.0;
+  static const double s52 = 52.0;
   static const double s56 = 56.0;
+  static const double s60 = 60.0;
   static const double s64 = 64.0;
+  static const double s72 = 72.0;
+  static const double s76 = 76.0;
   static const double s80 = 80.0;
+  static const double s84 = 84.0;
+  static const double s88 = 88.0;
+  static const double s90 = 90.0;
   static const double s96 = 96.0;
+  static const double s100 = 100.0;
+  static const double s120 = 120.0;
+  static const double s200 = 200.0;
+  static const double s220 = 220.0;
   // 语义别名
   static const double pagePadding = s16;
   static const double cardPadding = s16;
@@ -135,16 +159,22 @@ abstract final class AppSpace {
 /// L1 尺度 —— 圆角
 abstract final class AppRadius {
   static const double r0 = 0.0;
+  static const double r3 = 3.0;
   static const double r4 = 4.0;
   static const double r6 = 6.0;
   static const double r8 = 8.0;
   static const double r10 = 10.0;
   static const double r12 = 12.0;
+  static const double r14 = 14.0;
   static const double r16 = 16.0;
   static const double r20 = 20.0;
+  static const double r22 = 22.0;
   static const double r24 = 24.0;
   static const double r28 = 28.0;
+  static const double r32 = 32.0;
+  static const double r40 = 40.0;
   static const double full = 999.0;
+  static const double r2 = 2.0;
   // 语义别名
   static const double card = r12;
   static const double button = r12;
@@ -158,7 +188,8 @@ abstract final class AppRadius {
 
 /// L1 尺度 —— 字号 (中老年: 正文 18 起步, Material 默认是 14)
 abstract final class AppType {
-  static const double xxs = 10.0;
+  static const double micro = 10.0;
+  static const double tiny = 12.0;
   static const double xs = 14.0;
   static const double sm = 16.0;
   static const double md = 18.0;
@@ -231,6 +262,92 @@ abstract final class AppOpacity {
   static const double scrim = 0.32;
 }
 
+/// L2 语义令牌 —— **跨主题不变**的那部分 (中性色 / 文字色 / 状态色 / 图谱色)
+///
+/// 为什么这层是 const 而不是 context.tokens:
+///   design-tokens.json 的规则是「themes 只覆盖品牌槽, 中性/文字/状态色在 shared 里共用」——
+///   也就是说这些颜色**本来就不随换肤变**。做成常量后, 存量代码里大量
+///   `const TextStyle(color: Color(0xFF8A8A8A))` 能直接换成 `AppColors.textTertiary`,
+///   既不用拿 context, 也不会因为少写 const 而丢编译期优化。
+///
+/// 判定是自动的 (见生成器): 把某个槽从 shared 挪进 themes, 它就自动降级成运行时令牌。
+abstract final class AppColors {
+  static const Color surface = Color(0xFFFFFBF5);
+  static const Color surfaceCard = Color(0xFFFFFFFF);
+  static const Color surfaceSubtle = Color(0xFFF7F2EA);
+  static const Color surfaceSunken = Color(0xFFEDE6DA);
+  static const Color surfaceInverse = Color(0xFF1A1A1A);
+  static const Color textPrimary = Color(0xFF1A1A1A);
+  static const Color textSecondary = Color(0xFF4A4A4A);
+  static const Color textTertiary = Color(0xFF6B6B6B);
+  static const Color textDisabled = Color(0xFF8A8A8A);
+  static const Color textOnInverse = Color(0xFFFFFFFF);
+  static const Color border = Color(0xFFD0D0D0);
+  static const Color borderStrong = Color(0xFF8A8A8A);
+  static const Color borderInput = Color(0xFFD0D0D0);
+  static const Color divider = Color(0xFFEDE6DA);
+  static const Color success = Color(0xFF2D5A3D);
+  static const Color successLight = Color(0xFFA8D5BA);
+  static const Color successSurface = Color(0xFFF0F7F2);
+  static const Color warning = Color(0xFF8A6D1F);
+  static const Color warningLight = Color(0xFFFFE8A3);
+  static const Color warningSurface = Color(0xFFFFF3CD);
+  static const Color danger = Color(0xFFB33A3A);
+  static const Color dangerLight = Color(0xFFE08A8A);
+  static const Color dangerSurface = Color(0xFFFFF5F5);
+  static const Color info = Color(0xFF1F4E80);
+  static const Color infoLight = Color(0xFFE3EDF8);
+  static const Color infoSurface = Color(0xFFEDF4FB);
+  static const Color memberGold = Color(0xFFC89A2B);
+  static const Color memberGoldSurface = Color(0xFFFFF3CD);
+  static const Color badgeNeutral = Color(0xFF6B6B6B);
+  static const Color badgeNeutralSurface = Color(0xFFEDE6DA);
+  static const Color graphFranchiseeB = Color(0xFF8E5BA8);
+  static const Color graphFranchiseeBSurface = Color(0xFFF5F0F8);
+  static const Color graphFranchiseeA = Color(0xFF2B6CB0);
+  static const Color graphFranchiseeASurface = Color(0xFFEDF4FB);
+  static const Color graphLine = Color(0xFFD0D0D0);
+  static const Color graphLineSoft = Color(0xFFEDE6DA);
+  static const Color shadowColor = Color(0xFF000000);
+  static const Color scrim = Color(0xFF0F0F0F);
+  static const Color accentSurfaceWarm = Color(0xFFFFF8E8);
+  static const Color salonWaitlist = Color(0xFF5C6BC0);
+  static const Color salonNeutral = Color(0xFF8A8A8A);
+  static const Color warningDark = Color(0xFF8A5A1F);
+  static const Color memberGoldLight = Color(0xFFD9B23D);
+  static const Color dangerBright = Color(0xFFD3545C);
+  static const Color avatarSlot1 = Color(0xFF4A7C59);
+  static const Color avatarSlot2 = Color(0xFFC2185B);
+  static const Color avatarSlot3 = Color(0xFF8D6E63);
+  static const Color avatarSlot4 = Color(0xFF2F7D6F);
+  static const Color avatarSlot5 = Color(0xFFD3545C);
+  static const Color avatarSlot6 = Color(0xFFE89F4D);
+  static const Color avatarSlot7 = Color(0xFF6B9E7A);
+  static const Color avatarSlot8 = Color(0xFF2B6CB0);
+  static const Color avatarSlotNeutral = Color(0xFF9AA5A0);
+  static const Color onPrimary = Color(0xFFFFFFFF);
+  static const Color onSuccess = Color(0xFFFFFFFF);
+  static const Color onWarning = Color(0xFFFFFFFF);
+  static const Color onDanger = Color(0xFFFFFFFF);
+  static const Color onInfo = Color(0xFFFFFFFF);
+}
+
+/// 随主题变化的品牌槽 —— 只能用 `context.tokens.<名>` (取到当前主题的值)
+///
+/// 共 9 个: focusRing, primary, primaryLight, primaryDark, primarySurface, accent, accentLight, accentSurface, onAccent
+const List<String> kThemeVariantTokenKeys = <String>[
+  'focusRing',
+  'primary',
+  'primaryLight',
+  'primaryDark',
+  'primarySurface',
+  'accent',
+  'accentLight',
+  'accentSurface',
+  'onAccent',
+  'id', 'label', 'group',
+];
+
 /// L2 语义令牌 —— 一个主题一份 (运行时可变, 用于换肤)
 ///
 /// 取用方式 (业务代码唯一正确姿势):
@@ -279,6 +396,21 @@ class AppTokens {
   final Color graphLineSoft;
   final Color shadowColor;
   final Color scrim;
+  final Color accentSurfaceWarm;
+  final Color salonWaitlist;
+  final Color salonNeutral;
+  final Color warningDark;
+  final Color memberGoldLight;
+  final Color dangerBright;
+  final Color avatarSlot1;
+  final Color avatarSlot2;
+  final Color avatarSlot3;
+  final Color avatarSlot4;
+  final Color avatarSlot5;
+  final Color avatarSlot6;
+  final Color avatarSlot7;
+  final Color avatarSlot8;
+  final Color avatarSlotNeutral;
   final Color primary;
   final Color primaryLight;
   final Color primaryDark;
@@ -336,6 +468,21 @@ class AppTokens {
     required this.graphLineSoft,
     required this.shadowColor,
     required this.scrim,
+    required this.accentSurfaceWarm,
+    required this.salonWaitlist,
+    required this.salonNeutral,
+    required this.warningDark,
+    required this.memberGoldLight,
+    required this.dangerBright,
+    required this.avatarSlot1,
+    required this.avatarSlot2,
+    required this.avatarSlot3,
+    required this.avatarSlot4,
+    required this.avatarSlot5,
+    required this.avatarSlot6,
+    required this.avatarSlot7,
+    required this.avatarSlot8,
+    required this.avatarSlotNeutral,
     required this.primary,
     required this.primaryLight,
     required this.primaryDark,
@@ -419,6 +566,21 @@ abstract final class AppThemes {
     graphLineSoft: Color(0xFFEDE6DA),
     shadowColor: Color(0xFF000000),
     scrim: Color(0xFF0F0F0F),
+    accentSurfaceWarm: Color(0xFFFFF8E8),
+    salonWaitlist: Color(0xFF5C6BC0),
+    salonNeutral: Color(0xFF8A8A8A),
+    warningDark: Color(0xFF8A5A1F),
+    memberGoldLight: Color(0xFFD9B23D),
+    dangerBright: Color(0xFFD3545C),
+    avatarSlot1: Color(0xFF4A7C59),
+    avatarSlot2: Color(0xFFC2185B),
+    avatarSlot3: Color(0xFF8D6E63),
+    avatarSlot4: Color(0xFF2F7D6F),
+    avatarSlot5: Color(0xFFD3545C),
+    avatarSlot6: Color(0xFFE89F4D),
+    avatarSlot7: Color(0xFF6B9E7A),
+    avatarSlot8: Color(0xFF2B6CB0),
+    avatarSlotNeutral: Color(0xFF9AA5A0),
     primary: Color(0xFF4A7C59),
     primaryLight: Color(0xFFA8D5BA),
     primaryDark: Color(0xFF2D5A3D),
@@ -478,6 +640,21 @@ abstract final class AppThemes {
     graphLineSoft: Color(0xFFEDE6DA),
     shadowColor: Color(0xFF000000),
     scrim: Color(0xFF0F0F0F),
+    accentSurfaceWarm: Color(0xFFFFF8E8),
+    salonWaitlist: Color(0xFF5C6BC0),
+    salonNeutral: Color(0xFF8A8A8A),
+    warningDark: Color(0xFF8A5A1F),
+    memberGoldLight: Color(0xFFD9B23D),
+    dangerBright: Color(0xFFD3545C),
+    avatarSlot1: Color(0xFF4A7C59),
+    avatarSlot2: Color(0xFFC2185B),
+    avatarSlot3: Color(0xFF8D6E63),
+    avatarSlot4: Color(0xFF2F7D6F),
+    avatarSlot5: Color(0xFFD3545C),
+    avatarSlot6: Color(0xFFE89F4D),
+    avatarSlot7: Color(0xFF6B9E7A),
+    avatarSlot8: Color(0xFF2B6CB0),
+    avatarSlotNeutral: Color(0xFF9AA5A0),
     primary: Color(0xFF5A7D3C),
     primaryLight: Color(0xFFC3DFA6),
     primaryDark: Color(0xFF3D5A28),
@@ -537,6 +714,21 @@ abstract final class AppThemes {
     graphLineSoft: Color(0xFFEDE6DA),
     shadowColor: Color(0xFF000000),
     scrim: Color(0xFF0F0F0F),
+    accentSurfaceWarm: Color(0xFFFFF8E8),
+    salonWaitlist: Color(0xFF5C6BC0),
+    salonNeutral: Color(0xFF8A8A8A),
+    warningDark: Color(0xFF8A5A1F),
+    memberGoldLight: Color(0xFFD9B23D),
+    dangerBright: Color(0xFFD3545C),
+    avatarSlot1: Color(0xFF4A7C59),
+    avatarSlot2: Color(0xFFC2185B),
+    avatarSlot3: Color(0xFF8D6E63),
+    avatarSlot4: Color(0xFF2F7D6F),
+    avatarSlot5: Color(0xFFD3545C),
+    avatarSlot6: Color(0xFFE89F4D),
+    avatarSlot7: Color(0xFF6B9E7A),
+    avatarSlot8: Color(0xFF2B6CB0),
+    avatarSlotNeutral: Color(0xFF9AA5A0),
     primary: Color(0xFF2F7A72),
     primaryLight: Color(0xFFA6D6CE),
     primaryDark: Color(0xFF1F574F),
@@ -596,6 +788,21 @@ abstract final class AppThemes {
     graphLineSoft: Color(0xFFEDE6DA),
     shadowColor: Color(0xFF000000),
     scrim: Color(0xFF0F0F0F),
+    accentSurfaceWarm: Color(0xFFFFF8E8),
+    salonWaitlist: Color(0xFF5C6BC0),
+    salonNeutral: Color(0xFF8A8A8A),
+    warningDark: Color(0xFF8A5A1F),
+    memberGoldLight: Color(0xFFD9B23D),
+    dangerBright: Color(0xFFD3545C),
+    avatarSlot1: Color(0xFF4A7C59),
+    avatarSlot2: Color(0xFFC2185B),
+    avatarSlot3: Color(0xFF8D6E63),
+    avatarSlot4: Color(0xFF2F7D6F),
+    avatarSlot5: Color(0xFFD3545C),
+    avatarSlot6: Color(0xFFE89F4D),
+    avatarSlot7: Color(0xFF6B9E7A),
+    avatarSlot8: Color(0xFF2B6CB0),
+    avatarSlotNeutral: Color(0xFF9AA5A0),
     primary: Color(0xFFA65E24),
     primaryLight: Color(0xFFE8C79E),
     primaryDark: Color(0xFF7A421A),
@@ -655,6 +862,21 @@ abstract final class AppThemes {
     graphLineSoft: Color(0xFFEDE6DA),
     shadowColor: Color(0xFF000000),
     scrim: Color(0xFF0F0F0F),
+    accentSurfaceWarm: Color(0xFFFFF8E8),
+    salonWaitlist: Color(0xFF5C6BC0),
+    salonNeutral: Color(0xFF8A8A8A),
+    warningDark: Color(0xFF8A5A1F),
+    memberGoldLight: Color(0xFFD9B23D),
+    dangerBright: Color(0xFFD3545C),
+    avatarSlot1: Color(0xFF4A7C59),
+    avatarSlot2: Color(0xFFC2185B),
+    avatarSlot3: Color(0xFF8D6E63),
+    avatarSlot4: Color(0xFF2F7D6F),
+    avatarSlot5: Color(0xFFD3545C),
+    avatarSlot6: Color(0xFFE89F4D),
+    avatarSlot7: Color(0xFF6B9E7A),
+    avatarSlot8: Color(0xFF2B6CB0),
+    avatarSlotNeutral: Color(0xFF9AA5A0),
     primary: Color(0xFF8C4A4A),
     primaryLight: Color(0xFFDFB9B9),
     primaryDark: Color(0xFF632F2F),
@@ -703,4 +925,4 @@ abstract final class AppThemes {
 }
 
 /// 生成器自检: 每个主题的【色值个数】必须一致 (防止加主题时漏槽位)
-const int kTokenColorCount = 52;
+const int kTokenColorCount = 67;

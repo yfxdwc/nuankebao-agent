@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class RatingSlider extends StatelessWidget {
   final String label;
   final int value;
@@ -44,10 +45,10 @@ class RatingSlider extends StatelessWidget {
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s6),
               decoration: BoxDecoration(
                 color: AppTheme.primary,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppRadius.r16),
               ),
               child: Text(
                 displayValue,
@@ -60,7 +61,7 @@ class RatingSlider extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.s8),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             trackHeight: 8,

@@ -19,6 +19,7 @@ import '../../../../core/models/franchisee.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/member_avatar.dart';
 
+import '../../../../core/theme/tokens.g.dart';
 // ============================================
 // 布局结果
 // ============================================
@@ -655,7 +656,7 @@ class FranchiseTreePainter extends CustomPainter {
       text: TextSpan(
         text: '＋',
         style: TextStyle(
-          fontSize: 34 * boost,
+          fontSize: AppType.xxl * boost,
           color: AppTheme.accent.withOpacity(0.9),
           fontWeight: FontWeight.w600,
         ),
@@ -672,7 +673,7 @@ class FranchiseTreePainter extends CustomPainter {
       text: TextSpan(
         text: label,
         style: TextStyle(
-          fontSize: 12 * boost,
+          fontSize: AppType.tiny * boost,
           color: AppTheme.accent,
           fontWeight: FontWeight.w600,
         ),
@@ -692,7 +693,7 @@ class FranchiseTreePainter extends CustomPainter {
           tp.width + 10,
           tp.height + 4,
         ),
-        const Radius.circular(6),
+        const Radius.circular(AppRadius.r6),
       ),
       Paint()..color = AppTheme.bgWarm.withOpacity(0.92),
     );
@@ -704,7 +705,7 @@ class FranchiseTreePainter extends CustomPainter {
         text: TextSpan(
           text: hint,
           style: TextStyle(
-            fontSize: 11 * boost,
+            fontSize: AppType.tiny * boost,
             color: AppTheme.textSecondary,
           ),
         ),
@@ -810,7 +811,7 @@ class FranchiseTreePainter extends CustomPainter {
         text: TextSpan(
           text: '⏳ ${p.label}',
           style: TextStyle(
-            fontSize: 12 * boost,
+            fontSize: AppType.tiny * boost,
             color: ghostColor,
             fontWeight: FontWeight.w600,
           ),
@@ -829,7 +830,7 @@ class FranchiseTreePainter extends CustomPainter {
             tp.width + 10,
             tp.height + 4,
           ),
-          const Radius.circular(6),
+          const Radius.circular(AppRadius.r6),
         ),
         Paint()..color = AppTheme.bgWarm.withOpacity(0.92),
       );
@@ -1233,7 +1234,7 @@ class FranchiseTreePainter extends CustomPainter {
         text: TextSpan(
           text: '(我)',
           style: TextStyle(
-            fontSize: 12,
+            fontSize: AppType.tiny,
             color: isFaded
                 ? AppTheme.primary.withOpacity(0.5)
                 : AppTheme.primary,
@@ -1263,7 +1264,7 @@ class FranchiseTreePainter extends CustomPainter {
         text: TextSpan(
           text: node.placementSide == 'left' ? '← A线' : 'B线 →',
           style: TextStyle(
-            fontSize: 11,
+            fontSize: AppType.tiny,
             color: node.placementSide == 'left'
                 ? (isFaded
                     ? AppTheme.franchiseeA.withOpacity(0.4)

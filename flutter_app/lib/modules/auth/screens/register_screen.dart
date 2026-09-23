@@ -21,6 +21,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key, this.initialCode});
 
@@ -110,15 +111,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       appBar: AppBar(title: const Text('注册账号'), toolbarHeight: 64),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(AppSpace.s20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.s12),
                 decoration: BoxDecoration(
                   color: AppTheme.primaryLight.withOpacity(0.25),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.r12),
                 ),
                 child: const Text(
                   '暖客宝是邀请制: 填朋友的 6 位推荐码就能注册。\n'
@@ -126,7 +127,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   style: TextStyle(fontSize: AppTheme.fontSm, height: 1.6),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpace.s20),
 
               TextField(
                 controller: _codeCtrl,
@@ -145,7 +146,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   prefixIcon: Icon(Icons.card_giftcard),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
 
               TextField(
                 controller: _nameCtrl,
@@ -159,7 +160,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   prefixIcon: Icon(Icons.badge_outlined),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
 
               TextField(
                 controller: _phoneCtrl,
@@ -174,7 +175,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   prefixIcon: Icon(Icons.phone_iphone),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
 
               TextField(
                 controller: _pwdCtrl,
@@ -190,7 +191,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
 
               TextField(
                 controller: _pwd2Ctrl,
@@ -201,7 +202,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   prefixIcon: Icon(Icons.lock_reset),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpace.s24),
 
               SizedBox(
                 width: double.infinity,
@@ -210,8 +211,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   onPressed: _busy ? null : _submit,
                   icon: _busy
                       ? const SizedBox(
-                          width: 22,
-                          height: 22,
+                          width: AppSpace.s22,
+                          height: AppSpace.s22,
                           child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
                         )
                       : const Icon(Icons.person_add_alt_1, size: 26),
@@ -219,7 +220,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       style: const TextStyle(fontSize: AppTheme.fontMd)),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               Center(
                 child: TextButton(
                   onPressed: _busy ? null : () => context.go('/login'),

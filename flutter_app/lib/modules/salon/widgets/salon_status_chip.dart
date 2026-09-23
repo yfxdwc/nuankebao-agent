@@ -10,8 +10,9 @@ import 'package:flutter/material.dart';
 import '../../../core/models/salon.dart';
 import '../../../core/theme/app_theme.dart';
 
+import '../../../core/theme/tokens.g.dart';
 /// 中性灰 (草稿 / 已结束 / 已截止等)
-const Color _salonGray = Color(0xFF6B6B6B);
+const Color _salonGray = AppColors.textTertiary;
 
 /// 沙龙状态胶囊: 报名中=绿 草稿=灰 已取消=红 已结束/截止=灰 进行中=橙
 class SalonStatusChip extends StatelessWidget {
@@ -132,10 +133,10 @@ class _MiniChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s4),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.r14),
       ),
       child: Text(
         label,

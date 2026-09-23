@@ -12,6 +12,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
 
+import '../core/theme/tokens.g.dart';
 /// 分区卡 (标题 + 条目列表)
 class ProfileSection extends StatelessWidget {
   final String title;
@@ -36,14 +37,14 @@ class ProfileSection extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Icon(icon, size: 24, color: AppTheme.primaryDark),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: Text(
                     title,
@@ -65,7 +66,7 @@ class ProfileSection extends StatelessWidget {
                 if (trailing != null) trailing!,
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpace.s4),
             ...children,
           ],
         ),
@@ -100,21 +101,21 @@ class ProfileTile extends StatelessWidget {
     final tint = danger ? AppTheme.danger : color;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.r12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.s10),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: AppSpace.s44,
+              height: AppSpace.s44,
               decoration: BoxDecoration(
                 color: tint.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(AppRadius.r22),
               ),
               child: Icon(icon, size: 26, color: tint),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpace.s12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,7 +130,7 @@ class ProfileTile extends StatelessWidget {
                     ),
                   ),
                   if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: AppSpace.s2),
                     Text(
                       subtitle!,
                       style: const TextStyle(
@@ -141,7 +142,7 @@ class ProfileTile extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.s8),
             if (trailing != null)
               trailing!
             else if (onTap != null)
@@ -172,12 +173,12 @@ class InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final row = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 84,
+            width: AppSpace.s84,
             child: Text(
               label,
               style: const TextStyle(
@@ -225,9 +226,9 @@ class StatBox extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
           child: Column(
             children: [
               Text(
@@ -238,7 +239,7 @@ class StatBox extends StatelessWidget {
                   color: color ?? AppTheme.primary,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Text(
                 label,
                 textAlign: TextAlign.center,
@@ -256,4 +257,4 @@ class StatBox extends StatelessWidget {
 }
 
 /// 分区之间的间距 (统一 16, 别每个页面各写一个数)
-const SizedBox profileSectionGap = SizedBox(height: 16);
+const SizedBox profileSectionGap = SizedBox(height: AppSpace.s16);

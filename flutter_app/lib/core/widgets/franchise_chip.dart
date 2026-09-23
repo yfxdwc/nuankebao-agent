@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
+import '../theme/tokens.g.dart';
 class FranchiseChip extends StatelessWidget {
   /// 'franchisee' = 紫色"加盟"
   /// 'normal' = 绿色"普通"
@@ -26,10 +27,10 @@ class FranchiseChip extends StatelessWidget {
       _ => ('👤 普通', AppTheme.primary),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s6),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.r16),
       ),
       child: Text(
         label,
@@ -51,10 +52,10 @@ class HealthTagChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s6),
       decoration: BoxDecoration(
         color: AppTheme.primaryLight.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.r14),
         border: Border.all(color: AppTheme.primary, width: 1),
       ),
       child: Text(

@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/models/franchisee.dart';
 import '../../../../core/theme/app_theme.dart';
 
+import '../../../../core/theme/tokens.g.dart';
 Future<void> showFranchiseNodeSheet(
   BuildContext context, {
   required FranchiseeTreeNode node,
@@ -17,7 +18,7 @@ Future<void> showFranchiseNodeSheet(
     context: context,
     backgroundColor: AppTheme.bgWarm,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.r20)),
     ),
     builder: (ctx) => _FranchiseNodeSheet(node: node),
   );
@@ -31,7 +32,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s20, 20, 20, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -45,13 +46,13 @@ class _FranchiseNodeSheet extends StatelessWidget {
                   child: Text(
                     node.name.isNotEmpty ? node.name[0] : '?',
                     style: const TextStyle(
-                      fontSize: 24,
+                      fontSize: AppType.lg,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.franchisee,
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: AppSpace.s16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,7 +64,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpace.s4),
                       Text(
                         _positionLabel(node),
                         style: const TextStyle(
@@ -76,7 +77,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
                 ),
               ],
             ),
-            const Divider(height: 32),
+            const Divider(height: AppSpace.s32),
 
             // 操作选项
             _actionTile(
@@ -105,7 +106,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
               },
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             const Text(
               '添加下线到此节点',
               style: TextStyle(
@@ -114,7 +115,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
 
             // 添加下线 - 左
             _actionTile(
@@ -139,7 +140,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
               },
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               style: TextButton.styleFrom(
@@ -174,17 +175,17 @@ class _FranchiseNodeSheet extends StatelessWidget {
   }) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.r12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
         child: Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: AppSpace.s56,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16),
           child: Row(
             children: [
               Icon(icon, color: iconColor ?? AppTheme.textPrimary, size: 24),
-              const SizedBox(width: 16),
+              const SizedBox(width: AppSpace.s16),
               Expanded(
                 child: Text(
                   label,
@@ -202,7 +203,7 @@ class _FranchiseNodeSheet extends StatelessWidget {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.s8),
               const Icon(Icons.chevron_right, size: 24, color: AppTheme.textSecondary),
             ],
           ),

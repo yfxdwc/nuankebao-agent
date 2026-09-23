@@ -18,6 +18,7 @@ import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state.dart';
 
+import '../../../core/theme/tokens.g.dart';
 /// 待办任务 + 客户名映射 (任务模型没有客户名, 这里用客户列表补上, 不动 freezed 模型)
 class FollowUpTodo {
   final FollowUpTask task;
@@ -91,7 +92,7 @@ class FollowUpsPage extends ConsumerWidget {
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(pendingFollowUpsProvider),
             child: ListView(
-              padding: const EdgeInsets.only(bottom: 32),
+              padding: const EdgeInsets.only(bottom: AppSpace.s32),
               children: [
                 for (final g in ordered) ...[
                   _groupHeader(g, grouped[g]!.length),
@@ -110,15 +111,15 @@ class FollowUpsPage extends ConsumerWidget {
     final color = urgent ? AppTheme.danger : AppTheme.primary;
     return Container(
       color: AppTheme.bgWarm,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 14, 16, 6),
       child: Row(
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: AppSpace.s8,
+            height: AppSpace.s8,
             decoration: BoxDecoration(shape: BoxShape.circle, color: color),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpace.s8),
           Text(
             label,
             style: TextStyle(
@@ -127,7 +128,7 @@ class FollowUpsPage extends ConsumerWidget {
               color: color,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppSpace.s6),
           Text('($count)', style: TextStyle(fontSize: AppTheme.fontXs, color: color)),
         ],
       ),
@@ -138,9 +139,9 @@ class FollowUpsPage extends ConsumerWidget {
     final t = todo.task;
     final overdue = _groupOf(t.dueAt) == '逾期';
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 12),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       child: Row(
         children: [
@@ -158,7 +159,7 @@ class FollowUpsPage extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpace.s2),
                 Text(
                   t.reason,
                   style: TextStyle(
@@ -169,7 +170,7 @@ class FollowUpsPage extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpace.s8),
           // 一键完成 (老人友好: 大按钮 + 明确文字)
           ElevatedButton(
             onPressed: () async {
@@ -188,7 +189,7 @@ class FollowUpsPage extends ConsumerWidget {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primary,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s12),
             ),
             child: const Text('完成', style: TextStyle(fontSize: AppTheme.fontSm)),
           ),

@@ -6,6 +6,7 @@ import '../../models/customer.dart';
 import '../../providers/service_providers.dart';
 import '../../theme/app_theme.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 final customersProvider = FutureProvider<List<Customer>>((ref) async {
   return ref.watch(customerServiceProvider).list();
 });
@@ -34,7 +35,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpace.s12),
             child: TextField(
               decoration: const InputDecoration(
                 hintText: '搜索姓名 / 手机号',
@@ -65,7 +66,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                         title: Text(c.name),
                         subtitle: Text(_maskPhone(c.phone)),
                         trailing: c.healthTags.isNotEmpty
-                            ? Text(c.healthTags.first, style: const TextStyle(fontSize: 11))
+                            ? Text(c.healthTags.first, style: const TextStyle(fontSize: AppType.tiny))
                             : null,
                         onTap: () => context.push('/customers/${c.id}'),
                       );

@@ -9,6 +9,7 @@ import '../../providers/service_providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/stat_card.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 class DashboardData {
   final DashboardStats stats;
   final List<ServiceDistribution> distribution;
@@ -57,7 +58,7 @@ class DashboardScreen extends ConsumerWidget {
       onRefresh: () async => ref.invalidate(dashboardProvider),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -99,9 +100,9 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            const Text('快捷操作', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s24),
+            const Text('快捷操作', style: TextStyle(fontSize: AppType.sm, fontWeight: FontWeight.w600)),
+            const SizedBox(height: AppSpace.s12),
             Row(
               children: [
                 Expanded(
@@ -111,7 +112,7 @@ class DashboardScreen extends ConsumerWidget {
                     onTap: () => context.push('/customers/new'),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpace.s12),
                 Expanded(
                   child: _ActionCard(
                     icon: Icons.favorite,
@@ -121,7 +122,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             Row(
               children: [
                 Expanded(
@@ -131,7 +132,7 @@ class DashboardScreen extends ConsumerWidget {
                     onTap: () => context.push('/ai'),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpace.s12),
                 Expanded(
                   child: _ActionCard(
                     icon: Icons.bar_chart,
@@ -141,13 +142,13 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpace.s24),
             if (distribution.isNotEmpty) ...[
-              const Text('本月项目分布', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
+              const Text('本月项目分布', style: TextStyle(fontSize: AppType.sm, fontWeight: FontWeight.w600)),
+              const SizedBox(height: AppSpace.s12),
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpace.s16),
                   child: Column(
                     children: [
                       SizedBox(
@@ -171,7 +172,7 @@ class DashboardScreen extends ConsumerWidget {
                                 titleStyle: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14,
+                                  fontSize: AppType.xs,
                                 ),
                                 radius: 60,
                               );
@@ -179,7 +180,7 @@ class DashboardScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.s12),
                       Wrap(
                         spacing: 12,
                         runSpacing: 6,
@@ -195,17 +196,17 @@ class DashboardScreen extends ConsumerWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Container(
-                                width: 12,
-                                height: 12,
+                                width: AppSpace.s12,
+                                height: AppSpace.s12,
                                 decoration: BoxDecoration(
                                   color: colors[e.key % colors.length],
-                                  borderRadius: BorderRadius.circular(2),
+                                  borderRadius: BorderRadius.circular(AppRadius.r2),
                                 ),
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: AppSpace.s4),
                               Text(
                                 '#${e.value.serviceItemId} (${e.value.count})',
-                                style: const TextStyle(fontSize: 12),
+                                style: const TextStyle(fontSize: AppType.tiny),
                               ),
                             ],
                           );
@@ -235,12 +236,12 @@ class _ActionCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(AppSpace.s20),
           child: Row(
             children: [
-              Icon(icon, color: AppTheme.primary, size: 28),
-              const SizedBox(width: 12),
-              Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+              Icon(icon, color: AppTheme.primary, size: AppSpace.s28),
+              const SizedBox(width: AppSpace.s12),
+              Text(title, style: const TextStyle(fontSize: AppType.sm, fontWeight: FontWeight.w500)),
             ],
           ),
         ),

@@ -7,6 +7,7 @@ import '../../../core/http/api_client.dart';
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
+import '../../../core/theme/tokens.g.dart';
 /// 登录页 (2026-09-19 P2: 手机号+验证码 → 账号/手机号 + 密码)
 ///
 /// 设计来源: docs/deploy/production-plan.md §1.1
@@ -88,7 +89,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(AppSpace.s24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
               child: Column(
@@ -96,23 +97,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 children: [
                   Image.asset(
                     'assets/icons/nuankebao-logo.png',
-                    width: 96,
-                    height: 96,
+                    width: AppSpace.s96,
+                    height: AppSpace.s96,
                     fit: BoxFit.contain,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpace.s16),
                   const Text('暖客宝', style: TextStyle(
-                    fontSize: 32, fontWeight: FontWeight.bold, color: AppTheme.primary,
+                    fontSize: AppType.xxl, fontWeight: FontWeight.bold, color: AppTheme.primary,
                   )),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpace.s8),
                   const Text('大健康行业销售 CRM', style: TextStyle(color: Colors.black54)),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: AppSpace.s48),
                   _buildForm(authState),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.s24),
                   // 诊断信息: 当前连的后端地址 (登录不上时对照确认装对 APK)
                   Text(
                     ApiClient.baseUrl,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    style: TextStyle(fontSize: AppType.tiny, color: Colors.grey.shade500),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -137,7 +138,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             prefixIcon: Icon(Icons.person_outline),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.s16),
         TextField(
           controller: _passwordController,
           obscureText: _obscure,
@@ -154,29 +155,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
         if (authState.error != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           Text(
             authState.error!,
-            style: const TextStyle(color: Colors.red, fontSize: 13),
+            style: const TextStyle(color: Colors.red, fontSize: AppType.xs),
             textAlign: TextAlign.center,
           ),
         ],
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpace.s20),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: loading ? null : _login,
             child: loading
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
+                    width: AppSpace.s20,
+                    height: AppSpace.s20,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white),
                   )
                 : const Text('登录'),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // ★ 新用户入口 (B1, 主人 2026-09-20): 填朋友的推荐码自助注册
         //   为什么放在登录页而不是单独藏起来: 新用户第一次打开 App 就落在这里,
@@ -189,13 +190,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, AppTheme.buttonMinHeight),
             foregroundColor: AppTheme.primaryDark,
-            side: const BorderSide(color: AppTheme.primaryLight, width: 2),
+            side: const BorderSide(color: AppTheme.primaryLight, width: AppSpace.s2),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
         const Text(
           '老账号忘记密码请联系管理员重置; 新用户需要朋友的推荐码才能注册',
-          style: TextStyle(fontSize: 12, color: Colors.black45),
+          style: TextStyle(fontSize: AppType.tiny, color: Colors.black45),
           textAlign: TextAlign.center,
         ),
       ],

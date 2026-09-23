@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
+import '../theme/tokens.g.dart';
 class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -22,12 +23,12 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(AppSpace.s32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 80, color: AppTheme.textSecondary),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             Text(
               title,
               textAlign: TextAlign.center,
@@ -38,7 +39,7 @@ class EmptyState extends StatelessWidget {
               ),
             ),
             if (hint != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Text(
                 hint!,
                 textAlign: TextAlign.center,
@@ -49,7 +50,7 @@ class EmptyState extends StatelessWidget {
               ),
             ],
             if (onAction != null && actionLabel != null) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpace.s24),
               ElevatedButton(
                 onPressed: onAction,
                 style: ElevatedButton.styleFrom(
@@ -76,8 +77,8 @@ class LoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Center(
       child: SizedBox(
-        width: 56,
-        height: 56,
+        width: AppSpace.s56,
+        height: AppSpace.s56,
         child: CircularProgressIndicator(strokeWidth: 4),
       ),
     );

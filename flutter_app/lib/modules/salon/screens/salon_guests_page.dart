@@ -14,6 +14,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../providers/salon_providers.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class SalonGuestsPage extends ConsumerStatefulWidget {
   final String salonId;
   const SalonGuestsPage({super.key, required this.salonId});
@@ -61,11 +62,11 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
       grouped.putIfAbsent(name, () => <SalonGuest>[]).add(g);
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 8, 16, 32),
       children: [
         for (final entry in grouped.entries) ...[
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+            padding: const EdgeInsets.fromLTRB(AppSpace.s4, 12, 4, 8),
             child: Text(
               '${entry.key} 带来的 (${entry.value.length} 位)',
               style: const TextStyle(
@@ -83,9 +84,9 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
 
   Widget _guestCard(SalonGuest g) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),
         leading: CircleAvatar(
           radius: 26,
           backgroundColor: AppTheme.primaryLight.withOpacity(0.6),
@@ -112,26 +113,26 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
             ),
             if (g.actualAttended)
               Padding(
-                padding: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.only(left: AppSpace.s8),
                 child: _miniTag('已到场', AppTheme.primary),
               ),
           ],
         ),
         subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.only(top: AppSpace.s4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  _miniTag(g.relationLabel, const Color(0xFF6D6D6D)),
-                  const SizedBox(width: 8),
+                  _miniTag(g.relationLabel, AppColors.textTertiary),
+                  const SizedBox(width: AppSpace.s8),
                   _miniTag(g.status.label, _guestStatusColor(g.status)),
                 ],
               ),
               if (g.phone != null && g.phone!.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.only(top: AppSpace.s6),
                   child: InkWell(
                     onTap: () => _call(g.phone!),
                     child: Row(
@@ -142,7 +143,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
                           size: 20,
                           color: AppTheme.primary,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: AppSpace.s4),
                         Text(
                           g.phone!,
                           style: const TextStyle(
@@ -166,10 +167,10 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
 
   Widget _miniTag(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: AppSpace.s4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.r8),
         border: Border.all(color: color.withOpacity(0.5)),
       ),
       child: Text(
@@ -194,7 +195,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
       case SalonGuestStatus.absent:
         return AppTheme.danger;
       case SalonGuestStatus.cancelled:
-        return const Color(0xFF8A8A8A);
+        return AppColors.textDisabled;
       case SalonGuestStatus.pending:
         return AppTheme.accent;
     }
@@ -216,7 +217,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                padding: const EdgeInsets.fromLTRB(AppSpace.s20, 16, 20, 8),
                 child: Text(
                   '${g.name} · ${g.status.label}',
                   style: const TextStyle(
@@ -246,7 +247,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
                   ),
                   onTap: () => Navigator.of(ctx).pop(a.key),
                 ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
             ],
           ),
         ),

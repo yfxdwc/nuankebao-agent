@@ -28,6 +28,7 @@ import '../core/models/admin_user.dart';
 import '../core/providers/service_providers.dart';
 import '../core/theme/app_theme.dart';
 
+import '../core/theme/tokens.g.dart';
 /// 弹出「改上层」弹层; 返回 true = 改成功了 (调用方去刷新)
 Future<bool?> showReparentSheet(
   BuildContext context,
@@ -199,9 +200,9 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 4,
+          left: AppSpace.s20,
+          right: AppSpace.s20,
+          top: AppSpace.s4,
           bottom: MediaQuery.of(context).viewInsets.bottom + 16,
         ),
         child: Column(
@@ -212,7 +213,7 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
               '协商处理: 改上层',
               style: TextStyle(fontSize: AppTheme.fontMd, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpace.s6),
             Text(
               '给「${move.name}」换一位上层 (点位父)。\n'
               '上层一旦有人就不能自己撤换 —— 这条是管理员协商处理通道, 会留痕。',
@@ -221,7 +222,7 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
                 color: AppTheme.textSecondary,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Text(
               _currentPosition,
               style: const TextStyle(
@@ -229,12 +230,12 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
                 color: AppTheme.textSecondary,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpace.s14),
             const Text(
               '① 选新的上层 (谁在她上面)',
               style: TextStyle(fontSize: AppTheme.fontSm, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpace.s6),
             TextField(
               controller: _search,
               decoration: const InputDecoration(
@@ -245,12 +246,12 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
               ),
               style: const TextStyle(fontSize: AppTheme.fontSm),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 220),
               child: candidates.isEmpty
                   ? const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
+                      padding: EdgeInsets.symmetric(vertical: AppSpace.s16),
                       child: Text(
                         '没有可选的上层: 树里其他人要么还没账号, 要么都是她的下线',
                         style: TextStyle(
@@ -265,20 +266,20 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
                       itemBuilder: (_, i) => _candidateTile(candidates[i], move),
                     ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s10),
             const Text(
               '② 她在这位上层下面走哪条线',
               style: TextStyle(fontSize: AppTheme.fontSm, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpace.s6),
             Row(
               children: [
                 _sideButton('left', occupants, occupants?['left']),
-                const SizedBox(width: 10),
+                const SizedBox(width: AppSpace.s10),
                 _sideButton('right', occupants, occupants?['right']),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpace.s14),
             TextField(
               controller: _reason,
               maxLength: 200,
@@ -297,8 +298,8 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
                 onPressed: canSubmit ? _submit : null,
                 icon: _busy
                     ? const SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: AppSpace.s16,
+                        height: AppSpace.s16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.account_tree_outlined),
@@ -338,16 +339,16 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
             ),
           ),
           if (otherTree) ...[
-            const SizedBox(width: 6),
+            const SizedBox(width: AppSpace.s6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s6, vertical: 1),
               decoration: BoxDecoration(
                 color: AppTheme.textSecondary.withOpacity(0.14),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.r8),
               ),
               child: const Text(
                 '另一棵树',
-                style: TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                style: TextStyle(fontSize: AppType.micro, color: AppTheme.textSecondary),
               ),
             ),
           ],
@@ -372,7 +373,7 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
           side: BorderSide(
             color: selected ? AppTheme.primary : AppTheme.textSecondary.withOpacity(0.4),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.s10, horizontal: AppSpace.s8),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -390,7 +391,7 @@ class _ReparentSheetState extends ConsumerState<_ReparentSheet> {
                 '${taken.name} 占着',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                style: const TextStyle(fontSize: AppType.micro, color: AppTheme.textSecondary),
               ),
           ],
         ),

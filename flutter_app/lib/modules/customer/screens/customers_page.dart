@@ -38,6 +38,7 @@ import 'add_record_sheet.dart';
 import '../../../core/models/placement_request.dart';
 import '../../../core/widgets/placement_target_sheet.dart';
 
+import '../../../core/theme/tokens.g.dart';
 /// 客户页视图模式: 列表 / 图谱
 enum _CustomerViewMode { list, graph }
 
@@ -212,7 +213,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           ),
           // 列表/图谱 切换 (Material 3 SegmentedButton)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s8),
             child: SegmentedButton<_CustomerViewMode>(
               // fix-graph-ui-v3 (2026-09-17): 去 icon + 去掉 compact/shrinkWrap
               //   旧版 (icon 20 + label 14 + compact) 每个 segment 只有 63pt 宽,
@@ -221,11 +222,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
               segments: const [
                 ButtonSegment(
                   value: _CustomerViewMode.list,
-                  label: Text('列表', style: TextStyle(fontSize: 15)),
+                  label: Text('列表', style: TextStyle(fontSize: AppType.sm)),
                 ),
                 ButtonSegment(
                   value: _CustomerViewMode.graph,
-                  label: Text('图谱', style: TextStyle(fontSize: 15)),
+                  label: Text('图谱', style: TextStyle(fontSize: AppType.sm)),
                 ),
               ],
               selected: {_viewMode},
@@ -239,7 +240,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         children: [
           // 搜索框 (始终可见; 列表视图下走 list 过滤, 图谱视图下高亮匹配节点)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            padding: const EdgeInsets.fromLTRB(AppSpace.s16, 8, 16, 8),
             child: TextField(
               controller: _searchController,
               style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -280,7 +281,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           //   口径: 加盟 = 我的下级加盟商 (跟图谱 tab 同口径), 三类互斥穷尽 → 相加 = 全部
           if (_viewMode == _CustomerViewMode.list)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(AppSpace.s16, 0, 16, 8),
               child: SegmentedButton<_CustomerFilter>(
                 segments: [
                   ButtonSegment(
@@ -357,19 +358,19 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     final urgent = s.dueToday > 0 || s.overdue > 0;
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.fromLTRB(AppSpace.s16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s10),
       decoration: BoxDecoration(
         color: (urgent ? AppTheme.danger : AppTheme.primary).withOpacity(0.10),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
         border: Border.all(
           color: (urgent ? AppTheme.danger : AppTheme.primary).withOpacity(0.35),
         ),
       ),
       child: Row(
         children: [
-          Text(urgent ? '🔴' : '🟢', style: const TextStyle(fontSize: 16)),
-          const SizedBox(width: 8),
+          Text(urgent ? '🔴' : '🟢', style: const TextStyle(fontSize: AppType.sm)),
+          const SizedBox(width: AppSpace.s8),
           Expanded(
             child: Text(
               text,
@@ -399,16 +400,16 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       }),
       child: Container(
         color: AppTheme.bgWarm,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s16, 10, 16, 6),
         child: Row(
           children: [
-            Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
-            const SizedBox(width: 8),
+            Container(width: AppSpace.s8, height: AppSpace.s8, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
+            const SizedBox(width: AppSpace.s8),
             Text(
               label,
               style: TextStyle(fontSize: AppTheme.fontSm, fontWeight: FontWeight.w700, color: color),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: AppSpace.s6),
             Text('($count)', style: TextStyle(fontSize: AppTheme.fontXs, color: color)),
             const Spacer(),
             Icon(collapsed ? Icons.expand_more : Icons.expand_less, size: 20, color: AppTheme.textSecondary),
@@ -662,11 +663,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         context: context,
         backgroundColor: AppTheme.bgWarm,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.r20)),
         ),
         builder: (ctx) => SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            padding: const EdgeInsets.fromLTRB(AppSpace.s20, 20, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -678,7 +679,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 Text(
                   '我在她的${up.sideLabel} · 第${up.depth}层\n'
                   '上层一旦确定就不能撤换; 确需调整请联系系统管理员。',
@@ -687,7 +688,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpace.s16),
                 FilledButton(
                   onPressed: () {
                     Navigator.of(ctx).pop();
@@ -766,7 +767,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           children: [
             // 顶部提示条: 选中节点属性 / 搜索命中数 / 默认指引
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),
               color: searchQuery.isNotEmpty
                   ? (matchCount > 0
                       ? AppTheme.primaryLight.withOpacity(0.5)
@@ -785,7 +786,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                               ? AppTheme.danger
                               : AppTheme.primaryDark,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: AppSpace.s8),
                         Expanded(
                           child: Text(
                             searchQuery.isEmpty
@@ -824,12 +825,12 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             // 筛选 (胶囊按键, 主人 2026-09-17 拍): 全部 / A线 / B线 / 直推
             // 点 = 只看这一类 (其余淡化); 再点「全部」恢复
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+              padding: const EdgeInsets.fromLTRB(AppSpace.s16, 6, 16, 6),
               child: SegmentedButton<_GraphFilter>(
                 segments: [
                   const ButtonSegment(
                     value: _GraphFilter.none,
-                    label: Text('全部', style: TextStyle(fontSize: 14)),
+                    label: Text('全部', style: TextStyle(fontSize: AppType.xs)),
                   ),
                   ButtonSegment(
                     value: _GraphFilter.aLine,
@@ -855,23 +856,23 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             //   只在真有会员时出现 —— 没会员不占地方 (大多数树一开始没会员)
             if (_memberCountInTree(tree) > 0)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                padding: const EdgeInsets.fromLTRB(AppSpace.s16, 0, 16, 6),
                 child: Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                          horizontal: AppSpace.s8, vertical: 3),
                       decoration: BoxDecoration(
                         color: kMemberGold.withOpacity(0.14),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(AppRadius.r10),
                         border: Border.all(
                             color: kMemberGold.withOpacity(0.55), width: 1),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('👑', style: TextStyle(fontSize: 13)),
-                          const SizedBox(width: 4),
+                          const Text('👑', style: TextStyle(fontSize: AppType.xs)),
+                          const SizedBox(width: AppSpace.s4),
                           Text(
                             '会员 ${_memberCountInTree(tree)} 位',
                             style: const TextStyle(
@@ -883,7 +884,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpace.s8),
                     const Expanded(
                       child: Text(
                         '金环 + 👑 = 会员',
@@ -1044,8 +1045,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                       ),
                       // 右下角: 「回到我」(根节点居中 1:1) / 「全景」(整树 fit)
                       Positioned(
-                        right: 12,
-                        bottom: 12,
+                        right: AppSpace.s12,
+                        bottom: AppSpace.s12,
                         child: Row(
                           children: [
                             _graphControlButton(
@@ -1053,7 +1054,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                               label: '回到我',
                               onTap: _focusGraphView,
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: AppSpace.s8),
                             _graphControlButton(
                               icon: Icons.zoom_out_map,
                               label: '全景',
@@ -1064,7 +1065,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                             //   非根用户上面已经有 app 内的上级, 往上发展该由那个根去做
                             //   (placementSide == null ⟺ 我这张图的根无侧别 = 我是树根)
                             if (tree.placementSide == null) ...[
-                              const SizedBox(width: 8),
+                              const SizedBox(width: AppSpace.s8),
                               _graphControlButton(
                                 icon: Icons.arrow_circle_up,
                                 label: '认领上级',
@@ -1121,7 +1122,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 TextField(
                   controller: codeCtrl,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -1131,7 +1132,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     helperText: '6 位字母数字 —— 她的唯一识别码 (手机号不再作为识别依据)',
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 TextField(
                   controller: nameCtrl,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -1204,7 +1205,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     return Row(
       children: [
         const Icon(Icons.account_tree_outlined, size: 20, color: AppTheme.accent),
-        const SizedBox(width: 8),
+        const SizedBox(width: AppSpace.s8),
         Expanded(
           child: Text(
             '${node.name} · $line · ${node.relation.label} · 第${node.placementDepth}层',
@@ -1227,10 +1228,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         // 懒加载 (ADR-0011): 有下级 + 未展开 → 「展开」; 展开了 → 「收起」
         if (loading)
           const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
+            padding: EdgeInsets.symmetric(horizontal: AppSpace.s8),
             child: SizedBox(
-              width: 16,
-              height: 16,
+              width: AppSpace.s16,
+              height: AppSpace.s16,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           )
@@ -1238,14 +1239,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           TextButton.icon(
             onPressed: () => _expandNode(node),
             icon: const Icon(Icons.unfold_more, size: 20),
-            label: const Text('展开下级', style: TextStyle(fontSize: 14)),
+            label: const Text('展开下级', style: TextStyle(fontSize: AppType.xs)),
             style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
           )
         else if (childrenLoaded && !_graphNoFold)
           TextButton.icon(
             onPressed: () => _collapseNode(node),
             icon: const Icon(Icons.unfold_less, size: 20),
-            label: const Text('收起', style: TextStyle(fontSize: 14)),
+            label: const Text('收起', style: TextStyle(fontSize: AppType.xs)),
             style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
           ),
         IconButton(
@@ -1286,7 +1287,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 SegmentedButton<String>(
                   segments: const [
                     ButtonSegment(value: 'left', label: Text('A线')),
@@ -1296,7 +1297,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   showSelectedIcon: false,
                   onSelectionChanged: (v) => setDlg(() => side = v.first),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 TextField(
                   controller: codeCtrl,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -1306,7 +1307,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     helperText: '6 位字母数字 —— 她的唯一识别码 (手机号不再作为识别依据)',
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 TextField(
                   controller: nameCtrl,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -1405,15 +1406,15 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 8,
-          height: 8,
+          width: AppSpace.s8,
+          height: AppSpace.s8,
           decoration: BoxDecoration(shape: BoxShape.circle, color: color),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: AppSpace.s4),
         Flexible(
           child: Text(
             '$text $count',
-            style: const TextStyle(fontSize: 13),
+            style: const TextStyle(fontSize: AppType.xs),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1669,19 +1670,19 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     return Material(
       color: Colors.white.withOpacity(0.9),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.r20),
         side: BorderSide(color: AppTheme.primary.withOpacity(0.4), width: 1),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.r20),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 18, color: AppTheme.primaryDark),
-              const SizedBox(width: 4),
+              const SizedBox(width: AppSpace.s4),
               Text(
                 label,
                 style: TextStyle(
@@ -1880,7 +1881,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     final n = counts?[typeKey];
     return Text(
       n == null ? text : '$text $n',
-      style: const TextStyle(fontSize: 14),
+      style: const TextStyle(fontSize: AppType.xs),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );
@@ -1955,23 +1956,23 @@ class CustomerDetailPage extends ConsumerWidget {
     AsyncValue<List<dynamic>> asyncRecords,
   ) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 8, 16, 80),
       children: [
         // 1) 大头像 + 基本信息 (类型徽章 / 年龄 / 拨号)
         _buildHeader(context, ref, customer),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // 1.5) 客户类型切换 (主人 2026-09-18: 「没找到修改客户类型的入口」→ 详情页直接给开关)
         _buildTypeCard(context, ref, customer),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // 2) 被动养生记录 (含汇总: 共 N 次 / 最近到店)
         _buildWellnessSection(context, asyncRecords),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // 2.5) 跟进分析 (客观指标; 主人 2026-09-20 拍 P1 §7.1) —— 先事实, 再 AI 解读
         FollowUpAnalysisCard(customerId: customerId),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // 3) AI 智能区 (主人 2026-09-18 拍: 复购预测 / 客户画像 / 跟进建议 / 效果分析)
         //    顺序按「销售员每天最用得上」排: 复购预测 (自动算, 不烧额度) →
@@ -1981,7 +1982,7 @@ class CustomerDetailPage extends ConsumerWidget {
         AiFollowUpCard(customerId: customerId),
         AiProfileCard(customerId: customerId),
         EffectAnalysisCard(customerId: customerId),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpace.s4),
 
         // 4) 跟进任务 (该客户待办, 可直接勾完成)
         CustomerFollowUpSection(customerId: customerId),
@@ -2001,14 +2002,14 @@ class CustomerDetailPage extends ConsumerWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 const Icon(Icons.favorite, size: 26, color: AppTheme.accent),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text('养生记录',
                       style: TextStyle(
@@ -2036,10 +2037,10 @@ class CustomerDetailPage extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             asyncRecords.when(
               loading: () => const Padding(
-                padding: EdgeInsets.all(8),
+                padding: EdgeInsets.all(AppSpace.s8),
                 child: LoadingState(),
               ),
               error: (e, _) => Text('加载失败: $e',
@@ -2062,7 +2063,7 @@ class CustomerDetailPage extends ConsumerWidget {
                 );
               },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Row(
               children: [
                 Expanded(
@@ -2094,7 +2095,7 @@ class CustomerDetailPage extends ConsumerWidget {
         maxChildSize: 0.95,
         builder: (_, controller) => ListView.builder(
           controller: controller,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s16, 0, 16, 24),
           itemCount: records.length,
           itemBuilder: (ctx, i) {
             final r = records[i];
@@ -2131,7 +2132,7 @@ class CustomerDetailPage extends ConsumerWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           children: [
             // 头像 + 右下角相机角标 (主人 2026-09-18 拍: 点它设置客户头像)
@@ -2150,12 +2151,12 @@ class CustomerDetailPage extends ConsumerWidget {
                     right: -4,
                     bottom: -4,
                     child: Container(
-                      width: 32,
-                      height: 32,
+                      width: AppSpace.s32,
+                      height: AppSpace.s32,
                       decoration: BoxDecoration(
                         color: AppTheme.primary,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(color: Colors.white, width: AppSpace.s2),
                       ),
                       child: const Icon(Icons.photo_camera,
                           size: 18, color: Colors.white),
@@ -2164,12 +2165,12 @@ class CustomerDetailPage extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpace.s6),
             const Text(
               '点头像可以换 (拍照 / 相册 / 现成头像)',
               style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpace.s6),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -2185,12 +2186,12 @@ class CustomerDetailPage extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 // 类型徽章 (加盟紫 / 种子橙 / 普通绿) —— 跟客户列表同口径
                 FranchiseChip(type: type),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpace.s6),
             Text(
               _maskPhone(c.phone),
               style: const TextStyle(
@@ -2199,7 +2200,7 @@ class CustomerDetailPage extends ConsumerWidget {
               ),
             ),
             if (c.gender != null || age != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Wrap(
                 spacing: 8,
                 alignment: WrapAlignment.center,
@@ -2214,7 +2215,7 @@ class CustomerDetailPage extends ConsumerWidget {
                 ],
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             // 快捷操作: 打电话 / 记一次互动 (拨号在 web 不支持时静默失败)
             Row(
               children: [
@@ -2226,7 +2227,7 @@ class CustomerDetailPage extends ConsumerWidget {
                     onTap: () => _callCustomer(context, ref, c.phone),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: BigActionButton(
                     icon: Icons.edit_note,
@@ -2239,7 +2240,7 @@ class CustomerDetailPage extends ConsumerWidget {
             ),
             // 生日 + 提醒 (主人 2026-09-18)
             if (c.birthMonth != null && c.birthDay != null) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpace.s10),
               Builder(builder: (_) {
                 final info = birthdayInfo(
                   month: c.birthMonth,
@@ -2258,14 +2259,14 @@ class CustomerDetailPage extends ConsumerWidget {
                     : ' · 下次 ${nextSolar.year}-${nextSolar.month.toString().padLeft(2, '0')}-${nextSolar.day.toString().padLeft(2, '0')}';
                 return Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s10),
                   decoration: BoxDecoration(
                     color: due
                         ? AppTheme.accent.withOpacity(0.18)
                         : AppTheme.bgWarm,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppRadius.r10),
                     border: Border.all(
-                      color: due ? AppTheme.accent : const Color(0xFFEDE6DA),
+                      color: due ? AppTheme.accent : AppColors.divider,
                     ),
                   ),
                   child: Column(
@@ -2276,7 +2277,7 @@ class CustomerDetailPage extends ConsumerWidget {
                           Icon(Icons.cake_outlined,
                               size: 20,
                               color: due ? AppTheme.accent : AppTheme.primaryDark),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: AppSpace.s6),
                           Expanded(
                             child: Text(
                               '生日 ${birthdayLabel(month: c.birthMonth, day: c.birthDay, calendar: c.birthCalendar, year: c.birthYear)}'
@@ -2290,7 +2291,7 @@ class CustomerDetailPage extends ConsumerWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpace.s4),
                       Text(
                         '提醒: ${remindLabel(c.birthdayRemindDays)}$nextSolarText',
                         style: const TextStyle(
@@ -2302,7 +2303,7 @@ class CustomerDetailPage extends ConsumerWidget {
                 );
               }),
             ] else if (c.birthYear != null) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: AppSpace.s10),
               Text(
                 '生日未填 (只知道年份 ${c.birthYear}) · 填上月日可开启生日提醒',
                 style: const TextStyle(
@@ -2310,12 +2311,12 @@ class CustomerDetailPage extends ConsumerWidget {
               ),
             ],
             if (c.diseaseHistory != null && c.diseaseHistory!.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.s12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF5F5),
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.dangerSurface,
+                  borderRadius: BorderRadius.circular(AppRadius.r8),
                 ),
                 child: Text(
                   '既往病史: ${c.diseaseHistory}',
@@ -2327,12 +2328,12 @@ class CustomerDetailPage extends ConsumerWidget {
               ),
             ],
             if (c.allergyHistory != null && c.allergyHistory!.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.s12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF8E8),
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.accentSurfaceWarm,
+                  borderRadius: BorderRadius.circular(AppRadius.r8),
                   border: Border.all(color: AppTheme.accent.withOpacity(0.4)),
                 ),
                 child: Row(
@@ -2340,7 +2341,7 @@ class CustomerDetailPage extends ConsumerWidget {
                   children: [
                     const Icon(Icons.warning_amber_rounded,
                         size: 20, color: AppTheme.accent),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: AppSpace.s6),
                     Expanded(
                       child: Text(
                         '过敏史: ${c.allergyHistory}',
@@ -2355,7 +2356,7 @@ class CustomerDetailPage extends ConsumerWidget {
               ),
             ],
             if (c.healthTags.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               _buildHealthTags(c),
             ],
           ],
@@ -2437,8 +2438,8 @@ class CustomerDetailPage extends ConsumerWidget {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) => Padding(
           padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
+            left: AppSpace.s16,
+            right: AppSpace.s16,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
           ),
           child: Column(
@@ -2448,7 +2449,7 @@ class CustomerDetailPage extends ConsumerWidget {
               const Text('记一次互动',
                   style: TextStyle(
                       fontSize: AppTheme.fontLg, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -2462,7 +2463,7 @@ class CustomerDetailPage extends ConsumerWidget {
                         ))
                     .toList(),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextField(
                 controller: summaryCtrl,
                 maxLines: 3,
@@ -2470,7 +2471,7 @@ class CustomerDetailPage extends ConsumerWidget {
                 decoration: const InputDecoration(
                     labelText: '聊了什么 (可选)', hintText: '例: 说腰疼好多了, 约下周三'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               BigButton(
                 label: saving ? '保存中...' : '保存',
                 icon: Icons.check,
@@ -2504,7 +2505,7 @@ class CustomerDetailPage extends ConsumerWidget {
                         }
                       },
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
             ],
           ),
         ),
@@ -2518,7 +2519,7 @@ class CustomerDetailPage extends ConsumerWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -2526,7 +2527,7 @@ class CustomerDetailPage extends ConsumerWidget {
               children: [
                 const Icon(Icons.badge_outlined,
                     size: 20, color: AppTheme.primaryDark),
-                const SizedBox(width: 6),
+                const SizedBox(width: AppSpace.s6),
                 const Text(
                   '客户类型',
                   style: TextStyle(
@@ -2538,7 +2539,7 @@ class CustomerDetailPage extends ConsumerWidget {
                 FranchiseChip(type: c.customerType),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s10),
             if (isFranchisee)
               const Text(
                 '加盟客户：类型由加盟关系决定，不能在这里切换；\n要退出加盟请到加盟商详情页走「解除加盟」(需三方确认)',
@@ -2558,7 +2559,7 @@ class CustomerDetailPage extends ConsumerWidget {
                 onSelectionChanged: (v) =>
                     _setCustomerSeed(context, ref, c, v.first == 'seed'),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpace.s6),
               const Text(
                 '种子 = 还没体验过 / 刚加好友的潜在客户；选「种子」后可用列表顶部「🌱 种子」筛出来',
                 style: TextStyle(
@@ -2566,7 +2567,7 @@ class CustomerDetailPage extends ConsumerWidget {
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const Divider(height: 20),
+              const Divider(height: AppSpace.s20),
               const Text(
                 '要变成加盟商？走加盟落位（需三方确认）',
                 style: TextStyle(
@@ -2574,7 +2575,7 @@ class CustomerDetailPage extends ConsumerWidget {
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               // 发展客户为加盟商 (主人 2026-09-19: 入口迁到「客户类型」区块里)
               //   走三方确认的落位流程 (我 + 客户本人 + 目标上级), 通过后自动成为加盟商
               FilledButton.icon(
@@ -2599,10 +2600,10 @@ class CustomerDetailPage extends ConsumerWidget {
   Widget _buildHealthTags(Customer c) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpace.s12),
       decoration: BoxDecoration(
         color: AppTheme.primaryLight.withOpacity(0.25),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.r10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2615,7 +2616,7 @@ class CustomerDetailPage extends ConsumerWidget {
               color: AppTheme.textSecondary,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -2628,7 +2629,7 @@ class CustomerDetailPage extends ConsumerWidget {
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s12),
       child: Text(
         title,
         style: const TextStyle(
@@ -2642,14 +2643,14 @@ class CustomerDetailPage extends ConsumerWidget {
 
   Widget _buildEmptyHint(String title, String hint) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpace.s24),
       child: Center(
         child: Column(
           children: [
             const Icon(Icons.history, size: 56, color: AppTheme.textSecondary),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Text(title, style: const TextStyle(fontSize: AppTheme.fontMd)),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpace.s4),
             Text(hint, style: const TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
           ],
         ),
@@ -2660,15 +2661,15 @@ class CustomerDetailPage extends ConsumerWidget {
   Widget _buildRecordTile(BuildContext context, dynamic r) {
     final dateFmt = DateFormat('yyyy-MM-dd');
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: AppSpace.s8),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s12),
         leading: Container(
-          width: 48,
-          height: 48,
+          width: AppSpace.s48,
+          height: AppSpace.s48,
           decoration: BoxDecoration(
             color: AppTheme.accent.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppRadius.r24),
           ),
           child: const Icon(Icons.favorite, color: AppTheme.accent, size: 28),
         ),
@@ -2680,7 +2681,7 @@ class CustomerDetailPage extends ConsumerWidget {
           ),
         ),
         subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.only(top: AppSpace.s4),
           child: Text(
             '${dateFmt.format(DateTime.parse(r.serviceDate))}${r.customerFeedback != null ? ' · ${r.customerFeedback}' : ''}',
             style: const TextStyle(fontSize: AppTheme.fontSm),
@@ -2810,7 +2811,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       onPressed: onPick,
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, 52),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2936,10 +2937,10 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   Widget _hintBox(String text, {bool warn = false}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(AppSpace.s10),
       decoration: BoxDecoration(
         color: warn ? AppTheme.bgWarm : AppTheme.primaryLight,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.r10),
       ),
       child: Text(
         text,
@@ -3036,7 +3037,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpace.s16),
           children: [
             // 推荐码识别 (只新建时; ADR-0015 Q10): 填已注册朋友的码 → 把她加为客户
             if (widget.customerId == null) ...[
@@ -3057,10 +3058,10 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                   helperText: '朋友的推荐码: 填了可把已注册的她加为客户',
                   suffixIcon: _lookupLoading
                       ? const Padding(
-                          padding: EdgeInsets.all(12),
+                          padding: EdgeInsets.all(AppSpace.s12),
                           child: SizedBox(
-                            width: 18,
-                            height: 18,
+                            width: AppSpace.s18,
+                            height: AppSpace.s18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         )
@@ -3072,10 +3073,10 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ),
               ),
               if (_lookup != null) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 _lookupHint(_lookup!),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
             ],
             TextFormField(
               controller: _nameController,
@@ -3087,7 +3088,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               ),
               validator: (v) => (v == null || v.trim().isEmpty) ? '请输入姓名' : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             // 已注册用户: 手机号在对方账号里, 不需要录 (档案已存在)
             if (!_claimMode) ...[
               TextFormField(
@@ -3102,29 +3103,29 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
             ],
             // 性别 (大按钮组)
             const Text('性别', style: TextStyle(fontSize: AppTheme.fontMd)),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Row(
               children: [
                 _genderButton('女', 'F'),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 _genderButton('男', 'M'),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 _genderButton('未知', 'U'),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             // ===== 生日 (主人 2026-09-18: 年月日可选填 + 农历/阳历 + 生日提醒) =====
             const Text('生日', style: TextStyle(fontSize: AppTheme.fontMd)),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpace.s4),
             const Text(
               '知道多少填多少, 不知道的留空 (例: 只记得属相/年份 → 只填年; 过农历生日 → 切「农历」)',
               style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Row(
               children: [
                 Expanded(
@@ -3134,7 +3135,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     onPick: _pickBirthYear,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: _birthPickerButton(
                     label: '月',
@@ -3142,7 +3143,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     onPick: () => _pickBirthPart(isMonth: true),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: _birthPickerButton(
                     label: '日',
@@ -3152,17 +3153,17 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             // 历法 (阳历 / 农历)
             Row(
               children: [
                 const Text('历法:', style: TextStyle(fontSize: AppTheme.fontSm)),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: SegmentedButton<String>(
                     segments: const [
-                      ButtonSegment(value: 'solar', label: Text('阳历', style: TextStyle(fontSize: 14))),
-                      ButtonSegment(value: 'lunar', label: Text('农历', style: TextStyle(fontSize: 14))),
+                      ButtonSegment(value: 'solar', label: Text('阳历', style: TextStyle(fontSize: AppType.xs))),
+                      ButtonSegment(value: 'lunar', label: Text('农历', style: TextStyle(fontSize: AppType.xs))),
                     ],
                     selected: {_birthCalendar},
                     showSelectedIcon: false,
@@ -3175,12 +3176,12 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
             ),
             // 月+日 都填了 = 开启生日提醒 (提醒强度可选)
             if (_birthMonth != null && _birthDay != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.s12),
                 decoration: BoxDecoration(
                   color: AppTheme.accent.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppRadius.r10),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -3189,14 +3190,14 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                       children: [
                         Icon(Icons.notifications_active_outlined,
                             size: 20, color: AppTheme.accent),
-                        SizedBox(width: 6),
+                        SizedBox(width: AppSpace.s6),
                         Text('生日提醒 (已开启)',
                             style: TextStyle(
                                 fontSize: AppTheme.fontSm,
                                 fontWeight: FontWeight.w600)),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpace.s8),
                     Wrap(
                       spacing: 8,
                       children: [
@@ -3223,15 +3224,15 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ),
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             // ===== 健康标签 (默认候选 + 自定义, 单个 ≤6 汉字; 主人 2026-09-18) =====
             const Text('健康标签', style: TextStyle(fontSize: AppTheme.fontMd)),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpace.s4),
             const Text(
               '点一下选中/取消; 也可以自己加 (最多 6 个字)',
               style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -3255,7 +3256,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                         )),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             // 自定义标签输入 (≤6 汉字)
             Row(
               children: [
@@ -3272,11 +3273,11 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     onSubmitted: (_) => _addCustomTag(),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 // 定宽: 主题里 OutlinedButton minimumSize = infinity, 在 Row 里会被量成无限宽
                 SizedBox(
-                  width: 88,
-                  height: 48,
+                  width: AppSpace.s88,
+                  height: AppSpace.s48,
                   child: OutlinedButton.icon(
                     onPressed: _addCustomTag,
                     style: OutlinedButton.styleFrom(
@@ -3289,7 +3290,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             // ===== 既往病史 / 过敏史 (主人 2026-09-18: 过敏史新增) =====
             TextField(
               controller: _diseaseController,
@@ -3300,7 +3301,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 hintText: '例: 高血压(服药中) / 腰椎间盘突出',
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             TextField(
               controller: _allergyController,
               style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -3310,22 +3311,22 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 hintText: '例: 青霉素过敏 / 对薰衣草精油过敏 / 皮肤敏感',
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             // 种子客户开关 (潜在客户, 胶囊筛选「种子」命中这里)
             Container(
               decoration: BoxDecoration(
                 color: _isSeed ? AppTheme.accent.withOpacity(0.12) : Colors.white,
                 border: Border.all(
-                  color: _isSeed ? AppTheme.accent : const Color(0xFFD0D0D0),
+                  color: _isSeed ? AppTheme.accent : AppColors.border,
                   width: _isSeed ? 2 : 1,
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.r12),
               ),
               child: SwitchListTile(
                 value: _isSeed,
                 onChanged: (v) => setState(() => _isSeed = v),
                 activeColor: AppTheme.accent,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),
                 title: const Text('🌱 种子客户', style: TextStyle(fontSize: AppTheme.fontMd)),
                 subtitle: const Text(
                   '还没体验过/刚加好友的潜在客户。勾上后客户列表可用「种子」筛出',
@@ -3333,14 +3334,14 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s16),
             TextFormField(
               controller: _notesController,
               style: const TextStyle(fontSize: AppTheme.fontMd),
               maxLines: 3,
               decoration: const InputDecoration(labelText: '备注'),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: AppSpace.s32),
             BigButton(
               label: widget.customerId == null ? '保存' : '保存修改',
               icon: Icons.check,
@@ -3364,7 +3365,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
           foregroundColor: selected ? Colors.white : AppTheme.primary,
           side: BorderSide(
             color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.4),
-            width: 2,
+            width: AppSpace.s2,
           ),
         ),
         child: Text(label, style: const TextStyle(fontSize: AppTheme.fontMd)),
@@ -3438,7 +3439,7 @@ class _NumberPickerDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(title, style: const TextStyle(fontSize: AppTheme.fontLg)),
-      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
       content: SizedBox(
         height: 300,
         width: 240,
@@ -3589,7 +3590,7 @@ Customer c,
             '还没注册? 先请她注册, 再回来发展。',
             style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           TextField(
             controller: codeCtrl,
             style: const TextStyle(fontSize: AppTheme.fontMd),

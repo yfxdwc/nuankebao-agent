@@ -8,6 +8,7 @@ import '../../models/dictionaries.dart';
 import '../../providers/service_providers.dart';
 import '../../theme/app_theme.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 final wellnessRecordsListProvider = FutureProvider<List<WellnessRecord>>((ref) async {
   return ref.watch(wellnessRecordServiceProvider).list();
 });
@@ -46,22 +47,22 @@ class WellnessRecordsListScreen extends ConsumerWidget {
               itemBuilder: (context, i) {
                 final r = records[i];
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s6),
                   child: ListTile(
                     title: Text(r.serviceDate),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 4),
+                        const SizedBox(height: AppSpace.s4),
                         Text('项目: ${sMap[r.serviceItemId] ?? r.serviceItemId}'),
                         if (r.bodyPartIds.isNotEmpty)
                           Text('部位: ${r.bodyPartIds.map((id) => bMap[id] ?? id).join(', ')}',
-                            style: const TextStyle(fontSize: 12)),
+                            style: const TextStyle(fontSize: AppType.tiny)),
                         if (r.customerFeedback != null)
                           Padding(
-                            padding: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.only(top: AppSpace.s4),
                             child: Text('反馈: ${r.customerFeedback}',
-                              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                              style: const TextStyle(fontSize: AppType.tiny, color: Colors.black54)),
                           ),
                       ],
                     ),

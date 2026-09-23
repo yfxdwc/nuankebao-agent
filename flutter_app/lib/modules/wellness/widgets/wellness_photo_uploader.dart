@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_theme.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class WellnessPhotoUploader extends StatefulWidget {
   /// 已上传的 URL 列表（来自 model）
   final List<String> existingUrls;
@@ -118,7 +119,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpace.s4),
         Text(
           '已上传 ${_urls.length} / ${widget.maxPhotos}',
           style: const TextStyle(
@@ -126,7 +127,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
             color: AppTheme.textSecondary,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // 已上传照片网格
         if (_urls.isNotEmpty)
@@ -140,7 +141,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
             }).toList(),
           ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
 
         // 上传按钮 (大按钮组)
         Row(
@@ -153,7 +154,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
                 style: OutlinedButton.styleFrom(minimumSize: const Size(0, 64)),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpace.s12),
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: _uploading ? null : () => _pickImage(ImageSource.gallery),
@@ -165,15 +166,15 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
           ],
         ),
         if (_uploading) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           const Row(
             children: [
               SizedBox(
-                width: 20,
-                height: 20,
+                width: AppSpace.s20,
+                height: AppSpace.s20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              SizedBox(width: 8),
+              SizedBox(width: AppSpace.s8),
               Text('上传中...', style: TextStyle(fontSize: AppTheme.fontSm)),
             ],
           ),
@@ -186,28 +187,28 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
     return Stack(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.r12),
           child: Image.network(
             url,
-            width: 96,
-            height: 96,
+            width: AppSpace.s96,
+            height: AppSpace.s96,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(
-              width: 96,
-              height: 96,
+              width: AppSpace.s96,
+              height: AppSpace.s96,
               color: AppTheme.bgWarm,
               child: const Icon(Icons.broken_image, color: AppTheme.textSecondary),
             ),
             loadingBuilder: (_, child, progress) {
               if (progress == null) return child;
               return Container(
-                width: 96,
-                height: 96,
+                width: AppSpace.s96,
+                height: AppSpace.s96,
                 color: AppTheme.bgWarm,
                 child: const Center(
                   child: SizedBox(
-                    width: 24,
-                    height: 24,
+                    width: AppSpace.s24,
+                    height: AppSpace.s24,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
@@ -216,12 +217,12 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
           ),
         ),
         Positioned(
-          top: 4,
-          right: 4,
+          top: AppSpace.s4,
+          right: AppSpace.s4,
           child: GestureDetector(
             onTap: onRemove,
             child: Container(
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.all(AppSpace.s4),
               decoration: const BoxDecoration(
                 color: Colors.black54,
                 shape: BoxShape.circle,

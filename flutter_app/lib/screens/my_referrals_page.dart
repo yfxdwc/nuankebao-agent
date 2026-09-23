@@ -15,6 +15,7 @@ import '../core/theme/app_theme.dart';
 import '../core/widgets/empty_state.dart';
 import 'profile_widgets.dart';
 
+import '../core/theme/tokens.g.dart';
 class MyReferralsPage extends ConsumerStatefulWidget {
   const MyReferralsPage({super.key});
 
@@ -81,7 +82,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
         child: async.when(
           loading: () => const LoadingState(),
           error: (e, _) => ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             children: [
               ErrorState(error: e, onRetry: () => ref.invalidate(myReferralsProvider)),
             ],
@@ -89,9 +90,9 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
           data: (rows) {
             if (rows.isEmpty) {
               return ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpace.s16),
                 children: const [
-                  SizedBox(height: 60),
+                  SizedBox(height: AppSpace.s60),
                   EmptyState(
                     icon: Icons.group_outlined,
                     title: '还没有人用你的推荐码注册',
@@ -104,7 +105,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
 
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
               children: [
                 ProfileSection(
                   title: '好友申请',
@@ -112,7 +113,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                   hint: '共 ${rows.length} 人',
                   children: [
                     const Padding(
-                      padding: EdgeInsets.only(bottom: 8),
+                      padding: EdgeInsets.only(bottom: AppSpace.s8),
                       child: Text(
                         '朋友填了你的推荐码注册。确认「这是我朋友」后, 他立刻得到 15 天会员; '
                         '不认识就驳回 (不会有任何权益)。',
@@ -127,11 +128,11 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                       // 只有"自助注册 + 未处理"才需要推荐人动手 (管理员代建的已生效)
                       final pending = r.needsMyConfirmation;
                       return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: AppSpace.s10),
+                        padding: const EdgeInsets.all(AppSpace.s12),
                         decoration: BoxDecoration(
                           color: AppTheme.bgWarm,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppRadius.r12),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,7 +150,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                                const SizedBox(width: AppSpace.s10),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,7 +175,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                               ],
                             ),
                             if (pending) ...[
-                              const SizedBox(height: 10),
+                              const SizedBox(height: AppSpace.s10),
                               Row(
                                 children: [
                                   Expanded(
@@ -184,7 +185,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                                           style: TextStyle(fontSize: AppTheme.fontSm)),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: AppSpace.s8),
                                   Expanded(
                                     child: OutlinedButton(
                                       onPressed: _busy ? null : () => _decide(r, false),
@@ -198,7 +199,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                             // 归属声明 (ADR-0015 Q11/Q12): 无归属 → 可加为我的客户;
                             // 已是我的 / 已归属别人 → 只显示状态, 不显示按钮
                             if (r.canClaim) ...[
-                              const SizedBox(height: 10),
+                              const SizedBox(height: AppSpace.s10),
                               SizedBox(
                                 width: double.infinity,
                                 child: FilledButton.tonalIcon(
@@ -210,7 +211,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                                 ),
                               ),
                             ] else if (r.claimLabel != null) ...[
-                              const SizedBox(height: 6),
+                              const SizedBox(height: AppSpace.s6),
                               Text(
                                 r.claimLabel!,
                                 style: const TextStyle(

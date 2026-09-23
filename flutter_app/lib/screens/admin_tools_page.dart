@@ -23,6 +23,7 @@ import '../core/theme/app_theme.dart';
 import '../core/widgets/empty_state.dart';
 import 'profile_widgets.dart';
 
+import '../core/theme/tokens.g.dart';
 class AdminToolsPage extends ConsumerStatefulWidget {
   const AdminToolsPage({super.key});
 
@@ -116,7 +117,7 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
                 hintText: '例: 张老师',
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             TextField(
               controller: hintCtrl,
               style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -170,7 +171,7 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
           children: [
             // 用户管理 (主人 2026-09-21 拍): 系统级功能, 收在管理员工具里,
             //   不散在「我的」主页 (那是每个用户都看得到的页面)
@@ -209,7 +210,7 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
                   onTap: _busy ? null : _pickQrCode,
                 ),
                 const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
+                  padding: EdgeInsets.only(bottom: AppSpace.s8),
                   child: Text(
                     '用户付完款会在 App 里点「我已支付」, 你在下面核对到账后点「通过」即可开通',
                     style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
@@ -234,11 +235,11 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
               children: [
                 async.when(
                   loading: () => const Padding(
-                    padding: EdgeInsets.all(24),
+                    padding: EdgeInsets.all(AppSpace.s24),
                     child: LoadingState(),
                   ),
                   error: (e, _) => Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(AppSpace.s12),
                     child: ErrorState(
                       error: e,
                       onRetry: () => ref.invalidate(adminPaymentsProvider(_status)),
@@ -247,7 +248,7 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
                   data: (rows) {
                     if (rows.isEmpty) {
                       return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20),
+                        padding: EdgeInsets.symmetric(vertical: AppSpace.s20),
                         child: Text(
                           '暂时没有',
                           style: TextStyle(fontSize: AppTheme.fontMd, color: AppTheme.textSecondary),
@@ -257,11 +258,11 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
                     return Column(
                       children: rows.map((r) {
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: AppSpace.s10),
+                          padding: const EdgeInsets.all(AppSpace.s12),
                           decoration: BoxDecoration(
                             color: AppTheme.bgWarm,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppRadius.r12),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,13 +287,13 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: AppSpace.s4),
                               Text(
                                 '备注: ${r.payerNote?.isNotEmpty == true ? r.payerNote : "(没填)"}',
                                 style: const TextStyle(fontSize: AppTheme.fontSm),
                               ),
                               if (r.proofUrl != null) ...[
-                                const SizedBox(height: 8),
+                                const SizedBox(height: AppSpace.s8),
                                 GestureDetector(
                                   onTap: () => showDialog<void>(
                                     context: context,
@@ -303,17 +304,17 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
                                     ),
                                   ),
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(AppRadius.r8),
                                     child: SizedBox(
-                                      width: 90,
-                                      height: 90,
+                                      width: AppSpace.s90,
+                                      height: AppSpace.s90,
                                       child: _ProofImage(url: r.proofUrl!),
                                     ),
                                   ),
                                 ),
                               ],
                               if (_status == 'pending') ...[
-                                const SizedBox(height: 10),
+                                const SizedBox(height: AppSpace.s10),
                                 Row(
                                   children: [
                                     Expanded(
@@ -323,7 +324,7 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
                                             style: TextStyle(fontSize: AppTheme.fontSm)),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: AppSpace.s8),
                                     Expanded(
                                       child: OutlinedButton(
                                         onPressed: _busy ? null : () => _decide(r, false),
@@ -349,7 +350,7 @@ class _AdminToolsPageState extends ConsumerState<AdminToolsPage> {
               icon: Icons.info_outline,
               children: const [
                 Padding(
-                  padding: EdgeInsets.only(bottom: 8),
+                  padding: EdgeInsets.only(bottom: AppSpace.s8),
                   child: Text(
                     '· 通过 = 立刻给该账号 +30 天会员 (可追溯: 申请单 + 权益流水 + 审计日志)\n'
                     '· 只有 admin 角色能进出本页; 服务端每次都会重新校验\n'

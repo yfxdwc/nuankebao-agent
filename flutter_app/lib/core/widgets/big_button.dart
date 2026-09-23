@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
+import '../theme/tokens.g.dart';
 class BigButton extends StatelessWidget {
   final String label;
   final IconData? icon;
@@ -31,8 +32,8 @@ class BigButton extends StatelessWidget {
         onPressed: loading ? null : onPressed,
         icon: loading
             ? SizedBox(
-                width: 24,
-                height: 24,
+                width: AppSpace.s24,
+                height: AppSpace.s24,
                 child: CircularProgressIndicator(
                   color: fg,
                   strokeWidth: 3,
@@ -51,7 +52,7 @@ class BigButton extends StatelessWidget {
           foregroundColor: fg,
           disabledBackgroundColor: bg.withOpacity(0.5),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.r12),
           ),
         ),
       ),

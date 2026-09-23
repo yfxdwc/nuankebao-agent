@@ -14,6 +14,7 @@ import '../../../core/widgets/empty_state.dart';
 import '../providers/salon_providers.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/tokens.g.dart';
 class SalonManagePage extends ConsumerStatefulWidget {
   final String salonId;
   const SalonManagePage({super.key, required this.salonId});
@@ -68,9 +69,9 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
           ),
           unselectedLabelStyle: const TextStyle(fontSize: AppTheme.fontMd),
           tabs: const [
-            Tab(text: '报名情况', height: 52),
-            Tab(text: '邀请名单', height: 52),
-            Tab(text: '带约任务', height: 52),
+            Tab(text: '报名情况', height: AppSpace.s52),
+            Tab(text: '邀请名单', height: AppSpace.s52),
+            Tab(text: '带约任务', height: AppSpace.s52),
           ],
         ),
       ),
@@ -112,10 +113,10 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
         onRetry: () => ref.invalidate(salonAggregatesProvider(widget.salonId)),
       ),
       data: (agg) => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
         children: [
           _statGrid(agg),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpace.s20),
           const Text(
             '沙龙信息',
             style: TextStyle(
@@ -123,7 +124,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           _salonInfoCard(),
         ],
       ),
@@ -162,11 +163,11 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
 
   Widget _statCard({required String label, required String value}) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpace.s12),
       decoration: BoxDecoration(
         color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8E0D8)),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        border: Border.all(color: AppColors.surfaceSunken),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -179,7 +180,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
               color: AppTheme.primary,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpace.s4),
           Text(
             label,
             textAlign: TextAlign.center,
@@ -198,7 +199,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
     return asyncSalon.when(
       loading: () => const Card(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: EdgeInsets.all(AppSpace.s24),
           child: Center(child: CircularProgressIndicator()),
         ),
       ),
@@ -215,7 +216,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
       ),
       data: (s) => Card(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpace.s16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -226,7 +227,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               _infoRow('状态', s.status.label),
               _infoRow('时间', _fmtRange(s.startAt, s.endAt)),
               _infoRow('地点', s.addressLine.isEmpty ? '待定' : s.addressLine),
@@ -240,12 +241,12 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
 
   Widget _infoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 64,
+            width: AppSpace.s64,
             child: Text(
               label,
               style: const TextStyle(
@@ -288,7 +289,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
           );
         }
         return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 120),
           itemCount: items.length,
           itemBuilder: (context, i) => _invitationTile(items[i]),
         );
@@ -298,9 +299,9 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
 
   Widget _invitationTile(SalonInvitation inv) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),
         leading: CircleAvatar(
           radius: 26,
           backgroundColor: AppTheme.primaryLight.withOpacity(0.6),
@@ -327,12 +328,12 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
             ),
             if (inv.roleInSalon == 'organizer')
               Padding(
-                padding: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.only(left: AppSpace.s8),
                 child: _miniTag('主理人', AppTheme.accent),
               )
             else if (inv.isStaff)
               Padding(
-                padding: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.only(left: AppSpace.s8),
                 child: _miniTag(
                   inv.staffRole != null && inv.staffRole!.isNotEmpty
                       ? '会务·${inv.staffRole}'
@@ -343,7 +344,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
           ],
         ),
         subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.only(top: AppSpace.s4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -367,10 +368,10 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
 
   Widget _miniTag(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: AppSpace.s4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.r8),
       ),
       child: Text(
         text,
@@ -386,10 +387,10 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
   Widget _invitationStatusChip(SalonInvitationStatus status) {
     final color = _invitationStatusColor(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s6),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.r10),
         border: Border.all(color: color.withOpacity(0.6)),
       ),
       child: Text(
@@ -412,15 +413,15 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
       case SalonInvitationStatus.declined:
         return AppTheme.danger;
       case SalonInvitationStatus.waitlist:
-        return const Color(0xFF5C6BC0);
+        return AppColors.salonWaitlist;
       case SalonInvitationStatus.attended:
         return AppTheme.primaryDark;
       case SalonInvitationStatus.absent:
         return AppTheme.danger;
       case SalonInvitationStatus.cancelled:
-        return const Color(0xFF8A8A8A);
+        return AppColors.textDisabled;
       case SalonInvitationStatus.pending:
-        return const Color(0xFF8A8A8A);
+        return AppColors.textDisabled;
     }
   }
 
@@ -442,7 +443,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                padding: const EdgeInsets.fromLTRB(AppSpace.s20, 16, 20, 8),
                 child: Text(
                   '${inv.inviteeName} · ${inv.status.label}',
                   style: const TextStyle(
@@ -472,7 +473,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
                   ),
                   onTap: () => Navigator.of(ctx).pop(a.value),
                 ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
             ],
           ),
         ),
@@ -553,7 +554,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
           );
         }
         return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 120),
           itemCount: quotas.length,
           itemBuilder: (context, i) => _quotaCard(quotas[i]),
         );
@@ -563,9 +564,9 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
 
   Widget _quotaCard(SalonQuota q) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -586,7 +587,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Text(
               '带约 ${q.quotaValue} 人',
               style: const TextStyle(
@@ -595,21 +596,21 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
                 color: AppTheme.primaryDark,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s10),
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadius.r8),
               child: LinearProgressIndicator(
                 value: q.ratio,
                 minHeight: 12,
-                backgroundColor: const Color(0xFFEAE3DA),
+                backgroundColor: AppColors.surfaceSunken,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Text(
               '已完成 ${q.progress} / ${q.quotaValue} · 已登记 ${q.guestCount} · 自报 ${q.expectedGuestCount} 人',
               style: const TextStyle(fontSize: AppTheme.fontSm),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpace.s4),
             Text(
               q.deadlineAt == null
                   ? '截止时间: 未设置'
@@ -620,7 +621,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
               ),
             ),
             if (q.note != null && q.note!.isNotEmpty) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Text(
                 '备注: ${q.note}',
                 style: const TextStyle(
@@ -821,14 +822,14 @@ class _AddInvitationDialogState extends ConsumerState<_AddInvitationDialog> {
               style: const TextStyle(fontSize: AppTheme.fontMd),
               decoration: const InputDecoration(labelText: '姓名 *'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             TextField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
               style: const TextStyle(fontSize: AppTheme.fontMd),
               decoration: const InputDecoration(labelText: '手机号 *'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             DropdownButtonFormField<String>(
               value: _role,
               isExpanded: true,
@@ -847,7 +848,7 @@ class _AddInvitationDialogState extends ConsumerState<_AddInvitationDialog> {
                   : (v) => setState(() => _role = v ?? 'attendee'),
             ),
             if (_role == 'staff') ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextField(
                 controller: _staffRoleCtrl,
                 style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -857,7 +858,7 @@ class _AddInvitationDialogState extends ConsumerState<_AddInvitationDialog> {
                 ),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             TextField(
               controller: _guestCountCtrl,
               keyboardType: TextInputType.number,
@@ -949,7 +950,7 @@ class _AssignQuotaDialogState extends ConsumerState<_AssignQuotaDialog> {
       loading: () => const AlertDialog(
         title: Text('分配任务'),
         content: SizedBox(
-          height: 100,
+          height: AppSpace.s100,
           child: Center(child: CircularProgressIndicator()),
         ),
       ),
@@ -1016,7 +1017,7 @@ class _AssignQuotaDialogState extends ConsumerState<_AssignQuotaDialog> {
                       ? null
                       : (v) => setState(() => _selectedUserId = v),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 TextField(
                   controller: _quotaCtrl,
                   keyboardType: TextInputType.number,
@@ -1026,7 +1027,7 @@ class _AssignQuotaDialogState extends ConsumerState<_AssignQuotaDialog> {
                     hintText: '如: 3',
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 TextField(
                   controller: _noteCtrl,
                   style: const TextStyle(fontSize: AppTheme.fontMd),
@@ -1113,7 +1114,7 @@ class _CancelSalonAction extends ConsumerWidget {
                 '取消后受邀者会在沙龙详情页看到这条说明, 请把原因写清楚。',
                 style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextField(
                 controller: reasonCtrl,
                 maxLines: 4,

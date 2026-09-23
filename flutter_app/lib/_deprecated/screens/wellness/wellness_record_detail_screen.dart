@@ -8,6 +8,7 @@ import '../../models/dictionaries.dart';
 import '../../providers/service_providers.dart';
 import '../wellness/wellness_records_list_screen.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 final wellnessRecordDetailProvider = FutureProvider.family<WellnessRecord, String>(
   (ref, id) => ref.watch(wellnessRecordServiceProvider).getById(id),
 );
@@ -44,19 +45,19 @@ class WellnessRecordDetailScreen extends ConsumerWidget {
               .map((id) => dict?.bodyParts.where((b) => b.id == id).firstOrNull?.name ?? id)
               .toList();
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.s16),
             children: [
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpace.s16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(r.serviceDate, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
+                      Text(r.serviceDate, style: const TextStyle(fontSize: AppType.md, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: AppSpace.s4),
                       Text('项目: $sName'),
                       if (bNames.isNotEmpty) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpace.s8),
                         Wrap(
                           spacing: 6,
                           children: bNames.map((n) => Chip(label: Text(n))).toList(),
@@ -66,20 +67,20 @@ class WellnessRecordDetailScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               if (r.preCondition.isNotEmpty || r.postCondition.isNotEmpty)
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(AppSpace.s16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('状态对比', style: TextStyle(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpace.s8),
                         ...r.preCondition.entries.map((e) {
                           final post = r.postCondition[e.key];
                           return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            padding: const EdgeInsets.symmetric(vertical: AppSpace.s2),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -98,15 +99,15 @@ class WellnessRecordDetailScreen extends ConsumerWidget {
                   ),
                 ),
               if (r.processNote != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(AppSpace.s16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('理疗过程', style: TextStyle(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpace.s8),
                         Text(r.processNote!),
                       ],
                     ),
@@ -114,15 +115,15 @@ class WellnessRecordDetailScreen extends ConsumerWidget {
                 ),
               ],
               if (r.customerFeedback != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s12),
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(AppSpace.s16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('客户反馈', style: TextStyle(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpace.s8),
                         Text(r.customerFeedback!),
                       ],
                     ),

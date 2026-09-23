@@ -6,6 +6,7 @@ import '../../models/customer.dart';
 import '../../providers/service_providers.dart';
 import '../customers/customer_detail_screen.dart';
 
+import 'package:nuankebao/core/theme/tokens.g.dart';
 class CustomerFormScreen extends ConsumerStatefulWidget {
   final String? customerId; // null = 新增
   const CustomerFormScreen({super.key, this.customerId});
@@ -103,7 +104,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
         title: Text(widget.customerId == null ? '新增客户' : '编辑客户'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s16),
         child: Form(
           key: _formKey,
           child: Column(
@@ -114,7 +115,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                 decoration: const InputDecoration(labelText: '姓名 *'),
                 validator: (v) => v!.trim().isEmpty ? '请输入姓名' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
@@ -122,7 +123,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                 decoration: const InputDecoration(labelText: '手机号 *', counterText: ''),
                 validator: (v) => !RegExp(r'^1[3-9]\d{9}$').hasMatch(v!) ? '手机号格式错误' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               DropdownButtonFormField<String>(
                 value: _gender,
                 decoration: const InputDecoration(labelText: '性别'),
@@ -133,16 +134,16 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                 ],
                 onChanged: (v) => setState(() => _gender = v!),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextFormField(
                 controller: _birthYearController,
                 keyboardType: TextInputType.number,
                 maxLength: 4,
                 decoration: const InputDecoration(labelText: '出生年', counterText: ''),
               ),
-              const SizedBox(height: 16),
-              const Text('健康标签 (多选)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s16),
+              const Text('健康标签 (多选)', style: TextStyle(fontSize: AppType.xs, fontWeight: FontWeight.w500)),
+              const SizedBox(height: AppSpace.s8),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
@@ -161,23 +162,23 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               TextFormField(
                 controller: _diseaseHistoryController,
                 maxLines: 3,
                 decoration: const InputDecoration(labelText: '既往病史 / 过敏史'),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextFormField(
                 controller: _notesController,
                 maxLines: 3,
                 decoration: const InputDecoration(labelText: '备注'),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpace.s24),
               ElevatedButton(
                 onPressed: _loading ? null : _save,
                 child: _loading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox(width: AppSpace.s20, height: AppSpace.s20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Text('保存'),
               ),
             ],
