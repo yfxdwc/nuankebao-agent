@@ -169,6 +169,13 @@
       "when": 1790259600000,
       "tag": "0023_usage_event",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790346000000,
+      "tag": "0024_app_config",
+      "breakpoints": true
     }
   ]
 }

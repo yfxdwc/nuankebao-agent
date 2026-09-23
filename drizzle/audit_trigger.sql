@@ -111,3 +111,11 @@ DROP TRIGGER IF EXISTS billing_config_audit ON billing_config;
 CREATE TRIGGER billing_config_audit
   AFTER INSERT OR UPDATE OR DELETE ON billing_config
   FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+-- P5 后续 (2026-09-23): 可调参数组覆盖层
+--   为什么必须挂: 改评分阈值会影响**全店**客户的分数与行动指引,
+--   必须能回答"这条分数是谁在什么时候把参数改成这样的"。
+DROP TRIGGER IF EXISTS app_config_audit ON app_config;
+CREATE TRIGGER app_config_audit
+  AFTER INSERT OR UPDATE OR DELETE ON app_config
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();

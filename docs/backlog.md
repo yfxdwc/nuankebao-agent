@@ -5,30 +5,54 @@
 
 ---
 
-## ⓪-新 · admin 「客户管理参数调节」页 (2026-09-23 主人点名挂起)
+## ✅ ⓪-新 · admin 「客户管理参数调节」页 (2026-09-23 完成)
 
 > **主人原话**: 「挂起待办任务：在 admin 里增加管理、调节页面，让评分规则及其他客户管理中的参数可在管理页面进行调节」
 
-**背景**: 2026-09-23 已把客户洞察的 **31 个可调参数**全部变量化
-(`src/lib/customer/insight-config.ts`, JSON 可序列化)。现在只差"给谁改"的入口。
+**已落地** (CHANGELOG 同日条目):
 
-**要做**
-
-| # | 东西 | 说明 |
+| # | 东西 | 落地位置 |
 |---|---|---|
-| 1 | **DB 覆盖层** | 通用表 `app_config(key text pk, value jsonb, updated_by, updated_at)` —— 一张表装所有"可调参数组", 不只评分 |
-| 2 | **读写口** | `getInsightConfig()` = `resolveInsightConfig(DB 里那份)`; 写走 `PUT /api/admin/insight-config` (admin only + 审计) |
-| 3 | **admin 页** | `/admin/settings/insight` —— 按参数组分折叠面板 (评分 / 行动 / 阈值), 每项带**当前值 + 默认值 + 说明 + 合法区间**; 改完显示"这会改变 N 个客户的分数" |
-| 4 | **版本提示** | 保存时 `version` 自动 +1; 详情页可提示"评分规则已更新, 分数可能变化" |
-| 5 | **重置为默认** | 一键删 DB 覆盖 → 回落 `DEFAULT_INSIGHT_CONFIG` |
-| 6 | **"其他客户管理参数"** | 同表承载: 客户列表排序权重 / 紧急度分档 (`urgency.ts::URGENCY_LEVELS`) / 分页大小 / 标签规则阈值 |
+| 1 | **DB 覆盖层** | 表 `app_config(key, value jsonb, description, updated_by, updated_at)` + audit 触发器; 迁移 `0024_app_config` |
+| 2 | **读写口** | `src/lib/config/app-config.ts` (通用, 不懂业务) + `src/lib/customer/insight-config-store.ts` (夹区间 / 版本 / 重置) |
+| 3 | **admin 页** | `/admin/settings/insight` + `components/business/insight-config-editor.tsx` (6 组折叠面板) |
+| 4 | **版本提示** | 内容真变了才 `scoring.version`/`actions.version` +1 |
+| 5 | **重置为默认** | 删覆盖行 (不是写一份等于默认的值) |
+| 6 | **"其他客户管理参数"** | 通用表已就绪, 接新参数组只需加一个 `*-store.ts` (紧急度/分页待接) |
 
-**前置**: 无 (config 层已就绪)。**风险**: 改阈值影响全店分数 → 必须**审计留痕 + 可回滚**(这是 ADR-0015「诊断/配置类改动要留痕」的延伸)。
+**额外做的**: 「预估影响面」按钮 —— 保存前抽样算一遍会改掉多少客户的分数/行动
+(`POST /api/admin/insight-config/impact`)。
 
-**待拍板**
-- 谁能改? (仅 admin / 或允许店长改本店的?)
-- 改了要不要通知受影响的销售?
-- 参数要不要按门店隔离? (CHARTER §3.6 门店维度已冻结 → 倾向**全局一套**, 不按门店)
+**为什么"改造门面"用抽样而不是全量**: 每位客户要按两套参数各跑一次完整洞察 (各 ~6 次查询),
+全量在同步请求里不现实; 返回体带 `sampled` / `sampledAll`, 页面明示"抽样估算" (不假装精确)。
+
+**已拍的 3 个问题** (按最窄口径实现, 若要放宽需主人再拍):
+- 谁能改 → **仅系统管理员** (`role='admin'` 服务端查库)
+- 改了通不通知销售 → **本期不做**; 靠参数版本号 + 详情页"规则已更新"提示兜
+- 按不按门店隔离 → **全局一套** (CHARTER §3.6 门店维度已冻结)
+
+**发现并记下的 repo 隐患**: drizzle 的 snapshot 只到 **0016**, 0017-0023 都是手写迁移 →
+直接跑 `drizzle-kit generate` 会把 0020-0023 的变更**整段重放** (对已有库是灾难)。
+本次按既有约定手写 `0024_app_config.sql` + 手工追加 `drizzle/meta/_journal.json`。
+后续要么补齐 snapshot, 要么在 `db:generate` 上加护栏 —— 已记入下方技术债。
+
+## 技术债 · drizzle snapshot 只到 0016, `db:generate` 会整段重放 (2026-09-23 发现)
+
+**现象**: `npx drizzle-kit generate` 输出 `0024_*.sql` 里包着 **0020-0023 的全部变更**
+(建表 + 重复 ALTER `customer.owner_id` 等)。原因是 `drizzle/meta/` 的 snapshot 停在 `0016`,
+之后 0017-0023 都是手写迁移 + 手工改 `_journal.json`。
+
+**风险**: 谁在不了解这一点时跑一次 `db:generate` 并 apply, 对已有库 = 重复 ALTER / 重复建表,
+可能直接挂。
+
+**可选方案**:
+- (a) 补齐 0017-0023 的 snapshot 链 (工作量大, 但一劳永逸)
+- (b) 在 `package.json` 的 `db:generate` 外面包一层护栏脚本: 先 dry-run, 若 diff 里出现
+      已知表名 (customer/user/franchisee...) 的 ALTER/建表就拒绝并提示"手写迁移"
+- (c) 只在 README/AGENTS 写明 (最轻, 但靠人记)
+
+**倾向 (b)**: 护栏比告示可靠 (AGENTS §5「贴告示 ≠ 修复」同一根)。
+**当前状态**: 未做; 本次已按既有约定手写迁移绕开。
 
 ---
 

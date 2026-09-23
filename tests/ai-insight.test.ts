@@ -196,7 +196,8 @@ describe("generateAiInsight (集成, mock 模式)", () => {
   let customerId: bigint;
 
   beforeAll(async () => {
-    const phone = "13900009999";
+    // ⚠ 手机号每次全新: 测试库不清库, 固定号码第二次跑本文件就撞 phoneHash 唯一索引
+    const phone = `139${String(Date.now() % 100000000).padStart(8, "0")}9`;
     const phoneHash = createHash("sha256").update(phone).digest("hex");
     const [row] = await db
       .insert(customer)

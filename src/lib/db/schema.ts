@@ -1419,3 +1419,37 @@ export const manualPaymentRequest = pgTable(
 
 export type ManualPaymentRequest = typeof manualPaymentRequest.$inferSelect;
 export type NewManualPaymentRequest = typeof manualPaymentRequest.$inferInsert;
+
+// ============================================
+// app_config —— 通用「可调参数组」覆盖层 (2026-09-23, P5 后续)
+// ============================================
+// 主人 2026-09-23 拍: 「在 admin 里增加管理、调节页面，让评分规则及其他客户管理
+//   中的参数可在管理页面进行调节」
+//
+// 设计取舍:
+//   - **一张表装所有参数组** (key = 逻辑名, 如 'customer.insight'), 不为每个参数组
+//     单独建表 —— 参数组会不断新增 (评分/行动/紧急度/分页...), 一表一表加不完。
+//   - 只存**覆盖值** (override), 不存默认值 —— 默认值永远在代码里
+//     (`DEFAULT_INSIGHT_CONFIG` 等)。这样"重置为默认" = 删一行, 且代码改默认值
+//     能立刻生效 (不用同步改 DB)。
+//   - value 是 jsonb 且**不受信**: 读取时一律经 resolve* 夹区间, 坏配置静默回落默认
+//     (一个坏配置不该让客户详情页打不开)。
+//   - 改配置影响全店分数 → 挂 audit 触发器 (谁改的/改成什么, 见 audit_log)。
+//     表自带 updated_by/updated_at 只是方便看, 追责靠 audit_log。
+//   - 无 revision/版本列: 覆盖层的版本号存在 value 内部 (如 scoring.version),
+//     由业务层自己在保存时 +1 —— 保持本表纯 key-value, 不懂业务。
+export const appConfig = pgTable("app_config", {
+  /** 逻辑键 (命名: <域>.<物>, 例: customer.insight) */
+  key: text("key").primaryKey(),
+  /** 覆盖值 (只放"与默认不同"的部分; 读取时与默认深合并) */
+  value: jsonb("value").notNull(),
+  /** 人话说明 (admin 页展示用, 可选) */
+  description: text("description"),
+  updatedBy: bigint("updated_by", { mode: "bigint" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .default(sql`NOW()`),
+});
+
+export type AppConfigRow = typeof appConfig.$inferSelect;
+export type NewAppConfigRow = typeof appConfig.$inferInsert;

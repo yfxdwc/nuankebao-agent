@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Heart, Bell, FileText, Sparkles, BarChart3, Upload, MessageCircle, Brain, Download, Wrench, Activity } from "lucide-react";
+import { Users, Heart, Bell, FileText, Sparkles, BarChart3, Upload, MessageCircle, Brain, Download, Wrench, Activity,
+  SlidersHorizontal,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -17,6 +19,7 @@ const navItems = [
   { href: "/admin/import", label: "导入客户", icon: Upload },
   { href: "/admin/ai", label: "AI 助手", icon: Brain },
   { href: "/admin/download", label: "App 下载", icon: Download },
+  { href: "/admin/settings/insight", label: "参数调节", icon: SlidersHorizontal },
 ];
 
 // 主人 2026-09-14 override 拍板 (v0.1.4 master-decide, AGENTS §3 反模式“mobile-only 阶段加 web admin 新功能” 主人在此场景显式拍板例外):

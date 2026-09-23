@@ -2,6 +2,51 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — admin 客户管理参数调节页 (2026-09-23)
+
+主人 2026-09-23 点名挂起的 backlog 条目落地: 「在 admin 里增加管理、调节页面，
+让评分规则及其他客户管理中的参数可在管理页面进行调节」。
+
+**后端**
+- 新表 `app_config(key, value jsonb, description, updated_by, updated_at)` + `app_config_audit`
+  审计触发器（改参数影响全店分数 → 必须能追责）。迁移 `0024_app_config` + `_journal.json`
+- `src/lib/config/app-config.ts` —— **通用**覆盖层（不懂业务，只管 key→jsonb）
+- `src/lib/customer/insight-config-store.ts` —— 生效配置 = 代码默认 ⊕ DB 覆盖，**写入前夹区间**
+  （参数来自 HTTP 且全店共用，越界值必须挡）；**内容真变了**才 version +1；
+  重置 = **删行**（不是写一份等于默认的值，否则代码改默认后变成陈旧覆盖）
+- API：`GET/PUT/DELETE /api/admin/insight-config` + `POST .../impact`（保存前影响面预估）
+- `loadCustomerInsight` 接上 DB 覆盖（原来留的口子：「将来接 DB 时不用改调用方」）
+
+**前端**
+- `/admin/settings/insight`（侧边栏「参数调节」）+ `insight-config-editor.tsx`
+- 6 组折叠面板覆盖 **46 个数值 + 9 个行动优先级 + 4 档分档标签**；每行显示
+  当前值 / 默认值 / 可填区间 / 单位 / 一句话业务说明；改过的行高亮 + 单行还原
+- 「预估影响面」：保存前抽样 25 位客户算一遍，报告「N 位分数会变、M 位该做的事会变」
+  （命中时给具体客户例子）。⚠ 明示是**抽样估算**，不假装精确
+- 页面上写明参数是**全局一套**（不按门店），免得店长误解
+
+**参数元数据**
+- `src/lib/customer/insight-param-meta.ts` —— UI 的中文名/区间/说明真相源
+- ⭐ `tests/insight-param-meta.test.ts` 用「喂 min-1 / max+1 看后端夹回多少」锁死
+  **元数据区间 ≡ resolveInsightConfig 夹取范围**（不一致 = UI 让填 -5、后端悄悄夹成 0）
+
+**拍的 3 个问题**（按最窄口径；要放宽需主人再拍）：仅系统管理员可改 / 本期不通知销售
+（靠版本号提示兜）/ 参数全局一套（CHARTER §3.6 门店维度已冻结）。
+
+**测试**: 新增 `insight-param-meta` 103 例 + `insight-config-store` 18 例。
+真机 E2E（admin 登录 → 改值 → 保存 → 刷新持久化 → 影响面 → 重置）全通；
+审计日志确认写入者 user_id 与 INSERT/DELETE 操作。
+
+**顺带修的**:
+- `insight-config-store` 版本号 bug：内容没变时误用 `resolved`（不含 version）落库 → 版本从 v2 退回 v1
+- 我新写的两个测试文件手机号固定 → 第二次跑撞 `idx_customer_phone_hash`（改每次全新）
+
+**发现的 repo 隐患（已记 backlog + 技术债）**: drizzle snapshot 只到 0016，
+之后 0017-0023 都是手写迁移 → 直接跑 `drizzle-kit generate` 会把 0020-0023 整段重放。
+本次按既有约定手写迁移绕开。
+
+---
+
 ## [Unreleased] — 定位文档 drift 清扫 + 副标题决策闭环 (2026-09-23)
 
 主人问「当前项目的核心定位」时，顺带核对四份文档同步状态，清掉四处 drift：
