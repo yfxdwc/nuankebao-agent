@@ -204,9 +204,17 @@ const config: Config = {
       },
 
       fontSize: {
-        // xxs 仅限 web admin 密集区 (表格/角标); Flutter APK 可读性底线仍是 14px
-        micro: ["var(--text-micro)", { lineHeight: "1.4" }],
-        // 语义字号 (中老年: 正文 18px, 比 Tailwind 默认 16px 大一档)
+        // 语义字号 (B 档 · 紧凑专业) — 改这里一处 = 全站所有 .text-{role} 跟着变
+        //   角色名描述**用途**, 不描述大小 —— 适合「中文 15px 是正文」这种按用途选档的体感
+        //
+        //   caption   12  角标 / 时间戳
+        //   body      13  副文 / 帮助文字
+        //   body-lg   15  正文 (B 档目标; 微信 17 / iOS 17 / 企业应用 14-15)
+        //   title-sm  17  区块标题
+        //   title     20  页面标题
+        //   display   28  主页大数字 / hero
+        //
+        // micro (11px) 是更小档, Tailwind 没暴露, 仅 Flutter 图谱画布用
         caption: ["var(--text-xs)", { lineHeight: "1.5" }],
         body: ["var(--text-sm)", { lineHeight: "1.6" }],
         "body-lg": ["var(--text-md)", { lineHeight: "1.6" }],

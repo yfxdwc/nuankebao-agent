@@ -36,7 +36,7 @@ export default function RootLayout({
         */}
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
-      <body className="theme-transition min-h-screen bg-background font-sans antialiased">
+      <body className="theme-transition min-h-screen bg-background font-sans text-body-lg text-content-primary antialiased">
         {children}
       </body>
     </html>

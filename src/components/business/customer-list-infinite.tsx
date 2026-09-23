@@ -113,15 +113,14 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
 
   return (
     <>
-      <div className="grid gap-2 md:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="divide-y divide-divider rounded-lg border border-border-default bg-card overflow-hidden">
         {items.map((customer) => (
           <Link
             key={customer.id}
             href={`/admin/customers/${customer.id}`}
-            className="block active:scale-[0.98] transition-transform"
+            className="block hover:bg-surface-subtle transition-colors active:scale-[0.99]"
           >
-            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-              <CardContent className="p-3 md:p-6">
+            <div className="px-3 md:px-4 py-2.5 md:py-3">
                 <div className="flex items-start gap-3">
                   <div
                     className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center text-base md:text-lg font-medium shrink-0"
@@ -171,11 +170,10 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                     </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
           </Link>
         ))}
-      </div>
+      </ul>
 
       {/* 底部: 加载更多 / 已加载完 / 错误 */}
       <div ref={sentinelRef} className="h-4" aria-hidden="true" />
