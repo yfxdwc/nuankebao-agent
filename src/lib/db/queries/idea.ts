@@ -37,30 +37,59 @@ export interface ListIdeasOptions {
   status?: IdeaStatus;
 }
 
+/**
+ * API-friendly row shape (id/userId 都是 string, JSON 安全)
+ * 跟 customers store::CustomerView 同口径 (NextResponse.json 不能序列化 BigInt)
+ */
+export interface IdeaApi {
+  id: string;
+  userId: string;
+  title: string;
+  description: string;
+  status: IdeaStatus;
+  createdAt: string; // ISO
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+function toApiRow(row: Idea): IdeaApi {
+  return {
+    id: row.id.toString(),
+    userId: row.userId.toString(),
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+  };
+}
+
 /** 列出一个主人的想法 (按 updated_at DESC) */
-export async function listIdeas(opts: ListIdeasOptions): Promise<Idea[]> {
+export async function listIdeas(opts: ListIdeasOptions): Promise<IdeaApi[]> {
   const where = opts.status
     ? and(eq(idea.userId, opts.userId), eq(idea.status, opts.status))
     : eq(idea.userId, opts.userId);
 
-  return await db
+  const rows = await db
     .select()
     .from(idea)
     .where(where)
     .orderBy(desc(idea.updatedAt));
+  return rows.map(toApiRow);
 }
 
 /** 取单条想法 (返回 null = 不存在或不属于这个 user) */
 export async function getIdea(
   id: bigint,
   userId: bigint
-): Promise<Idea | null> {
+): Promise<IdeaApi | null> {
   const [row] = await db
     .select()
     .from(idea)
     .where(and(eq(idea.id, id), eq(idea.userId, userId)))
     .limit(1);
-  return row ?? null;
+  return row ? toApiRow(row) : null;
 }
 
 // ============================================
@@ -76,7 +105,7 @@ export interface CreateIdeaInput {
 export async function createIdea(
   input: CreateIdeaInput,
   audit: AuditContext
-): Promise<Idea> {
+): Promise<IdeaApi> {
   const row: NewIdea = {
     userId: input.userId,
     title: input.title.trim(),
@@ -90,7 +119,7 @@ export async function createIdea(
     if (!inserted) {
       throw new Error("createIdea: 插入未返回行 (DB 异常)");
     }
-    return inserted;
+    return toApiRow(inserted);
   });
 }
 
@@ -120,7 +149,7 @@ export async function updateIdea(
   userId: bigint,
   patch: UpdateIdeaPatch,
   audit: AuditContext
-): Promise<Idea> {
+): Promise<IdeaApi> {
   return await withAuditContext(audit, async (tx) => {
     // 1) 先确认这条想法属于这个 user (不暴露其他 user 的 id 是否存在)
     const [existing] = await tx
@@ -162,7 +191,7 @@ export async function updateIdea(
       // 理论上不存在 (刚 select 出来); 防御性抛错
       throw new Error(`updateIdea: 未返回更新行, id=${id}`);
     }
-    return updated;
+    return toApiRow(updated);
   });
 }
 

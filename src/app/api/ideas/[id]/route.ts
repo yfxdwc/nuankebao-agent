@@ -13,13 +13,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
+import { getDevFallbackAdminUserId } from "@/lib/auth/dev-fallback";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 import {
   updateIdea,
   deleteIdea,
   IdeaNotFoundError,
 } from "@/lib/db/queries/idea";
-import { getRbacContext } from "@/lib/auth/rbac";
+import { getRbacContextForSession } from "@/lib/auth/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -50,22 +51,32 @@ function parseId(raw: string): bigint | null {
 
 async function authAndRbac(request: NextRequest) {
   const session = await auth();
+  const fallbackUserId = await getDevFallbackAdminUserId();
   if (!isAuthSkipped() && !session?.user?.id) {
     return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
   }
-  const sessionUserId = session?.user?.id;
+  const sessionUserId = session?.user?.id ?? fallbackUserId?.toString();
   if (!sessionUserId) {
     return { error: NextResponse.json({ error: "missing user id" }, { status: 401 }) };
   }
-  const rbac = await getRbacContext(BigInt(sessionUserId), session.user.role);
-  if (rbac.role !== "admin") {
+  // dev skip-auth 时 session 为空 → getRbacContextForSession(undefined) 也 undefined
+  // → 用 fallback user 的 id 构造一个虚拟 session 再算 rbac
+  const rbac =
+    (await getRbacContextForSession(session)) ??
+    (fallbackUserId
+      ? await getRbacContextForSession({ user: { id: fallbackUserId.toString() } })
+      : undefined);
+  if (rbac?.role !== "admin") {
     return {
       error: NextResponse.json({ error: "forbidden (admin only)" }, { status: 403 }),
     };
   }
+  // dev fallback 时, 给 audit 一个 userId 字段 (audit_trigger SET LOCAL app.current_user_id 用)
+  const auditSession =
+    session ?? (fallbackUserId ? { user: { id: fallbackUserId.toString() } } : null);
   return {
     sessionUserId,
-    audit: getAuditContextFromRequest(request, { userId: BigInt(sessionUserId) }),
+    audit: getAuditContextFromRequest(request, auditSession),
   };
 }
 

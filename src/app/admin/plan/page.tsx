@@ -1,29 +1,31 @@
 // ============================================
-// /admin/plan — 主人自用的项目路线图 (开发计划模块)
+// /admin/plan — 主人自用的项目计划中心
 //
-// v0.1.5 主人 2026-09-23 拍板 (ask_user d3e7f2a1):
-// 「admin 端增加开发计划模块」— 独立 /admin/plan (跟 /admin/dev 平级),
-// 纯静态渲染 docs/phase-1-mvp.md + CHANGELOG.md + docs/adr/INDEX.md.
+// v0.1.5 主人 2026-09-23 拍 (ask_user d3e7f2a1, 两轮):
+//   第一轮: 「admin 端增加开发计划模块」— 静态路线图渲染 (W1-W6 + CHANGELOG + ADR)
+//   第二轮: 「我需要能手动记录一个待开发的想法」— 增删改 / 勾选 / 丢弃
+//
+// (c) 升级方案 (主人拍板): 主页 = **待开发想法 CRUD** + 下方保留路线图 section
+//   - 顶部 IdeaList (client component) = 主人日常用 (新增/勾选/丢弃)
+//   - 下方路线图 (server-rendered)   = 大盘 (Phase 1 整体进度, 只读)
 //
 // 设计原则 (docs/ui-principles.md §1-§5):
-// - 密度: 列表紧凑, 一屏可见 (原则 1)
-// - 层级: 字重 + 颜色差, 字号 ≤ 5 档 (原则 2)
-// - 留白: 组内 8 / 组间 20 (原则 3)
-// - 容器: 列表不套 Card, 用 1px 分隔线 (原则 4) ★ 最容易踩
-// - 颜色: 状态色只在有状态时出现 (原则 5)
+//   - 密度: 列表紧凑, 一屏可见 (原则 1)
+//   - 层级: 字重 + 颜色差, 字号 ≤ 5 档 (原则 2)
+//   - 留白: 组内 8 / 组间 20 (原则 3)
+//   - 容器: 列表不套 Card, 用 1px 分隔线 (原则 4) ★
+//   - 颜色: 状态色只在有状态时出现 (原则 5)
 //
 // 不要做的 (per AGENTS §5 反模式):
-// - ❌ 卡片套卡片
-// - ❌ 给列表加卡片容器
-// - ❌ 一屏十种颜色
-// - ❌ 容器用边框 + 阴影叠加 (阴影只在弹层/Sheet)
-//
-// 数据源 (plan-loader.ts): 不写数据库, 不写 API, 只读 docs/*
+//   - ❌ 卡片套卡片
+//   - ❌ 给列表加卡片容器
+//   - ❌ 一屏十种颜色
 // ============================================
 
 import Link from "next/link";
 import { loadPlanData } from "./plan-loader";
 import { Badge } from "@/components/ui/badge";
+import { IdeaList } from "@/components/admin/idea-list";
 
 // SSR 强制 — 跟 /admin/dev 系列保持一致
 export const dynamic = "force-dynamic";
@@ -31,7 +33,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "开发计划 · 暖客宝 admin",
   description:
-    "主人自用的项目路线图: Phase 1 MVP 周里程碑 + 最近变更 + 最近 ADR 决策",
+    "主人自用的项目计划: 待开发想法 CRUD + Phase 1 MVP 周里程碑 + 最近变更 + 最近 ADR 决策",
 };
 
 export default async function PlanPage() {
@@ -43,7 +45,7 @@ export default async function PlanPage() {
   const overallPct = totalTasks > 0 ? Math.round((totalDone / totalTasks) * 100) : 0;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 md:space-y-8">
+    <div className="mx-auto max-w-5xl space-y-8 md:space-y-10">
       {/* ========== 1. Header (页面标题 + 总进度) ========== */}
       <header className="space-y-3">
         <div className="flex items-baseline justify-between gap-4 flex-wrap">
@@ -52,13 +54,13 @@ export default async function PlanPage() {
               开发计划
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              主人自用的项目路线图 · {data.meta.phase} · 当前{" "}
+              主人自用的项目计划 · {data.meta.phase} · 当前{" "}
               <span className="font-mono">{data.meta.version}</span>
             </p>
           </div>
           {/* 总进度 (用 div 模拟进度条, 不依赖 shadcn Progress 组件) */}
           <div className="text-right">
-            <div className="text-xs text-muted-foreground">总进度</div>
+            <div className="text-xs text-muted-foreground">路线图进度</div>
             <div className="text-2xl font-semibold tabular-nums text-primary">
               {overallPct}%
             </div>
@@ -74,11 +76,11 @@ export default async function PlanPage() {
             aria-valuenow={overallPct}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Phase 1 MVP 总进度"
+            aria-label="Phase 1 MVP 路线图总进度"
           />
         </div>
         <div className="text-xs text-muted-foreground">
-          {totalDone} / {totalTasks} 任务已完成 ·{" "}
+          {totalDone} / {totalTasks} 路线图任务已完成 ·{" "}
           <span className="font-mono">
             {data.meta.fetchedAt.slice(0, 16).replace("T", " ")}
           </span>{" "}
@@ -90,7 +92,7 @@ export default async function PlanPage() {
       {data.meta.warnings.length > 0 && (
         <div className="rounded-md border border-warning/40 bg-warning-surface p-3 text-sm">
           <div className="font-medium text-warning-foreground mb-1">
-            ⚠ 数据源读取失败:
+            ⚠ 路线图数据源读取失败:
           </div>
           <ul className="list-disc pl-5 text-muted-foreground">
             {data.meta.warnings.map((w, i) => (
@@ -100,10 +102,21 @@ export default async function PlanPage() {
         </div>
       )}
 
-      {/* ========== 2. 周里程碑 (W1-W6 详细) ========== */}
+      {/* ========== 2. 待开发想法 (主人日常用, client CRUD) ========== */}
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-3">
-          周里程碑 · Phase 1 MVP (6 周)
+          待开发想法
+        </h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          主人手动记录的待办 / 备忘 — 顶部一行新增, 状态三选 (待办/完成/丢弃), 真删需二次确认。
+        </p>
+        <IdeaList />
+      </section>
+
+      {/* ========== 3. 周里程碑 (Phase 1 大盘, 只读) ========== */}
+      <section>
+        <h2 className="text-lg font-semibold text-foreground mb-3">
+          路线图 · Phase 1 MVP (6 周)
         </h2>
         <p className="text-xs text-muted-foreground mb-4">
           数据来源:{" "}
@@ -210,7 +223,7 @@ export default async function PlanPage() {
         </ul>
       </section>
 
-      {/* ========== 3. 最近变更 (CHANGELOG 头部) ========== */}
+      {/* ========== 4. 最近变更 (CHANGELOG 头部) ========== */}
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-3">最近变更</h2>
         <p className="text-xs text-muted-foreground mb-4">
@@ -271,7 +284,7 @@ export default async function PlanPage() {
         </ul>
       </section>
 
-      {/* ========== 4. 最近 ADR (决策时间线) ========== */}
+      {/* ========== 5. 最近 ADR (决策时间线) ========== */}
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-3">
           最近 ADR 决策
@@ -328,10 +341,10 @@ export default async function PlanPage() {
         </ul>
       </section>
 
-      {/* ========== 5. Footer (数据来源说明 + 渲染时间) ========== */}
+      {/* ========== 6. Footer (数据来源说明 + 渲染时间) ========== */}
       <footer className="text-xs text-muted-foreground border-t pt-4 space-y-1">
         <p>
-          完整计划见{" "}
+          完整路线图见{" "}
           <Link
             href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/phase-1-mvp.md"
             className="text-info hover:underline"

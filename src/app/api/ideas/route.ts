@@ -14,9 +14,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
+import { getDevFallbackAdminUserId } from "@/lib/auth/dev-fallback";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 import { listIdeas, createIdea } from "@/lib/db/queries/idea";
-import { getRbacContext } from "@/lib/auth/rbac";
+import { getRbacContextForSession } from "@/lib/auth/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -30,17 +31,23 @@ const CreateIdeaSchema = z.object({
 // ---------- GET /api/ideas ----------
 export async function GET(request: NextRequest) {
   const session = await auth();
+  const fallbackUserId = await getDevFallbackAdminUserId();
   if (!isAuthSkipped() && !session?.user?.id) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const sessionUserId = session?.user?.id;
+  const sessionUserId = session?.user?.id ?? fallbackUserId?.toString();
   if (!sessionUserId) {
     return NextResponse.json({ error: "missing user id" }, { status: 401 });
   }
 
   // 仅 admin 自用 (主人拍板 Q5)
-  const rbac = await getRbacContext(BigInt(sessionUserId), session.user.role);
-  if (rbac.role !== "admin") {
+  // dev skip-auth 时 rbac 可能 undefined, 用 fallback user 兜底
+  const rbac =
+    (await getRbacContextForSession(session)) ??
+    (fallbackUserId
+      ? await getRbacContextForSession({ user: { id: fallbackUserId.toString() } })
+      : undefined);
+  if (rbac?.role !== "admin") {
     return NextResponse.json({ error: "forbidden (admin only)" }, { status: 403 });
   }
 
@@ -67,16 +74,21 @@ export async function GET(request: NextRequest) {
 // ---------- POST /api/ideas ----------
 export async function POST(request: NextRequest) {
   const session = await auth();
+  const fallbackUserId = await getDevFallbackAdminUserId();
   if (!isAuthSkipped() && !session?.user?.id) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const sessionUserId = session?.user?.id;
+  const sessionUserId = session?.user?.id ?? fallbackUserId?.toString();
   if (!sessionUserId) {
     return NextResponse.json({ error: "missing user id" }, { status: 401 });
   }
 
-  const rbac = await getRbacContext(BigInt(sessionUserId), session.user.role);
-  if (rbac.role !== "admin") {
+  const rbac =
+    (await getRbacContextForSession(session)) ??
+    (fallbackUserId
+      ? await getRbacContextForSession({ user: { id: fallbackUserId.toString() } })
+      : undefined);
+  if (rbac?.role !== "admin") {
     return NextResponse.json({ error: "forbidden (admin only)" }, { status: 403 });
   }
 
@@ -89,7 +101,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const audit = getAuditContextFromRequest(request, { userId: BigInt(sessionUserId) });
+  const audit = getAuditContextFromRequest(
+    request,
+    session ?? (fallbackUserId ? { user: { id: fallbackUserId.toString() } } : null)
+  );
   const created = await createIdea(
     {
       userId: BigInt(sessionUserId),

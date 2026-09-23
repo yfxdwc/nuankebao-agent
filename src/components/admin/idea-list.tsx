@@ -163,7 +163,7 @@ export function IdeaList() {
         )
       );
       // 切换了 tab 过滤后, 状态跟 tab 不符就该消失; 这里乐观更新后, 实际再 refresh
-      if (tab !== "all" && tab !== status) {
+      if (tab !== status) {
         const list = await apiIdeasList(tab === "all" ? undefined : tab);
         setItems(list);
       }
