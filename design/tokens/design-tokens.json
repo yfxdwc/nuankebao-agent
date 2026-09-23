@@ -1,0 +1,374 @@
+{
+  "$meta": {
+    "name": "nuankebao-design-tokens",
+    "version": "1.0.0",
+    "description": "暖客宝 UI 设计令牌 单一真相源 (SSOT)。改这里 → 跑 `pnpm tokens:build` → Flutter + Web 两端同步生成。",
+    "generatedArtifacts": [
+      "flutter_app/lib/core/theme/tokens.g.dart",
+      "src/lib/design-tokens.g.ts",
+      "src/styles/globals.css (标记注入块)"
+    ],
+    "neverEdit": [
+      "flutter_app/lib/core/theme/tokens.g.dart",
+      "src/lib/design-tokens.g.ts",
+      "src/styles/globals.css 中 BEGIN/END GENERATED 之间的内容"
+    ],
+    "rules": [
+      "本文件是唯一允许出现字面 hex 色值的地方 (mermaid classDef 字符串例外, 见 docs/ui-tokens.md §例外)",
+      "themes 只覆盖品牌色槽位; 中性色 / 文字色 / 状态色在 shared, 所有主题共用 → 换肤不会让对比度退化",
+      "onPrimary / onAccent / onSuccess 等『前景色』一律由生成器按相对亮度自动推导, 手写无效",
+      "新增主题 = 往 themes 数组加一项, 然后 pnpm tokens:build (无需改任何业务代码)"
+    ]
+  },
+
+  "palette": {
+    "neutral-0": "#FFFFFF",
+    "neutral-50": "#FFFBF5",
+    "neutral-100": "#F7F2EA",
+    "neutral-200": "#EDE6DA",
+    "neutral-300": "#E0E0E0",
+    "neutral-400": "#D0D0D0",
+    "neutral-500": "#8A8A8A",
+    "neutral-600": "#6B6B6B",
+    "neutral-700": "#4A4A4A",
+    "neutral-800": "#2E2E2E",
+    "neutral-900": "#1A1A1A",
+    "neutral-950": "#0F0F0F",
+
+    "green-50": "#F0F7F2",
+    "green-100": "#E9F4EE",
+    "green-200": "#A8D5BA",
+    "green-300": "#7CBF97",
+    "green-400": "#5E9E78",
+    "green-500": "#4A7C59",
+    "green-600": "#3D6849",
+    "green-700": "#2D5A3D",
+    "green-800": "#234631",
+    "green-900": "#17301F",
+
+    "amber-50": "#FDF6EC",
+    "amber-100": "#FAE9D0",
+    "amber-200": "#F5D5A8",
+    "amber-300": "#EFBF80",
+    "amber-400": "#ECAF65",
+    "amber-500": "#E89F4D",
+    "amber-600": "#D08A38",
+    "amber-700": "#A86E2B",
+    "amber-800": "#8A5A1F",
+    "amber-900": "#6B4415",
+
+    "yellow-100": "#FFF3CD",
+    "yellow-200": "#FFE8A3",
+    "yellow-500": "#D9B23D",
+    "yellow-600": "#C89A2B",
+    "yellow-700": "#8A6D1F",
+    "yellow-900": "#5C4712",
+
+    "red-50": "#FFF5F5",
+    "red-100": "#FBDDDD",
+    "red-300": "#E08A8A",
+    "red-500": "#D3545C",
+    "red-600": "#B33A3A",
+    "red-700": "#8F2E2E",
+
+    "blue-50": "#EDF4FB",
+    "blue-100": "#E3EDF8",
+    "blue-500": "#2B6CB0",
+    "blue-700": "#1F4E80",
+
+    "purple-50": "#F5F0F8",
+    "purple-100": "#EFE7F4",
+    "purple-500": "#8E5BA8",
+    "purple-700": "#6D4282",
+
+    "pink-500": "#C2185B",
+
+    "spring-500": "#5A7D3C",
+    "spring-200": "#C3DFA6",
+    "spring-700": "#3D5A28",
+    "spring-50": "#F2F8EB",
+    "springAccent-500": "#B3536C",
+    "springAccent-100": "#F0D2DB",
+    "springAccent-50": "#FDF1F5",
+
+    "summer-500": "#2F7A72",
+    "summer-200": "#A6D6CE",
+    "summer-700": "#1F574F",
+    "summer-50": "#EEF7F5",
+    "summerAccent-500": "#B07E1E",
+    "summerAccent-100": "#F0E0B8",
+    "summerAccent-50": "#FBF6E9",
+
+    "autumn-500": "#A65E24",
+    "autumn-200": "#E8C79E",
+    "autumn-700": "#7A421A",
+    "autumn-50": "#FBF2E7",
+    "autumnAccent-500": "#A9791F",
+    "autumnAccent-100": "#EFDDAE",
+    "autumnAccent-50": "#FAF4E4",
+
+    "winter-500": "#8C4A4A",
+    "winter-200": "#DFB9B9",
+    "winter-700": "#632F2F",
+    "winter-50": "#FAF1F1",
+    "winterAccent-500": "#4A6E8C",
+    "winterAccent-100": "#CBDCE9",
+    "winterAccent-50": "#F0F5F9"
+  },
+
+  "scales": {
+    "space": {
+      "s0": 0,
+      "s2": 2,
+      "s4": 4,
+      "s6": 6,
+      "s8": 8,
+      "s10": 10,
+      "s12": 12,
+      "s14": 14,
+      "s16": 16,
+      "s20": 20,
+      "s24": 24,
+      "s32": 32,
+      "s40": 40,
+      "s48": 48,
+      "s56": 56,
+      "s64": 64,
+      "s80": 80,
+      "s96": 96
+    },
+    "radius": {
+      "r0": 0,
+      "r4": 4,
+      "r6": 6,
+      "r8": 8,
+      "r10": 10,
+      "r12": 12,
+      "r16": 16,
+      "r20": 20,
+      "r24": 24,
+      "r28": 28,
+      "full": 999
+    },
+    "type": {
+      "xs": 14,
+      "sm": 16,
+      "md": 18,
+      "lg": 22,
+      "xl": 28,
+      "xxl": 36
+    },
+    "weight": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    },
+    "size": {
+      "iconSm": 18,
+      "iconMd": 24,
+      "iconLg": 28,
+      "iconXl": 32,
+      "buttonMinHeight": 56,
+      "buttonLgHeight": 64,
+      "fabSize": 80,
+      "listRowHeight": 80,
+      "avatarSm": 40,
+      "avatarMd": 56,
+      "avatarLg": 96,
+      "appBarHeight": 64,
+      "borderHairline": 1,
+      "borderThick": 2,
+      "tapMin": 48,
+      "contentMaxWidth": 720
+    },
+    "elevation": {
+      "e0": 0,
+      "e1": 1,
+      "e2": 2,
+      "e3": 4,
+      "e4": 8
+    },
+    "duration": {
+      "instant": 80,
+      "fast": 120,
+      "base": 200,
+      "slow": 320,
+      "slower": 480
+    },
+    "opacity": {
+      "disabled": 0.38,
+      "muted": 0.62,
+      "hover": 0.08,
+      "overlay": 0.48,
+      "scrim": 0.32
+    }
+  },
+
+  "semantic": {
+    "space": {
+      "pagePadding": "s16",
+      "cardPadding": "s16",
+      "cardGap": "s12",
+      "sectionGap": "s24",
+      "inlineGap": "s8",
+      "tightGap": "s4",
+      "listRowPadding": "s16",
+      "formFieldGap": "s12",
+      "bottomSafeGap": "s80"
+    },
+    "radius": {
+      "card": "r12",
+      "button": "r12",
+      "input": "r12",
+      "chip": "r20",
+      "badge": "r8",
+      "sheet": "r16",
+      "dialog": "r16",
+      "pill": "full"
+    }
+  },
+
+  "shared": {
+    "surface": "{palette.neutral-50}",
+    "surfaceCard": "{palette.neutral-0}",
+    "surfaceSubtle": "{palette.neutral-100}",
+    "surfaceSunken": "{palette.neutral-200}",
+    "surfaceInverse": "{palette.neutral-900}",
+
+    "textPrimary": "{palette.neutral-900}",
+    "textSecondary": "{palette.neutral-700}",
+    "textTertiary": "{palette.neutral-600}",
+    "textDisabled": "{palette.neutral-500}",
+    "textOnInverse": "{palette.neutral-0}",
+
+    "border": "{palette.neutral-400}",
+    "borderStrong": "{palette.neutral-500}",
+    "borderInput": "{palette.neutral-400}",
+    "divider": "{palette.neutral-200}",
+    "focusRing": "{palette.green-500}",
+
+    "success": "{palette.green-700}",
+    "successLight": "{palette.green-200}",
+    "successSurface": "{palette.green-50}",
+    "warning": "{palette.yellow-700}",
+    "warningLight": "{palette.yellow-200}",
+    "warningSurface": "{palette.yellow-100}",
+    "danger": "{palette.red-600}",
+    "dangerLight": "{palette.red-300}",
+    "dangerSurface": "{palette.red-50}",
+    "info": "{palette.blue-700}",
+    "infoLight": "{palette.blue-100}",
+    "infoSurface": "{palette.blue-50}",
+
+    "memberGold": "{palette.yellow-600}",
+    "memberGoldSurface": "{palette.yellow-100}",
+    "badgeNeutral": "{palette.neutral-600}",
+    "badgeNeutralSurface": "{palette.neutral-200}",
+
+    "graphFranchiseeB": "{palette.purple-500}",
+    "graphFranchiseeBSurface": "{palette.purple-50}",
+    "graphFranchiseeA": "{palette.blue-500}",
+    "graphFranchiseeASurface": "{palette.blue-50}",
+    "graphLine": "{palette.neutral-400}",
+    "graphLineSoft": "{palette.neutral-200}",
+
+    "shadowColor": "#000000",
+    "scrim": "{palette.neutral-950}"
+  },
+
+  "web": {
+    "fontSans": "ui-sans-serif, system-ui, -apple-system, \"PingFang SC\", \"Microsoft YaHei\", \"Source Han Sans SC\", sans-serif",
+    "fontMono": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    "density": 1,
+    "shadow": {
+      "xs": "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+      "sm": "0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06)",
+      "md": "0 4px 8px -2px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.05)",
+      "lg": "0 12px 20px -6px rgb(0 0 0 / 0.10), 0 4px 8px -4px rgb(0 0 0 / 0.06)",
+      "xl": "0 24px 36px -12px rgb(0 0 0 / 0.14)"
+    }
+  },
+
+  "themes": [
+    {
+      "id": "sage",
+      "label": "养生绿",
+      "group": "品牌",
+      "isDefault": true,
+      "flutterKey": "sage",
+      "colors": {
+        "primary": "{palette.green-500}",
+        "primaryLight": "{palette.green-200}",
+        "primaryDark": "{palette.green-700}",
+        "primarySurface": "{palette.green-50}",
+        "accent": "{palette.amber-500}",
+        "accentLight": "{palette.amber-100}",
+        "accentSurface": "{palette.amber-50}"
+      }
+    },
+    {
+      "id": "spring",
+      "label": "春 · 新芽",
+      "group": "季节",
+      "colors": {
+        "primary": "{palette.spring-500}",
+        "primaryLight": "{palette.spring-200}",
+        "primaryDark": "{palette.spring-700}",
+        "primarySurface": "{palette.spring-50}",
+        "accent": "{palette.springAccent-500}",
+        "accentLight": "{palette.springAccent-100}",
+        "accentSurface": "{palette.springAccent-50}"
+      }
+    },
+    {
+      "id": "summer",
+      "label": "夏 · 青荷",
+      "group": "季节",
+      "colors": {
+        "primary": "{palette.summer-500}",
+        "primaryLight": "{palette.summer-200}",
+        "primaryDark": "{palette.summer-700}",
+        "primarySurface": "{palette.summer-50}",
+        "accent": "{palette.summerAccent-500}",
+        "accentLight": "{palette.summerAccent-100}",
+        "accentSurface": "{palette.summerAccent-50}"
+      }
+    },
+    {
+      "id": "autumn",
+      "label": "秋 · 琥珀",
+      "group": "季节",
+      "colors": {
+        "primary": "{palette.autumn-500}",
+        "primaryLight": "{palette.autumn-200}",
+        "primaryDark": "{palette.autumn-700}",
+        "primarySurface": "{palette.autumn-50}",
+        "accent": "{palette.autumnAccent-500}",
+        "accentLight": "{palette.autumnAccent-100}",
+        "accentSurface": "{palette.autumnAccent-50}"
+      }
+    },
+    {
+      "id": "winter",
+      "label": "冬 · 苏木",
+      "group": "季节",
+      "colors": {
+        "primary": "{palette.winter-500}",
+        "primaryLight": "{palette.winter-200}",
+        "primaryDark": "{palette.winter-700}",
+        "primarySurface": "{palette.winter-50}",
+        "accent": "{palette.winterAccent-500}",
+        "accentLight": "{palette.winterAccent-100}",
+        "accentSurface": "{palette.winterAccent-50}"
+      }
+    }
+  ],
+
+  "contrast": {
+    "minOnColorRatio": 4.5,
+    "preferRatio": 7.0,
+    "lightForeground": "{palette.neutral-0}",
+    "darkForeground": "{palette.neutral-900}"
+  }
+}
