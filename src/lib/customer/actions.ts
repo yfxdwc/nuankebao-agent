@@ -38,6 +38,24 @@ export type ActionPriority = "high" | "medium" | "low";
 
 export type ActionChannel = "phone" | "wechat" | "visit" | "profile" | "internal";
 
+/**
+ * 这条行动该怎么**闭环** (一键动作类型)
+ *
+ * 为什么需要它 (2026-09-23 修「认领是死路」那个 bug):
+ *   L0 的行动行原本**一律**给「建任务」按钮。对"去联系她"类行动这是对的
+ *   (任务 = 提醒), 但 `profile_incomplete` 是**对客户档案本身做配置变更** ——
+ *   建任务完全不碰 `customer.owner_id`, 于是行动永远消不掉 (死路)。
+ *   根因是"行动 = 一次接触"这个隐含假设, 对档案类行动不成立。
+ *
+ * 所以把"该怎么闭环"**由后端声明**(它才知道这条规则要改什么), 前端只负责渲染 ——
+ * 与 channel / expected / taskTitle 同一套路, 不在前端硬编码规则 id。
+ */
+export type ActionCta =
+  /** 默认: 建一条跟进任务 (行动 = 去联系她, 任务 = 提醒) */
+  | "create_task"
+  /** 认领归属: 把客户加为我的客户 (行动 = 改档案, 建任务没用) */
+  | "claim_ownership";
+
 export type ActionRuleId =
   | "never_contacted"
   | "repurchase_window"
@@ -68,6 +86,8 @@ export interface ActionItem {
   taskTitle: string;
   /** 建议任务截止 (ISO; 一键建任务时预填) */
   taskDueAt: string;
+  /** 该怎么闭环 (见 ActionCta) —— 前端据此决定按钮 */
+  cta: ActionCta;
 }
 
 export interface ActionInput {
@@ -208,6 +228,8 @@ export function buildActionItems(
       },
       when: "今天",
       channel: "wechat",
+      // 闭环方式: 联系类行动一律「建任务」(提醒去联系她)
+      cta: "create_task",
       expected: "加上微信 / 打个招呼, 建立第一次联系",
       taskTitle: "首次联系",
       taskDueAt: now.toISOString(),
@@ -244,6 +266,8 @@ export function buildActionItems(
         },
         when: "今天",
         channel: "phone",
+        // 闭环方式: 联系类行动一律「建任务」(提醒去联系她)
+        cta: "create_task",
         expected: "约到具体日期",
         taskTitle: "约下次到店",
         taskDueAt: now.toISOString(),
@@ -266,6 +290,8 @@ export function buildActionItems(
       },
       when: "今天",
       channel: "phone",
+      // 闭环方式: 联系类行动一律「建任务」(提醒去联系她)
+      cta: "create_task",
       expected: "把逾期任务清掉",
       taskTitle: "补上逾期跟进",
       taskDueAt: now.toISOString(),
@@ -300,6 +326,8 @@ export function buildActionItems(
         },
         when: "本周",
         channel: "wechat",
+        // 闭环方式: 联系类行动一律「建任务」(提醒去联系她)
+        cta: "create_task",
         expected: "恢复联系节奏",
         taskTitle: "主动联系",
         taskDueAt: addDays(now, 3).toISOString(),
@@ -320,6 +348,8 @@ export function buildActionItems(
       },
       when: "今天",
       channel: "internal",
+      // 闭环方式: 联系类行动一律「建任务」(提醒去联系她)
+      cta: "create_task",
       expected: "确认方案是否需要调整",
       taskTitle: "复核服务方案 (效果未改善)",
       taskDueAt: now.toISOString(),
@@ -344,6 +374,8 @@ export function buildActionItems(
         evidence: { daysUntilBirthday: input.daysUntilBirthday },
         when: whenLabel(input.daysUntilBirthday),
         channel: "wechat",
+        // 闭环方式: 联系类行动一律「建任务」(提醒去联系她)
+        cta: "create_task",
         expected: "关系升温",
         taskTitle: "生日关怀",
         taskDueAt: addDays(now, input.daysUntilBirthday).toISOString(),
@@ -369,6 +401,8 @@ export function buildActionItems(
       },
       when: "本周",
       channel: "phone",
+      // 闭环方式: 联系类行动一律「建任务」(提醒去联系她)
+      cta: "create_task",
       expected: "了解效果 + 铺垫第二次到店",
       taskTitle: "首次效果回访",
       taskDueAt: addDays(now, 1).toISOString(),
@@ -390,6 +424,8 @@ export function buildActionItems(
         evidence: { dueInDays: dueIn },
         when: whenLabel(Math.max(0, dueIn)),
         channel: "phone",
+        // 闭环方式: 联系类行动一律「建任务」(提醒去联系她)
+        cta: "create_task",
         expected: "按技师建议的时间点回访",
         taskTitle: "按建议日期回访",
         taskDueAt: input.nextAdviceDate.toISOString(),
@@ -407,6 +443,9 @@ export function buildActionItems(
       evidence: { hasOwner: "否" },
       when: "本周",
       channel: "profile",
+      // ⚠ 不是「建任务」: 建任务**不碰 owner_id**, 这条行动永远消不掉
+      //   (2026-09-23 修: 原实现给的是「建任务」= 死路, 见 docs/backlog 挂起项)
+      cta: "claim_ownership",
       expected: "进入我的客户列表",
       taskTitle: "认领客户",
       taskDueAt: addDays(now, 3).toISOString(),

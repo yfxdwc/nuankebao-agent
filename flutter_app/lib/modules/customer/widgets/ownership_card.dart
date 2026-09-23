@@ -63,7 +63,7 @@ class _CustomerOwnershipCardState
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
-          content: Text(_humanError(e)),
+          content: Text(humanClaimError(e)),
         ),
       );
     } finally {
@@ -215,13 +215,4 @@ class _CustomerOwnershipCardState
       ],
     );
   }
-}
-
-/// 把后端业务错误翻成人话 (409/400 都是有含义的, 不该甩 DioException 字符串)
-String _humanError(Object e) {
-  final s = e.toString();
-  if (s.contains('409')) return '已被别人先认领 (先到先得)';
-  if (s.contains('400')) return '不能把自己加为客户';
-  if (s.contains('404')) return '客户不存在';
-  return '认领失败: $e';
 }

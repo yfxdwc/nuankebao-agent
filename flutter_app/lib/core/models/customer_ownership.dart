@@ -49,3 +49,17 @@ class CustomerOwnership {
   /// 无归属 (谁都不在管)
   bool get hasNoOwner => ownerId == null;
 }
+
+/// 把认领失败的业务错误翻成人话
+///
+/// 为什么放这里 (而不是各处 widget 里): 认领入口有**两处** ——
+///   管理 Tab 的归属卡 + L0 行动行的「认领为我的客户」。
+///   两处各写一份翻译 = 迟早一处改一处忘 (措辞不一致 / 新错误码漏翻)。
+///   `claimCustomerOwnership` 的返回码是固定的几个, 正好一处维护。
+String humanClaimError(Object e) {
+  final s = e.toString();
+  if (s.contains('409')) return '已被别人先认领 (先到先得)';
+  if (s.contains('400')) return '不能把自己加为客户';
+  if (s.contains('404')) return '客户不存在';
+  return '认领失败: $e';
+}

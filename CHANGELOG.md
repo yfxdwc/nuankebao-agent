@@ -2,6 +2,48 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 修「认领为我的客户」行动死路 + 工具修复 (2026-09-23)
+
+主人 2026-09-23 拍「修」(原话: 先挂起这个 bug, 后期提醒我修 → 随后即修)。
+
+**问题 (三层证据链)**
+1. 规则层 `actions.ts` 规则 8: `!hasOwner` → `title: "认领为我的客户"` / `expected: "进入我的客户列表"`
+2. UI 层 `_ActionRow`: **只渲染一个按钮**「建任务」→ 写 `follow_up_task`
+3. 效果层: 建任务**完全不碰 `customer.owner_id`** → `hasOwner` 恒 false → **行动永远消不掉**
+
+销售可以反复点出一堆「认领客户」任务, 客户始终不在他列表里 —— 违反 CHARTER §1.4
+「行动输出 = 明确的可落地指引」, 也违反 P1 自己写的「必须可闭环」。
+
+**根因**: 「建任务」对另外 8 条规则是对的 (行动 = 去联系她 → 任务 = 提醒),
+但 `profile_incomplete` 是**对客户档案本身做配置变更** —— 动词用错了。
+
+**修法: 新增 `ActionItem.cta`, 让后端声明"该怎么闭环"**
+- `ActionCta = 'create_task' | 'claim_ownership'`; 9 条规则各自显式声明 (不靠默认值)
+- 前端只按 `cta` 渲染按钮 —— **不在前端硬编码规则 id** (与 channel/expected/taskTitle 同一套路)
+- `profile_incomplete` → 「认领」按钮 → `POST /api/customers/claim`
+  → `hasOwner` 变 true → **行动消失**; 成功后 invalidate 洞察/归属卡/详情/客户列表四处
+- 按钮文案用「认领」而非「认领为我的客户」—— 后者是它的**标题**, 同一行重复既冗余
+  又让人以为点错 (其它规则天然不同: 标题「约下次到店」+ 按钮「建任务」)
+- 端点复用已有的 `customerService.claim` (管理 Tab 归属卡同一条路), 错误翻译函数
+  `humanClaimError` 抽到模型文件共用 —— 两处入口不各写一份 (避免措辞漂移)
+
+**工具修复**: `tools/wait-flutter-web-build.sh` 原来只傻等"下一次重建完成" ——
+调用时若构建**已经跑完**就白等到超时 (让人误以为构建挂了)。改为先比
+产物 mtime vs 最新源码, 已新则立即返回 (幂等)。
+
+**验证**
+- 后端: `tests/customer-scoring.test.ts` +3 例 (每条规则声明 cta /
+  profile_incomplete **必须**是 claim_ownership / 其余**必须**是 create_task)
+- 前端: `customer_insight_header_test.dart` +5 例 (按钮形态 / 走 onClaim 不走 onBuildTask /
+  显示「已认领」而非「已建任务」/ 失败不崩 / 回归 create_task 不受影响)
+- **真浏览器 (客户 #741, 无归属)**: L0 标题「认领为我的客户」+ 按钮「认领」→
+  点击 → `POST /api/customers/claim` → snackbar「已认领为我的客户」(1.6s 时可见) →
+  **行动消失** ✅; 同屏「首次联系破冰」的「建任务」不受影响 ✅
+- flutter test 267 例 / vitest 583 例 / 硬编码 0 / tsc + analyze 干净
+- 验证用的认领已复原 (#740/#741 归属改回空), 演示数据保持原样
+
+---
+
 ## [Unreleased] — 管理维度补口: 客户归属卡 (2026-09-23)
 
 主人 2026-09-23「接着做管理维度」。核实后管理维度**唯一的真缺口是归属** ——

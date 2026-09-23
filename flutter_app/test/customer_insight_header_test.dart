@@ -48,6 +48,7 @@ ActionItem action({
   String why = "她的复购间隔通常 28 天, 已经 32 天没到店",
   String when = "今天",
   String channel = "phone",
+  String cta = "create_task",
 }) =>
     ActionItem(
       id: id,
@@ -59,6 +60,7 @@ ActionItem action({
       expected: "约到具体日期",
       taskTitle: title,
       taskDueAt: "2026-09-23T09:00:00.000Z",
+      cta: cta,
     );
 
 CustomerInsight insight({
@@ -88,7 +90,11 @@ CustomerInsight insight({
     );
 
 /// ⚠ 关键: 带真主题 + 真实字体缩放, 跟生产一致
-Widget host(CustomerInsight data, {Future<void> Function(ActionItem)? onBuild}) {
+Widget host(
+  CustomerInsight data, {
+  Future<void> Function(ActionItem)? onBuild,
+  Future<void> Function(ActionItem)? onClaim,
+}) {
   final tokens = AppThemes.resolve(null);
   return ProviderScope(
     overrides: [
@@ -100,15 +106,20 @@ Widget host(CustomerInsight data, {Future<void> Function(ActionItem)? onBuild}) 
         body: CustomerInsightHeader(
           customerId: "1",
           onBuildTask: onBuild ?? (_) async {},
+          onClaim: onClaim ?? (_) async {},
         ),
       ),
     ),
   );
 }
 
-Future<void> pump(WidgetTester tester, CustomerInsight data,
-    {Future<void> Function(ActionItem)? onBuild}) async {
-  await tester.pumpWidget(host(data, onBuild: onBuild));
+Future<void> pump(
+  WidgetTester tester,
+  CustomerInsight data, {
+  Future<void> Function(ActionItem)? onBuild,
+  Future<void> Function(ActionItem)? onClaim,
+}) async {
+  await tester.pumpWidget(host(data, onBuild: onBuild, onClaim: onClaim));
   await tester.pumpAndSettle();
 }
 
@@ -254,6 +265,71 @@ void main() {
     });
   });
 
+  group("⑤b 认领归属闭环 (修 profile_incomplete 死路)", () {
+    ActionItem claimAction() => action(
+          id: "profile_incomplete",
+          priority: "low",
+          title: "认领为我的客户",
+          why: "这个客户还没有归属人, 不认领的话不在任何人的客户列表里",
+          when: "本周",
+          channel: "profile",
+          cta: "claim_ownership",
+        );
+
+    testWidgets("cta=claim_ownership → 按钮是「认领」而不是「建任务」", (tester) async {
+      // 修之前: 这条行动的按钮是「建任务」→ 建任务不碰 owner_id → 行动永远消不掉
+      await pump(tester, insight(actions: [claimAction()]));
+      expect(find.widgetWithText(TextButton, "认领"), findsOneWidget);
+      expect(find.text("建任务"), findsNothing);
+      // 标题仍是全称 (标题 + 按钮文案要不同, 否则同一行重复)
+      expect(find.text("认领为我的客户"), findsWidgets);
+    });
+
+    testWidgets("点它 → 走 onClaim, **不**走 onBuildTask", (tester) async {
+      ActionItem? viaClaim;
+      ActionItem? viaBuild;
+      await pump(
+        tester,
+        insight(actions: [claimAction()]),
+        onClaim: (a) async => viaClaim = a,
+        onBuild: (a) async => viaBuild = a,
+      );
+
+      await tester.tap(find.widgetWithText(TextButton, "认领"));
+      await tester.pumpAndSettle();
+
+      expect(viaClaim, isNotNull);
+      expect(viaClaim!.id, "profile_incomplete");
+      expect(viaBuild, isNull, reason: "认领类行动不该去建任务");
+    });
+
+    testWidgets("点后显示「已认领」(不是「已建任务」—— 它压根没建任务)", (tester) async {
+      await pump(tester, insight(actions: [claimAction()]));
+      await tester.tap(find.widgetWithText(TextButton, "认领"));
+      await tester.pumpAndSettle();
+
+      expect(find.text("已认领"), findsOneWidget);
+      expect(find.text("已建任务"), findsNothing);
+    });
+
+    testWidgets("认领失败不崩 (回调抛异常)", (tester) async {
+      await pump(
+        tester,
+        insight(actions: [claimAction()]),
+        onClaim: (a) async => throw Exception("409"),
+      );
+      await tester.tap(find.widgetWithText(TextButton, "认领"));
+      await tester.pumpAndSettle();
+      expect(find.text("认领为我的客户"), findsWidgets);
+    });
+
+    testWidgets("回归: cta=create_task 的行动仍走「建任务」", (tester) async {
+      await pump(tester, insight(actions: [action()]));
+      expect(find.text("建任务"), findsOneWidget);
+      expect(find.widgetWithText(TextButton, "认领"), findsNothing);
+    });
+  });
+
   group("⑥ 静默降级", () {
     testWidgets("provider 报错 → 整块消失, 不炸 (详情页其他 section 要活)", (tester) async {
       final tokens = AppThemes.resolve(null);
@@ -266,7 +342,8 @@ void main() {
           child: MaterialApp(
             theme: AppTheme.light(tokens),
             home: const Scaffold(
-              body: CustomerInsightHeader(customerId: "1", onBuildTask: _noop),
+              body: CustomerInsightHeader(
+                  customerId: "1", onBuildTask: _noop, onClaim: _noop),
             ),
           ),
         ),

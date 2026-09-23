@@ -881,6 +881,47 @@ describe("行动指引 (buildActionItems)", () => {
     expect(items[items.length - 1].id).toBe("profile_incomplete"); // low 在最后
   });
 
+  // ── 闭环方式 (cta) —— 修「认领是死路」那个 bug 的护栏 ──
+  it("每条行动都声明了闭环方式 cta (不能漏, 否则前端不知道该给什么按钮)", () => {
+    // 造出尽量多的规则 (多状态叠加)
+    const items = buildActionItems(
+      actionInput({
+        analysis: analysis({ overdueTasks: 1, daysSinceLastVisit: 90, daysSinceLastContact: 90 }),
+        hasOwner: false,
+        nextAdviceDate: daysAgo(1),
+        daysUntilBirthday: 2,
+      })
+    );
+    expect(items.length).toBeGreaterThan(3);
+    for (const a of items) {
+      expect(["create_task", "claim_ownership"], `规则 ${a.id} 的 cta 非法`).toContain(a.cta);
+    }
+  });
+
+  it("⭐ profile_incomplete 的闭环是**认领**不是建任务 (建任务不碰 owner_id = 死路)", () => {
+    const items = buildActionItems(actionInput({ hasOwner: false }));
+    const a = items.find((x) => x.id === "profile_incomplete");
+    expect(a).toBeDefined();
+    // 核心不变量: 这条**必须**是 claim_ownership。
+    // 回到 create_task = 行动永远消不掉 (hasOwner 恒 false), 就是修之前的 bug。
+    expect(a!.cta).toBe("claim_ownership");
+  });
+
+  it("其余 8 条规则的闭环都是建任务 (联系类行动 = 提醒去联系她)", () => {
+    const items = buildActionItems(
+      actionInput({
+        analysis: analysis({ overdueTasks: 1, daysSinceLastVisit: 90, daysSinceLastContact: 90 }),
+        nextAdviceDate: daysAgo(1),
+        daysUntilBirthday: 2,
+      })
+    );
+    const others = items.filter((x) => x.id !== "profile_incomplete");
+    expect(others.length).toBeGreaterThan(2);
+    for (const a of others) {
+      expect(a.cta, `规则 ${a.id} 不该是认领类`).toBe("create_task");
+    }
+  });
+
   it("确定性: 同输入两次结果一致", () => {
     const input = actionInput({
       analysis: analysis({ overdueTasks: 1, daysSinceLastVisit: 40, medianRepurchaseIntervalDays: 28 }),

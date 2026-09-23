@@ -13,8 +13,23 @@
 #   bash tools/wait-flutter-web-build.sh          # 等下一次构建完成
 #   timeout 300 bash tools/wait-flutter-web-build.sh || echo "构建没跟上, 别急着验证"
 set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 LOG="${NKB_FLUTTER_WATCH_LOG:-/home/tooyan/nuankebao-databackups/logs/flutter-web-watch.log}"
 [ -f "$LOG" ] || { echo "✗ 找不到 watch 日志: $LOG" >&2; exit 2; }
+
+# ── 先判断"产物是不是已经比源码新" ──
+#   ⚠ 2026-09-23 修: 原版只傻等"下一次重建完成"。如果调用时构建**已经跑完**,
+#     就会白等到超时 (踩过: 明明产物是新的, 脚本却报"等待超时", 让人误以为构建挂了)。
+#   判定: 产物 mtime > 最新源码文件 mtime → 说明不需要等
+ARTIFACT="$ROOT/public/app/main.dart.js"
+if [ -f "$ARTIFACT" ]; then
+  NEWEST_SRC=$(find flutter_app/lib flutter_app/pubspec.yaml -type f -newer "$ARTIFACT" 2>/dev/null | head -1)
+  if [ -z "$NEWEST_SRC" ]; then
+    echo "✓ 产物已是最新 (无需等待)"
+    exit 0
+  fi
+fi
 
 LAST=$(grep -c "重建完成" "$LOG" 2>/dev/null || true)
 LAST=${LAST:-0}

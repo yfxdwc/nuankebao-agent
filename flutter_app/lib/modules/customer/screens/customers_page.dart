@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/models/customer_insight.dart';
+import '../../../core/models/customer_ownership.dart';
 import '../../../core/models/wellness_record.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/follow_up_info.dart';
@@ -1982,6 +1983,8 @@ class CustomerDetailPage extends ConsumerWidget {
                   customerId: customerId,
                   onBuildTask: (action) =>
                       _buildTaskFromAction(context, ref, action),
+                  onClaim: (action) =>
+                      _claimFromAction(context, ref, action),
                 ),
               ),
               Expanded(
@@ -2096,6 +2099,42 @@ class CustomerDetailPage extends ConsumerWidget {
       // app 身份 (ADR-0016): 已注册 / 未注册 + 填邀请码绑定
       _buildIdentityCard(context, ref, customer),
     ]);
+  }
+
+  /// 「认领归属」—— 把 `profile_incomplete` 那条行动的闭环做完
+  ///
+  /// 2026-09-23 修 (主人拍「先挂起…修」后落的): 这条行动原本只有一个「建任务」按钮,
+  ///   而建任务**完全不碰 `customer.owner_id`** → `hasOwner` 恒为 false →
+  ///   行动永远消不掉 (死路, 详见 docs/backlog 挂起项)。
+  ///
+  /// 本方法的职责就是把「行动」真闭环: 改归属 → 刷新洞察 (hasOwner 变 true → 行动消失)
+  ///   + 刷新归属卡 / 客户列表 (三处都受归属影响)。
+  Future<void> _claimFromAction(
+    BuildContext context,
+    WidgetRef ref,
+    ActionItem action,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(customerServiceProvider).claim(customerId);
+      // 归属变了 → 这四处都受影响
+      ref.invalidate(customerInsightProvider(customerId)); // 行动据此消失
+      ref.invalidate(customerOwnershipProvider(customerId)); // 管理 Tab 的归属卡
+      ref.invalidate(customerDetailProvider(customerId));
+      ref.invalidate(customersProvider); // “我的客户”列表
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('已认领为我的客户'),
+        ),
+      );
+    } catch (e) {
+      // 409/400 都有业务含义 (被别人抢先 / 是自己) —— 把后端的话翻成人话给用户
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text(humanClaimError(e))),
+      );
+    }
   }
 
   /// 「建任务」—— 把一条行动指引落成 follow_up_task (闭环的关键一步)

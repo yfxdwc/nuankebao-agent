@@ -126,6 +126,10 @@ class ActionItem {
   /// 一键建任务时预填的标题 / 截止时间
   final String taskTitle;
   final String taskDueAt;
+  /// 该怎么**闭环** (后端声明, 见 src/lib/customer/actions.ts::ActionCta)
+  ///   'create_task'      = 建跟进任务 (默认; 行动 = 去联系她)
+  ///   'claim_ownership'  = 认领归属 (行动 = 改档案, 建任务没用)
+  final String cta;
 
   const ActionItem({
     required this.id,
@@ -138,9 +142,13 @@ class ActionItem {
     required this.expected,
     required this.taskTitle,
     required this.taskDueAt,
+    this.cta = 'create_task',
   });
 
   bool get isHigh => priority == 'high';
+
+  /// 这条行动的闭环动作是"认领归属" (不是建任务)
+  bool get isClaimOwnership => cta == 'claim_ownership';
 
   /// 渠道 → 中文 + 图标语义 (UI 用)
   String get channelLabel => switch (channel) {
@@ -163,6 +171,8 @@ class ActionItem {
         expected: (json['expected'] as String?) ?? '',
         taskTitle: (json['taskTitle'] as String?) ?? '',
         taskDueAt: (json['taskDueAt'] as String?) ?? '',
+        // 老后端不返回 cta → 默认建任务 (退化成旧行为, 不崩)
+        cta: (json['cta'] as String?) ?? 'create_task',
       );
 }
 

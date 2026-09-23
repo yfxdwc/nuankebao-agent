@@ -32,12 +32,15 @@ class CustomerInsightHeader extends ConsumerWidget {
     super.key,
     required this.customerId,
     required this.onBuildTask,
+    required this.onClaim,
   });
 
   final String customerId;
 
   /// 点「建任务」→ 由详情页写 follow_up_task (回写闭环, CHARTER §1.4)
   final Future<void> Function(ActionItem action) onBuildTask;
+  /// 认领归属 (cta == 'claim_ownership' 时用) —— 建任务对这类行动是死路
+  final Future<void> Function(ActionItem action) onClaim;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -50,6 +53,7 @@ class CustomerInsightHeader extends ConsumerWidget {
       data: (insight) => _InsightBody(
         insight: insight,
         onBuildTask: onBuildTask,
+        onClaim: onClaim,
         onRefresh: () => ref.invalidate(customerInsightProvider(customerId)),
       ),
     );
@@ -64,11 +68,13 @@ class _InsightBody extends StatefulWidget {
   const _InsightBody({
     required this.insight,
     required this.onBuildTask,
+    required this.onClaim,
     required this.onRefresh,
   });
 
   final CustomerInsight insight;
   final Future<void> Function(ActionItem) onBuildTask;
+  final Future<void> Function(ActionItem) onClaim;
   final VoidCallback onRefresh;
 
   @override
@@ -176,6 +182,7 @@ class _InsightBodyState extends State<_InsightBody> {
                     _ActionRow(
                       action: todos[i],
                       onBuildTask: () => widget.onBuildTask(todos[i]),
+                      onClaim: () => widget.onClaim(todos[i]),
                     ),
                   ],
                 ],
@@ -449,10 +456,15 @@ class _DimensionDetail extends StatelessWidget {
 // ============================================
 
 class _ActionRow extends StatefulWidget {
-  const _ActionRow({required this.action, required this.onBuildTask});
+  const _ActionRow({
+    required this.action,
+    required this.onBuildTask,
+    required this.onClaim,
+  });
 
   final ActionItem action;
   final Future<void> Function() onBuildTask;
+  final Future<void> Function() onClaim;
 
   @override
   State<_ActionRow> createState() => _ActionRowState();
@@ -462,11 +474,15 @@ class _ActionRowState extends State<_ActionRow> {
   bool _busy = false;
   bool _done = false;
 
+  /// 这条行动的闭环动作 —— 由**后端**声明 (action.cta), 不在前端按规则 id 硬编码
+  Future<void> Function() get _run =>
+      widget.action.isClaimOwnership ? widget.onClaim : widget.onBuildTask;
+
   Future<void> _build() async {
     if (_busy || _done) return;
     setState(() => _busy = true);
     try {
-      await widget.onBuildTask();
+      await _run();
       if (mounted) setState(() => _done = true);
     } catch (_) {
       // ⚠ 错误提示由**回调自己**负责 (它知道业务上下文, 能说清"网络"还是"重复建")。
@@ -554,8 +570,11 @@ class _ActionRowState extends State<_ActionRow> {
                   children: [
                     Icon(Icons.check, size: AppSize.iconSm, color: t.success),
                     const SizedBox(width: AppSpace.s2),
-                    Text('已建任务',
-                        style: TextStyle(fontSize: AppType.xs, color: t.success)),
+                    Text(
+                        // 「已建任务」对认领类行动是错的 —— 它压根没建任务
+                        a.isClaimOwnership ? '已认领' : '已建任务',
+                        style:
+                            TextStyle(fontSize: AppType.xs, color: t.success)),
                   ],
                 )
               else
@@ -572,7 +591,10 @@ class _ActionRowState extends State<_ActionRow> {
                           height: AppSize.iconSm,
                           child: const CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('建任务'),
+                      // ⚠ 认领类行动的按钮**不能**也用「认领为我的客户」——
+                      //   那是它的标题文案, 同一行出现两遍既冗余又让人以为点错了
+                      //   (其它规则天然不同: 标题「约下次到店」+ 按钮「建任务」)。
+                      : Text(a.isClaimOwnership ? '认领' : '建任务'),
                 ),
             ],
           ),

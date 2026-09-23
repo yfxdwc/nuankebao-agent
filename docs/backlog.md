@@ -5,10 +5,20 @@
 
 ---
 
-## ⏸ 挂起 · 「认领为我的客户」行动是死路 (2026-09-23 发现, 主人拍板"后期再修")
+## ✅ 挂起项已修 · 「认领为我的客户」行动是死路 (2026-09-23 发现 → 同日修)
 
-> **主人原话**: 「先挂起这个bug，后期提醒我修。」
-> ⏰ **提醒**: 做管理维度 / P1 行动闭环收尾时, 回来修这条。
+> **主人原话**: 「先挂起这个bug，后期提醒我修。」→ 当天随后拍「修」, **已修** ✅
+>
+> **修法 (落地)**: 新增 `ActionItem.cta` (`create_task` | `claim_ownership`) —— 把
+> 「这条行动该怎么闭环」**由后端声明**, 前端只按 cta 渲染按钮, 不在前端硬编码规则 id。
+> L0 的 `profile_incomplete` 现在给「认领」按钮 → 调 `POST /api/customers/claim`
+> → `hasOwner` 变 true → **行动消失** (闭环完成)。
+> 成功提示后 invalidate 洞察 / 归属卡 / 详情 / 客户列表四处。
+> 顺带: 按钮文案用「认领」而不是「认领为我的客户」—— 后者是它的**标题**,
+> 同一行出现两遍既冗余又让人以为点错 (其它规则天然不同: 标题「约下次到店」+ 按钮「建任务」)。
+> 护栏: `tests/customer-scoring.test.ts` 3 例 (每条规则都声明 cta /
+> profile_incomplete 必须是 claim_ownership / 其余必须是 create_task);
+> `customer_insight_header_test.dart` 5 例 (按钮形态 / 走 onClaim 不走 onBuildTask / 已认领 / 失败不崩 / 回归)。
 
 **现象**: L0 会弹出行动「**认领为我的客户**」(`expected: 进入我的客户列表`),
 但它唯一的按钮是「**建任务**」—— 建任务**完全不碰 `customer.owner_id`**,
