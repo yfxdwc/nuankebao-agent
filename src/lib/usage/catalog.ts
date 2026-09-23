@@ -116,6 +116,15 @@ export function isUsageEntityType(value: unknown): value is UsageEntityType {
   );
 }
 
-/** AI 卡片枚举 (与 Flutter ai_insight_cards.dart 对齐) */
-export const AI_CARDS = ["profile", "follow_up", "repurchase", "effect"] as const;
+/** AI 卡片枚举 (与 Flutter ai_insight_cards.dart 对齐)
+ *  ⚠ P5 (2026-09-23): 3 张卡合并成 1 次调用 → 新事件用 `insight`;
+ *    旧值保留是为了**历史数据不乱** (库里已有 card=profile/follow_up/effect 的行)。
+ */
+export const AI_CARDS = [
+  "insight",
+  "profile",
+  "follow_up",
+  "repurchase",
+  "effect",
+] as const;
 export type AiCard = (typeof AI_CARDS)[number];

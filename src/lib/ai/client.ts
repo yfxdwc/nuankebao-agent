@@ -13,6 +13,8 @@
 // 详见 docs/references.md §4 + docs/adr/0001-tech-stack.md
 // ============================================
 
+import { INSIGHT_DELIMITERS } from "./prompts";
+
 export interface AIMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -153,6 +155,30 @@ export async function aiComplete(
  */
 function mockCompletion(options: AICompletionOptions): string {
   const prompt = options.prompt.toLowerCase();
+
+  // P5 合并洞察: 必须也给出三段 + 分隔符 —— 否则没配 MINIMAX_API_KEY 时
+  //   `parseInsightSections` 永远解析失败 (sectionsParsed=false), 开发/测试环境跑不通。
+  //   判定放最前: 该 prompt 同时含"客户画像""跟进""效果分析"关键词,
+  //   会被下面的分支抢先匹配到单一卡片 mock。
+  if (prompt.includes("[[画像]]") || prompt.includes("三段")) {
+    return `${INSIGHT_DELIMITERS.profile}
+【画像 - Mock】
+健康档案: 肩颈僵硬, 睡眠质量差; 频次较高的项目是肩颈经络理疗。
+服务偏好: 偏好下午到店, 对艾灸接受度高。
+跟进要点: 上次反馈睡眠改善, 本次可先问肩颈是否反复。
+
+${INSIGHT_DELIMITERS.followUp}
+【话术 - Mock】
+张姐, 下午好! 距离您上次做肩颈理疗已经有一段时间了, 您最近肩颈情况怎么样? 睡眠有没有保持住上次的改善? 我们这边新到了艾灸调理, 对肩颈疲劳和睡眠都挺有帮助的, 您看要不要这周过来体验一下? 时间您方便的话我帮您留位。
+
+${INSIGHT_DELIMITERS.effect}
+【效果分析 - Mock】
+疼痛度从首次的 8/10 降至最近一次的 4/10, 属于持续改善; 睡眠主观反馈也从 5/10 升至 7/10。
+变化集中在肩颈部位, 与所选项目一致。
+建议保持当前项目节奏, 可考虑加入 1-2 次艾灸巩固。
+
+(注: 这是 mock 数据, 配置 MINIMAX_API_KEY 后将使用真实 AI)`;
+  }
 
   if (prompt.includes("客户画像") || prompt.includes("customer profile")) {
     return `【客户画像 - Mock 数据】

@@ -17,11 +17,22 @@
 export const FEATURES = {
   /** AI 助手区块 (整块; 客户端用它隐藏整个 AI 区) */
   AI_ASSISTANT: "ai.assistant",
-  /** 跟进建议 (AI 话术) */
+  /**
+   * AI 洞察 (P5 合并入口, 主人 2026-09-23 拍)
+   *
+   * 一次调用产出 三段: 客户画像 + 跟进话术 + 效果分析
+   *   (复购预测是纯 DB 计算, 一并返回但不烧 AI)
+   *
+   * 取代原先拆开的 3 个 key (ai.follow_up / ai.customer_profile /
+   * ai.effect_analysis) —— 那三个路由已删; `ai.repurchase` 因历史数据
+   * 仍留在表里, 但已不再被任何 route 判权 (客户端入口已走本 key)。
+   */
+  AI_INSIGHT: "ai.insight",
+  /** 跟进建议 (AI 话术) —— @deprecated 已并入 AI_INSIGHT */
   AI_FOLLOW_UP: "ai.follow_up",
-  /** 客户画像 (AI) */
+  /** 客户画像 (AI) —— @deprecated 已并入 AI_INSIGHT */
   AI_CUSTOMER_PROFILE: "ai.customer_profile",
-  /** 效果分析 (AI) */
+  /** 效果分析 (AI) —— @deprecated 已并入 AI_INSIGHT */
   AI_EFFECT_ANALYSIS: "ai.effect_analysis",
   /** 跟进推荐 (复购预测; 纯 DB 计算, 但主人拍板归会员 — D21) */
   AI_REPURCHASE: "ai.repurchase",
