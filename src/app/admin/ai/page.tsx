@@ -84,7 +84,7 @@ export default async function AIPage({
           <div className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-3 border-b bg-muted/30">
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium">AI 客户洞察</span>
-            <Badge variant="outline" className="text-xxs ml-auto">
+            <Badge variant="outline" className="text-micro ml-auto">
               {customers.find(c => c.id.toString() === preselected)?.name}
             </Badge>
           </div>

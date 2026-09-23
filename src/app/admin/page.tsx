@@ -89,7 +89,7 @@ export default async function AdminDashboardPage() {
                       <p className="text-2xl md:text-3xl font-bold mt-1 md:mt-2 truncate">
                         {s.value}
                       </p>
-                      <p className="text-xxs md:text-xs text-muted-foreground mt-1 flex items-center">
+                      <p className="text-micro md:text-xs text-muted-foreground mt-1 flex items-center">
                         {s.note}
                         <ArrowUpRight className="h-3 w-3 ml-0.5" />
                       </p>
@@ -120,7 +120,7 @@ export default async function AdminDashboardPage() {
             <h3 className="text-sm md:text-base font-medium text-foreground leading-tight">
               新增客户
             </h3>
-            <p className="text-xxs md:text-xs text-muted-foreground mt-0.5 truncate">
+            <p className="text-micro md:text-xs text-muted-foreground mt-0.5 truncate">
               录入健康档案
             </p>
           </div>
@@ -136,7 +136,7 @@ export default async function AdminDashboardPage() {
             <h3 className="text-sm md:text-base font-medium text-foreground leading-tight">
               新增养生
             </h3>
-            <p className="text-xxs md:text-xs text-muted-foreground mt-0.5 truncate">
+            <p className="text-micro md:text-xs text-muted-foreground mt-0.5 truncate">
               理疗过程记录
             </p>
           </div>

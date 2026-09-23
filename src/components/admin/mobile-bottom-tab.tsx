@@ -105,7 +105,7 @@ export function MobileBottomTab() {
                   )}
                   strokeWidth={isActive ? 2.5 : 2}
                 />
-                <span className={cn("text-xxs", isActive && "font-medium")}>
+                <span className={cn("text-micro", isActive && "font-medium")}>
                   {tab.label}
                 </span>
               </Link>
@@ -140,7 +140,7 @@ export function MobileBottomTab() {
               <circle cx="12" cy="12" r="1.5" />
               <circle cx="19" cy="12" r="1.5" />
             </svg>
-            <span className={cn("text-xxs", isMoreActive && "font-medium")}>
+            <span className={cn("text-micro", isMoreActive && "font-medium")}>
               更多
             </span>
           </button>

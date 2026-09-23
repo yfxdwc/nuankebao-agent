@@ -63,7 +63,7 @@ export default async function DownloadPage() {
                   <br />
                   {sizeMB} MB · 构建时间: {meta.mtimeLocal} (本地)
                   <br />
-                  md5: <code className="text-xxs">{meta.md5}</code>
+                  md5: <code className="text-micro">{meta.md5}</code>
                 </p>
               ) : (
                 <p className="text-xs text-danger">

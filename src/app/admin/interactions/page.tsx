@@ -115,16 +115,16 @@ export default async function InteractionsPage() {
                             <span className="text-xs md:text-sm font-medium">
                               {meta.label}
                             </span>
-                            <span className="text-xxs md:text-xs text-muted-foreground">
+                            <span className="text-micro md:text-xs text-muted-foreground">
                               客户 #{i.customerId.toString()}
                             </span>
                           </div>
-                          <span className="text-xxs md:text-xs text-muted-foreground tabular-nums shrink-0">
+                          <span className="text-micro md:text-xs text-muted-foreground tabular-nums shrink-0">
                             {time}
                           </span>
                         </div>
                         {i.summaryEncrypted && (
-                          <p className="text-xxs md:text-xs text-muted-foreground mt-1 italic">
+                          <p className="text-micro md:text-xs text-muted-foreground mt-1 italic">
                             (内容已加密,详情见客户详情页)
                           </p>
                         )}

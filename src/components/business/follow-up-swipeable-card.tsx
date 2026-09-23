@@ -96,7 +96,7 @@ export function FollowUpSwipeableCard({ task, customerName, overdue, isDesktop }
               )}
               <Badge
                 variant={overdue ? "destructive" : "outline"}
-                className="text-xxs md:text-xs shrink-0"
+                className="text-micro md:text-xs shrink-0"
               >
                 {overdue ? "已逾期" : formatDate(task.dueAt)}
               </Badge>
@@ -105,7 +105,7 @@ export function FollowUpSwipeableCard({ task, customerName, overdue, isDesktop }
               {task.reason}
             </p>
             {task.aiSuggestion && (
-              <div className="mt-2 p-2 md:p-3 bg-primary/5 border border-primary/10 rounded-md text-xxs md:text-xs text-foreground/80 whitespace-pre-wrap">
+              <div className="mt-2 p-2 md:p-3 bg-primary/5 border border-primary/10 rounded-md text-micro md:text-xs text-foreground/80 whitespace-pre-wrap">
                 <span className="font-medium text-primary">AI 建议: </span>
                 {task.aiSuggestion}
               </div>
@@ -117,7 +117,7 @@ export function FollowUpSwipeableCard({ task, customerName, overdue, isDesktop }
 
             {/* 移动端: 提示滑动 */}
             {swipe.isOpen ? null : (
-              <p className="text-xxs text-muted-foreground mt-1.5 md:hidden">
+              <p className="text-micro text-muted-foreground mt-1.5 md:hidden">
                 ← 左滑标记完成 · 右滑取消 →
               </p>
             )}
@@ -149,7 +149,7 @@ export function FollowUpSwipeableCard({ task, customerName, overdue, isDesktop }
         aria-label="取消跟进"
       >
         <X className="h-5 w-5" />
-        <span className="text-xxs font-medium">取消</span>
+        <span className="text-micro font-medium">取消</span>
       </button>
 
       {/* 右 action: 标记完成 (背景, 右侧 absolute) */}
@@ -166,7 +166,7 @@ export function FollowUpSwipeableCard({ task, customerName, overdue, isDesktop }
         aria-label="标记完成"
       >
         <Check className="h-5 w-5" />
-        <span className="text-xxs font-medium">完成</span>
+        <span className="text-micro font-medium">完成</span>
       </button>
 
       {/* 可滑动主体 */}
@@ -177,7 +177,7 @@ export function FollowUpSwipeableCard({ task, customerName, overdue, isDesktop }
       {/* 打开态: 浮一个 "点这儿完成" 的视觉提示 (可选) */}
       {swipe.isOpen === "right" && actionLoading !== "complete" && (
         <div className="md:hidden absolute inset-y-0 right-0 w-20 pointer-events-none flex items-center justify-center">
-          <div className="bg-success text-white text-xxs px-2 py-1 rounded animate-pulse">
+          <div className="bg-success text-white text-micro px-2 py-1 rounded animate-pulse">
             松开完成
           </div>
         </div>

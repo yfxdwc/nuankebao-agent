@@ -205,7 +205,7 @@ const config: Config = {
 
       fontSize: {
         // xxs 仅限 web admin 密集区 (表格/角标); Flutter APK 可读性底线仍是 14px
-        xxs: ["var(--text-xxs)", { lineHeight: "1.4" }],
+        micro: ["var(--text-micro)", { lineHeight: "1.4" }],
         // 语义字号 (中老年: 正文 18px, 比 Tailwind 默认 16px 大一档)
         caption: ["var(--text-xs)", { lineHeight: "1.5" }],
         body: ["var(--text-sm)", { lineHeight: "1.6" }],

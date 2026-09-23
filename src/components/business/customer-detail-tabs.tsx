@@ -107,7 +107,7 @@ export function CustomerDetailTabs({
                 {t.label}
                 <span
                   className={cn(
-                    "ml-1 inline-flex items-center justify-center min-w-badge h-4 px-1 rounded-full text-xxs font-semibold",
+                    "ml-1 inline-flex items-center justify-center min-w-badge h-4 px-1 rounded-full text-micro font-semibold",
                     isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                   )}
                 >
@@ -149,7 +149,7 @@ function ProfileTab({ customer }: { customer: CustomerLite }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg md:text-2xl font-bold">{customer.name}</h2>
-                <Badge variant="outline" className="text-xxs">
+                <Badge variant="outline" className="text-micro">
                   {customer.gender === "F" ? "女" : customer.gender === "M" ? "男" : "-"}
                 </Badge>
               </div>
@@ -262,14 +262,14 @@ function WellnessTab({
                   <h3 className="text-sm md:text-base font-medium">
                     {formatDate(r.serviceDate)}
                   </h3>
-                  <Badge variant="outline" className="text-xxs shrink-0">
+                  <Badge variant="outline" className="text-micro shrink-0">
                     {serviceMap[r.serviceItemId] ?? `项目 ${r.serviceItemId}`}
                   </Badge>
                 </div>
                 {r.bodyPartIds.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {r.bodyPartIds.map((id) => (
-                      <Badge key={id} variant="secondary" className="text-xxs">
+                      <Badge key={id} variant="secondary" className="text-micro">
                         {bodyPartMap[id] ?? `#${id}`}
                       </Badge>
                     ))}
@@ -327,17 +327,17 @@ function InteractionsTab({ interactions }: { interactions: InteractionLite[] }) 
             </div>
             <div className="bg-card border rounded-lg p-2.5 md:p-3">
               <div className="flex items-center justify-between gap-2">
-                <Badge variant="outline" className="text-xxs">
+                <Badge variant="outline" className="text-micro">
                   {TYPE_LABELS[i.type] ?? i.type}
                 </Badge>
-                <span className="text-xxs text-muted-foreground tabular-nums">
+                <span className="text-micro text-muted-foreground tabular-nums">
                   {formatDate(i.createdAt)} {time}
                 </span>
               </div>
               {i.summary ? (
                 <p className="text-xs mt-1.5">{i.summary}</p>
               ) : (
-                <p className="text-xxs text-muted-foreground mt-1 italic">
+                <p className="text-micro text-muted-foreground mt-1 italic">
                   (无内容记录)
                 </p>
               )}

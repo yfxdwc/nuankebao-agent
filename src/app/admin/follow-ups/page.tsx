@@ -100,7 +100,7 @@ export default async function FollowUpsPage({
               <span>{f.label}</span>
               <span
                 className={cn(
-                  "inline-flex items-center justify-center min-w-badge-lg h-5 px-1.5 rounded-full text-xxs font-semibold",
+                  "inline-flex items-center justify-center min-w-badge-lg h-5 px-1.5 rounded-full text-micro font-semibold",
                   isActive ? "bg-white/60" : "bg-muted"
                 )}
               >

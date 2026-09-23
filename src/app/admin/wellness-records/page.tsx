@@ -90,11 +90,11 @@ export default async function WellnessRecordsPage({
                         <h3 className="text-sm md:text-base font-medium truncate">
                           {customer?.name ?? `客户 ${r.customerId}`}
                         </h3>
-                        <p className="text-xxs md:text-xs text-muted-foreground mt-0.5">
+                        <p className="text-micro md:text-xs text-muted-foreground mt-0.5">
                           {formatDate(r.serviceDate)}
                         </p>
                       </div>
-                      <Badge variant="outline" className="text-xxs md:text-xs shrink-0">
+                      <Badge variant="outline" className="text-micro md:text-xs shrink-0">
                         {serviceMap.get(r.serviceItemId) ?? `项目 ${r.serviceItemId}`}
                       </Badge>
                     </div>
@@ -106,13 +106,13 @@ export default async function WellnessRecordsPage({
                           <Badge
                             key={id}
                             variant="secondary"
-                            className="text-xxs md:text-xs"
+                            className="text-micro md:text-xs"
                           >
                             {bodyPartMap.get(id) ?? `#${id}`}
                           </Badge>
                         ))}
                         {r.bodyPartIds.length > 3 && (
-                          <span className="text-xxs text-muted-foreground self-center">
+                          <span className="text-micro text-muted-foreground self-center">
                             +{r.bodyPartIds.length - 3}
                           </span>
                         )}
@@ -121,7 +121,7 @@ export default async function WellnessRecordsPage({
 
                     {/* 效果对比: 疼痛 + 睡眠 (移动极简, 桌面详细) */}
                     {hasMetrics && (
-                      <div className="mt-2 flex items-center gap-3 text-xxs md:text-xs">
+                      <div className="mt-2 flex items-center gap-3 text-micro md:text-xs">
                         {painBefore !== undefined || painAfter !== undefined ? (
                           <span className="text-danger">
                             疼痛 {String(painBefore ?? "-")} → {String(painAfter ?? "-")}
@@ -137,7 +137,7 @@ export default async function WellnessRecordsPage({
 
                     {/* 反馈 (line-clamp 1) */}
                     {r.customerFeedback && (
-                      <p className="text-xxs md:text-xs text-muted-foreground line-clamp-1 mt-1.5 italic">
+                      <p className="text-micro md:text-xs text-muted-foreground line-clamp-1 mt-1.5 italic">
                         "{r.customerFeedback}"
                       </p>
                     )}

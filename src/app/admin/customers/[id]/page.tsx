@@ -48,7 +48,7 @@ export default async function CustomerDetailPage({
             <h1 className="text-lg md:text-3xl font-bold tracking-tight truncate">
               {customer.name}
             </h1>
-            <p className="text-xxs md:text-sm text-muted-foreground truncate">
+            <p className="text-micro md:text-sm text-muted-foreground truncate">
               注册于 {new Date(customer.createdAt).toISOString().split("T")[0]}
             </p>
           </div>

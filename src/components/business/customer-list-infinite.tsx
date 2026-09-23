@@ -134,7 +134,7 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                       <h3 className="font-medium text-sm md:text-base truncate">
                         {customer.name}
                       </h3>
-                      <Badge variant="outline" className="text-xxs md:text-xs shrink-0">
+                      <Badge variant="outline" className="text-micro md:text-xs shrink-0">
                         {customer.gender === "F"
                           ? "女"
                           : customer.gender === "M"
@@ -154,19 +154,19 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                           <Badge
                             key={tag}
                             variant="secondary"
-                            className="text-xxs md:text-xs"
+                            className="text-micro md:text-xs"
                           >
                             {tag}
                           </Badge>
                         ))}
                         {customer.healthTags.length > 2 && (
-                          <span className="text-xxs text-muted-foreground self-center">
+                          <span className="text-micro text-muted-foreground self-center">
                             +{customer.healthTags.length - 2}
                           </span>
                         )}
                       </div>
                     )}
-                    <p className="text-xxs md:text-xs text-muted-foreground mt-1.5 md:hidden">
+                    <p className="text-micro md:text-xs text-muted-foreground mt-1.5 md:hidden">
                       {customer.createdAt.split("T")[0]}
                     </p>
                   </div>

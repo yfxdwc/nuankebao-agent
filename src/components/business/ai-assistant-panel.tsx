@@ -149,7 +149,7 @@ export function AIAssistantPanel({ customerId }: AIAssistantPanelProps) {
                   >
                     {s.label}
                   </p>
-                  <p className="text-xxs md:text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
+                  <p className="text-micro md:text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
                     {s.desc}
                   </p>
                 </div>
@@ -222,10 +222,10 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {data.aiMock && (
-            <Badge className="bg-warning-surface text-warning text-xxs">Mock 模式</Badge>
+            <Badge className="bg-warning-surface text-warning text-micro">Mock 模式</Badge>
           )}
           {data.recentRecords?.length > 0 && (
-            <Badge variant="outline" className="text-xxs">
+            <Badge variant="outline" className="text-micro">
               基于 {data.recentRecords.length} 条记录
             </Badge>
           )}
@@ -242,12 +242,12 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {data.daysSinceLastVisit !== null && (
-            <Badge variant="secondary" className="text-xxs">
+            <Badge variant="secondary" className="text-micro">
               距上次 {data.daysSinceLastVisit} 天
             </Badge>
           )}
           {data.avgInterval !== null && (
-            <Badge variant="outline" className="text-xxs">
+            <Badge variant="outline" className="text-micro">
               平均 {data.avgInterval} 天复购
             </Badge>
           )}
@@ -273,10 +273,10 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {data.aiMock && (
-            <Badge className="bg-warning-surface text-warning text-xxs">Mock 模式</Badge>
+            <Badge className="bg-warning-surface text-warning text-micro">Mock 模式</Badge>
           )}
           {data.probability !== undefined && (
-            <Badge variant="outline" className="text-xxs">
+            <Badge variant="outline" className="text-micro">
               复购概率 {Math.round((data.probability ?? 0) * 100)}%
             </Badge>
           )}
