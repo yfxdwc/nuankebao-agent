@@ -34,6 +34,7 @@ import {
   DEFAULT_INSIGHT_CONFIG,
   resolveInsightConfig,
 } from "@/lib/customer/insight-config";
+import { buildCustomerCharts } from "@/lib/customer/charts";
 import type { FollowUpAnalysis } from "@/lib/follow-up/analysis";
 
 // ---------- 测试夹具 ----------
@@ -1057,6 +1058,144 @@ describe("参数变量化 (resolveInsightConfig + config 生效)", () => {
     const input = scoringInput({ records: [record(3, { pain_level: 7 }, { pain_level: 4 })] });
     expect(JSON.stringify(buildCustomerScore(input, DEFAULT_INSIGHT_CONFIG))).toBe(
       JSON.stringify(buildCustomerScore(input))
+    );
+  });
+});
+
+// ============================================
+// ⑨ 分析图谱数据层 (P4)
+// ============================================
+// 守护的东西:
+//   ① 趋势按时间**正序** (老的在前 —— 折线从左到右是时间流)
+//   ② 趋势只取「有评分」的记录, 且**只留最近 N 条** (多了挤在一起)
+//   ③ 部位统计: 出现次数 + 止痛**中位数** (防单次异常值)
+//   ④ 缺评分的部位记录不拉低止痛中位数 (不把"没数据"当 0)
+//   ⑤ 描述性统计 —— 不给医疗结论 (CHARTER §1.3)
+
+describe("分析图谱 (buildCustomerCharts)", () => {
+  const rec = (
+    day: number,
+    pre: Record<string, unknown>,
+    post: Record<string, unknown>,
+    parts: string[] = [],
+  ) => ({ serviceDate: daysAgo(day), pre, post, bodyPartIds: parts });
+
+  const names = new Map([
+    ["1", "肩颈"],
+    ["2", "腰部"],
+    ["3", "膝盖"],
+  ]);
+
+  it("趋势按时间正序 (老的在前)", () => {
+    const c = buildCustomerCharts({
+      records: [
+        rec(2, { pain_level: 5 }, { pain_level: 3 }),
+        rec(30, { pain_level: 8 }, { pain_level: 6 }),
+        rec(16, { pain_level: 7 }, { pain_level: 4 }),
+      ],
+      bodyPartNames: names,
+    });
+    expect(c.trend.map((t) => t.date)).toEqual([
+      daysAgo(30).toISOString().slice(0, 10),
+      daysAgo(16).toISOString().slice(0, 10),
+      daysAgo(2).toISOString().slice(0, 10),
+    ]);
+    expect(c.trend[0].prePain).toBe(8);
+    expect(c.trend[2].postPain).toBe(3);
+  });
+
+  it("无评分的记录不进趋势 (但它仍算 recordCount)", () => {
+    const c = buildCustomerCharts({
+      records: [
+        rec(2, {}, {}),
+        rec(9, { pain_level: 7 }, { pain_level: 4 }),
+      ],
+      bodyPartNames: names,
+    });
+    expect(c.trend).toHaveLength(1);
+    expect(c.scoredRecordCount).toBe(1);
+    expect(c.recordCount).toBe(2);
+  });
+
+  it("趋势只留最近 N 条 (trendLimit), 且保留的是最近的", () => {
+    const records = Array.from({ length: 15 }, (_, i) =>
+      rec(i * 3 + 1, { pain_level: 8 - i }, { pain_level: 3 }),
+    );
+    const c = buildCustomerCharts({ records, bodyPartNames: names, trendLimit: 5 });
+    expect(c.trend).toHaveLength(5);
+    // 最近的一条应该是最小的 daysAgo (=1)
+    expect(c.trend[c.trend.length - 1].date).toBe(daysAgo(1).toISOString().slice(0, 10));
+  });
+
+  it("部位统计: 按次数降序 + 止痛中位数", () => {
+    const c = buildCustomerCharts({
+      records: [
+        rec(20, { pain_level: 9 }, { pain_level: 4 }, ["1", "2"]), // 肩颈 drop 5, 腰 5
+        rec(10, { pain_level: 8 }, { pain_level: 6 }, ["1"]), //     肩颈 drop 2
+        rec(3, { pain_level: 7 }, { pain_level: 3 }, ["1"]), //      肩颈 drop 4
+      ],
+      bodyPartNames: names,
+    });
+    expect(c.bodyParts[0].name).toBe("肩颈");
+    expect(c.bodyParts[0].count).toBe(3);
+    expect(c.bodyParts[0].medianPainDrop).toBe(4); // median([5,2,4]) = 4
+    expect(c.bodyParts[1].name).toBe("腰部");
+    expect(c.bodyParts[1].count).toBe(1);
+    expect(c.bodyParts[1].medianPainDrop).toBe(5);
+  });
+
+  it("缺前后疼痛的部位记录不进中位数 (不把'没数据'当 0)", () => {
+    const c = buildCustomerCharts({
+      records: [
+        rec(20, { pain_level: 9 }, { pain_level: 4 }, ["1"]), // drop 5
+        rec(10, {}, { pain_level: 3 }, ["1"]), //             无 pre → 不计入
+      ],
+      bodyPartNames: names,
+    });
+    expect(c.bodyParts[0].count).toBe(2); // 出现 2 次
+    expect(c.bodyParts[0].medianPainDrop).toBe(5); // 但中位数只由 1 条算出
+  });
+
+  it("记录里全是'无改善' → 中位数为 0 (而不是 null)", () => {
+    const c = buildCustomerCharts({
+      records: [rec(9, { pain_level: 5 }, { pain_level: 5 }, ["1"])],
+      bodyPartNames: names,
+    });
+    expect(c.bodyParts[0].medianPainDrop).toBe(0);
+  });
+
+  it("查不到名字的部位用 #id 兜底 (字典缺项不该崩)", () => {
+    const c = buildCustomerCharts({
+      records: [rec(3, { pain_level: 5 }, { pain_level: 3 }, ["999"])],
+      bodyPartNames: names,
+    });
+    expect(c.bodyParts[0].name).toBe("#999");
+  });
+
+  it("无记录 → 空图 (不抛错)", () => {
+    const c = buildCustomerCharts({ records: [], bodyPartNames: names });
+    expect(c.trend).toEqual([]);
+    expect(c.bodyParts).toEqual([]);
+    expect(c.recordCount).toBe(0);
+  });
+
+  it("只产出描述性统计, 不含任何医疗结论字段 (CHARTER §1.3 边界)", () => {
+    const c = buildCustomerCharts({
+      records: [rec(3, { pain_level: 8 }, { pain_level: 3 }, ["1"])],
+      bodyPartNames: names,
+    });
+    // 导出结构里只有 count / medianPainDrop / date / 前后分
+    expect(Object.keys(c.bodyParts[0]).sort()).toEqual(["count", "id", "medianPainDrop", "name"]);
+    expect(Object.keys(c.trend[0]).sort()).toEqual(["date", "postPain", "postSleep", "prePain", "preSleep"]);
+  });
+
+  it("确定性: 同输入两次一致", () => {
+    const input = {
+      records: [rec(3, { pain_level: 8 }, { pain_level: 3 }, ["1", "2"])],
+      bodyPartNames: names,
+    };
+    expect(JSON.stringify(buildCustomerCharts(input))).toBe(
+      JSON.stringify(buildCustomerCharts(input)),
     );
   });
 });
