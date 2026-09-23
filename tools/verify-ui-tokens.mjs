@@ -111,10 +111,22 @@ try {
 
     if (hits.length === 0) {
       ok(`${id}: 本页无 bg-primary/brand 大元素 (跳过; 变量已验)`);
-    } else if (hits.every((h) => h === expected || h.startsWith("rgba") && h.includes("0, 0, 0, 0"))) {
-      ok(`${id}: ${hits.length} 处 bg-primary/brand 元素计算样式 = ${expected}`);
     } else {
-      bad(`${id}: bg-primary 元素配色不对 — 期望 ${expected}, 实得 ${[...new Set(hits)].join(" / ")}`);
+      // 允许透明度变体: `bg-primary/5` 算出 `rgba(74,124,89,0.05)` —— 基色相同就算过。
+      // (2026-09-23: 最初的断言要求「全等」, 被 bg-primary/5 误报了一次 —— 是断言太窄, 不是代码错)
+      const rgbPart = (s) => {
+        const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s);
+        return m ? `rgb(${m[1]}, ${m[2]}, ${m[3]})` : null;
+      };
+      const wantRgb = rgbPart(expected);
+      const off = hits.filter((h) => rgbPart(h) !== wantRgb);
+
+      if (off.length === 0) {
+        const variants = new Set(hits.map((h) => (h === expected ? "100%" : h.split(",").pop().trim())));
+        ok(`${id}: ${hits.length} 处 bg-primary/brand 基色 = ${expected} (含透明档 ${[...variants].join("/")})`);
+      } else {
+        bad(`${id}: bg-primary 元素基色不对 — 期望 ${expected}, 实得 ${[...new Set(off)].join(" / ")}`);
+      }
     }
   }
 
