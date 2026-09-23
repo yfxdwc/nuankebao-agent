@@ -1,5 +1,9 @@
 // ============================================
 // Flutter P2/P3/P4 视觉验证 —— 真浏览器驱动 Flutter web
+//
+// ⚠ 跑之前先确认构建已经完成, 否则验的是上一版产物:
+//   bash tools/wait-flutter-web-build.sh
+//   curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3003/app/index.html   # 必须 200
 // ============================================
 // 为什么需要它:
 //   Flutter web 渲染到 canvas, 传统 DOM 断言/选择器点不中。

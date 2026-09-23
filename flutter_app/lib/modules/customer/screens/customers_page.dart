@@ -2005,11 +2005,15 @@ class CustomerDetailPage extends ConsumerWidget {
   ///   切到「分析」时继承了「记录」的偏移 → 顶部图表被顶出视口 →
   ///   语义树/截图里都看不到, 而 `find.text` 却仍能找到 **(极难排查)**。
   ///   每个 Tab 独立滚动位置本来就是正确的交互 (切 Tab 不该共享滚动)。
-  Widget _tabScroll({required List<Widget> children}) => ListView(
+  Widget _tabScroll({required List<Widget> children}) =>
+      SingleChildScrollView(
         primary: false,
         padding: const EdgeInsets.fromLTRB(AppSpace.pagePadding, AppSpace.s12,
             AppSpace.pagePadding, AppSpace.s48),
-        children: children,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        ),
       );
 
   /// **记录 Tab** —— 三大动作之「记录」: 养生记录 + 跟进任务 + 互动流水

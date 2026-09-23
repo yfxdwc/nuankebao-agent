@@ -353,6 +353,20 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   **修法 = UI 验证前先 `curl -s -o /dev/null -w "%{http_code}" <base>/app/index.html` 确认 200**,
   挂了先 `systemctl --user restart nuankebao-nextjs.service` 再验。
 
+- ❌ **`Column` 直接当 `ListView` 子节点 → 整块渲染塌成 0 高 (2026-09-23 P4 图谱, 排查 ~4h)** —
+  现象极吓人: 分析 Tab 三张图**真机完全不渲染**(连语义树都没有), 而**紧邻的卡片却正常**;
+  在组件最前面加显眼 `Text('MARKER')` **也看不到**。
+  **排错手法 (可复用)**:
+  1. 把 `ErrorWidget.builder` 临时换成红色可读框 → **无红框** = 不是 build 异常 (release 默认吞异常)
+  2. dump 全部 `flt-semantics` 节点**坐标** → 紧邻卡片起点 y = 容器 top + padding ⇒ 说明上一块**高度恰好为 0**
+  3. 把同一组件挪到别处 (L0, TabBarView 外) → **正常渲染** ⇒ 锁定是容器
+  4. 把容器从 `ListView` 换成 `SingleChildScrollView + Column` → **正常渲染**
+  **规避 (已采用)**: Tab 里的**固定卡片列表**用 `SingleChildScrollView + Column`,
+  不用 `ListView` (本来也不需要虚拟化)。
+  ⚠ **widget test 复现不出来** —— 同样的 `TabBarView + ListView` 结构在 `flutter_test` 里能渲染 705px,
+  所以**这类问题只能真机/真浏览器验收**, 别因为单测绿就认为 UI 没问题。
+  根因未完全定位 (不排除 Flutter web 引擎 sliver 布局的边缘 bug), 但规避手段已验证。
+
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
 > **历史**:
