@@ -78,13 +78,21 @@ export async function requireAccountForUserId(
 export async function findActiveUserByReferralCode(
   exec: Exec,
   code: string
-): Promise<{ userId: bigint; name: string; phone: string; phoneHash: string } | null> {
+): Promise<{
+  userId: bigint;
+  name: string;
+  phone: string;
+  phoneHash: string;
+  /** 她已经绑的客户档案 (null = 没绑; 绑定流程要判"是否绑到别人身上") */
+  customerId: bigint | null;
+} | null> {
   const [u] = await exec
     .select({
       id: user.id,
       name: user.name,
       phoneEncrypted: user.phoneEncrypted,
       phoneHash: user.phoneHash,
+      customerId: user.customerId,
     })
     .from(referralCode)
     .innerJoin(user, eq(user.id, referralCode.userId))
@@ -98,6 +106,7 @@ export async function findActiveUserByReferralCode(
     name: u.name,
     phone: decryptField(u.phoneEncrypted),
     phoneHash: u.phoneHash,
+    customerId: u.customerId,
   };
 }
 

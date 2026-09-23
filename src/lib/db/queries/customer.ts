@@ -27,6 +27,8 @@ import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
 import { customerRbacFilter, type RbacContext } from "@/lib/auth/rbac";
 import { directDownlineFranchiseeSql, hasAccountSql } from "./customer-scope";
+import { findActiveUserByReferralCode } from "./franchisee-account";
+import { maskPhone } from "@/lib/utils";
 import {
   memberExistsSql,
   customerFlagsByCustomerId,
@@ -844,6 +846,124 @@ export async function claimCustomerOwnership(
   if (!updated) return { ok: false, code: "OWNED_BY_OTHER" };
 
   return { ok: true, alreadyMine: false, customer: await view(updated) };
+}
+
+// ============================================
+// 绑定 app 身份 (填邀请码) —— 手工客户 ↔ 她的账号
+// ============================================
+// 主人 2026-09-22 拍:
+//   「当用户先自建的客户 (没注册 app 账号), 之后这个客户注册使用了 app,
+//     要能在**客户详情页**中填写客户的**邀请码 (身份识别码)** 绑定用户身份,
+//     并在**客户列表**中显示标识。同为 app 用户方便在 app 内邀请/通过会议。」
+//
+// 为什么需要"显式绑定":
+//   建号时系统会按**手机号**自动认领既有档案 (createAccountWithProfile 复用同号档案),
+//   但客户档案上的手机号可能写错 / 她换号注册 → 自动认领不上, 两边就散着。
+//   邀请码 = 唯一识别码 (ADR-0016 D1) → 用它把两边合上 (不依赖手机号相等)。
+//
+// 边界: 只改 user.customer_id (列连接, ADR-0015 Q7); 手机号**默认不动** ——
+//   档案上的号可能是销售特意记的另一个联系方式, 要不要同步由调用方显式 syncPhone 决定。
+export type BindCustomerAccountFailure =
+  | "NOT_FOUND" // 客户不存在 / 已软删
+  | "CODE_NOT_FOUND" // 邀请码没有对应账号
+  | "BOUND_TO_OTHER" // 该客户已绑别的账号, 或该账号已绑别的客户档案
+  | "PHONE_CONFLICT"; // 同步手机号时撞上另一条客户档案
+
+export interface BindCustomerAccountOk {
+  ok: true;
+  /** 本来就绑着 (幂等) */
+  alreadyBound: boolean;
+  /** 客户档案的手机号与账号手机号不一致 */
+  phoneMismatch: boolean;
+  /** 本次是否把档案手机号同步成了账号手机号 */
+  phoneSynced: boolean;
+  account: { userId: bigint; name: string; phoneMasked: string };
+}
+
+export async function bindCustomerAccount(
+  customerId: bigint,
+  referralCode: string,
+  opts: { syncPhone?: boolean } = {},
+  ctx: AuditContext
+): Promise<BindCustomerAccountOk | { ok: false; code: BindCustomerAccountFailure; detail?: string }> {
+  const [row] = await db
+    .select()
+    .from(customer)
+    .where(and(eq(customer.id, customerId), isNull(customer.deletedAt)))
+    .limit(1);
+  if (!row) return { ok: false, code: "NOT_FOUND" };
+
+  const account = await findActiveUserByReferralCode(db, referralCode);
+  if (!account) return { ok: false, code: "CODE_NOT_FOUND" };
+
+  const okView = (alreadyBound: boolean, phoneMismatch: boolean, phoneSynced: boolean): BindCustomerAccountOk => ({
+    ok: true,
+    alreadyBound,
+    phoneMismatch,
+    phoneSynced,
+    account: { userId: account.userId, name: account.name, phoneMasked: maskPhone(account.phone) },
+  });
+
+  // 这条档案当前绑的是谁 (user.customer_id 指过来)
+  const [currentLink] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.customerId, customerId))
+    .limit(1);
+
+  const phoneMismatch = row.phoneHash !== account.phoneHash;
+
+  if (currentLink && currentLink.id === account.userId) {
+    return okView(true, phoneMismatch, false); // 幂等
+  }
+  if (currentLink && currentLink.id !== account.userId) {
+    return { ok: false, code: "BOUND_TO_OTHER", detail: "这条档案已经绑定另一个账号了" };
+  }
+  if (account.customerId != null && account.customerId !== customerId) {
+    return { ok: false, code: "BOUND_TO_OTHER", detail: "这个账号已经绑定另一位客户档案了" };
+  }
+
+  const syncPhone = opts.syncPhone === true && phoneMismatch;
+  if (syncPhone) {
+    const [conflict] = await db
+      .select({ id: customer.id })
+      .from(customer)
+      .where(
+        and(
+          eq(customer.phoneHash, account.phoneHash),
+          ne(customer.id, customerId),
+          isNull(customer.deletedAt)
+        )
+      )
+      .limit(1);
+    if (conflict) {
+      return {
+        ok: false,
+        code: "PHONE_CONFLICT",
+        detail: "账号的手机号已经是另一条客户档案了 —— 先处理重复档案, 或选择不同步手机号",
+      };
+    }
+  }
+
+  await withAuditContext(ctx, async (tx) => {
+    // ★ 连接: user.customer_id = 这条档案 (账号↔档案 的唯一真相, ADR-0015 Q7)
+    await tx
+      .update(user)
+      .set({ customerId, updatedAt: new Date() })
+      .where(eq(user.id, account.userId));
+    if (syncPhone) {
+      await tx
+        .update(customer)
+        .set({
+          phoneEncrypted: encryptField(account.phone),
+          phoneHash: account.phoneHash,
+          updatedAt: new Date(),
+        })
+        .where(eq(customer.id, customerId));
+    }
+  });
+
+  return okView(false, phoneMismatch, syncPhone);
 }
 
 // ============================================
