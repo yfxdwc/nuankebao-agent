@@ -29,6 +29,7 @@ import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/big_button.dart';
 import '../../../core/widgets/big_fab.dart';
 import '../widgets/customer_insight_header.dart';
+import '../widgets/danger_zone_card.dart';
 import '../widgets/ownership_card.dart';
 import '../widgets/record_tile.dart';
 import '../widgets/ai_insight_cards.dart';
@@ -2098,6 +2099,12 @@ class CustomerDetailPage extends ConsumerWidget {
       const SizedBox(height: AppSpace.cardGap),
       // app 身份 (ADR-0016): 已注册 / 未注册 + 填邀请码绑定
       _buildIdentityCard(context, ref, customer),
+      const SizedBox(height: AppSpace.cardGap),
+      // ★ 危险操作 (P8): 归档 / (后续: 合并) —— 放最底部, 需要时才滑下来看
+      CustomerDangerZoneCard(
+        customerId: customerId,
+        customerName: customer.name,
+      ),
     ]);
   }
 

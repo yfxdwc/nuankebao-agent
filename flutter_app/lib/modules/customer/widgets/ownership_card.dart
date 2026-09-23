@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/customer_ownership.dart';
 import '../../../core/providers/service_providers.dart';
+import '../../../core/services/api.dart' show ReferralLookup;
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
@@ -66,6 +67,36 @@ class _CustomerOwnershipCardState
           content: Text(humanClaimError(e)),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 转给同事: 先弹「输邀请码 → 识别 → 确认」, 确认后真转
+  Future<void> _transfer() async {
+    final code = await showDialog<String>(
+      context: context,
+      builder: (_) => _TransferDialog(customerId: widget.customerId),
+    );
+    if (code == null) return; // 用户取消
+
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(customerServiceProvider)
+          .transfer(widget.customerId, toReferralCode: code);
+      // 归属变了 → 三处受影响 (对方列表不在本机, 靠下次拉取)
+      ref.invalidate(customerOwnershipProvider(widget.customerId));
+      ref.invalidate(customerDetailProvider(widget.customerId));
+      ref.invalidate(customersProvider);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('已转出，她不再在你的客户列表')),
+      );
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text(_humanTransferError(e))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -155,8 +186,19 @@ class _CustomerOwnershipCardState
           ),
         ),
 
-        // 无归属: 说清后果 (不讲清"为什么该管", 用户不会点)
-        if (o.hasNoOwner) ...[
+        // 说明文案 —— 三种情况分开写, **不能只看 hasNoOwner**:
+        //   ⚠ 「自己的档案」也是 hasNoOwner=true 但 canClaim=false ——
+        //     按 hasNoOwner 写会显示"认领后归你管理"(错) 并给出一个点了会 400 的按钮。
+        if (!o.canClaim && o.blockedReason != null) ...[
+          // ① 不能认领 (自己的档案 / 归属别人): 说清为什么
+          const SizedBox(height: AppSpace.s6),
+          Text(
+            o.blockedReason!,
+            style: TextStyle(
+                fontSize: AppTheme.fontXs, color: t.textSecondary, height: 1.5),
+          ),
+        ] else if (o.hasNoOwner) ...[
+          // ② 无归属且可认领: 讲清后果 (不讲清"为什么该管", 用户不会点)
           const SizedBox(height: AppSpace.s6),
           Text(
             '没有归属人的客户不在任何人的「我的客户」列表里, 也拿不到行动提醒。\n'
@@ -166,18 +208,8 @@ class _CustomerOwnershipCardState
           ),
         ],
 
-        // 归属别人: 说明为什么不能点 (而不是给一个点了会报错的按钮)
-        if (!o.canClaim && o.blockedReason != null && !o.hasNoOwner) ...[
-          const SizedBox(height: AppSpace.s6),
-          Text(
-            o.blockedReason!,
-            style: TextStyle(
-                fontSize: AppTheme.fontXs, color: t.textSecondary, height: 1.5),
-          ),
-        ],
-
         const SizedBox(height: AppSpace.s10),
-        if (o.canClaim)
+        if (o.canClaim && o.hasNoOwner)
           SizedBox(
             width: double.infinity,
             height: AppSize.controlLg,
@@ -191,11 +223,27 @@ class _CustomerOwnershipCardState
                     )
                   : const Icon(Icons.add_business_outlined,
                       size: AppSize.iconLg),
-              label: Text(
-                // 已经是我的 → 按钮改成"确认归属"没意义, 直接提示已归我管
-                o.hasNoOwner ? '认领为我的客户' : '已经是我的客户',
-                style: const TextStyle(fontSize: AppTheme.fontMd),
-              ),
+              label: const Text('认领为我的客户',
+                  style: TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+          )
+        else if (o.isMine)
+          // 已经是我的 → 唯一有意义的动作是**转出去** (离职/转岗/分工)
+          //   原来这里给的是「已经是我的客户」按钮 (点了幂等认领) —— 没意义
+          SizedBox(
+            width: double.infinity,
+            height: AppSize.controlLg,
+            child: OutlinedButton.icon(
+              onPressed: _busy ? null : _transfer,
+              icon: _busy
+                  ? SizedBox(
+                      width: AppSize.iconSm,
+                      height: AppSize.iconSm,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.swap_horiz, size: AppSize.iconLg),
+              label: const Text('转给我的同事',
+                  style: TextStyle(fontSize: AppTheme.fontMd)),
             ),
           )
         else
@@ -215,4 +263,192 @@ class _CustomerOwnershipCardState
       ],
     );
   }
+}
+
+// ============================================
+// 「转给同事」弹层
+// ============================================
+// 两段式: 输邀请码 → 识别出**是哪个人** → 才给确认按钮。
+//
+// 为什么非要让用户先看到"张三 138****8000"再确认:
+//   归属转移是**不可逆的权限动作** (转出去就不在你自己列表里了),
+//   而邀请码是一串随机字符 —— 光看码根本没把握是转给谁。
+//   ADR-0015 Q10 也正是为此授权了「按推荐码查人」接口 (只返回姓名 +
+//   打码手机号 + 会员标识, 限流 + 审计)。
+//
+// 为什么把 code 交回给调用方、由调用方再发 transfer:
+//   弹层只管"选人", 业务动作 (转 + 刷三处 provider + snackbar) 留在卡片里,
+//   状态管理不乱。
+class _TransferDialog extends ConsumerStatefulWidget {
+  final String customerId;
+  const _TransferDialog({required this.customerId});
+
+  @override
+  ConsumerState<_TransferDialog> createState() => _TransferDialogState();
+}
+
+class _TransferDialogState extends ConsumerState<_TransferDialog> {
+  final _codeCtrl = TextEditingController();
+  ReferralLookup? _found;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _lookup() async {
+    final code = _codeCtrl.text.trim();
+    if (code.isEmpty) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _found = null;
+    });
+    try {
+      final r = await ref.read(billingServiceProvider).lookupReferralCode(code);
+      if (!mounted) return;
+      setState(() {
+        if (!r.found) {
+          _error = '邀请码不存在, 请核对后重试';
+        } else if (r.claimState == 'self') {
+          // 转给自己没意义 —— 后端也会拦, 这里先说清
+          _error = '这是你自己的邀请码';
+        } else {
+          _found = r;
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = '识别失败: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final f = _found;
+    return AlertDialog(
+      title: const Text('转给同事', style: TextStyle(fontSize: AppTheme.fontLg)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '输入对方的邀请码（她可以在「我的」页看到自己的码）。\n'
+              '转移后她会出现在对方的「我的客户」列表里，你这边就不再有这位客户。',
+              style: TextStyle(fontSize: AppTheme.fontXs, color: t.textSecondary, height: 1.6),
+            ),
+            const SizedBox(height: AppSpace.s12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _codeCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    style: const TextStyle(fontSize: AppTheme.fontMd),
+                    decoration: const InputDecoration(
+                      hintText: '例如 SRFTF7',
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _lookup(),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.s8),
+                SizedBox(
+                  height: AppSize.controlLg,
+                  child: OutlinedButton(
+                    onPressed: _loading ? null : _lookup,
+                    child: _loading
+                        ? const SizedBox(
+                            width: AppSize.iconSm,
+                            height: AppSize.iconSm,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('识别'),
+                  ),
+                ),
+              ],
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpace.s8),
+              Text(_error!,
+                  style: TextStyle(fontSize: AppTheme.fontXs, color: t.danger)),
+            ],
+            if (f != null) ...[
+              const SizedBox(height: AppSpace.s12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpace.s10),
+                decoration: BoxDecoration(
+                  color: t.successSurface,
+                  borderRadius: BorderRadius.circular(AppRadius.r8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.person_outline, size: AppSize.iconLg, color: t.success),
+                    const SizedBox(width: AppSpace.s8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(f.name,
+                              style: TextStyle(
+                                  fontSize: AppTheme.fontMd,
+                                  fontWeight: FontWeight.w600,
+                                  color: t.textPrimary)),
+                          Text(
+                            '${f.phoneMasked}${f.isMember ? " · 会员" : ""}',
+                            style: TextStyle(
+                                fontSize: AppTheme.fontXs, color: t.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+        ),
+        FilledButton(
+          // 没识别出人就禁用 —— 防"盲转"
+          onPressed: f == null ? null : () => Navigator.pop(context, f.code),
+          child: const Text('确认转移', style: TextStyle(fontSize: AppTheme.fontMd)),
+        ),
+      ],
+    );
+  }
+}
+
+/// 把**转移**失败的业务错误翻成人话
+///
+/// 后端 `FAILURE_MESSAGE` 已经给了人话, 但 Dio 把它包在 response 里 ——
+/// 这里优先取后端那句, 取不到才退回通用文案。
+/// (与 `humanClaimError` 分开: 两者错误集合不同, 混在一起会互相污染)
+String _humanTransferError(Object e) {
+  final s = e.toString();
+  for (final m in [
+    '只有当前归属人 (或系统管理员) 能转出客户',
+    '这位客户还没有归属人 —— 该用「认领」, 不是转移',
+    '不能转给自己',
+    '不能把客户转给她本人',
+    '这位客户已经是她的了',
+    '邀请码不存在或对方账号已停用',
+    '客户不存在',
+  ]) {
+    if (s.contains(m)) return m;
+  }
+  if (s.contains('403')) return '只有当前归属人 (或系统管理员) 能转出客户';
+  return '转移失败: $e';
 }

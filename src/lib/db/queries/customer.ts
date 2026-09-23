@@ -1118,3 +1118,78 @@ export async function getCustomerOwnership(
     statusLabel,
   };
 }
+
+// ============================================
+// 归属转移 (P8 管理维度, 主人 2026-09-23)
+// ============================================
+// 背景: 归属卡做完（认领）后, 主人要「归属转移」。
+//
+// ⚠ 与「先到先得」(ADR-0015 Q15) 的关系 —— 为什么不冲突:
+//   先到先得约束的是**抢别人的客户**(claim 时 owner_id 已是别人 → 409)。
+//   本函数是**当前归属人主动交出**(自愿交接: 离职 / 转岗 / 分工调整),
+//   有处置权的人同意才发生, 不是抢单。
+//   所以: 只有**当前归属人本人**或**系统管理员**能转; 其他任何人不能碰。
+//
+// 为什么用「邀请码」而不是 userId 定位接收人:
+//   ① 客户端不该拿到别人的 user id (最小暴露);
+//   ② 邀请码是**服务端可复核**的稳定身份锚 (ADR-0016 D1: 一个自然人 = 一个邀请码);
+//   ③ 复用已有路径 `findActiveUserByReferralCode`, 与建节点/落位/绑定同口径。
+//
+// 审计: 走 withAuditContext → customer 表的 audit trigger 记
+//   changed_fields = { owner_id: 旧 → 新 } + user_id = 操作人。谁把谁的客户给了谁, 查得到。
+
+export type TransferOwnershipFailure =
+  | "NOT_FOUND" // 客户不存在
+  | "CODE_NOT_FOUND" // 邀请码找不到 active 账号
+  | "NO_OWNER" // 客户当前无归属 → 该走「认领」, 不是转移
+  | "NOT_OWNER" // 我不是归属人 (也不是 admin) → 无权交出别人的客户
+  | "TO_SELF" // 转给我自己 = 没意义
+  | "TO_OWN_PROFILE" // 接收人就是这位客户本人 (§6.6: 自己不应该是自己的客户)
+  | "ALREADY_HERS"; // 已经是她的客户了
+
+export type TransferOwnershipResult =
+  | { ok: true; fromUserId: bigint | null; toUserId: bigint; toName: string }
+  | { ok: false; code: TransferOwnershipFailure };
+
+export async function transferCustomerOwnership(
+  customerId: bigint,
+  actorUserId: bigint,
+  toReferralCode: string,
+  opts: { isAdmin?: boolean } = {},
+  ctx: AuditContext
+): Promise<TransferOwnershipResult> {
+  const [row] = await db
+    .select({ id: customer.id, ownerId: customer.ownerId })
+    .from(customer)
+    .where(and(eq(customer.id, customerId), isNull(customer.deletedAt)))
+    .limit(1);
+  if (!row) return { ok: false, code: "NOT_FOUND" };
+
+  const target = await findActiveUserByReferralCode(db, toReferralCode);
+  if (!target) return { ok: false, code: "CODE_NOT_FOUND" };
+
+  // 接收人就是这位客户本人的档案 → 拒绝 (§6.6「自己不应该是自己的客户」)
+  if (target.customerId != null && target.customerId === row.id) {
+    return { ok: false, code: "TO_OWN_PROFILE" };
+  }
+  if (target.userId === actorUserId) return { ok: false, code: "TO_SELF" };
+  if (row.ownerId == null) return { ok: false, code: "NO_OWNER" };
+  if (row.ownerId === target.userId) return { ok: false, code: "ALREADY_HERS" };
+  if (!opts.isAdmin && row.ownerId !== actorUserId) {
+    return { ok: false, code: "NOT_OWNER" };
+  }
+
+  await withAuditContext(ctx, async (tx) => {
+    await tx
+      .update(customer)
+      .set({ ownerId: target.userId, updatedAt: new Date() })
+      .where(eq(customer.id, customerId));
+  });
+
+  return {
+    ok: true,
+    fromUserId: row.ownerId,
+    toUserId: target.userId,
+    toName: target.name,
+  };
+}

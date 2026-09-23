@@ -264,6 +264,27 @@ class CustomerService {
     return Customer.fromJson(data['customer'] as Map<String, dynamic>);
   }
 
+  /// 把客户归属转给同事 (P8)
+  ///
+  /// 接收人用**邀请码**定位 (不用 userId):
+  ///   ① 客户端不该拿到别人的 user id; ② 邀请码是服务端可复核的身份锚 (ADR-0016 D1)。
+  /// ⚠ 调用前先用 `BillingService.lookupReferralCode` 让用户确认是**哪个人**
+  ///   (打码手机号 + 姓名), 再把同一个 code 传到这里 —— 服务端会重新解析。
+  ///
+  /// 权限: 只有当前归属人 (或系统管理员) 能转出。
+  /// 返回转出后的新归属状态 (直接拿来回显, 不用再打一次 ownership)。
+  Future<CustomerOwnership> transfer(
+    String customerId, {
+    required String toReferralCode,
+  }) async {
+    final res = await _dio.post('/customers/$customerId/transfer', data: {
+      'toReferralCode': toReferralCode,
+    });
+    final data = res.data as Map<String, dynamic>;
+    return CustomerOwnership.fromJson(
+        (data['ownership'] as Map<String, dynamic>?) ?? const {});
+  }
+
   /// 查客户的归属状态 (谁把她当客户在管) —— 管理 Tab 的「归属」卡用
   ///
   /// 返回体里的 `canClaim` 与后端 `claimCustomerOwnership` 的放行条件一一对应,
