@@ -47,11 +47,18 @@
   `bg-primary` 的元素的**计算样式**真的跟着换, 不只看 CSS 变量)
 - `docs/ui-tokens.md` 令牌系统 canonical 文档
 
+**可读性加强 (主人 2026-09-23 追加拍板)**
+- `scales.type.micro` **10px → 12px** (web admin 密集表格 42 处), 与 `tiny` 合并成一名一值
+- 5 个主题 `primary` 全部抬到 **WCAG AAA (≥7:1)**:
+  sage 7.95 / spring 7.80 / summer 8.29 / autumn 8.01 / winter 10.62
+  (原 `#4A7C59` 只有 4.86:1 —— 中老年视力对绿底白字偏吃力)
+  → 做成**硬门槛** `contrast.requiredRatio.primary = 7`, 生成器不达标直接 exit 1, 加主题不会静默退化
+
 **验证 (全过)**
-- `npx tsc --noEmit` / `flutter analyze` (仅 3 条存量警告) / `next build` 均过
-- Vitest 令牌契约 **56 例** + Flutter 令牌契约 **41 例** = **97 例**
-- Flutter 全量测试 **189 例** 全过 (顺带修掉 `profile_page_test` 对 ListView 缓存区的隐式依赖)
-- 视觉验收 **20/20**; web 6 个页面冒烟 200
+- `npx tsc --noEmit` / `flutter analyze` (0 issue) / `next build` (39 路由) 均过
+- Vitest 令牌契约 **57 例** + Flutter 令牌契约 **42 例** = **99 例**
+- Flutter 全量测试 **194 例** 全过
+- 视觉验收 **21/21** (真浏览器 × 5 主题, 断言计算样式与令牌真源一致); web 14 条路由冒烟 200
 - 护栏 **1265 → 0**
 
 ## [Unreleased] — web admin 解冻 + 真实用户使用数据采集模块 (2026-09-22)

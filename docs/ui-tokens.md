@@ -246,11 +246,17 @@ tools/check-ui-tokens.sh --by-file    列每个文件的明细
   临时解禁分析出 200 条 issue，0 条与令牌有关），观察期早已过。删除前先做了完整令牌化，
   万一要回滚: `git log --diff-filter=D --oneline -- flutter_app/lib/_deprecated` 找到删除 commit,
   再 `git checkout <该commit>^ -- flutter_app/lib/_deprecated/`。
-- **Web 字号 `--text-micro` (10px)** ×42 处来自 web admin 密集表格。Flutter 可读性底线仍是 14px；
-  web admin 是主人自用脚手架，暂许更小。要统一抬高 → 改 `scales.type.micro` 一个数。
+- **`--text-micro` = 12px**（2026-09-23 从 10px 抬高，主人拍板）。用于 web admin 密集表格（42 处）。
+  常规 UI 的可读性底线仍是 `xs` = 14px。抬高只需改 `scales.type.micro` 一个数。
 - **PWA 启动壳的颜色是静态的**（`index.html` / `manifest.json`）：浏览器在 Dart 引擎启动前就读它们，
   那时没有 CSS 变量也没有 localStorage → 只能给品牌默认色。生成器会同步它们，
   `tokens:check` 漂移即 fail（下次改 `scales`/主色时自动跟随）。
-- **`sage` 的 `primary` 对白字 4.86:1**（AA，未达 AAA 7:1）。基础字号 18pt 属 WCAG 大字号，AA-large 达标；
-  需要 AAA 的场景用 `primaryDark`（7.95:1）。`pnpm tokens:contrast` 会列出全部。
+- **`primary` 对白字是硬门槛 AAA (≥7:1)**（2026-09-23 主人拍板「用 primaryDark 加强」）。
+  5 个主题实测：sage 7.95 / spring 7.80 / summer 8.29 / autumn 8.01 / winter 10.62。
+  原先的 `#4A7C59` 只有 4.86:1 —— 中老年视力对绿底白字偏吃力，所以把每个主题的 `primary`
+  下移一档到原 `primaryDark` 的位置，`primaryDark` 再往下顺移一档。
+  **这是一条硬门槛**：`contrast.requiredRatio.primary = 7`，生成器不达标直接 `exit 1`（不是 warning），
+  加新主题时不会静默退化；测试里另有一道独立复核（防止门槛配置本身被调松）。
+  副作用（正面）：`primary` 也用作文字/图标色，加深后对白底从 4.86:1 升到 7.95:1 —— 同样受益。
+- `accent`（暖橙）保持 AA 门槛（4.5:1）：它是强调色，不承担长文正文。
 - 未做 dark mode（主人 2026-09-23 拍板）。

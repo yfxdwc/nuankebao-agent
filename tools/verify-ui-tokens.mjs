@@ -16,13 +16,26 @@
 // ============================================
 
 import { chromium } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
 const BASE = process.env.E2E_BASE_URL || "http://127.0.0.1:3003";
 const OUT = "/tmp/nkb-ui-verify";
 const STORAGE_KEY = "nuankebao.theme";
-const DEFAULT_ID = "sage";
-const THEMES = ["sage", "spring", "summer", "autumn", "winter"];
+
+// ⚠ 期望值一律从令牌真源读, **不在本脚本里复制一份** ——
+//   2026-09-23 主人把 primary 抬到 AAA 后, 本脚本因为写死旧绿 #4A7C59 而误报了一次。
+//   验证脚本自带"期望值副本" = 必然漂移。
+const TOKENS = JSON.parse(readFileSync("design/tokens/design-tokens.json", "utf8"));
+const resolveRef = (v) => {
+  const m = /^\{([^}]+)\}$/.exec(String(v).trim());
+  if (!m) return v;
+  return m[1].split(".").reduce((a, k) => a?.[k], TOKENS);
+};
+const THEMES = TOKENS.themes.map((t) => t.id);
+const DEFAULT_ID = TOKENS.themes.find((t) => t.isDefault).id;
+const DEFAULT_PRIMARY = resolveRef(
+  TOKENS.themes.find((t) => t.isDefault).colors.primary,
+).toUpperCase();
 
 mkdirSync(OUT, { recursive: true });
 
@@ -48,7 +61,8 @@ try {
 
   const baseline = { primary: await readVar(page, "--primary"), brand: await readVar(page, "--brand") };
   ok(`默认主题 --primary = ${baseline.primary} (data-theme=${(await readAttr(page)) ?? "null(默认)"})`);
-  if (baseline.primary.toUpperCase() !== "#4A7C59") bad(`默认主色应为 #4A7C59, 实得 ${baseline.primary}`);
+  if (baseline.primary.toUpperCase() !== DEFAULT_PRIMARY)
+    bad(`默认主色应为 ${DEFAULT_PRIMARY} (令牌真源), 实得 ${baseline.primary}`);
   if ((await readAttr(page)) !== null) bad("默认主题不该带 data-theme 属性");
 
   await page.screenshot({ path: `${OUT}/00-admin-${DEFAULT_ID}.png`, fullPage: false });
@@ -79,6 +93,14 @@ try {
 
     await page.screenshot({ path: `${OUT}/01-admin-${id}.png`, fullPage: false });
   }
+
+  // 每个主题的主色必须 = 令牌里登记的值 (不是随便变了个色就算过)
+  for (const t of TOKENS.themes) {
+    const want = resolveRef(t.colors.primary).toUpperCase();
+    const got = (seen.get(t.id) || "").toUpperCase();
+    if (got !== want) bad(`${t.id}: --primary 期望 ${want} (令牌), 实得 ${got || "(未采到)"}`);
+  }
+  ok(`${TOKENS.themes.length} 个主题主色均与令牌真源一致`);
 
   console.log("\n━━━ ③ 5 个主题主色必须两两不同 (防「生成了但没接上」) ━━━");
   const uniq = new Set([...seen.values()].map((v) => v.toUpperCase()));
