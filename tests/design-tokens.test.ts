@@ -122,28 +122,28 @@ describe("② 对比度门槛 (WCAG 2.1)", () => {
         Object.entries({ ...shared, ...t.colors }).map(([k, v]) => [k, resolveRef(v as string)]),
       );
 
-      it("primary 底 + 前景色达 AAA (7:1) —— 硬门槛, 不是建议", () => {
-        // primary 是按钮底色, 上面永远压白字。design-tokens.json 的
-        // contrast.requiredRatio.primary = 7 会被生成器强制执行 (不达标直接 exit 1),
-        // 这里再独立复核一遍 —— 免得门槛配置本身被改松。
+      it("primary 底 + 前景色达 AA (4.5:1) —— 硬门槛 (业界标准, 不能再降)", () => {
+        // 2026-09-23 主人拍板从 AAA 降到 AA: 换调色自由度 (AAA 锁死调色板,
+        // 主色被压到 #2D5A3D 就是代价). AA 是微信/Linear/Stripe 的业界标准。
+        // 这条**不能再降**, 但也不必 AAA。生成器不达标直接 exit 1。
         const r = ratio(c.primary, onColor(c.primary));
-        expect(r, `primary/onPrimary = ${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(7);
+        expect(r, `primary/onPrimary = ${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
       });
 
       it(`accent 底 + 自动推导的前景色 ≥ AA (${min}:1)`, () => {
         expect(ratio(c.accent, onColor(c.accent))).toBeGreaterThanOrEqual(min);
       });
 
-      it("正文 / 副文 对背景达 AAA (7:1) —— 中老年可读性底线", () => {
+      it("正文 / 副文 对背景 ≥ 7:1 (防浅灰当正文, 便宜且真有用)", () => {
         expect(ratio(c.textPrimary, c.surface), "textPrimary/surface").toBeGreaterThanOrEqual(7);
         expect(ratio(c.textSecondary, c.surface), "textSecondary/surface").toBeGreaterThanOrEqual(7);
       });
 
-      it("卡片上的正文达 AAA", () => {
+      it("卡片上的正文 ≥ 7:1", () => {
         expect(ratio(c.textPrimary, c.surfaceCard)).toBeGreaterThanOrEqual(7);
       });
 
-      it("边框在卡片上可见 (≥1.5:1, 太浅等于没画线)", () => {
+      it("边框在卡片上可见 (≥1.5:1 —— 1.32:1 等于没画线, 曾是真 bug)", () => {
         expect(ratio(c.border, c.surfaceCard)).toBeGreaterThanOrEqual(1.5);
       });
 
@@ -159,8 +159,11 @@ describe("② 对比度门槛 (WCAG 2.1)", () => {
     });
   }
 
-  it("硬门槛配置存在且 primary 门槛 = 7 (防止有人把它调松)", () => {
-    expect(doc.contrast.requiredRatio?.primary).toBeGreaterThanOrEqual(7);
+  it("硬门槛配置: AA 4.5 (on*)、7.0 (正文)、1.5 (边框) —— 防被调松", () => {
+    // 这些是 design-tokens.json 的三个硬门槛, 生成器/测试双重守护。
+    expect(doc.contrast.minOnColorRatio).toBeGreaterThanOrEqual(4.5);
+    expect(doc.contrast.bodyTextMinRatio).toBeGreaterThanOrEqual(7.0);
+    expect(doc.contrast.borderMinRatio).toBeGreaterThanOrEqual(1.5);
   });
 
   it("状态色 (success/warning/danger/info) 的前景色 ≥ AA", () => {

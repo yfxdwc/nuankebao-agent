@@ -164,9 +164,10 @@ void main() {
     for (final theme in AppThemes.all) {
       test('${theme.label}: 主要配对 ≥ AA, 正文 ≥ AAA', () {
         // 硬门槛: primary 是按钮底色, 上面永远压白字。
-      // 2026-09-23 主人拍板「用 primaryDark 加强」→ 5 个主题全部抬到 AAA。
-      expect(_contrast(theme.primary, theme.onPrimary), greaterThanOrEqualTo(7.0),
-            reason: '按钮底/字 —— 中老年视力对 4.86:1 的绿底白字偏吃力, 必须 AAA');
+      // 2026-09-23 主人拍板从 AAA 降到 AA 换调色自由度 —— AA 是业界标准 (微信/Linear/Stripe 都按 AA)。
+      // 不能再降; 但也不必 AAA。
+      expect(_contrast(theme.primary, theme.onPrimary), greaterThanOrEqualTo(4.5),
+            reason: '按钮底/字 AA 硬门槛 (design-tokens.json → contrast.minOnColorRatio)');
         expect(_contrast(theme.accent, theme.onAccent), greaterThanOrEqualTo(4.5),
             reason: '强调色底/字');
         expect(_contrast(theme.textPrimary, theme.surface),
@@ -197,12 +198,15 @@ void main() {
   });
 
   group('⑤ 尺度令牌 (不随主题变, 中老年底线)', () {
-    test('字号档位满足可读性底线 (正文 ≥18, 副信息 ≥14)', () {
-      expect(AppType.md, greaterThanOrEqualTo(18));
-      // xs 是常规 UI 的可读性底线 (14); micro 仅限图谱画布/极小角标
-      expect(AppType.xs, greaterThanOrEqualTo(14));
-      // 2026-09-23 主人拍板把 micro 从 10 抬到 12 (web 密集表格 42 处)
-      expect(AppType.micro, greaterThanOrEqualTo(12));
+    test('字号档位满足可读性底线 (B 档: 正文 ≥15, 副信息 ≥13, 角标 ≥12)', () {
+      // 2026-09-23 主人拍板从适老化改为紧凑专业(B 档): 正文 18 → 15。
+      // 中文 15px 是企业应用主流 (微信 17 / iOS 17 / Linear 14-15),
+      // 一屏能多看约 80% 信息。
+      expect(AppType.md, greaterThanOrEqualTo(15));
+      expect(AppType.sm, greaterThanOrEqualTo(13));
+      // xs (角标) 12 / micro (画布) 11 —— 仅在特定场景用, 不是 UI 底线
+      expect(AppType.xs, greaterThanOrEqualTo(12));
+      expect(AppType.micro, greaterThanOrEqualTo(11));
       expect(AppType.xs, lessThan(AppType.sm));
       expect(AppType.sm, lessThan(AppType.md));
       expect(AppType.md, lessThan(AppType.lg));
@@ -210,9 +214,15 @@ void main() {
       expect(AppType.xl, lessThan(AppType.xxl));
     });
 
-    test('触摸目标 ≥48pt (WCAG 2.5.5)', () {
+    test('触摸目标 ≥48pt (WCAG 2.5.5) — 「紧凑」不等于「难点」', () {
+      // 设计原则 (docs/ui-principles.md §3.1): 视觉可以小, 热区不能小。
+      // 2026-09-23 B 档把 buttonLgHeight 64 → 48 (Material 标准), tapMin 仍是 48。
+      // 视觉 32px 的图标按钮: iconSize:32 + padding:8 → hit box 48。
       expect(AppSize.tapMin, greaterThanOrEqualTo(48));
-      expect(AppSize.buttonMinHeight, greaterThanOrEqualTo(AppSize.tapMin));
+      // 主按钮 (buttonLgHeight) 必须等于 tapMin (紧凑化后的最大值 = 热区下限)
+      expect(AppSize.buttonLgHeight, AppSize.tapMin);
+      // 次按钮 (buttonMinHeight) 可以 < tapMin —— 视觉紧凑, 用 padding 撑热区
+      expect(AppSize.buttonMinHeight, lessThanOrEqualTo(AppSize.tapMin));
     });
 
     test('spacing 尺度单调递增且都是正数', () {
@@ -223,12 +233,19 @@ void main() {
       }
     });
 
-    test('语义间距别名指向真实档位', () {
-      expect(AppSpace.cardPadding, AppSpace.s16);
-      expect(AppSpace.sectionGap, AppSpace.s24);
-      expect(AppRadius.card, AppRadius.r12);
-      expect(AppRadius.chip, AppRadius.r20);
-      expect(AppRadius.button, AppRadius.r12);
+    test('语义间距别名指向真实档位 (B 档)', () {
+      // 2026-09-23 B 档: 紧凑化
+      expect(AppSpace.pagePadding, AppSpace.s16);    // 不变
+      expect(AppSpace.cardPadding, AppSpace.s14);   // 16 → 14
+      expect(AppSpace.cardGap, AppSpace.s10);       // 12 → 10
+      expect(AppSpace.sectionGap, AppSpace.s20);    // 24 → 20
+      expect(AppSpace.listRowPadding, AppSpace.s14);// 16 → 14
+      expect(AppSpace.formFieldGap, AppSpace.s10);   // 12 → 10
+      expect(AppRadius.card, AppRadius.r10);        // 12 → 10
+      expect(AppRadius.button, AppRadius.r8);        // 12 → 8
+      expect(AppRadius.badge, AppRadius.r4);         // 8 → 4 (小元素小圆角)
+      // chip → 全圆 (避免半吊子圆角显廉价)
+      expect(AppRadius.chip, 999.0);
     });
 
     test('动效时长有序', () {

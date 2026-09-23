@@ -42,11 +42,11 @@ class AppTheme {
   //   (品牌槽随主题变, 所以只能取默认主题对应的色板槽; 中性槽用 AppColors, 它跨主题恒定)
 
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.primary`
-  static const Color primary = AppPalette.green700;
+  static const Color primary = AppPalette.green500;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.primaryLight`
   static const Color primaryLight = AppPalette.green200;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.primaryDark`
-  static const Color primaryDark = AppPalette.green800;
+  static const Color primaryDark = AppPalette.green700;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.accent`
   static const Color accent = AppPalette.amber500;
   /// 兼容别名 —— 换肤不生效, 新代码用 `context.tokens.graphFranchiseeB`

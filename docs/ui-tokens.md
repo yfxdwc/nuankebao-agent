@@ -108,6 +108,8 @@ import { palette, themeColors } from "@/lib/design-tokens.g";
 
 **密度旋钮**：`--density` 一个数控制全站语义间距。
 
+**设计语言与验收**：见 [`docs/ui-principles.md`](./ui-principles.md) —— 5 条原则 / B 档规格 / review 清单 / 反模式。所有 UI 改动都要拿那份逐条对。
+
 ```css
 :root { --density: 1; }
 --space-16: calc(1rem * var(--density));

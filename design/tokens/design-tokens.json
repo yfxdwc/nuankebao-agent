@@ -174,13 +174,13 @@
       "r2": 2
     },
     "type": {
-      "micro": 12,
-      "xs": 14,
-      "sm": 16,
-      "md": 18,
-      "lg": 22,
-      "xl": 28,
-      "xxl": 36
+      "micro": 11,
+      "xs": 12,
+      "sm": 13,
+      "md": 15,
+      "lg": 17,
+      "xl": 20,
+      "xxl": 28
     },
     "weight": {
       "regular": 400,
@@ -189,30 +189,30 @@
       "bold": 700
     },
     "size": {
-      "iconSm": 18,
-      "iconMd": 24,
-      "iconLg": 28,
-      "iconXl": 32,
-      "controlSm": 36,
-      "controlMd": 40,
-      "controlLg": 52,
+      "iconSm": 16,
+      "iconMd": 20,
+      "iconLg": 24,
+      "iconXl": 28,
+      "controlSm": 32,
+      "controlMd": 34,
+      "controlLg": 44,
       "tapCompact": 44,
       "tapMin": 48,
-      "buttonMinHeight": 56,
-      "buttonLgHeight": 64,
-      "fieldLg": 68,
-      "fabSize": 80,
-      "listRowHeight": 80,
-      "avatarSm": 40,
-      "avatarMd": 56,
-      "avatarLg": 96,
-      "appBarHeight": 64,
+      "buttonMinHeight": 40,
+      "buttonLgHeight": 48,
+      "fieldLg": 52,
+      "fabSize": 56,
+      "listRowHeight": 60,
+      "avatarSm": 32,
+      "avatarMd": 44,
+      "avatarLg": 64,
+      "appBarHeight": 52,
       "borderHairline": 1,
       "borderThick": 2,
-      "badgeMinWidth": 18,
-      "badgeMinWidthLg": 20,
-      "textareaMinHeight": 80,
-      "tableMinWidth": 760,
+      "badgeMinWidth": 16,
+      "badgeMinWidthLg": 18,
+      "textareaMinHeight": 72,
+      "tableMinWidth": 720,
       "contentMaxWidth": 720
     },
     "elevation": {
@@ -240,23 +240,23 @@
   "semantic": {
     "space": {
       "pagePadding": "s16",
-      "cardPadding": "s16",
-      "cardGap": "s12",
-      "sectionGap": "s24",
+      "cardPadding": "s14",
+      "cardGap": "s10",
+      "sectionGap": "s20",
       "inlineGap": "s8",
       "tightGap": "s4",
-      "listRowPadding": "s16",
-      "formFieldGap": "s12",
-      "bottomSafeGap": "s80"
+      "listRowPadding": "s14",
+      "formFieldGap": "s10",
+      "bottomSafeGap": "s64"
     },
     "radius": {
-      "card": "r12",
-      "button": "r12",
-      "input": "r12",
-      "chip": "r20",
-      "badge": "r8",
+      "card": "r10",
+      "button": "r8",
+      "input": "r8",
+      "chip": "full",
+      "badge": "r4",
       "sheet": "r16",
-      "dialog": "r16",
+      "dialog": "r14",
       "pill": "full"
     }
   },
@@ -336,9 +336,9 @@
       "isDefault": true,
       "flutterKey": "sage",
       "colors": {
-        "primary": "{palette.green-700}",
+        "primary": "{palette.green-500}",
         "primaryLight": "{palette.green-200}",
-        "primaryDark": "{palette.green-800}",
+        "primaryDark": "{palette.green-700}",
         "primarySurface": "{palette.green-50}",
         "accent": "{palette.amber-500}",
         "accentLight": "{palette.amber-100}",
@@ -350,9 +350,9 @@
       "label": "春 · 新芽",
       "group": "季节",
       "colors": {
-        "primary": "{palette.spring-700}",
+        "primary": "{palette.spring-500}",
         "primaryLight": "{palette.spring-200}",
-        "primaryDark": "{palette.spring-800}",
+        "primaryDark": "{palette.spring-700}",
         "primarySurface": "{palette.spring-50}",
         "accent": "{palette.springAccent-500}",
         "accentLight": "{palette.springAccent-100}",
@@ -364,9 +364,9 @@
       "label": "夏 · 青荷",
       "group": "季节",
       "colors": {
-        "primary": "{palette.summer-700}",
+        "primary": "{palette.summer-500}",
         "primaryLight": "{palette.summer-200}",
-        "primaryDark": "{palette.summer-800}",
+        "primaryDark": "{palette.summer-700}",
         "primarySurface": "{palette.summer-50}",
         "accent": "{palette.summerAccent-500}",
         "accentLight": "{palette.summerAccent-100}",
@@ -378,9 +378,9 @@
       "label": "秋 · 琥珀",
       "group": "季节",
       "colors": {
-        "primary": "{palette.autumn-700}",
+        "primary": "{palette.autumn-500}",
         "primaryLight": "{palette.autumn-200}",
-        "primaryDark": "{palette.autumn-800}",
+        "primaryDark": "{palette.autumn-700}",
         "primarySurface": "{palette.autumn-50}",
         "accent": "{palette.autumnAccent-500}",
         "accentLight": "{palette.autumnAccent-100}",
@@ -392,9 +392,9 @@
       "label": "冬 · 苏木",
       "group": "季节",
       "colors": {
-        "primary": "{palette.winter-700}",
+        "primary": "{palette.winter-500}",
         "primaryLight": "{palette.winter-200}",
-        "primaryDark": "{palette.winter-800}",
+        "primaryDark": "{palette.winter-700}",
         "primarySurface": "{palette.winter-50}",
         "accent": "{palette.winterAccent-500}",
         "accentLight": "{palette.winterAccent-100}",
@@ -404,12 +404,11 @@
   ],
   "contrast": {
     "minOnColorRatio": 4.5,
-    "preferRatio": 7.0,
+    "comfortRatio": 7.0,
+    "bodyTextMinRatio": 7.0,
+    "borderMinRatio": 1.5,
     "lightForeground": "{palette.neutral-0}",
     "darkForeground": "{palette.neutral-900}",
-    "requiredRatio": {
-      "primary": 7.0
-    },
-    "_requiredRatioNote": "硬门槛: 不达标 → 生成器直接报错 (不是 warning)。primary 是按钮底色, 上面永远压白字; 中老年视力对 4.86:1 的绿底白字实际偏吃力。"
+    "_note": "AAA 会锁死调色板(主色被压到 #2D5A3D 就是代价)。降到 AA 换调色自由度, 但不能再降。"
   }
 }

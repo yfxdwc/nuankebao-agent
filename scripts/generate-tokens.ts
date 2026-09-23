@@ -132,10 +132,18 @@ const sharedColors = resolveColorMap(doc.shared, "shared");
 
 const LIGHT_FG: string = resolveRef(doc.contrast.lightForeground) as string;
 const DARK_FG: string = resolveRef(doc.contrast.darkForeground) as string;
+/**
+ * 对比度门槛 (2026-09-23 主人拍板从 AAA 降到 AA 换调色自由度)
+ *
+ *   minOnColorRatio  = **硬门槛**: 所有 on* 配对必须 ≥ 4.5:1, 不达标生成器 exit 1
+ *   comfortRatio     = 参考线:  7:1 (AAA), 达到更好, **不阻断**
+ *   bodyTextMinRatio = **硬门槛**: 正文/背景 (这条很便宜, 且真有用 —— 防止有人选浅灰当正文)
+ *   borderMinRatio   = **硬门槛**: 边框/卡片可见性 (1.32:1 等于没画线, 曾是真实 bug)
+ */
 const MIN_RATIO: number = doc.contrast.minOnColorRatio ?? 4.5;
-const PREFER_RATIO: number = doc.contrast.preferRatio ?? 7;
-/** 按槽位的**硬门槛** —— 不达标直接抛错, 不是 warning。加主题时不会静默退化。 */
-const REQUIRED_RATIO: Record<string, number> = doc.contrast.requiredRatio ?? {};
+const COMFORT_RATIO: number = doc.contrast.comfortRatio ?? 7;
+const BODY_TEXT_MIN: number = doc.contrast.bodyTextMinRatio ?? 7;
+const BORDER_MIN: number = doc.contrast.borderMinRatio ?? 1.5;
 
 /** 需要自动配前景色的底: 令牌键 → 生成的前景键名 */
 const FG_PAIRS: Array<[string, string]> = [
@@ -157,29 +165,41 @@ function deriveForeground(bgHex: string, label: string): string {
   const best = pickLight ? cLight : cDark;
   const fg = pickLight ? LIGHT_FG.toUpperCase() : DARK_FG.toUpperCase();
 
-  // 硬门槛 (design-tokens.json → contrast.requiredRatio)
-  const slot = label.split(".").pop() ?? "";
-  const required = REQUIRED_RATIO[slot];
-  if (required !== undefined && best < required) {
+  // 硬门槛: AA 是底线, 不能再降 (2026-09-23 主人拍板)
+  if (best < MIN_RATIO) {
     contrastErrors.push(
-      `✗ ${label} (${bgHex}) 对比度 ${best.toFixed(2)}:1 < 硬门槛 ${required}:1 —— ` +
-        (slot === "primary"
-          ? "primary 是按钮底色, 上面永远压白字; 把该主题的 primary 换成更深一档的色板槽"
+      `✗ ${label} (${bgHex}) 对比度 ${best.toFixed(2)}:1 < 硬门槛 AA ${MIN_RATIO}:1 —— ` +
+        (label.includes(".primary")
+          ? "primary 是按钮底色, 上面永远压白字; 换更深一档的色板槽"
           : "降低该槽亮度, 或让生成器改选深色前景"),
     );
-    return fg;
+  } else if (best < COMFORT_RATIO) {
+    contrastWarnings.push(
+      `· ${label} (${bgHex}) 对比度 ${best.toFixed(2)}:1 (达 AA, 未达 AAA ${COMFORT_RATIO}:1)`,
+    );
   }
+  return fg;
+}
 
-  if (best < MIN_RATIO) {
-    contrastWarnings.push(
-      `⚠ ${label} (${bgHex}) 最优前景对比度仅 ${best.toFixed(2)}:1 < ${MIN_RATIO}:1 (WCAG AA)`,
-    );
-  } else if (best < PREFER_RATIO) {
-    contrastWarnings.push(
-      `· ${label} (${bgHex}) 前景对比度 ${best.toFixed(2)}:1 (达 AA, 未达 AAA ${PREFER_RATIO}:1; 仅大字号可用)`,
-    );
+/**
+ * 主题级额外硬门槛: 正文可读性 + 边框可见性。
+ * 这两条与「on* 自动推导」无关 —— 它们是**共用槽**之间的配对, 每个主题都要复核。
+ */
+function validateThemeContrast(t: ThemeDef, c: Record<string, string>): void {
+  const checks: Array<[string, string, string, number]> = [
+    ["正文对主背景", c.textPrimary, c.surface, BODY_TEXT_MIN],
+    ["正文对卡片", c.textPrimary, c.surfaceCard, BODY_TEXT_MIN],
+    ["副文对主背景", c.textSecondary, c.surface, BODY_TEXT_MIN],
+    ["边框在卡片上的可见性", c.border, c.surfaceCard, BORDER_MIN],
+  ];
+  for (const [name, a, b, floor] of checks) {
+    const r = contrastRatio(a, b);
+    if (r < floor) {
+      contrastErrors.push(
+        `✗ ${t.label} · ${name} (${a} on ${b}) = ${r.toFixed(2)}:1 < 硬门槛 ${floor}:1`,
+      );
+    }
   }
-  return pickLight ? LIGHT_FG.toUpperCase() : DARK_FG.toUpperCase();
 }
 
 // ============================================
@@ -225,7 +245,10 @@ function buildThemeColors(t: ThemeDef): Record<string, string> {
 }
 
 const themeColors: Record<string, Record<string, string>> = {};
-for (const t of themeDefs) themeColors[t.id] = buildThemeColors(t);
+for (const t of themeDefs) {
+  themeColors[t.id] = buildThemeColors(t);
+  validateThemeContrast(t, themeColors[t.id]);
+}
 
 // ============================================
 // 尺度
@@ -916,7 +939,8 @@ function syncStaticShell(primary: string, results: string[]): void {
 
 if (MODE === "contrast") {
   console.log("\n暖客宝 主题对比度体检 (WCAG 2.1)\n");
-  console.log("  目标: 正文 ≥ 4.5:1 (AA) · 理想 ≥ 7:1 (AAA)\n");
+  console.log(`  硬门槛: on* ≥ ${MIN_RATIO}:1 · 正文 ≥ ${BODY_TEXT_MIN}:1 · 边框 ≥ ${BORDER_MIN}:1`);
+  console.log(`  参考线: ≥ ${COMFORT_RATIO}:1 (AAA, 不阻断)\n`);
   for (const t of themeDefs) {
     const c = themeColors[t.id];
     console.log(`▸ ${t.label} (${t.id})${t.isDefault ? "  [默认]" : ""}`);

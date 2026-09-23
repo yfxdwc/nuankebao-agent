@@ -150,14 +150,14 @@ abstract final class AppSpace {
   static const double s220 = 220.0;
   // 语义别名
   static const double pagePadding = s16;
-  static const double cardPadding = s16;
-  static const double cardGap = s12;
-  static const double sectionGap = s24;
+  static const double cardPadding = s14;
+  static const double cardGap = s10;
+  static const double sectionGap = s20;
   static const double inlineGap = s8;
   static const double tightGap = s4;
-  static const double listRowPadding = s16;
-  static const double formFieldGap = s12;
-  static const double bottomSafeGap = s80;
+  static const double listRowPadding = s14;
+  static const double formFieldGap = s10;
+  static const double bottomSafeGap = s64;
 }
 
 /// L1 尺度 —— 圆角
@@ -180,25 +180,25 @@ abstract final class AppRadius {
   static const double full = 999.0;
   static const double r2 = 2.0;
   // 语义别名
-  static const double card = r12;
-  static const double button = r12;
-  static const double input = r12;
-  static const double chip = r20;
-  static const double badge = r8;
+  static const double card = r10;
+  static const double button = r8;
+  static const double input = r8;
+  static const double chip = full;
+  static const double badge = r4;
   static const double sheet = r16;
-  static const double dialog = r16;
+  static const double dialog = r14;
   static const double pill = full;
 }
 
 /// L1 尺度 —— 字号 (中老年: 正文 18 起步, Material 默认是 14)
 abstract final class AppType {
-  static const double micro = 12.0;
-  static const double xs = 14.0;
-  static const double sm = 16.0;
-  static const double md = 18.0;
-  static const double lg = 22.0;
-  static const double xl = 28.0;
-  static const double xxl = 36.0;
+  static const double micro = 11.0;
+  static const double xs = 12.0;
+  static const double sm = 13.0;
+  static const double md = 15.0;
+  static const double lg = 17.0;
+  static const double xl = 20.0;
+  static const double xxl = 28.0;
 }
 
 /// L1 尺度 —— 字重
@@ -211,30 +211,30 @@ abstract final class AppWeight {
 
 /// L1 尺度 —— 组件尺寸
 abstract final class AppSize {
-  static const double iconSm = 18.0;
-  static const double iconMd = 24.0;
-  static const double iconLg = 28.0;
-  static const double iconXl = 32.0;
-  static const double controlSm = 36.0;
-  static const double controlMd = 40.0;
-  static const double controlLg = 52.0;
+  static const double iconSm = 16.0;
+  static const double iconMd = 20.0;
+  static const double iconLg = 24.0;
+  static const double iconXl = 28.0;
+  static const double controlSm = 32.0;
+  static const double controlMd = 34.0;
+  static const double controlLg = 44.0;
   static const double tapCompact = 44.0;
   static const double tapMin = 48.0;
-  static const double buttonMinHeight = 56.0;
-  static const double buttonLgHeight = 64.0;
-  static const double fieldLg = 68.0;
-  static const double fabSize = 80.0;
-  static const double listRowHeight = 80.0;
-  static const double avatarSm = 40.0;
-  static const double avatarMd = 56.0;
-  static const double avatarLg = 96.0;
-  static const double appBarHeight = 64.0;
+  static const double buttonMinHeight = 40.0;
+  static const double buttonLgHeight = 48.0;
+  static const double fieldLg = 52.0;
+  static const double fabSize = 56.0;
+  static const double listRowHeight = 60.0;
+  static const double avatarSm = 32.0;
+  static const double avatarMd = 44.0;
+  static const double avatarLg = 64.0;
+  static const double appBarHeight = 52.0;
   static const double borderHairline = 1.0;
   static const double borderThick = 2.0;
-  static const double badgeMinWidth = 18.0;
-  static const double badgeMinWidthLg = 20.0;
-  static const double textareaMinHeight = 80.0;
-  static const double tableMinWidth = 760.0;
+  static const double badgeMinWidth = 16.0;
+  static const double badgeMinWidthLg = 18.0;
+  static const double textareaMinHeight = 72.0;
+  static const double tableMinWidth = 720.0;
   static const double contentMaxWidth = 720.0;
 }
 
@@ -544,7 +544,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFF2D5A3D),
+    focusRing: Color(0xFF4A7C59),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -584,9 +584,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFF2D5A3D),
+    primary: Color(0xFF4A7C59),
     primaryLight: Color(0xFFA8D5BA),
-    primaryDark: Color(0xFF234631),
+    primaryDark: Color(0xFF2D5A3D),
     primarySurface: Color(0xFFF0F7F2),
     accent: Color(0xFFE89F4D),
     accentLight: Color(0xFFFAE9D0),
@@ -618,7 +618,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFF3D5A28),
+    focusRing: Color(0xFF5A7D3C),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -658,9 +658,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFF3D5A28),
+    primary: Color(0xFF5A7D3C),
     primaryLight: Color(0xFFC3DFA6),
-    primaryDark: Color(0xFF2F4620),
+    primaryDark: Color(0xFF3D5A28),
     primarySurface: Color(0xFFF2F8EB),
     accent: Color(0xFFB3536C),
     accentLight: Color(0xFFF0D2DB),
@@ -692,7 +692,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFF1F574F),
+    focusRing: Color(0xFF2F7A72),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -732,9 +732,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFF1F574F),
+    primary: Color(0xFF2F7A72),
     primaryLight: Color(0xFFA6D6CE),
-    primaryDark: Color(0xFF16403B),
+    primaryDark: Color(0xFF1F574F),
     primarySurface: Color(0xFFEEF7F5),
     accent: Color(0xFFB07E1E),
     accentLight: Color(0xFFF0E0B8),
@@ -766,7 +766,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFF7A421A),
+    focusRing: Color(0xFFA65E24),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -806,9 +806,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFF7A421A),
+    primary: Color(0xFFA65E24),
     primaryLight: Color(0xFFE8C79E),
-    primaryDark: Color(0xFF5C3113),
+    primaryDark: Color(0xFF7A421A),
     primarySurface: Color(0xFFFBF2E7),
     accent: Color(0xFFA9791F),
     accentLight: Color(0xFFEFDDAE),
@@ -840,7 +840,7 @@ abstract final class AppThemes {
     borderStrong: Color(0xFF8A8A8A),
     borderInput: Color(0xFFD0D0D0),
     divider: Color(0xFFEDE6DA),
-    focusRing: Color(0xFF632F2F),
+    focusRing: Color(0xFF8C4A4A),
     success: Color(0xFF2D5A3D),
     successLight: Color(0xFFA8D5BA),
     successSurface: Color(0xFFF0F7F2),
@@ -880,9 +880,9 @@ abstract final class AppThemes {
     avatarSlot7: Color(0xFF6B9E7A),
     avatarSlot8: Color(0xFF2B6CB0),
     avatarSlotNeutral: Color(0xFF9AA5A0),
-    primary: Color(0xFF632F2F),
+    primary: Color(0xFF8C4A4A),
     primaryLight: Color(0xFFDFB9B9),
-    primaryDark: Color(0xFF4A2222),
+    primaryDark: Color(0xFF632F2F),
     primarySurface: Color(0xFFFAF1F1),
     accent: Color(0xFF4A6E8C),
     accentLight: Color(0xFFCBDCE9),

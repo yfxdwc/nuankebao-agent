@@ -69,7 +69,7 @@
 - ✅ **任何数据库写都要走 audit log** → 谁改了什么
 - ✅ **选端口前先检测** → 跑 `./tools/check-port.sh [PORT]` 确认空闲，避免撞主人其他项目
 - ✅ **改了端口的 commit 必须经过 pre-commit hook** → `tools/pre-commit-port-check.sh` (安装: `ln -s ../../tools/pre-commit-port-check.sh .git/hooks/pre-commit`)
-- ✅ **改 / 加 migration 前必跑 `pnpm db:compat`** → 检查 DROP / RENAME / ALTER TYPE 无 USING / SET NOT NULL 无 DEFAULT 等禁止模式。CI `db-compat` job 失败 = PR 阻断。详见 CHARTER §3.5 + ADR-0004
+- ✅ **UI 改动必看 [`docs/ui-principles.md`](docs/ui-principles.md) (5 条原则 + B 档规格 + review 清单)**。改 / 加 migration 前必跑 `pnpm db:compat` → 检查 DROP / RENAME / ALTER TYPE 无 USING / SET NOT NULL 无 DEFAULT 等禁止模式。CI `db-compat` job 失败 = PR 阻断。详见 CHARTER §3.5 + ADR-0004
 - ✅ **前端同步策略 (web admin 已解冻, v0.1.5 主人拍, 2026-09-22, ADR-0017)**:
   - **销售侧功能 (录入/拍照/跟进/客户详情)** → **仍以 Flutter APK 为准** (`flutter_app/`), 不必做 web 同名功能 (apk-first 不变)
   - **管理与分析功能 (报表/导入/审计/用量/团队管理)** → **web admin 为主** (`src/app/admin/**`), 不必做 Flutter 同名页
