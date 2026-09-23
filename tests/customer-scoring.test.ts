@@ -30,6 +30,10 @@ import {
   type ActionInput,
   type ActionItem,
 } from "@/lib/customer/actions";
+import {
+  DEFAULT_INSIGHT_CONFIG,
+  resolveInsightConfig,
+} from "@/lib/customer/insight-config";
 import type { FollowUpAnalysis } from "@/lib/follow-up/analysis";
 
 // ---------- 测试夹具 ----------
@@ -917,5 +921,130 @@ describe("行动指引 (buildActionItems)", () => {
       expect(it.why.trim().length).toBeGreaterThan(4);
       expect(it.expected.trim().length).toBeGreaterThan(2);
     }
+  });
+});
+
+// ============================================
+// ⑧ 参数变量化 —— 配置层 (为 admin 调节页铺路)
+// ============================================
+// 守护的东西:
+//   ① 默认配置能跑通同一套校验 (不会因为默认值本身非法而崩)
+//   ② 覆盖能被夹回合法区间 (配置来自 DB/UI = 不受信输入)
+//   ③ 改参数真的改变结果 (否则"变量化"是摆设)
+//   ④ 同一份配置 → 同一份结果 (确定性不被配置破坏)
+
+describe("参数变量化 (resolveInsightConfig + config 生效)", () => {
+  it("默认配置经过校验后与硬编码前的行为一致", () => {
+    const d = resolveInsightConfig();
+    expect(d.scoring.bands).toHaveLength(4);
+    expect(d.scoring.bands[0].min).toBe(80);
+    expect(d.scoring.weights).toEqual({ effect: 0.3, engagement: 0.4, value: 0.3 });
+    expect(d.actions.contactAbsoluteGapDays).toBe(45);
+    expect(d.actions.priorities.profile_incomplete).toBe("low");
+  });
+
+  it("非法覆盖被夹回合法区间 (不受信输入)", () => {
+    const d = resolveInsightConfig({
+      scoring: { weakDimensionThreshold: 9999, weights: { effect: -5 } },
+      actions: { contactAbsoluteGapDays: -100, birthdayWindowDays: 1e9 },
+    });
+    expect(d.scoring.weakDimensionThreshold).toBe(100);
+    expect(d.scoring.weights.effect).toBe(0);
+    expect(d.actions.contactAbsoluteGapDays).toBe(1);
+    expect(d.actions.birthdayWindowDays).toBe(365);
+  });
+
+  it("垃圾输入不抛错, 回落默认 (一个坏配置不该让详情页打不开)", () => {
+    for (const junk of [null, undefined, 42, "x", [], { scoring: "nope" }]) {
+      const d = resolveInsightConfig(junk);
+      expect(d.scoring.bands).toHaveLength(4);
+      expect(d.actions.neverContactedGraceDays).toBe(1);
+    }
+  });
+
+  it("分档表必须覆盖到 0, 否则补一档 (y=bandOf 才找得到)", () => {
+    const d = resolveInsightConfig({ scoring: { bands: [{ band: "good", min: 60, label: "还行" }] } });
+    expect(d.scoring.bands[d.scoring.bands.length - 1].min).toBe(0);
+  });
+
+  it("改阈值真的改变行动结果 (变量化不是摆设)", () => {
+    const input = actionInput({
+      analysis: analysis({ contactTotal: 3, daysSinceLastContact: 50, avgContactIntervalDays: 0 }),
+    });
+    // 默认 45 天 → 触发
+    expect(buildActionItems(input).map((i) => i.id)).toContain("contact_gap");
+    // 把阈值提到 90 天 → 50 天就不该触发
+    expect(
+      buildActionItems(input, { actions: { contactAbsoluteGapDays: 90 } }).map((i) => i.id)
+    ).not.toContain("contact_gap");
+  });
+
+  it("改优先级真的改变排序", () => {
+    const input = actionInput({ hasOwner: false });
+    const dflt = buildActionItems(input);
+    expect(dflt.find((i) => i.id === "profile_incomplete")!.priority).toBe("low");
+
+    const bumped = buildActionItems(input, {
+      actions: { priorities: { profile_incomplete: "high" } },
+    });
+    expect(bumped.find((i) => i.id === "profile_incomplete")!.priority).toBe("high");
+  });
+
+  it("改权重真的改变综合分", () => {
+    const input = scoringInput({
+      relationshipStartAt: daysAgo(400),
+      records: [record(2, { pain_level: 9 }, { pain_level: 2 })], // effect 高
+      interactions: [], // engagement/value 低
+    });
+    const dflt = buildCustomerScore(input).overall as number;
+    // 把健康权重拉满 → 综合分应被 effect 拉高
+    const effectHeavy = buildCustomerScore(input, {
+      scoring: { weights: { effect: 1, engagement: 0, value: 0 } },
+    }).overall as number;
+    expect(effectHeavy).toBeGreaterThanOrEqual(dflt);
+  });
+
+  it("改分档阈值真的改变档位判定 (用中档客户, 不是极端值)", () => {
+    // 造一个"中档"客户: 有互动但不多 → 默认落在 fair (40-59)
+    const input = scoringInput({
+      relationshipStartAt: daysAgo(400),
+      interactions: [
+        { type: "phone", createdAt: daysAgo(3) },
+        { type: "wechat", createdAt: daysAgo(5) },
+        { type: "visit", createdAt: daysAgo(7) },
+      ],
+      analysis: analysis({ contactTotal: 3, daysSinceLastContact: 3, avgContactIntervalDays: 0 }),
+    });
+    const dflt = buildCustomerScore(input);
+    expect(dflt.overall as number).toBeGreaterThanOrEqual(40);
+    expect(dflt.overall as number).toBeLessThan(80);
+    expect(dflt.overallBand).toBe("fair");
+
+    // 把"优秀"门槛提到 95, 且删掉 fair/good 两档 → 中档客户掉进 poor
+    const strict = buildCustomerScore(input, {
+      scoring: {
+        bands: [
+          { band: "excellent", min: 95, label: "顶尖" },
+          { band: "poor", min: 0, label: "待改进" },
+        ],
+      },
+    });
+    expect(strict.overallBand).toBe("poor");
+    expect(strict.overallBandLabel).toBe("待改进"); // 标签也来自配置
+  });
+
+  it("score 带 configVersion (改参数前后分数可区分)", () => {
+    const a = buildCustomerScore(scoringInput(), { scoring: { version: "v1" } });
+    const b = buildCustomerScore(scoringInput(), { scoring: { version: "v2" } });
+    expect(a.configVersion).toBe("v1");
+    expect(b.configVersion).toBe("v2");
+    expect(a.scoringVersion).toBe(b.scoringVersion); // 算法版本没变
+  });
+
+  it("显式传默认配置 == 不传 (无隐藏状态)", () => {
+    const input = scoringInput({ records: [record(3, { pain_level: 7 }, { pain_level: 4 })] });
+    expect(JSON.stringify(buildCustomerScore(input, DEFAULT_INSIGHT_CONFIG))).toBe(
+      JSON.stringify(buildCustomerScore(input))
+    );
   });
 });

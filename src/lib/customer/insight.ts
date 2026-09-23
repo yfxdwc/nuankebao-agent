@@ -41,12 +41,18 @@ export interface CustomerInsight {
 /** L0 显示几条 */
 export const TOP_ACTION_LIMIT = 3;
 
+/**
+ * @param config 可调参数 (阈值/权重/分档) —— 默认用 DEFAULT_INSIGHT_CONFIG。
+ *   将来 admin 调节页写好之后, 这里改成「先读 DB 覆盖 → resolve → 传下去」。
+ *   现在留这个口子, 是为了**将来接 DB 时不用改任何调用方**。
+ */
 export async function loadCustomerInsight(
   customerId: bigint,
-  now: Date = new Date()
+  now: Date = new Date(),
+  config?: unknown
 ): Promise<CustomerInsight | null> {
   // 1) 评分 + 原始快照 (一次 DB 读; 行动指引复用同一份 analysis, 不重查)
-  const snap = await loadCustomerScoringSnapshot(customerId, now);
+  const snap = await loadCustomerScoringSnapshot(customerId, now, config);
   if (!snap) return null;
 
   // 2) 行动上下文的补充字段: 生日 + 最近记录 + 未完成任务
@@ -113,7 +119,7 @@ export async function loadCustomerInsight(
     hasOwner: snap.hasOwner,
     lastRecordNoImprovement,
     hasPendingTask: pendingRows.length > 0,
-  });
+  }, config);
 
   return {
     score: snap.score,

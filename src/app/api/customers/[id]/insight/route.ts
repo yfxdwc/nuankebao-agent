@@ -7,7 +7,7 @@ import { getCustomerById } from "@/lib/db/queries/customer";
 import { hasFeatureAccess } from "@/lib/billing/guard";
 import { FEATURES } from "@/lib/billing/features";
 import { loadCustomerInsight } from "@/lib/customer/insight";
-import { WEAK_DIMENSION_THRESHOLD } from "@/lib/customer/scoring";
+import { DEFAULT_RESOLVED_CONFIG } from "@/lib/customer/insight-config";
 
 /**
  * GET /api/customers/[id]/insight
@@ -69,6 +69,11 @@ export async function GET(
     ...insight,
     scriptAvailable,
     /** 前端用这个阈值判断"哪个维度算短板" (避免前端硬编码 60) */
-    weakDimensionThreshold: WEAK_DIMENSION_THRESHOLD,
+    weakDimensionThreshold: DEFAULT_RESOLVED_CONFIG.scoring.weakDimensionThreshold,
+    /**
+     * 生效的参数版本 (scoring.configVersion 已随分数返回, 这里再冗余一份顶层)。
+     * admin 调节页将来改完参数会 +version, 前端可据此提示"规则已更新"。
+     */
+    configVersion: DEFAULT_RESOLVED_CONFIG.scoring.version,
   });
 }

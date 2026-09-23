@@ -24,6 +24,11 @@
 import type { FollowUpAnalysis } from "@/lib/follow-up/analysis";
 import { daysBetween } from "@/lib/follow-up/urgency";
 import type { CustomerScore } from "@/lib/customer/scoring";
+import {
+  DEFAULT_RESOLVED_CONFIG,
+  resolveInsightConfig,
+  type ActionConfig,
+} from "@/lib/customer/insight-config";
 
 // ============================================
 // 类型
@@ -88,14 +93,18 @@ export interface ActionInput {
 }
 
 // ============================================
-// 阈值 (集中放这里, 好调)
+// 阈值
 // ============================================
+// ⚠ 全部可调 —— 真源在 `insight-config.ts::DEFAULT_INSIGHT_CONFIG.actions`,
+//   这里只是给「不传 config 的调用方」+ 测试可读性留的别名。
+//   admin 调节页将来编辑的是 insight-config 那份 (存 DB)。
 
+/** @deprecated 用 `config.actions.*` (见 insight-config.ts) */
 export const ACTION_THRESHOLDS = {
   /** 到店超期倍数: daysSinceLastVisit > median * N → 建议约下次到店 */
-  REPURCHASE_OVERDUE_FACTOR: 1.2,
+  REPURCHASE_OVERDUE_FACTOR: DEFAULT_RESOLVED_CONFIG.actions.repurchaseOverdueFactor,
   /** 联系超期倍数: daysSinceLastContact > avgInterval * N → 建议主动联系 */
-  CONTACT_GAP_FACTOR: 1.5,
+  CONTACT_GAP_FACTOR: DEFAULT_RESOLVED_CONFIG.actions.contactGapFactor,
   /**
    * **没有节奏时的绝对兜底阈值** (天)。
    *
@@ -104,17 +113,17 @@ export const ACTION_THRESHOLDS = {
    *   → 规则**永远不触发**, 哪怕 91 天没联系, 也不给任何行动。显然错。
    * 修法: 没节奏时不看比例, 改用绝对天数 (超过这个数就该主动联系了)。
    */
-  CONTACT_ABSOLUTE_GAP_DAYS: 45,
+  CONTACT_ABSOLUTE_GAP_DAYS: DEFAULT_RESOLVED_CONFIG.actions.contactAbsoluteGapDays,
   /** 无复购节奏时的绝对兜底阈值 (天) */
-  REPURCHASE_ABSOLUTE_OVERDUE_DAYS: 60,
+  REPURCHASE_ABSOLUTE_OVERDUE_DAYS: DEFAULT_RESOLVED_CONFIG.actions.repurchaseAbsoluteOverdueDays,
   /** 生日提前提醒窗口 (天); 与 birthdayRemindDays 取小 */
-  BIRTHDAY_WINDOW_DAYS: 7,
+  BIRTHDAY_WINDOW_DAYS: DEFAULT_RESOLVED_CONFIG.actions.birthdayWindowDays,
   /** 首访后回访窗口 (天) */
-  FIRST_VISIT_FOLLOWUP_DAYS: 7,
+  FIRST_VISIT_FOLLOWUP_DAYS: DEFAULT_RESOLVED_CONFIG.actions.firstVisitFollowupDays,
   /** 建档多少天后「从没联系过」才算需要破冰 (当天建的别催) */
-  NEVER_CONTACTED_GRACE_DAYS: 1,
+  NEVER_CONTACTED_GRACE_DAYS: DEFAULT_RESOLVED_CONFIG.actions.neverContactedGraceDays,
   /** nextAdviceDate 提前提醒窗口 (天) */
-  ADVICE_LEAD_DAYS: 0,
+  ADVICE_LEAD_DAYS: DEFAULT_RESOLVED_CONFIG.actions.adviceLeadDays,
 } as const;
 
 const PRIORITY_ORDER: Record<ActionPriority, number> = {
@@ -122,6 +131,21 @@ const PRIORITY_ORDER: Record<ActionPriority, number> = {
   medium: 1,
   low: 2,
 };
+
+/** 优先级阶梯 (低 → 高), 用于"严重时升一档" */
+const LADDER: readonly ActionPriority[] = ["low", "medium", "high"];
+
+/**
+ * 升一档 (低→中, 中→高, 高→高)。
+ *
+ * 为什么需要: 规则优先级是可配的 (基线), 但**同一规则内部的严重度差异**也该体现 ——
+ *   例: 「生日关怀」平时 medium, 但**生日当天**该升到 high;
+ *      「按建议回访」平时 medium, 但**已过期**该升到 high。
+ *   config 管基线, escalate 管严重度, 两者叠加。
+ */
+function escalate(p: ActionPriority): ActionPriority {
+  return LADDER[Math.min(LADDER.length - 1, LADDER.indexOf(p) + 1)];
+}
 
 // ============================================
 // 工具
@@ -142,7 +166,19 @@ function whenLabel(daysFromNow: number): string {
 // 规则
 // ============================================
 
-export function buildActionItems(input: ActionInput): ActionItem[] {
+/**
+ * 规则引擎入口。
+ *
+ * @param config 可调阈值 + 各规则优先级 (默认 = DEFAULT_INSIGHT_CONFIG.actions)。
+ *   传进来的东西会被 `resolveInsightConfig` 夹区间 (配置可能来自 DB/UI, 不受信)。
+ */
+export function buildActionItems(
+  input: ActionInput,
+  config?: unknown,
+): ActionItem[] {
+  const cfg = resolveInsightConfig(config).actions;
+  const T = cfg; // 阈值别名 (短一点, 下面规则好读)
+  const P = cfg.priorities; // 优先级别名
   const { now, analysis: a, score } = input;
   const out: ActionItem[] = [];
 
@@ -150,12 +186,12 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
   //   放在最前面: 她刚建档还没进过任何节奏, 其他规则的条件全是 null, 一条都不触发。
   if (
     a.contactTotal === 0 &&
-    daysBetween(input.customerCreatedAt, now) >= ACTION_THRESHOLDS.NEVER_CONTACTED_GRACE_DAYS &&
+    daysBetween(input.customerCreatedAt, now) >= T.neverContactedGraceDays &&
     !input.hasPendingTask
   ) {
     out.push({
       id: "never_contacted",
-      priority: "high",
+      priority: P.never_contacted,
       title: "首次联系破冰",
       why: `建档 ${daysBetween(input.customerCreatedAt, now)} 天了, 一次都还没联系过`,
       evidence: {
@@ -178,17 +214,17 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
     const byRhythm =
       hasRhythm &&
       d !== null &&
-      d > (interval as number) * ACTION_THRESHOLDS.REPURCHASE_OVERDUE_FACTOR;
+      d > (interval as number) * T.repurchaseOverdueFactor;
     const byAbsolute =
-      !hasRhythm && d !== null && d >= ACTION_THRESHOLDS.REPURCHASE_ABSOLUTE_OVERDUE_DAYS;
+      !hasRhythm && d !== null && d >= T.repurchaseAbsoluteOverdueDays;
     if (byRhythm || byAbsolute) {
       const overdue = hasRhythm
         ? (d as number) -
-          Math.round((interval as number) * ACTION_THRESHOLDS.REPURCHASE_OVERDUE_FACTOR)
-        : (d as number) - ACTION_THRESHOLDS.REPURCHASE_ABSOLUTE_OVERDUE_DAYS;
+          Math.round((interval as number) * T.repurchaseOverdueFactor)
+        : (d as number) - T.repurchaseAbsoluteOverdueDays;
       out.push({
         id: "repurchase_window",
-        priority: "high",
+        priority: P.repurchase_window,
         title: "约下次到店",
         why: hasRhythm
           ? `她的复购间隔通常 ${Math.round(interval as number)} 天, 已经 ${d} 天没到店`
@@ -211,7 +247,7 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
   if (a.overdueTasks > 0) {
     out.push({
       id: "task_overdue",
-      priority: "high",
+      priority: P.task_overdue,
       title: "补上逾期跟进",
       why: `有 ${a.overdueTasks} 个跟进任务逾期${
         a.oldestOverdueDays !== null ? `, 最久 ${a.oldestOverdueDays} 天` : ""
@@ -236,16 +272,16 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
     const byRhythm =
       hasRhythm &&
       d !== null &&
-      d > (interval as number) * ACTION_THRESHOLDS.CONTACT_GAP_FACTOR;
+      d > (interval as number) * T.contactGapFactor;
     const byAbsolute =
       !hasRhythm &&
       a.contactTotal > 0 &&
       d !== null &&
-      d >= ACTION_THRESHOLDS.CONTACT_ABSOLUTE_GAP_DAYS;
+      d >= T.contactAbsoluteGapDays;
     if (byRhythm || byAbsolute) {
       out.push({
         id: "contact_gap",
-        priority: byAbsolute ? "high" : "medium",
+        priority: byAbsolute ? escalate(P.contact_gap) : P.contact_gap,
         title: "主动联系一下",
         why: hasRhythm
           ? `平时约 ${Math.round(interval as number)} 天联系一次, 这次已经 ${d} 天`
@@ -267,7 +303,7 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
   if (input.lastRecordNoImprovement === true) {
     out.push({
       id: "no_improvement",
-      priority: "high",
+      priority: P.no_improvement,
       title: "复核服务方案",
       why: "上次做完后疼痛/睡眠没有改善, 建议找店长或资深技师复核方案",
       evidence: {
@@ -286,12 +322,12 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
   if (input.daysUntilBirthday !== null && input.birthdayRemindDays !== null) {
     const window = Math.max(
       0,
-      Math.min(ACTION_THRESHOLDS.BIRTHDAY_WINDOW_DAYS, input.birthdayRemindDays)
+      Math.min(T.birthdayWindowDays, input.birthdayRemindDays)
     );
     if (input.daysUntilBirthday >= 0 && input.daysUntilBirthday <= window) {
       out.push({
         id: "birthday_window",
-        priority: input.daysUntilBirthday <= 1 ? "high" : "medium",
+        priority: input.daysUntilBirthday <= 1 ? escalate(P.birthday_window) : P.birthday_window,
         title: input.daysUntilBirthday === 0 ? "今天生日, 发祝福" : "准备生日关怀",
         why:
           input.daysUntilBirthday === 0
@@ -311,12 +347,12 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
   if (
     a.visitCount === 1 &&
     a.daysSinceLastVisit !== null &&
-    a.daysSinceLastVisit >= ACTION_THRESHOLDS.FIRST_VISIT_FOLLOWUP_DAYS &&
+    a.daysSinceLastVisit >= T.firstVisitFollowupDays &&
     !input.hasPendingTask
   ) {
     out.push({
       id: "first_visit_followup",
-      priority: "medium",
+      priority: P.first_visit_followup,
       title: "首次效果回访",
       why: `首次到店已 ${a.daysSinceLastVisit} 天, 还没回访过效果`,
       evidence: {
@@ -334,10 +370,10 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
   // ── 规则 7: 技师建议的回访日期已到 ──
   if (input.nextAdviceDate !== null) {
     const dueIn = daysBetween(now, input.nextAdviceDate);
-    if (dueIn <= ACTION_THRESHOLDS.ADVICE_LEAD_DAYS) {
+    if (dueIn <= T.adviceLeadDays) {
       out.push({
         id: "advice_due",
-        priority: dueIn < 0 ? "high" : "medium",
+        priority: dueIn < 0 ? escalate(P.advice_due) : P.advice_due,
         title: "按上次建议回访",
         why:
           dueIn < 0
@@ -357,7 +393,7 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
   if (!input.hasOwner) {
     out.push({
       id: "profile_incomplete",
-      priority: "low",
+      priority: P.profile_incomplete,
       title: "认领为我的客户",
       why: "这个客户还没有归属人, 不认领的话不在任何人的客户列表里",
       evidence: { hasOwner: "否" },

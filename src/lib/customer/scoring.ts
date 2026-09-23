@@ -45,8 +45,21 @@ import {
   buildFollowUpAnalysis,
   type FollowUpAnalysis,
 } from "@/lib/follow-up/analysis";
+import {
+  DEFAULT_RESOLVED_CONFIG,
+  resolveInsightConfig,
+  type EffectConfig,
+  type EngagementConfig,
+  type InsightConfig,
+  type PunctualityConfig,
+  type ScoreBandConfig,
+  type ValueConfig,
+} from "@/lib/customer/insight-config";
 
-/** 算法版本 —— 改算法必须 +1, 让老分数可对比 (档案化的意义) */
+/**
+ * 算法版本 —— 改**算法逻辑**必须 +1 (改参数不用, 参数有 config.version)。
+ * 分数上带 `scoringVersion` + `configVersion`, 两者一起才能说明"这个分数是怎么来的"。
+ */
 export const SCORING_VERSION = "v1";
 
 // ============================================
@@ -55,25 +68,28 @@ export const SCORING_VERSION = "v1";
 
 export type ScoreBand = "excellent" | "good" | "fair" | "poor";
 
-/** 分档表 (区间下界, 高→低; 同 URGENCY_LEVELS 的写法) */
-export const SCORE_BANDS: ReadonlyArray<{
-  band: ScoreBand;
-  min: number;
-  label: string;
-}> = [
-  { band: "excellent", min: 80, label: "优秀" },
-  { band: "good", min: 60, label: "良好" },
-  { band: "fair", min: 40, label: "一般" },
-  { band: "poor", min: 0, label: "需关注" },
-];
+/**
+ * 默认分档表 (等价于 DEFAULT_INSIGHT_CONFIG.scoring.bands)。
+ * @deprecated 新代码请用 `bandOf(score, config.scoring.bands)` —— 分档是可调的。
+ *   保留此导出只为向后兼容 + 测试可读性。
+ */
+export const SCORE_BANDS: ReadonlyArray<ScoreBandConfig> =
+  DEFAULT_RESOLVED_CONFIG.scoring.bands;
 
-export function bandOf(score: number): ScoreBand {
-  return SCORE_BANDS.find((b) => score >= b.min)?.band ?? "poor";
+/** 分档: 传 bands 才用配置 (默认用默认配置) */
+export function bandOf(
+  score: number,
+  bands: ReadonlyArray<ScoreBandConfig> = SCORE_BANDS,
+): ScoreBand {
+  return bands.find((b) => score >= b.min)?.band ?? "poor";
 }
 
-export function bandLabel(score: number | null): string {
+export function bandLabel(
+  score: number | null,
+  bands: ReadonlyArray<ScoreBandConfig> = SCORE_BANDS,
+): string {
   if (score === null) return "待评估";
-  return SCORE_BANDS.find((b) => score >= b.min)?.label ?? "需关注";
+  return bands.find((b) => score >= b.min)?.label ?? "需关注";
 }
 
 /** 一个可解释因子: 销售点开能看到"这项为什么是这个分" */
@@ -108,7 +124,10 @@ export interface CustomerScore {
   value: DimensionScore;
   /** 短板维度 key (score < 60 的, 升序) —— 行动指引用它选"先补哪个" */
   weakDimensions: string[];
+  /** 算法版本 (改逻辑时 +1) */
   scoringVersion: string;
+  /** 参数版本 (改阈值/权重时 +1) —— 与 scoringVersion 分工不同 */
+  configVersion: string;
   computedAt: string;
 }
 
@@ -179,25 +198,31 @@ function num(v: unknown): number | null {
  * 缺哪项就把哪项的权重剔掉再归一化 —— 所以"只记了疼痛"也能算, 不会被当成 0。
  * 一项都没有 → null (这条记录对健康分无贡献, 不拉低也不拉高)。
  */
-export function singleImprovement(r: WellnessSnapshot): number | null {
+export function singleImprovement(
+  r: WellnessSnapshot,
+  cfg: EffectConfig = DEFAULT_RESOLVED_CONFIG.scoring.effect,
+): number | null {
   const parts: Array<{ v: number; w: number }> = [];
+  const W = cfg.metricWeights;
 
   const prePain = num(r.pre.pain_level);
   const postPain = num(r.post.pain_level);
   if (prePain !== null && postPain !== null) {
-    parts.push({ v: (prePain - postPain) / 10, w: 0.5 });
+    // 疼痛量程 0-10 → 除以 10 归一化到 [-1,1]
+    parts.push({ v: (prePain - postPain) / 10, w: W.pain });
   }
 
   const preSleep = num(r.pre.sleep_quality);
   const postSleep = num(r.post.sleep_quality);
   if (preSleep !== null && postSleep !== null) {
-    parts.push({ v: (postSleep - preSleep) / 4, w: 0.3 });
+    // 睡眠/情绪量程 1-5 → 跨度 4
+    parts.push({ v: (postSleep - preSleep) / 4, w: W.sleep });
   }
 
   const preMood = num(r.pre.mood);
   const postMood = num(r.post.mood);
   if (preMood !== null && postMood !== null) {
-    parts.push({ v: (postMood - preMood) / 4, w: 0.2 });
+    parts.push({ v: (postMood - preMood) / 4, w: W.mood });
   }
 
   if (parts.length === 0) return null;
@@ -205,22 +230,31 @@ export function singleImprovement(r: WellnessSnapshot): number | null {
   return clamp(parts.reduce((s, p) => s + p.v * p.w, 0) / totalW, -1, 1);
 }
 
-/** 改善值 (-1..1) → 0-100 分。0 变化 = 50 分 (中性), +1 = 100, -1 = 0 */
-function improvementToScore(v: number): number {
-  return clamp(50 + v * 50, 0, 100);
+/**
+ * 改善值 (-1..1) → 0-100 分。
+ * 默认: 0 变化 = 50 分 (中性), +1 = 100, -1 = 0
+ * (neutral / span 都可配 —— 若某业务希望"没变化"就是不及格, 把 neutral 调低即可)
+ */
+function improvementToScore(
+  v: number,
+  scale: EffectConfig["scale"] = DEFAULT_RESOLVED_CONFIG.scoring.effect.scale,
+): number {
+  return clamp(scale.neutral + v * scale.span, 0, 100);
 }
 
 // ============================================
 // 维度 1 · 健康改善分
 // ============================================
 
-const EFFECT_RECENT_N = 5;
-
-function scoreEffect(records: WellnessSnapshot[]): DimensionScore {
+function scoreEffect(
+  records: WellnessSnapshot[],
+  cfg: EffectConfig = DEFAULT_RESOLVED_CONFIG.scoring.effect,
+  bands: ReadonlyArray<ScoreBandConfig> = SCORE_BANDS,
+): DimensionScore {
   const label = "健康改善";
   const withImprovement = [...records]
     .sort((a, b) => b.serviceDate.getTime() - a.serviceDate.getTime()) // 新→旧
-    .map((r) => ({ r, v: singleImprovement(r) }))
+    .map((r) => ({ r, v: singleImprovement(r, cfg) }))
     .filter((x): x is { r: WellnessSnapshot; v: number } => x.v !== null);
 
   if (withImprovement.length === 0) {
@@ -229,7 +263,7 @@ function scoreEffect(records: WellnessSnapshot[]): DimensionScore {
       label,
       score: null,
       band: null,
-      bandLabel: bandLabel(null),
+      bandLabel: bandLabel(null, bands),
       factors: [],
       missingReason: "还没有带评分 (疼痛/睡眠/情绪) 的养生记录",
     };
@@ -237,14 +271,14 @@ function scoreEffect(records: WellnessSnapshot[]): DimensionScore {
 
   const factors: ScoreFactor[] = [];
 
-  // 因子 1: 最近一次改善 (满分 40)
+  // 因子 1: 最近一次改善
   const latest = withImprovement[0];
-  const latestScore = improvementToScore(latest.v);
+  const latestScore = improvementToScore(latest.v, cfg.scale);
   factors.push({
     key: "latest",
     label: "最近一次改善",
-    score: round1((latestScore / 100) * 40),
-    max: 40,
+    score: round1((latestScore / 100) * cfg.factorMax.latest),
+    max: cfg.factorMax.latest,
     detail:
       latest.v > 0.02
         ? `上次做完有改善 (+${Math.round(latest.v * 100)}%)`
@@ -253,15 +287,15 @@ function scoreEffect(records: WellnessSnapshot[]): DimensionScore {
           : "上次做完几乎没变化",
   });
 
-  // 因子 2: 近 N 次平均改善 (满分 40)
-  const recent = withImprovement.slice(0, EFFECT_RECENT_N);
+  // 因子 2: 近 N 次平均改善
+  const recent = withImprovement.slice(0, cfg.recentN);
   const avg = recent.reduce((s, x) => s + x.v, 0) / recent.length;
-  const avgScore = improvementToScore(avg);
+  const avgScore = improvementToScore(avg, cfg.scale);
   factors.push({
     key: "recent_avg",
     label: `近 ${recent.length} 次平均`,
-    score: round1((avgScore / 100) * 40),
-    max: 40,
+    score: round1((avgScore / 100) * cfg.factorMax.recentAvg),
+    max: cfg.factorMax.recentAvg,
     detail:
       avg > 0.02
         ? `平均改善 +${Math.round(avg * 100)}%`
@@ -270,20 +304,31 @@ function scoreEffect(records: WellnessSnapshot[]): DimensionScore {
           : "平均基本持平",
   });
 
-  // 因子 3: 改善趋势 (满分 20) —— 最近 2 次 vs 更早 (需 ≥3 条才有"更早")
+  // 因子 3: 改善趋势 —— 最近 headN 次 vs 更早 tailN 次
+  //   ⚠ 门槛 = headN + 1 (尾部至少要有 1 条), 不是 headN + tailN ——
+  //     否则只有 3 条记录时永远出不了趋势因子 (与变量化之前的行为不一致)。
+  //     tailN 是**上限** (最多看几条), 不是**必需条数**。
+  const needForTrend = cfg.trend.headN + 1;
+  const tailEnd = cfg.trend.headN + cfg.trend.tailN;
   let trendFactor: ScoreFactor | null = null;
-  if (withImprovement.length >= 3) {
-    const head = withImprovement.slice(0, 2).reduce((s, x) => s + x.v, 0) / 2;
-    const tailArr = withImprovement.slice(2, EFFECT_RECENT_N);
+  if (withImprovement.length >= needForTrend) {
+    const head =
+      withImprovement.slice(0, cfg.trend.headN).reduce((s, x) => s + x.v, 0) /
+      cfg.trend.headN;
+    const tailArr = withImprovement.slice(cfg.trend.headN, tailEnd);
     const tail = tailArr.reduce((s, x) => s + x.v, 0) / tailArr.length;
     const delta = head - tail; // 正 = 在变好
-    // delta +0.3 → 满分; -0.3 → 0
-    const tScore = clamp(50 + (delta / 0.3) * 50, 0, 100);
+    // delta 达 fullDelta → 满分; 反向同幅 → 0
+    const tScore = clamp(
+      cfg.scale.neutral + (delta / cfg.trend.fullDelta) * cfg.scale.span,
+      0,
+      100,
+    );
     trendFactor = {
       key: "trend",
       label: "改善趋势",
-      score: round1((tScore / 100) * 20),
-      max: 20,
+      score: round1((tScore / 100) * cfg.factorMax.trend),
+      max: cfg.factorMax.trend,
       detail:
         delta > 0.05
           ? "效果在变好"
@@ -293,7 +338,7 @@ function scoreEffect(records: WellnessSnapshot[]): DimensionScore {
     };
     factors.push(trendFactor);
   }
-  // 不足 3 条时把趋势的 20 分让给前两项 (按比例放大), 避免"样本少就低分"
+  // 出现趋势因子时按实际 factorMax 总和归一化 → 样本少不硬扣分
   const factorMax = factors.reduce((s, f) => s + f.max, 0);
   const raw = factors.reduce((s, f) => s + f.score, 0);
   const score = clamp((raw / factorMax) * 100, 0, 100);
@@ -302,40 +347,58 @@ function scoreEffect(records: WellnessSnapshot[]): DimensionScore {
     key: "effect",
     label,
     score: round1(score),
-    band: bandOf(score),
-    bandLabel: bandLabel(score),
+    band: bandOf(score, bands),
+    bandLabel: bandLabel(score, bands),
     factors,
     missingReason: null,
   };
 }
 
 // ============================================
-// 维度 2 · 关系温度分 (4 因子 × 25)
+// 维度 2 · 关系温度分
 // ============================================
 
-/** 时间比 → 得分: ratio ≤ 1.0 满分; ≥ 2.5 零分; 中间线性 */
-function punctualityScore(ratio: number, max: number): number {
-  return clamp(((2.5 - ratio) / 1.5) * max, 0, max);
+/**
+ * 时间比 → 得分; 中间线性。
+ * ratio ≤ fullRatio 满分; ratio ≥ zeroRatio 零分 (都来自 config)
+ */
+function punctualityScore(
+  ratio: number,
+  max: number,
+  cfg: PunctualityConfig = DEFAULT_RESOLVED_CONFIG.scoring.engagement.punctuality,
+): number {
+  const span = cfg.zeroRatio - cfg.fullRatio;
+  if (span <= 0) return ratio <= cfg.fullRatio ? max : 0;
+  return clamp(((cfg.zeroRatio - ratio) / span) * max, 0, max);
 }
 
 /**
- * 「还没有固定节奏」时的默认节律 (天)。
+ * 「还没有固定节奏」时的替身算法。
  *
- * 冒烟发现: demo 数据 6 次互动**全在同一天造** → 中位间隔 = 0 → 走"没节奏"分支
- *   → 无论过多久都是固定的 15/25 分 ("91 天没联系" 听起来却像还行)。
- * 修法: 没节奏时按 30 天(行业合理复访/回访周期)当分母套**同一个公式**,
- *   但结果**封顶 60%** —— 没有真实节奏就拿不到高分, 同时"多久没联系"仍然惩罚。
+ * 冒烟发现的真 BUG: demo 数据 6 次互动**全在同一天造** → 中位间隔 = 0
+ *   → 走"没节奏"分支 → 原先给**固定 15/25 分**, "91 天没联系"听起来却像还行。
+ * 修法: 没节奏时按 `cadenceDays` (行业合理复访/回访周期) 当分母套**同一个公式**,
+ *   但结果**封顶 capRatio** —— 没有真实节奏就拿不到高分, 同时"多久没联系"仍然惩罚。
  */
-const DEFAULT_CADENCE_DAYS = 30;
-const NO_RHYTHM_CAP_RATIO = 0.6;
-
-function punctualityScoreNoRhythm(daysSince: number, max: number): number {
-  const ratio = daysSince / DEFAULT_CADENCE_DAYS;
-  return Math.min(punctualityScore(ratio, max), max * NO_RHYTHM_CAP_RATIO);
+function punctualityScoreNoRhythm(
+  daysSince: number,
+  max: number,
+  cfg: EngagementConfig = DEFAULT_RESOLVED_CONFIG.scoring.engagement,
+): number {
+  const ratio = daysSince / cfg.noRhythm.cadenceDays;
+  return Math.min(
+    punctualityScore(ratio, max, cfg.punctuality),
+    max * cfg.noRhythm.capRatio,
+  );
 }
 
-function scoreEngagement(input: ScoringInput, max: number): DimensionScore {
+function scoreEngagement(
+  input: ScoringInput,
+  cfg: EngagementConfig = DEFAULT_RESOLVED_CONFIG.scoring.engagement,
+  bands: ReadonlyArray<ScoreBandConfig> = SCORE_BANDS,
+): DimensionScore {
   const label = "关系温度";
+  const max = cfg.factorMax;
   const a = input.analysis;
   const factors: ScoreFactor[] = [];
 
@@ -353,13 +416,13 @@ function scoreEngagement(input: ScoringInput, max: number): DimensionScore {
       });
     } else if (interval === null || interval <= 0) {
       // 还没形成节奏 (只联系过 1 次, 或多条互动挤在同一天) → 按默认节律算但封顶 60%
-      const s = punctualityScoreNoRhythm(d, max);
+      const s = punctualityScoreNoRhythm(d, max, cfg);
       factors.push({
         key: "contact_punctual",
         label: "联系准时度",
         score: round1(s),
         max,
-        detail: `${d} 天前联系过 (还没有固定节奏, 暂按 ${DEFAULT_CADENCE_DAYS} 天节律评估)`,
+        detail: `${d} 天前联系过 (还没有固定节奏, 暂按 ${cfg.noRhythm.cadenceDays} 天节律评估)`,
       });
     } else {
       const ratio = d / interval;
@@ -387,13 +450,13 @@ function scoreEngagement(input: ScoringInput, max: number): DimensionScore {
         detail: "从没到店记录",
       });
     } else if (interval === null || interval <= 0) {
-      const s = punctualityScoreNoRhythm(d, max);
+      const s = punctualityScoreNoRhythm(d, max, cfg);
       factors.push({
         key: "visit_punctual",
         label: "到店规律",
         score: round1(s),
         max,
-        detail: `${d} 天前到过店 (还没有复购节奏, 暂按 ${DEFAULT_CADENCE_DAYS} 天节律评估)`,
+        detail: `${d} 天前到过店 (还没有复购节奏, 暂按 ${cfg.noRhythm.cadenceDays} 天节律评估)`,
       });
     } else {
       const ratio = d / interval;
@@ -466,8 +529,8 @@ function scoreEngagement(input: ScoringInput, max: number): DimensionScore {
     key: "engagement",
     label,
     score: round1(score),
-    band: bandOf(score),
-    bandLabel: bandLabel(score),
+    band: bandOf(score, bands),
+    bandLabel: bandLabel(score, bands),
     factors,
     missingReason: null,
   };
@@ -484,51 +547,58 @@ function scoreEngagement(input: ScoringInput, max: number): DimensionScore {
  * 这不是"价值低", 是**还没法判断** —— 关系时长因子在 12 个月才满分,
  * 1 个月的客户天生拿 2.5/30。把"时间不够"当成"价值低"会误导销售。
  */
-export const VALUE_MIN_TENURE_DAYS = 30;
+/** @deprecated 用 `config.scoring.value.minTenureDays` */
+export const VALUE_MIN_TENURE_DAYS =
+  DEFAULT_RESOLVED_CONFIG.scoring.value.minTenureDays;
 
-function scoreValue(input: ScoringInput): DimensionScore {
+function scoreValue(
+  input: ScoringInput,
+  cfg: ValueConfig = DEFAULT_RESOLVED_CONFIG.scoring.value,
+  bands: ReadonlyArray<ScoreBandConfig> = SCORE_BANDS,
+): DimensionScore {
   const label = "价值潜力";
   const factors: ScoreFactor[] = [];
   const a = input.analysis;
 
   // 关系太短 → 数据不足, 不判 (返回 null 而不是低分)
   const tenureDays = daysBetween(input.relationshipStartAt, input.now);
-  if (tenureDays < VALUE_MIN_TENURE_DAYS) {
+  if (tenureDays < cfg.minTenureDays) {
     return {
       key: "value",
       label,
       score: null,
       band: null,
-      bandLabel: bandLabel(null),
+      bandLabel: bandLabel(null, bands),
       factors: [],
-      missingReason: `认识才 ${tenureDays} 天, 还看不出价值潜力 (需 ≥ ${VALUE_MIN_TENURE_DAYS} 天)`,
+      missingReason: `认识才 ${tenureDays} 天, 还看不出价值潜力 (需 ≥ ${cfg.minTenureDays} 天)`,
     };
   }
 
-  // 因子 1: 到店密度 (40) —— 近 180 天月均次数, 月均 ≥2 满分
+  // 因子 1: 到店密度 —— 近 windowDays 天月均次数, 达 fullMonthly 满分
   {
-    const since = new Date(input.now.getTime() - 180 * 86_400_000);
+    const vd = cfg.visitDensity;
+    const since = new Date(input.now.getTime() - vd.windowDays * 86_400_000);
     const n = input.records.filter((r) => r.serviceDate >= since).length;
-    const monthly = n / 6;
-    const s = clamp((monthly / 2) * 40, 0, 40);
+    const monthly = n / vd.monthsInWindow;
+    const s = clamp((monthly / vd.fullMonthly) * vd.max, 0, vd.max);
     factors.push({
       key: "visit_density",
       label: "到店密度",
       score: round1(s),
-      max: 40,
-      detail: `近半年到店 ${n} 次 (月均 ${round1(monthly)} 次)`,
+      max: vd.max,
+      detail: `近 ${vd.monthsInWindow} 个月到店 ${n} 次 (月均 ${round1(monthly)} 次)`,
     });
   }
 
-  // 因子 2: 关系时长 (30) —— 建档至今, ≥12 个月满分
+  // 因子 2: 关系时长 —— 达 fullMonths 满分
   {
     const months = Math.max(0, daysBetween(input.relationshipStartAt, input.now) / 30);
-    const s = clamp((months / 12) * 30, 0, 30);
+    const s = clamp((months / cfg.tenure.fullMonths) * cfg.tenure.max, 0, cfg.tenure.max);
     factors.push({
       key: "tenure",
       label: "关系时长",
       score: round1(s),
-      max: 30,
+      max: cfg.tenure.max,
       detail:
         months < 1
           ? "刚认识不久"
@@ -536,19 +606,19 @@ function scoreValue(input: ScoringInput): DimensionScore {
     });
   }
 
-  // 因子 3: 互动广度 (30) —— 渠道种类数 (电话 / 微信 / 到店), 每种 10
+  // 因子 3: 互动广度 —— 渠道**种类**数 (电话 / 微信 / 到店), 每种 perChannel 分
   {
     const channels = new Set(
       input.interactions
         .map((i) => (i.type === "holiday_greeting" ? "wechat" : i.type))
         .filter((t) => t === "phone" || t === "wechat" || t === "visit")
     );
-    const s = clamp(channels.size * 10, 0, 30);
+    const s = clamp(channels.size * cfg.breadth.perChannel, 0, cfg.breadth.max);
     factors.push({
       key: "breadth",
       label: "互动广度",
       score: round1(s),
-      max: 30,
+      max: cfg.breadth.max,
       detail:
         channels.size === 0
           ? "还没有任何互动"
@@ -567,8 +637,8 @@ function scoreValue(input: ScoringInput): DimensionScore {
     key: "value",
     label,
     score: round1(score),
-    band: bandOf(score),
-    bandLabel: bandLabel(score),
+    band: bandOf(score, bands),
+    bandLabel: bandLabel(score, bands),
     factors,
     missingReason: null,
   };
@@ -578,20 +648,38 @@ function scoreValue(input: ScoringInput): DimensionScore {
 // 综合
 // ============================================
 
-/** 权重: 关系温度最重 (它最直接决定"该不该投入") */
-const WEIGHTS: Record<"effect" | "engagement" | "value", number> = {
-  effect: 0.3,
-  engagement: 0.4,
-  value: 0.3,
-};
+/**
+ * 默认综合权重: 关系温度最重 (它最直接决定"该不该投入")。
+ * @deprecated 用 `config.scoring.weights` —— 权重可调。
+ */
+export const WEIGHTS: Record<"effect" | "engagement" | "value", number> =
+  DEFAULT_RESOLVED_CONFIG.scoring.weights;
 
-/** 短板阈值: < 60 视为拖后腿 */
-export const WEAK_DIMENSION_THRESHOLD = 60;
+/**
+ * 默认短板阈值: 维度分 < 此值 → 进 weakDimensions。
+ * @deprecated 用 `config.scoring.weakDimensionThreshold`
+ */
+export const WEAK_DIMENSION_THRESHOLD =
+  DEFAULT_RESOLVED_CONFIG.scoring.weakDimensionThreshold;
 
-export function buildCustomerScore(input: ScoringInput): CustomerScore {
-  const effect = scoreEffect(input.records);
-  const engagement = scoreEngagement(input, 25);
-  const value = scoreValue(input);
+/**
+ * 组装三维评分。
+ *
+ * @param config 可调参数 (阈值/权重/分档…)。默认 = DEFAULT_INSIGHT_CONFIG。
+ *   将来 admin 页面的覆盖值也从这个口子进 (loadCustomerInsight 会传)。
+ *   传进来的东西**会被 resolveInsightConfig 夹区间** (不受信输入)。
+ */
+export function buildCustomerScore(
+  input: ScoringInput,
+  config?: unknown,
+): CustomerScore {
+  const cfg = resolveInsightConfig(config);
+  const sc = cfg.scoring;
+  const WEIGHTS = sc.weights;
+
+  const effect = scoreEffect(input.records, sc.effect, sc.bands);
+  const engagement = scoreEngagement(input, sc.engagement, sc.bands);
+  const value = scoreValue(input, sc.value, sc.bands);
 
   const dims = [effect, engagement, value];
 
@@ -609,20 +697,22 @@ export function buildCustomerScore(input: ScoringInput): CustomerScore {
   const weakDimensions = dims
     .filter(
       (d): d is DimensionScore & { score: number } =>
-        d.score !== null && d.score < WEAK_DIMENSION_THRESHOLD
+        d.score !== null && d.score < sc.weakDimensionThreshold
     )
     .sort((a, b) => a.score - b.score)
     .map((d) => d.key);
 
   return {
     overall,
-    overallBand: overall === null ? null : bandOf(overall),
-    overallBandLabel: bandLabel(overall),
+    overallBand: overall === null ? null : bandOf(overall, sc.bands),
+    overallBandLabel: bandLabel(overall, sc.bands),
     effect,
     engagement,
     value,
     weakDimensions,
     scoringVersion: SCORING_VERSION,
+    /** 参数配置版本 —— 分数 + 配置 + 算法三者一起才说明"这分怎么来的" */
+    configVersion: sc.version,
     computedAt: input.now.toISOString(),
   };
 }
@@ -650,7 +740,8 @@ export interface CustomerScoringSnapshot {
 
 export async function loadCustomerScoringSnapshot(
   customerId: bigint,
-  now: Date = new Date()
+  now: Date = new Date(),
+  config?: unknown
 ): Promise<CustomerScoringSnapshot | null> {
   const [cust] = await db
     .select({
@@ -721,7 +812,7 @@ export async function loadCustomerScoringSnapshot(
       createdAt: r.createdAt,
     })),
     completedTaskCount,
-  });
+  }, config);
 
   return {
     score,
@@ -735,9 +826,10 @@ export async function loadCustomerScoringSnapshot(
 /** 只要分数的便捷入口 */
 export async function loadCustomerScore(
   customerId: bigint,
-  now: Date = new Date()
+  now: Date = new Date(),
+  config?: unknown
 ): Promise<CustomerScore | null> {
-  const snap = await loadCustomerScoringSnapshot(customerId, now);
+  const snap = await loadCustomerScoringSnapshot(customerId, now, config);
   return snap?.score ?? null;
 }
 
