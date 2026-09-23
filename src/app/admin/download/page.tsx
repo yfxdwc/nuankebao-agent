@@ -63,10 +63,10 @@ export default async function DownloadPage() {
                   <br />
                   {sizeMB} MB · 构建时间: {meta.mtimeLocal} (本地)
                   <br />
-                  md5: <code className="text-[10px]">{meta.md5}</code>
+                  md5: <code className="text-xxs">{meta.md5}</code>
                 </p>
               ) : (
-                <p className="text-xs text-red-500">
+                <p className="text-xs text-danger">
                   ⚠ APK 文件未找到。在 flutter_app 里跑{" "}
                   <code>flutter build apk --release</code> 后刷新本页即可。
                 </p>

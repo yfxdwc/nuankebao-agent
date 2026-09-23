@@ -22,28 +22,28 @@ const SCENARIOS: ScenarioMeta[] = [
     label: "客户画像",
     desc: "健康趋势 / 偏好 / 风险标签",
     icon: User,
-    tone: "from-blue-500/10 to-blue-500/5 text-blue-700 border-blue-200",
+    tone: "from-info/10 to-info/5 text-info border-info-light",
   },
   {
     value: "followup",
     label: "跟进话术",
     desc: "基于距上次到店 + 性格生成",
     icon: MessageCircle,
-    tone: "from-emerald-500/10 to-emerald-500/5 text-emerald-700 border-emerald-200",
+    tone: "from-success/10 to-success/5 text-success border-success-light",
   },
   {
     value: "repurchase",
     label: "复购预测",
     desc: "客户流失风险 + 复购概率",
     icon: TrendingDown,
-    tone: "from-rose-500/10 to-rose-500/5 text-rose-700 border-rose-200",
+    tone: "from-danger/10 to-danger/5 text-danger border-danger-light",
   },
   {
     value: "effect",
     label: "效果分析",
     desc: "近 N 次理疗效果趋势",
     icon: BarChart3,
-    tone: "from-amber-500/10 to-amber-500/5 text-amber-700 border-amber-200",
+    tone: "from-warning/10 to-warning/5 text-warning border-warning-light",
   },
 ];
 
@@ -125,7 +125,7 @@ export function AIAssistantPanel({ customerId }: AIAssistantPanelProps) {
               onClick={() => pickScenario(s.value)}
               className={cn(
                 "text-left p-2.5 md:p-3 rounded-lg border transition-all",
-                "active:scale-[0.98] min-h-[68px] md:min-h-0",
+                "active:scale-[0.98] min-h-field-lg md:min-h-0",
                 isActive
                   ? `bg-gradient-to-br ${s.tone} ring-2 ring-primary/30 shadow-sm`
                   : "bg-card border-border hover:bg-muted/50"
@@ -149,7 +149,7 @@ export function AIAssistantPanel({ customerId }: AIAssistantPanelProps) {
                   >
                     {s.label}
                   </p>
-                  <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
+                  <p className="text-xxs md:text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
                     {s.desc}
                   </p>
                 </div>
@@ -222,10 +222,10 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {data.aiMock && (
-            <Badge className="bg-yellow-100 text-yellow-800 text-[10px]">Mock 模式</Badge>
+            <Badge className="bg-warning-surface text-warning text-xxs">Mock 模式</Badge>
           )}
           {data.recentRecords?.length > 0 && (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-xxs">
               基于 {data.recentRecords.length} 条记录
             </Badge>
           )}
@@ -242,12 +242,12 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {data.daysSinceLastVisit !== null && (
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="secondary" className="text-xxs">
               距上次 {data.daysSinceLastVisit} 天
             </Badge>
           )}
           {data.avgInterval !== null && (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-xxs">
               平均 {data.avgInterval} 天复购
             </Badge>
           )}
@@ -273,10 +273,10 @@ function ScenarioResult({ scenario, data }: { scenario: Scenario; data: any }) {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {data.aiMock && (
-            <Badge className="bg-yellow-100 text-yellow-800 text-[10px]">Mock 模式</Badge>
+            <Badge className="bg-warning-surface text-warning text-xxs">Mock 模式</Badge>
           )}
           {data.probability !== undefined && (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-xxs">
               复购概率 {Math.round((data.probability ?? 0) * 100)}%
             </Badge>
           )}

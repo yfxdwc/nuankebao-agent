@@ -158,6 +158,7 @@ abstract final class AppRadius {
 
 /// L1 尺度 —— 字号 (中老年: 正文 18 起步, Material 默认是 14)
 abstract final class AppType {
+  static const double xxs = 10.0;
   static const double xs = 14.0;
   static const double sm = 16.0;
   static const double md = 18.0;
@@ -180,8 +181,14 @@ abstract final class AppSize {
   static const double iconMd = 24.0;
   static const double iconLg = 28.0;
   static const double iconXl = 32.0;
+  static const double controlSm = 36.0;
+  static const double controlMd = 40.0;
+  static const double controlLg = 52.0;
+  static const double tapCompact = 44.0;
+  static const double tapMin = 48.0;
   static const double buttonMinHeight = 56.0;
   static const double buttonLgHeight = 64.0;
+  static const double fieldLg = 68.0;
   static const double fabSize = 80.0;
   static const double listRowHeight = 80.0;
   static const double avatarSm = 40.0;
@@ -190,7 +197,10 @@ abstract final class AppSize {
   static const double appBarHeight = 64.0;
   static const double borderHairline = 1.0;
   static const double borderThick = 2.0;
-  static const double tapMin = 48.0;
+  static const double badgeMinWidth = 18.0;
+  static const double badgeMinWidthLg = 20.0;
+  static const double textareaMinHeight = 80.0;
+  static const double tableMinWidth = 760.0;
   static const double contentMaxWidth = 720.0;
 }
 

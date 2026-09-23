@@ -55,7 +55,7 @@ export default async function AIPage({
                   key={c.id.toString()}
                   href={`/admin/ai?customerId=${c.id}`}
                   className={cn(
-                    "shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-colors min-h-[36px]",
+                    "shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-colors min-h-control-sm",
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-foreground hover:bg-muted/70"
@@ -84,7 +84,7 @@ export default async function AIPage({
           <div className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-3 border-b bg-muted/30">
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium">AI 客户洞察</span>
-            <Badge variant="outline" className="text-[10px] ml-auto">
+            <Badge variant="outline" className="text-xxs ml-auto">
               {customers.find(c => c.id.toString() === preselected)?.name}
             </Badge>
           </div>

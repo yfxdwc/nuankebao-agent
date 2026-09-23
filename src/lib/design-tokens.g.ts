@@ -127,6 +127,7 @@ export const radius = {
 } as const;
 
 export const typeScale = {
+  "xxs": 10,
   "xs": 14,
   "sm": 16,
   "md": 18,
@@ -140,8 +141,14 @@ export const size = {
   "iconMd": 24,
   "iconLg": 28,
   "iconXl": 32,
+  "controlSm": 36,
+  "controlMd": 40,
+  "controlLg": 52,
+  "tapCompact": 44,
+  "tapMin": 48,
   "buttonMinHeight": 56,
   "buttonLgHeight": 64,
+  "fieldLg": 68,
   "fabSize": 80,
   "listRowHeight": 80,
   "avatarSm": 40,
@@ -150,7 +157,10 @@ export const size = {
   "appBarHeight": 64,
   "borderHairline": 1,
   "borderThick": 2,
-  "tapMin": 48,
+  "badgeMinWidth": 18,
+  "badgeMinWidthLg": 20,
+  "textareaMinHeight": 80,
+  "tableMinWidth": 760,
   "contentMaxWidth": 720,
 } as const;
 

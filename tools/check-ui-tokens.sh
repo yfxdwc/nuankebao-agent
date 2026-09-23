@@ -101,19 +101,33 @@ fi
 # ============================================
 # 3. Web: Tailwind 调色板类 (绕过语义令牌)
 # ============================================
-WEB_SRC=$(find src -name '*.tsx' -o -name '*.ts' 2>/dev/null | grep -v 'design-tokens.g.ts')
+WEB_SRC=$(find src -name '*.tsx' -o -name '*.ts' 2>/dev/null \
+  | grep -v 'design-tokens.g.ts' \
+  | grep -v '^src/components/preview/' \
+  | grep -v '^src/app/app-preview/' \
+  | grep -v '^src/app/preview/')
+# ↑ 后三条是 AGENTS §9.1 冻结的预览框架路径 —— 改了会被 pre-commit guard 阻断, 故不计入
 PALETTE='\b(bg|text|border|ring|from|to|via|fill|stroke|divide|outline|decoration|shadow|accent|caret)-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-[0-9]{2,3}\b'
 # shellcheck disable=SC2086
 count "web.paletteClass" "$PALETTE" $WEB_SRC
 
 # 任意值: [16px] / [1.25rem] / [#fff]
+# vh/vw/% 是视口相对单位 (没有"绝对值令牌"可替) → 不计入
 # shellcheck disable=SC2086
-count "web.arbitraryValue" '\[(#[0-9A-Fa-f]{3,8}|[0-9.]+(px|rem|em|vh|vw|%)|var\(--)' $WEB_SRC
+count "web.arbitraryValue" '\[(#[0-9A-Fa-f]{3,8}|[0-9.]+(px|rem|em)|var\(--)' $WEB_SRC
 
-# 字面 hex (排除 mermaid 架构图 —— 那是图的 DSL 字符串, 不是 CSS)
+# 字面 hex (排除 mermaid 架构图 —— 那是图的 DSL 字符串, 不是 CSS;
+#           排除冻结的预览框架路径)
+# 注释里提到 hex 不算硬编码 → 先把 // 和 /* */ 剥掉再扫
 WEB_HEX=$(echo "$WEB_SRC" | grep -v 'app/admin/dev/architecture/' | grep -v 'components/dev/mermaid-renderer')
-# shellcheck disable=SC2086
-count "web.hexLiteral" '#[0-9A-Fa-f]{6}\b' $WEB_HEX
+if [ -n "$WEB_HEX" ]; then
+  # shellcheck disable=SC2086
+  n_hex=$(grep -rhE '#[0-9A-Fa-f]{6}\b' $WEB_HEX 2>/dev/null \
+    | sed -E 's|/\*[^*]*\*/||g; s|//.*$||g' \
+    | grep -cE '#[0-9A-Fa-f]{6}\b' || true)
+  COUNTS["web.hexLiteral"]=${n_hex:-0}
+  TOTAL=$((TOTAL + ${n_hex:-0}))
+fi
 
 # ============================================
 # 4. 令牌生成物一致性

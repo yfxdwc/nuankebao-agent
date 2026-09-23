@@ -167,7 +167,7 @@ export function ImportCustomers() {
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-3 text-sm">
                 <Badge variant="outline">共 {state.data.total} 条</Badge>
-                <Badge className="bg-green-100 text-green-800">
+                <Badge className="bg-success-light text-success">
                   ✓ {state.data.validCount} 条可导入
                 </Badge>
                 {state.data.invalidCount > 0 && (
@@ -240,7 +240,7 @@ export function ImportCustomers() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+              <CheckCircle className="h-5 w-5 text-success" />
               导入完成
             </CardTitle>
           </CardHeader>

@@ -26,7 +26,7 @@ export default async function AdminDashboardPage() {
       icon: Users,
       href: "/admin/customers",
       note: "查看全部客户",
-      tone: "bg-blue-50 text-blue-700",
+      tone: "bg-info-surface text-info",
     },
     {
       label: "本月到店",
@@ -34,7 +34,7 @@ export default async function AdminDashboardPage() {
       icon: Heart,
       href: "/admin/wellness-records",
       note: "本月养生记录",
-      tone: "bg-rose-50 text-rose-700",
+      tone: "bg-danger-surface text-danger",
     },
     {
       label: "待跟进",
@@ -42,7 +42,7 @@ export default async function AdminDashboardPage() {
       icon: Bell,
       href: "/admin/follow-ups",
       note: "需要联系的客户",
-      tone: "bg-amber-50 text-amber-700",
+      tone: "bg-warning-surface text-warning",
     },
     {
       label: "联系记录",
@@ -50,7 +50,7 @@ export default async function AdminDashboardPage() {
       icon: MessageCircle,
       href: "/admin/interactions",
       note: "总联系次数",
-      tone: "bg-emerald-50 text-emerald-700",
+      tone: "bg-success-surface text-success",
     },
   ];
 
@@ -89,7 +89,7 @@ export default async function AdminDashboardPage() {
                       <p className="text-2xl md:text-3xl font-bold mt-1 md:mt-2 truncate">
                         {s.value}
                       </p>
-                      <p className="text-[10px] md:text-xs text-muted-foreground mt-1 flex items-center">
+                      <p className="text-xxs md:text-xs text-muted-foreground mt-1 flex items-center">
                         {s.note}
                         <ArrowUpRight className="h-3 w-3 ml-0.5" />
                       </p>
@@ -111,7 +111,7 @@ export default async function AdminDashboardPage() {
       <div className="grid gap-2 md:gap-3 grid-cols-2 md:grid-cols-2">
         <Link
           href="/admin/customers/new"
-          className="flex items-center gap-2 md:gap-3 p-3 md:p-4 border-2 border-dashed border-primary/30 bg-primary/5 rounded-lg hover:bg-primary/10 active:scale-[0.98] transition-all min-h-[56px] md:min-h-0"
+          className="flex items-center gap-2 md:gap-3 p-3 md:p-4 border-2 border-dashed border-primary/30 bg-primary/5 rounded-lg hover:bg-primary/10 active:scale-[0.98] transition-all min-h-field md:min-h-0"
         >
           <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
             <Plus className="h-4 w-4 md:h-5 md:w-5" />
@@ -120,23 +120,23 @@ export default async function AdminDashboardPage() {
             <h3 className="text-sm md:text-base font-medium text-foreground leading-tight">
               新增客户
             </h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 truncate">
+            <p className="text-xxs md:text-xs text-muted-foreground mt-0.5 truncate">
               录入健康档案
             </p>
           </div>
         </Link>
         <Link
           href="/admin/wellness-records/new"
-          className="flex items-center gap-2 md:gap-3 p-3 md:p-4 border-2 border-dashed border-rose-300 bg-rose-50/50 rounded-lg hover:bg-rose-50 active:scale-[0.98] transition-all min-h-[56px] md:min-h-0"
+          className="flex items-center gap-2 md:gap-3 p-3 md:p-4 border-2 border-dashed border-danger-light bg-danger-surface/50 rounded-lg hover:bg-danger-surface active:scale-[0.98] transition-all min-h-field md:min-h-0"
         >
-          <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0">
+          <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-danger text-white flex items-center justify-center shrink-0">
             <Activity className="h-4 w-4 md:h-5 md:w-5" />
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="text-sm md:text-base font-medium text-foreground leading-tight">
               新增养生
             </h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 truncate">
+            <p className="text-xxs md:text-xs text-muted-foreground mt-0.5 truncate">
               理疗过程记录
             </p>
           </div>

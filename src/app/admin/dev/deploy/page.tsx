@@ -171,7 +171,7 @@ export default async function DeployDashboardPage() {
         </Button>
 
         <div className="flex items-center gap-2 mb-2">
-          <Database className="size-7 text-green-700" />
+          <Database className="size-7 text-success" />
           <h1 className="text-3xl font-bold text-foreground">
             部署 + 备份 Dashboard
           </h1>
@@ -196,9 +196,9 @@ export default async function DeployDashboardPage() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               {backup?.status === "success" ? (
-                <CheckCircle2 className="size-5 text-green-600" />
+                <CheckCircle2 className="size-5 text-success" />
               ) : (
-                <XCircle className="size-5 text-red-600" />
+                <XCircle className="size-5 text-danger" />
               )}
               上次备份
             </CardTitle>
@@ -221,7 +221,7 @@ export default async function DeployDashboardPage() {
               {backup?.elapsed_sec ?? "—"} 秒
             </div>
             {backup?.reason && (
-              <div className="text-xs text-red-600 mt-1">
+              <div className="text-xs text-danger mt-1">
                 原因: {backup.reason}
               </div>
             )}
@@ -231,7 +231,7 @@ export default async function DeployDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <HardDrive className="size-5 text-blue-600" />
+              <HardDrive className="size-5 text-info" />
               备份大小
             </CardTitle>
           </CardHeader>
@@ -253,7 +253,7 @@ export default async function DeployDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="size-5 text-amber-600" />
+              <FileText className="size-5 text-warning" />
               GFS 副本数
               {gfsWarn && (
                 <Badge variant="destructive" className="text-xs">
@@ -283,7 +283,7 @@ export default async function DeployDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="size-5 text-purple-600" />
+              <Activity className="size-5 text-graph-b" />
               代码快照 (每日 04:00)
             </CardTitle>
           </CardHeader>
@@ -307,7 +307,7 @@ export default async function DeployDashboardPage() {
                   {formatDate(codeSnapshot.ts)} ({relativeTime(codeSnapshot.ts)})
                 </div>
                 {codeSnapshot.reason && (
-                  <div className="text-xs text-red-600 mt-1">
+                  <div className="text-xs text-danger mt-1">
                     原因: {codeSnapshot.reason}
                   </div>
                 )}
@@ -321,7 +321,7 @@ export default async function DeployDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle2 className="size-5 text-indigo-600" />
+              <CheckCircle2 className="size-5 text-info" />
               恢复演练 (月度)
             </CardTitle>
           </CardHeader>
@@ -350,7 +350,7 @@ export default async function DeployDashboardPage() {
                   {restoreVerify.tables_total ?? 0}
                 </div>
                 {restoreVerify.reason && (
-                  <div className="text-xs text-red-600 mt-1">
+                  <div className="text-xs text-danger mt-1">
                     原因: {restoreVerify.reason}
                   </div>
                 )}
@@ -435,7 +435,7 @@ export default async function DeployDashboardPage() {
           📋 完整部署 SOP 见{" "}
           <a
             href="https://github.com/tooyan/nuankebao-agent/blob/main/deploy/README.md"
-            className="text-blue-600 hover:underline"
+            className="text-info hover:underline"
             target="_blank"
             rel="noreferrer"
           >

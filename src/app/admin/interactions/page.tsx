@@ -13,10 +13,10 @@ const TYPE_META: Record<
   string,
   { label: string; icon: React.ComponentType<{ className?: string }>; tone: string }
 > = {
-  phone: { label: "电话", icon: Phone, tone: "bg-blue-100 text-blue-700" },
-  wechat: { label: "微信", icon: MessageCircle, tone: "bg-emerald-100 text-emerald-700" },
-  visit: { label: "到店", icon: MapPin, tone: "bg-rose-100 text-rose-700" },
-  holiday_greeting: { label: "节日", icon: Gift, tone: "bg-amber-100 text-amber-700" },
+  phone: { label: "电话", icon: Phone, tone: "bg-info-light text-info" },
+  wechat: { label: "微信", icon: MessageCircle, tone: "bg-success-light text-success" },
+  visit: { label: "到店", icon: MapPin, tone: "bg-danger-light text-danger" },
+  holiday_greeting: { label: "节日", icon: Gift, tone: "bg-warning-surface text-warning" },
   other: { label: "其他", icon: MoreHorizontal, tone: "bg-muted text-muted-foreground" },
 };
 
@@ -86,7 +86,7 @@ export default async function InteractionsPage() {
               <ol className="relative space-y-2 md:space-y-3 ml-3 md:ml-4">
                 {/* 竖线 (absolute, 从第一个 item 到最后一个) */}
                 <div
-                  className="absolute left-[10px] md:left-[12px] top-3 bottom-3 w-px bg-border"
+                  className="absolute left-2.5 md:left-3 top-3 bottom-3 w-px bg-border"
                   aria-hidden="true"
                 />
                 {items.map((i) => {
@@ -115,16 +115,16 @@ export default async function InteractionsPage() {
                             <span className="text-xs md:text-sm font-medium">
                               {meta.label}
                             </span>
-                            <span className="text-[10px] md:text-xs text-muted-foreground">
+                            <span className="text-xxs md:text-xs text-muted-foreground">
                               客户 #{i.customerId.toString()}
                             </span>
                           </div>
-                          <span className="text-[10px] md:text-xs text-muted-foreground tabular-nums shrink-0">
+                          <span className="text-xxs md:text-xs text-muted-foreground tabular-nums shrink-0">
                             {time}
                           </span>
                         </div>
                         {i.summaryEncrypted && (
-                          <p className="text-[10px] md:text-xs text-muted-foreground mt-1 italic">
+                          <p className="text-xxs md:text-xs text-muted-foreground mt-1 italic">
                             (内容已加密,详情见客户详情页)
                           </p>
                         )}

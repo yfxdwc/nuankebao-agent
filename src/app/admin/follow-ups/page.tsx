@@ -21,9 +21,9 @@ function classifyBucket(dueMs: number, now: number): "today" | "week" | "overdue
 }
 
 const FILTERS: { value: Filter; label: string; tone: string }[] = [
-  { value: "today", label: "今天", tone: "bg-amber-50 text-amber-700 border-amber-200" },
-  { value: "week", label: "本周", tone: "bg-blue-50 text-blue-700 border-blue-200" },
-  { value: "overdue", label: "逾期", tone: "bg-rose-50 text-rose-700 border-rose-200" },
+  { value: "today", label: "今天", tone: "bg-warning-surface text-warning border-warning-light" },
+  { value: "week", label: "本周", tone: "bg-info-surface text-info border-info-light" },
+  { value: "overdue", label: "逾期", tone: "bg-danger-surface text-danger border-danger-light" },
   { value: "all", label: "全部", tone: "bg-muted text-foreground border-border" },
 ];
 
@@ -91,7 +91,7 @@ export default async function FollowUpsPage({
               key={f.value}
               href={f.value === "today" ? "/admin/follow-ups" : `/admin/follow-ups?filter=${f.value}`}
               className={cn(
-                "shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs md:text-sm font-medium transition-colors min-h-[36px]",
+                "shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs md:text-sm font-medium transition-colors min-h-control-sm",
                 isActive
                   ? f.tone + " shadow-sm"
                   : "bg-background text-muted-foreground hover:bg-muted"
@@ -100,7 +100,7 @@ export default async function FollowUpsPage({
               <span>{f.label}</span>
               <span
                 className={cn(
-                  "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold",
+                  "inline-flex items-center justify-center min-w-badge-lg h-5 px-1.5 rounded-full text-xxs font-semibold",
                   isActive ? "bg-white/60" : "bg-muted"
                 )}
               >

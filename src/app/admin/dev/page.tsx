@@ -46,7 +46,7 @@ const implementedModules = [
     icon: Network,
     title: "架构图",
     description: "渲染 docs/CHARTER.md §4 文字版架构图为 mermaid SVG",
-    color: "bg-purple-50 text-purple-700",
+    color: "bg-graph-b-surface text-graph-b",
     badge: "★ v0.1.3",
   },
   {
@@ -54,7 +54,7 @@ const implementedModules = [
     icon: Database,
     title: "部署 + 备份",
     description: "读取 data/backup-health/*.json 显示备份健康状态 + 最近日志",
-    color: "bg-green-50 text-green-700",
+    color: "bg-success-surface text-success",
     badge: null,
   },
   {
@@ -62,7 +62,7 @@ const implementedModules = [
     icon: History,
     title: "任务快照",
     description: "列出 git tag pre-* 历史 + diff 预览 + rollback 按钮",
-    color: "bg-amber-50 text-amber-700",
+    color: "bg-warning-surface text-warning",
     badge: "⚠ 危险操作",
   },
 ];
@@ -168,14 +168,14 @@ export default function DevOverviewPage() {
           完整架构说明见{" "}
           <Link
             href="/admin/dev/architecture"
-            className="text-blue-600 hover:underline"
+            className="text-info hover:underline"
           >
             /admin/dev/architecture
           </Link>{" "}
           和{" "}
           <a
             href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/architecture/v0.1.3-final.md"
-            className="text-blue-600 hover:underline"
+            className="text-info hover:underline"
             target="_blank"
             rel="noreferrer"
           >

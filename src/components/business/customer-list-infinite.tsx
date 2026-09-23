@@ -134,7 +134,7 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                       <h3 className="font-medium text-sm md:text-base truncate">
                         {customer.name}
                       </h3>
-                      <Badge variant="outline" className="text-[10px] md:text-xs shrink-0">
+                      <Badge variant="outline" className="text-xxs md:text-xs shrink-0">
                         {customer.gender === "F"
                           ? "女"
                           : customer.gender === "M"
@@ -154,19 +154,19 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                           <Badge
                             key={tag}
                             variant="secondary"
-                            className="text-[10px] md:text-xs"
+                            className="text-xxs md:text-xs"
                           >
                             {tag}
                           </Badge>
                         ))}
                         {customer.healthTags.length > 2 && (
-                          <span className="text-[10px] text-muted-foreground self-center">
+                          <span className="text-xxs text-muted-foreground self-center">
                             +{customer.healthTags.length - 2}
                           </span>
                         )}
                       </div>
                     )}
-                    <p className="text-[10px] md:text-xs text-muted-foreground mt-1.5 md:hidden">
+                    <p className="text-xxs md:text-xs text-muted-foreground mt-1.5 md:hidden">
                       {customer.createdAt.split("T")[0]}
                     </p>
                   </div>
@@ -193,7 +193,7 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
           <button
             type="button"
             onClick={loadMore}
-            className="text-sm text-primary underline min-h-[44px] px-4"
+            className="text-sm text-primary underline min-h-tap-compact px-4"
           >
             重试
           </button>

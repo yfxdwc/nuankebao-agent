@@ -97,7 +97,7 @@ export function CustomerDetailTabs({
                 aria-selected={isActive}
                 onClick={() => setTab(t.value)}
                 className={cn(
-                  "flex-1 md:flex-none md:px-6 flex items-center justify-center gap-1.5 py-3 min-h-[44px] text-sm font-medium border-b-2 transition-colors",
+                  "flex-1 md:flex-none md:px-6 flex items-center justify-center gap-1.5 py-3 min-h-tap-compact text-sm font-medium border-b-2 transition-colors",
                   isActive
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -107,7 +107,7 @@ export function CustomerDetailTabs({
                 {t.label}
                 <span
                   className={cn(
-                    "ml-1 inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-[10px] font-semibold",
+                    "ml-1 inline-flex items-center justify-center min-w-badge h-4 px-1 rounded-full text-xxs font-semibold",
                     isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                   )}
                 >
@@ -149,7 +149,7 @@ function ProfileTab({ customer }: { customer: CustomerLite }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg md:text-2xl font-bold">{customer.name}</h2>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xxs">
                   {customer.gender === "F" ? "女" : customer.gender === "M" ? "男" : "-"}
                 </Badge>
               </div>
@@ -262,14 +262,14 @@ function WellnessTab({
                   <h3 className="text-sm md:text-base font-medium">
                     {formatDate(r.serviceDate)}
                   </h3>
-                  <Badge variant="outline" className="text-[10px] shrink-0">
+                  <Badge variant="outline" className="text-xxs shrink-0">
                     {serviceMap[r.serviceItemId] ?? `项目 ${r.serviceItemId}`}
                   </Badge>
                 </div>
                 {r.bodyPartIds.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {r.bodyPartIds.map((id) => (
-                      <Badge key={id} variant="secondary" className="text-[10px]">
+                      <Badge key={id} variant="secondary" className="text-xxs">
                         {bodyPartMap[id] ?? `#${id}`}
                       </Badge>
                     ))}
@@ -288,7 +288,7 @@ function WellnessTab({
 
       <Button
         asChild
-        className="w-full md:w-auto h-11 bg-rose-500 hover:bg-rose-600"
+        className="w-full md:w-auto h-11 bg-danger hover:bg-danger"
       >
         <Link href={`/admin/wellness-records/new?customerId=${customerId}`}>
           <Plus className="h-4 w-4 mr-2" />
@@ -312,7 +312,7 @@ function InteractionsTab({ interactions }: { interactions: InteractionLite[] }) 
   return (
     <ol className="relative space-y-2 md:space-y-3 ml-3 md:ml-4">
       <div
-        className="absolute left-[10px] md:left-[12px] top-3 bottom-3 w-px bg-border"
+        className="absolute left-2.5 md:left-3 top-3 bottom-3 w-px bg-border"
         aria-hidden="true"
       />
       {interactions.map((i) => {
@@ -327,17 +327,17 @@ function InteractionsTab({ interactions }: { interactions: InteractionLite[] }) 
             </div>
             <div className="bg-card border rounded-lg p-2.5 md:p-3">
               <div className="flex items-center justify-between gap-2">
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xxs">
                   {TYPE_LABELS[i.type] ?? i.type}
                 </Badge>
-                <span className="text-[10px] text-muted-foreground tabular-nums">
+                <span className="text-xxs text-muted-foreground tabular-nums">
                   {formatDate(i.createdAt)} {time}
                 </span>
               </div>
               {i.summary ? (
                 <p className="text-xs mt-1.5">{i.summary}</p>
               ) : (
-                <p className="text-[10px] text-muted-foreground mt-1 italic">
+                <p className="text-xxs text-muted-foreground mt-1 italic">
                   (无内容记录)
                 </p>
               )}

@@ -582,92 +582,112 @@ function px2rem(px: number): string {
   return `${+(px / 16).toFixed(4)}rem`;
 }
 
+/** `#4A7C59` → `74 124 89` (给 Tailwind 的 <alpha-value> 用) */
+function rgbChannels(hex: string): string {
+  const { r, g, b } = hexToRgb(hex);
+  return `${r} ${g} ${b}`;
+}
+
 /** shadcn/ui 兼容层: 旧变量名 → 新语义令牌 */
-function emitShadcnLayer(c: Record<string, string>): string[] {
-  const L: string[] = [];
-  const p = (s: string) => L.push(s);
-  p("  /* --- shadcn/ui 兼容层 (607 处既有用法依赖这些名字, 不要删) --- */");
-  p(`  --background: ${c.surface};`);
-  p(`  --foreground: ${c.textPrimary};`);
-  p(`  --card: ${c.surfaceCard};`);
-  p(`  --card-foreground: ${c.textPrimary};`);
-  p(`  --popover: ${c.surfaceCard};`);
-  p(`  --popover-foreground: ${c.textPrimary};`);
-  p(`  --primary: ${c.primary};`);
-  p(`  --primary-foreground: ${c.onPrimary};`);
-  p(`  --secondary: ${c.surfaceSubtle};`);
-  p(`  --secondary-foreground: ${c.textPrimary};`);
-  p(`  --muted: ${c.surfaceSubtle};`);
-  p(`  --muted-foreground: ${c.textTertiary};`);
-  p(`  --accent: ${c.accentSurface};`);
-  p(`  --accent-foreground: ${c.textPrimary};`);
-  p(`  --destructive: ${c.danger};`);
-  p(`  --destructive-foreground: ${c.onDanger};`);
-  p(`  --border: ${c.border};`);
-  p(`  --input: ${c.borderInput};`);
-  p(`  --ring: ${c.primary};`);
-  p(`  --radius: ${px2rem(radiusScale.r8)};`);
-  return L;
+function shadcnLayer(c: Record<string, string>): Array<[string, string]> {
+  return [
+    ["background", c.surface],
+    ["foreground", c.textPrimary],
+    ["card", c.surfaceCard],
+    ["card-foreground", c.textPrimary],
+    ["popover", c.surfaceCard],
+    ["popover-foreground", c.textPrimary],
+    ["primary", c.primary],
+    ["primary-foreground", c.onPrimary],
+    ["secondary", c.surfaceSubtle],
+    ["secondary-foreground", c.textPrimary],
+    ["muted", c.surfaceSubtle],
+    ["muted-foreground", c.textTertiary],
+    ["accent", c.accentSurface],
+    ["accent-foreground", c.textPrimary],
+    ["destructive", c.danger],
+    ["destructive-foreground", c.onDanger],
+    ["border", c.border],
+    ["input", c.borderInput],
+    ["ring", c.primary],
+  ];
 }
 
 /** 新语义层 (避开 shadcn 的 --accent 等重名) */
-function emitSemanticLayer(c: Record<string, string>, indent = "  "): string[] {
-  const L: string[] = [];
-  const p = (s: string) => L.push(indent + s);
-  p(`--brand: ${c.primary};`);
-  p(`--brand-light: ${c.primaryLight};`);
-  p(`--brand-dark: ${c.primaryDark};`);
-  p(`--brand-surface: ${c.primarySurface};`);
-  p(`--brand-foreground: ${c.onPrimary};`);
-  p(`--brand-accent: ${c.accent};`);
-  p(`--brand-accent-light: ${c.accentLight};`);
-  p(`--brand-accent-surface: ${c.accentSurface};`);
-  p(`--brand-accent-foreground: ${c.onAccent};`);
-  p(`--surface: ${c.surface};`);
-  p(`--surface-card: ${c.surfaceCard};`);
-  p(`--surface-subtle: ${c.surfaceSubtle};`);
-  p(`--surface-sunken: ${c.surfaceSunken};`);
-  p(`--surface-inverse: ${c.surfaceInverse};`);
-  p(`--text-primary: ${c.textPrimary};`);
-  p(`--text-secondary: ${c.textSecondary};`);
-  p(`--text-tertiary: ${c.textTertiary};`);
-  p(`--text-disabled: ${c.textDisabled};`);
-  p(`--text-on-inverse: ${c.textOnInverse};`);
-  p(`--border-default: ${c.border};`);
-  p(`--border-strong: ${c.borderStrong};`);
-  p(`--divider: ${c.divider};`);
-  p(`--focus-ring: ${c.focusRing};`);
-  p(`--success: ${c.success};`);
-  p(`--success-light: ${c.successLight};`);
-  p(`--success-surface: ${c.successSurface};`);
-  p(`--success-foreground: ${c.onSuccess};`);
-  p(`--warning: ${c.warning};`);
-  p(`--warning-light: ${c.warningLight};`);
-  p(`--warning-surface: ${c.warningSurface};`);
-  p(`--warning-foreground: ${c.onWarning};`);
-  p(`--danger: ${c.danger};`);
-  p(`--danger-light: ${c.dangerLight};`);
-  p(`--danger-surface: ${c.dangerSurface};`);
-  p(`--danger-foreground: ${c.onDanger};`);
-  p(`--info: ${c.info};`);
-  p(`--info-light: ${c.infoLight};`);
-  p(`--info-surface: ${c.infoSurface};`);
-  p(`--info-foreground: ${c.onInfo};`);
-  p(`--member-gold: ${c.memberGold};`);
-  p(`--member-gold-surface: ${c.memberGoldSurface};`);
-  p(`--badge-neutral: ${c.badgeNeutral};`);
-  p(`--badge-neutral-surface: ${c.badgeNeutralSurface};`);
-  p(`--graph-a: ${c.graphFranchiseeA};`);
-  p(`--graph-a-surface: ${c.graphFranchiseeASurface};`);
-  p(`--graph-b: ${c.graphFranchiseeB};`);
-  p(`--graph-b-surface: ${c.graphFranchiseeBSurface};`);
-  p(`--graph-line: ${c.graphLine};`);
-  p(`--graph-line-soft: ${c.graphLineSoft};`);
-  p(`--shadow-color: ${c.shadowColor};`);
-  p(`--scrim: ${c.scrim};`);
+function semanticLayer(c: Record<string, string>): Array<[string, string]> {
   const charts = chartPalette(c);
-  charts.forEach((v, i) => p(`--chart-${i + 1}: ${v};`));
-  return L;
+  return [
+    ["brand", c.primary],
+    ["brand-light", c.primaryLight],
+    ["brand-dark", c.primaryDark],
+    ["brand-surface", c.primarySurface],
+    ["brand-foreground", c.onPrimary],
+    ["brand-accent", c.accent],
+    ["brand-accent-light", c.accentLight],
+    ["brand-accent-surface", c.accentSurface],
+    ["brand-accent-foreground", c.onAccent],
+    ["surface", c.surface],
+    ["surface-card", c.surfaceCard],
+    ["surface-subtle", c.surfaceSubtle],
+    ["surface-sunken", c.surfaceSunken],
+    ["surface-inverse", c.surfaceInverse],
+    ["text-primary", c.textPrimary],
+    ["text-secondary", c.textSecondary],
+    ["text-tertiary", c.textTertiary],
+    ["text-disabled", c.textDisabled],
+    ["text-on-inverse", c.textOnInverse],
+    ["border-default", c.border],
+    ["border-strong", c.borderStrong],
+    ["divider", c.divider],
+    ["focus-ring", c.focusRing],
+    ["success", c.success],
+    ["success-light", c.successLight],
+    ["success-surface", c.successSurface],
+    ["success-foreground", c.onSuccess],
+    ["warning", c.warning],
+    ["warning-light", c.warningLight],
+    ["warning-surface", c.warningSurface],
+    ["warning-foreground", c.onWarning],
+    ["danger", c.danger],
+    ["danger-light", c.dangerLight],
+    ["danger-surface", c.dangerSurface],
+    ["danger-foreground", c.onDanger],
+    ["info", c.info],
+    ["info-light", c.infoLight],
+    ["info-surface", c.infoSurface],
+    ["info-foreground", c.onInfo],
+    ["member-gold", c.memberGold],
+    ["member-gold-surface", c.memberGoldSurface],
+    ["badge-neutral", c.badgeNeutral],
+    ["badge-neutral-surface", c.badgeNeutralSurface],
+    ["graph-a", c.graphFranchiseeA],
+    ["graph-a-surface", c.graphFranchiseeASurface],
+    ["graph-b", c.graphFranchiseeB],
+    ["graph-b-surface", c.graphFranchiseeBSurface],
+    ["graph-line", c.graphLine],
+    ["graph-line-soft", c.graphLineSoft],
+    ["shadow-color", c.shadowColor],
+    ["scrim", c.scrim],
+    ...charts.map((v, i): [string, string] => [`chart-${i + 1}`, v]),
+  ];
+}
+
+/**
+ * 写一组颜色变量。
+ *
+ * ⚠ 同时写 **hex** 和 **RGB 通道** 两种形式, 不是冗余:
+ *   `--primary: #4A7C59`      → 直接当 CSS 值用 (border: 1px solid var(--primary))
+ *   `--primary-rgb: 74 124 89` → 给 Tailwind 的透明度修饰符用
+ *     (`bg-primary/30` 需要 `rgb(var(--primary-rgb) / <alpha-value>)`;
+ *      Tailwind 对 `var(--primary)` 这种无法解析的值会**静默不生成类** ——
+ *      2026-09-23 迁移 web 调色板类时踩到: `from-danger/10` / `shadow-danger/30` 直接是空样式)
+ */
+function emitColorVars(lines: string[], pairs: Array<[string, string]>): void {
+  for (const [name, hex] of pairs) lines.push(`  --${name}: ${hex};`);
+  lines.push("");
+  for (const [name, hex] of pairs) {
+    lines.push(`  --${name}-rgb: ${rgbChannels(hex)};`);
+  }
 }
 
 function emitCssBlock(): string {
@@ -729,19 +749,22 @@ function emitCssBlock(): string {
   p("  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);");
   p("  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);");
   p("");
-  L.push(...emitShadcnLayer(themeColors[DEFAULT_THEME.id]));
+  p("  /* --- shadcn/ui 兼容层 (607 处既有用法依赖这些名字, 不要删) --- */");
+  emitColorVars(L, shadcnLayer(themeColors[DEFAULT_THEME.id]));
+  p(`  --radius: ${px2rem(radiusScale.r8)};`);
   p("");
   p("  /* ---- L2 语义令牌 (默认主题: " + DEFAULT_THEME.label + ") ---- */");
-  L.push(...emitSemanticLayer(themeColors[DEFAULT_THEME.id]));
+  emitColorVars(L, semanticLayer(themeColors[DEFAULT_THEME.id]));
   p("}");
   p("");
   p("/* ---- 运行时换肤: <html data-theme=\"x\"> 覆盖品牌槽位 ---- */");
   for (const t of themeDefs) {
     if (t.isDefault) continue;
     p(`[data-theme="${t.id}"] { /* ${t.label} · ${t.group} */`);
-    L.push(...emitShadcnLayer(themeColors[t.id]));
-    p("");
-    L.push(...emitSemanticLayer(themeColors[t.id]));
+    p("  /* shadcn 兼容层 */");
+    emitColorVars(L, shadcnLayer(themeColors[t.id]));
+    p("  /* 语义层 */");
+    emitColorVars(L, semanticLayer(themeColors[t.id]));
     p("}");
     p("");
   }

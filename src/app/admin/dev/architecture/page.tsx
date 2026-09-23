@@ -144,7 +144,7 @@ export default function ArchitecturePage() {
           ⚠️ 这是 mermaid 渲染版本. 文字版 (ASCII) 见{" "}
           <a
             href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/CHARTER.md"
-            className="text-blue-600 hover:underline"
+            className="text-info hover:underline"
             target="_blank"
             rel="noreferrer"
           >

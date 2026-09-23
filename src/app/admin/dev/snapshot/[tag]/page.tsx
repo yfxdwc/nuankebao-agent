@@ -102,7 +102,7 @@ export default async function SnapshotDetailPage({ params }: PageProps) {
         </Button>
 
         <div className="flex items-center gap-2 mb-2">
-          <History className="size-7 text-amber-700" />
+          <History className="size-7 text-warning" />
           <h1 className="text-3xl font-bold text-foreground font-mono break-all">
             {detail.tag}
           </h1>
@@ -113,15 +113,15 @@ export default async function SnapshotDetailPage({ params }: PageProps) {
       </div>
 
       {/* Rollback 警告区 */}
-      <Card className="mb-6 border-red-300 bg-red-50">
+      <Card className="mb-6 border-danger-light bg-danger-surface">
         <CardHeader>
-          <CardTitle className="text-base text-red-800 flex items-center gap-2">
+          <CardTitle className="text-base text-danger flex items-center gap-2">
             <AlertTriangle className="size-5" />
             Rollback 危险操作
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-red-700 mb-4">
+          <p className="text-sm text-danger mb-4">
             ⚠️ 回滚到 <code className="font-mono">{detail.tag}</code> 会:
             <br />
             1. stash 当前未提交状态 (含 untracked)

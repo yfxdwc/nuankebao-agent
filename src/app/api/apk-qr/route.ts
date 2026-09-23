@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import QRCode from "qrcode";
 
+import { defaultThemeColors, palette } from "@/lib/design-tokens.g";
+
 export const dynamic = "force-dynamic";
 
 /**
@@ -31,7 +33,10 @@ export async function GET(request: NextRequest) {
     errorCorrectionLevel: "M" as const,
     margin: 1,
     width: 300,
-    color: { dark: "#1F8A4C", light: "#FFFFFF" }, // 养生绿
+    // 二维码是**图片产物**, 不跟随用户主题 (扫出来才知道是什么, 服务端也不该读主题状态)
+    //   → 固定用品牌默认主题的主色; 真源 design/tokens/design-tokens.json
+    //   深色块 = 品牌主色 (对白底 4.86:1, 扫码对比度充足)
+    color: { dark: defaultThemeColors.primary, light: palette["neutral-0"] },
   };
 
   try {

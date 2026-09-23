@@ -79,7 +79,7 @@ export function RollbackButton({ tag, shortName }: RollbackButtonProps) {
         )}
       </Button>
       {error && (
-        <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
+        <div className="text-xs text-danger bg-danger-surface p-2 rounded border border-danger-light">
           <strong>错误:</strong> {error}
         </div>
       )}

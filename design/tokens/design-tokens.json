@@ -20,7 +20,6 @@
       "新增主题 = 往 themes 数组加一项, 然后 pnpm tokens:build (无需改任何业务代码)"
     ]
   },
-
   "palette": {
     "neutral-0": "#FFFFFF",
     "neutral-50": "#FFFBF5",
@@ -34,7 +33,6 @@
     "neutral-800": "#2E2E2E",
     "neutral-900": "#1A1A1A",
     "neutral-950": "#0F0F0F",
-
     "green-50": "#F0F7F2",
     "green-100": "#E9F4EE",
     "green-200": "#A8D5BA",
@@ -45,7 +43,6 @@
     "green-700": "#2D5A3D",
     "green-800": "#234631",
     "green-900": "#17301F",
-
     "amber-50": "#FDF6EC",
     "amber-100": "#FAE9D0",
     "amber-200": "#F5D5A8",
@@ -56,33 +53,27 @@
     "amber-700": "#A86E2B",
     "amber-800": "#8A5A1F",
     "amber-900": "#6B4415",
-
     "yellow-100": "#FFF3CD",
     "yellow-200": "#FFE8A3",
     "yellow-500": "#D9B23D",
     "yellow-600": "#C89A2B",
     "yellow-700": "#8A6D1F",
     "yellow-900": "#5C4712",
-
     "red-50": "#FFF5F5",
     "red-100": "#FBDDDD",
     "red-300": "#E08A8A",
     "red-500": "#D3545C",
     "red-600": "#B33A3A",
     "red-700": "#8F2E2E",
-
     "blue-50": "#EDF4FB",
     "blue-100": "#E3EDF8",
     "blue-500": "#2B6CB0",
     "blue-700": "#1F4E80",
-
     "purple-50": "#F5F0F8",
     "purple-100": "#EFE7F4",
     "purple-500": "#8E5BA8",
     "purple-700": "#6D4282",
-
     "pink-500": "#C2185B",
-
     "spring-500": "#5A7D3C",
     "spring-200": "#C3DFA6",
     "spring-700": "#3D5A28",
@@ -90,7 +81,6 @@
     "springAccent-500": "#B3536C",
     "springAccent-100": "#F0D2DB",
     "springAccent-50": "#FDF1F5",
-
     "summer-500": "#2F7A72",
     "summer-200": "#A6D6CE",
     "summer-700": "#1F574F",
@@ -98,7 +88,6 @@
     "summerAccent-500": "#B07E1E",
     "summerAccent-100": "#F0E0B8",
     "summerAccent-50": "#FBF6E9",
-
     "autumn-500": "#A65E24",
     "autumn-200": "#E8C79E",
     "autumn-700": "#7A421A",
@@ -106,7 +95,6 @@
     "autumnAccent-500": "#A9791F",
     "autumnAccent-100": "#EFDDAE",
     "autumnAccent-50": "#FAF4E4",
-
     "winter-500": "#8C4A4A",
     "winter-200": "#DFB9B9",
     "winter-700": "#632F2F",
@@ -115,7 +103,6 @@
     "winterAccent-100": "#CBDCE9",
     "winterAccent-50": "#F0F5F9"
   },
-
   "scales": {
     "space": {
       "s0": 0,
@@ -151,6 +138,7 @@
       "full": 999
     },
     "type": {
+      "xxs": 10,
       "xs": 14,
       "sm": 16,
       "md": 18,
@@ -169,8 +157,14 @@
       "iconMd": 24,
       "iconLg": 28,
       "iconXl": 32,
+      "controlSm": 36,
+      "controlMd": 40,
+      "controlLg": 52,
+      "tapCompact": 44,
+      "tapMin": 48,
       "buttonMinHeight": 56,
       "buttonLgHeight": 64,
+      "fieldLg": 68,
       "fabSize": 80,
       "listRowHeight": 80,
       "avatarSm": 40,
@@ -179,7 +173,10 @@
       "appBarHeight": 64,
       "borderHairline": 1,
       "borderThick": 2,
-      "tapMin": 48,
+      "badgeMinWidth": 18,
+      "badgeMinWidthLg": 20,
+      "textareaMinHeight": 80,
+      "tableMinWidth": 760,
       "contentMaxWidth": 720
     },
     "elevation": {
@@ -204,7 +201,6 @@
       "scrim": 0.32
     }
   },
-
   "semantic": {
     "space": {
       "pagePadding": "s16",
@@ -228,26 +224,22 @@
       "pill": "full"
     }
   },
-
   "shared": {
     "surface": "{palette.neutral-50}",
     "surfaceCard": "{palette.neutral-0}",
     "surfaceSubtle": "{palette.neutral-100}",
     "surfaceSunken": "{palette.neutral-200}",
     "surfaceInverse": "{palette.neutral-900}",
-
     "textPrimary": "{palette.neutral-900}",
     "textSecondary": "{palette.neutral-700}",
     "textTertiary": "{palette.neutral-600}",
     "textDisabled": "{palette.neutral-500}",
     "textOnInverse": "{palette.neutral-0}",
-
     "border": "{palette.neutral-400}",
     "borderStrong": "{palette.neutral-500}",
     "borderInput": "{palette.neutral-400}",
     "divider": "{palette.neutral-200}",
     "focusRing": "{palette.green-500}",
-
     "success": "{palette.green-700}",
     "successLight": "{palette.green-200}",
     "successSurface": "{palette.green-50}",
@@ -260,23 +252,19 @@
     "info": "{palette.blue-700}",
     "infoLight": "{palette.blue-100}",
     "infoSurface": "{palette.blue-50}",
-
     "memberGold": "{palette.yellow-600}",
     "memberGoldSurface": "{palette.yellow-100}",
     "badgeNeutral": "{palette.neutral-600}",
     "badgeNeutralSurface": "{palette.neutral-200}",
-
     "graphFranchiseeB": "{palette.purple-500}",
     "graphFranchiseeBSurface": "{palette.purple-50}",
     "graphFranchiseeA": "{palette.blue-500}",
     "graphFranchiseeASurface": "{palette.blue-50}",
     "graphLine": "{palette.neutral-400}",
     "graphLineSoft": "{palette.neutral-200}",
-
     "shadowColor": "#000000",
     "scrim": "{palette.neutral-950}"
   },
-
   "web": {
     "fontSans": "ui-sans-serif, system-ui, -apple-system, \"PingFang SC\", \"Microsoft YaHei\", \"Source Han Sans SC\", sans-serif",
     "fontMono": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
@@ -289,7 +277,6 @@
       "xl": "0 24px 36px -12px rgb(0 0 0 / 0.14)"
     }
   },
-
   "themes": [
     {
       "id": "sage",
@@ -364,7 +351,6 @@
       }
     }
   ],
-
   "contrast": {
     "minOnColorRatio": 4.5,
     "preferRatio": 7.0,

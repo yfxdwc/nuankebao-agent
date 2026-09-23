@@ -89,7 +89,7 @@ export function MobileBottomTab() {
                 href={tab.href}
                 className={cn(
                   "flex flex-col items-center justify-center gap-0.5",
-                  "min-h-[44px] min-w-[44px]",  // Apple HIG
+                  "min-h-tap-compact min-w-tap-compact",  // Apple HIG
                   "transition-colors",
                   isActive
                     ? "text-primary"
@@ -105,7 +105,7 @@ export function MobileBottomTab() {
                   )}
                   strokeWidth={isActive ? 2.5 : 2}
                 />
-                <span className={cn("text-[10px]", isActive && "font-medium")}>
+                <span className={cn("text-xxs", isActive && "font-medium")}>
                   {tab.label}
                 </span>
               </Link>
@@ -118,7 +118,7 @@ export function MobileBottomTab() {
             onClick={() => setMoreOpen(true)}
             className={cn(
               "flex flex-col items-center justify-center gap-0.5",
-              "min-h-[44px] min-w-[44px]",
+              "min-h-tap-compact min-w-tap-compact",
               "transition-colors",
               isMoreActive
                 ? "text-primary"
@@ -140,7 +140,7 @@ export function MobileBottomTab() {
               <circle cx="12" cy="12" r="1.5" />
               <circle cx="19" cy="12" r="1.5" />
             </svg>
-            <span className={cn("text-[10px]", isMoreActive && "font-medium")}>
+            <span className={cn("text-xxs", isMoreActive && "font-medium")}>
               更多
             </span>
           </button>
@@ -209,7 +209,7 @@ export function MobileBottomTab() {
                     onClick={() => setMoreOpen(false)}
                     className={cn(
                       "flex items-center gap-3 px-3 py-3 rounded-lg",
-                      "min-h-[52px]",  // 大触摸区
+                      "min-h-control-lg",  // 大触摸区
                       "transition-colors",
                       isActive
                         ? "bg-primary/10 text-primary"
@@ -248,7 +248,7 @@ export function MobileBottomTab() {
                 }}
                 className={cn(
                   "flex items-center justify-center gap-2 w-full",
-                  "min-h-[48px] px-4 rounded-lg",
+                  "min-h-tap px-4 rounded-lg",
                   "text-sm font-medium",
                   "text-destructive active:bg-destructive/10",
                   "transition-colors"

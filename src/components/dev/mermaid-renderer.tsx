@@ -47,9 +47,9 @@ export function MermaidRenderer({ chart, className }: MermaidRendererProps) {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-        <p className="text-sm font-semibold text-red-800">Mermaid 渲染失败</p>
-        <pre className="text-xs text-red-700 mt-2 whitespace-pre-wrap">
+      <div className="p-4 bg-danger-surface border border-danger-light rounded-lg">
+        <p className="text-sm font-semibold text-danger">Mermaid 渲染失败</p>
+        <pre className="text-xs text-danger mt-2 whitespace-pre-wrap">
           {error}
         </pre>
       </div>

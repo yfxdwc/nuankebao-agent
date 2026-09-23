@@ -95,7 +95,7 @@ export default async function SnapshotListPage() {
         </Button>
 
         <div className="flex items-center gap-2 mb-2">
-          <History className="size-7 text-amber-700" />
+          <History className="size-7 text-warning" />
           <h1 className="text-3xl font-bold text-foreground">
             任务快照 (Task Snapshot)
           </h1>
@@ -135,7 +135,7 @@ export default async function SnapshotListPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-mono flex items-center gap-2">
-                      <History className="size-4 text-amber-600" />
+                      <History className="size-4 text-warning" />
                       {s.shortName}
                       <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
                     </CardTitle>
@@ -165,7 +165,7 @@ export default async function SnapshotListPage() {
           📋 完整 SOP 见{" "}
           <a
             href="https://github.com/tooyan/nuankebao-agent/blob/main/scripts/task-snapshot.sh"
-            className="text-blue-600 hover:underline"
+            className="text-info hover:underline"
             target="_blank"
             rel="noreferrer"
           >
@@ -174,7 +174,7 @@ export default async function SnapshotListPage() {
           顶部注释, 借鉴自 sales-ai (per{" "}
           <a
             href="https://github.com/tooyan/nuankebao-agent/blob/main/docs/admin/dev-modules/task-snapshot.md"
-            className="text-blue-600 hover:underline"
+            className="text-info hover:underline"
             target="_blank"
             rel="noreferrer"
           >

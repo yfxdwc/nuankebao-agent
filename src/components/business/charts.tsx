@@ -12,6 +12,8 @@ import {
   Line,
 } from "recharts";
 
+import { useChartColors } from "@/lib/use-theme-colors";
+
 // ============================================
 // 图表组件 (基于 Recharts)
 // ============================================
@@ -26,13 +28,8 @@ interface IntervalData {
   count: number;
 }
 
-const COLORS = {
-  primary: "#1f8a4c",
-  primaryLight: "#7bc097",
-  muted: "#a1a1aa",
-};
-
 export function MonthlyTrendChart({ data }: { data: MonthlyData[] }) {
+  const c = useChartColors();
   if (data.length === 0 || data.every((d) => d.count === 0)) {
     return (
       <p className="text-sm text-muted-foreground text-center py-8">
@@ -50,19 +47,19 @@ export function MonthlyTrendChart({ data }: { data: MonthlyData[] }) {
   return (
     <ResponsiveContainer width="100%" height={250}>
       <LineChart data={formatted} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-        <XAxis dataKey="month" stroke="#888" />
-        <YAxis allowDecimals={false} stroke="#888" />
+        <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+        <XAxis dataKey="month" stroke={c.axis} />
+        <YAxis allowDecimals={false} stroke={c.axis} />
         <Tooltip
-          contentStyle={{ borderRadius: 6, border: "1px solid #e5e5e5" }}
+          contentStyle={{ borderRadius: 6, border: `1px solid ${c.border}`, background: c.surface }}
           formatter={(v: number) => [`${v} 次`, "到店"]}
         />
         <Line
           type="monotone"
           dataKey="count"
-          stroke={COLORS.primary}
+          stroke={c.series1}
           strokeWidth={2}
-          dot={{ fill: COLORS.primary, r: 4 }}
+          dot={{ fill: c.series1, r: 4 }}
           activeDot={{ r: 6 }}
         />
       </LineChart>
@@ -71,6 +68,7 @@ export function MonthlyTrendChart({ data }: { data: MonthlyData[] }) {
 }
 
 export function RepurchaseChart({ data }: { data: IntervalData[] }) {
+  const c = useChartColors();
   if (data.length === 0 || data.every((d) => d.count === 0)) {
     return (
       <p className="text-sm text-muted-foreground text-center py-8">
@@ -82,14 +80,14 @@ export function RepurchaseChart({ data }: { data: IntervalData[] }) {
   return (
     <ResponsiveContainer width="100%" height={250}>
       <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-        <XAxis dataKey="range" stroke="#888" />
-        <YAxis allowDecimals={false} stroke="#888" />
+        <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+        <XAxis dataKey="range" stroke={c.axis} />
+        <YAxis allowDecimals={false} stroke={c.axis} />
         <Tooltip
-          contentStyle={{ borderRadius: 6, border: "1px solid #e5e5e5" }}
+          contentStyle={{ borderRadius: 6, border: `1px solid ${c.border}`, background: c.surface }}
           formatter={(v: number) => [`${v} 位`, "客户"]}
         />
-        <Bar dataKey="count" fill={COLORS.primary} radius={[4, 4, 0, 0]} />
+        <Bar dataKey="count" fill={c.series1} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

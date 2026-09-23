@@ -36,7 +36,7 @@ export function Fab({
   const variantClass =
     variant === "primary"
       ? "bg-primary text-primary-foreground shadow-primary/30"
-      : "bg-rose-500 text-white shadow-rose-500/30";
+      : "bg-danger text-white shadow-danger/30";
 
   const content = (
     <>

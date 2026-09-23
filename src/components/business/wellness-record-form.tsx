@@ -221,7 +221,7 @@ export function WellnessRecordForm({ initial, mode }: WellnessRecordFormProps) {
                     if (idx <= step) setStep(idx);
                   }}
                   className={cn(
-                    "flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium min-h-[36px]",
+                    "flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium min-h-control-sm",
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : isDone
@@ -312,7 +312,7 @@ export function WellnessRecordForm({ initial, mode }: WellnessRecordFormProps) {
                     type="button"
                     onClick={() => toggleBodyPart(bp.id)}
                     className={cn(
-                      "px-3 py-2 md:py-1.5 rounded-full text-sm border transition-colors min-h-[40px] md:min-h-0",
+                      "px-3 py-2 md:py-1.5 rounded-full text-sm border transition-colors min-h-control md:min-h-0",
                       form.bodyPartIds.includes(bp.id)
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-background hover:bg-accent"

@@ -29,6 +29,7 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useChartColors } from "@/lib/use-theme-colors";
 
 interface UsageOverview {
   days: number;
@@ -140,6 +141,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 export function UsageDashboard() {
+  const c = useChartColors();
   const [days, setDays] = useState(30);
   const [overview, setOverview] = useState<UsageOverview | null>(null);
   const [users, setUsers] = useState<UsageUser[]>([]);
@@ -325,14 +327,14 @@ export function UsageDashboard() {
                 }))}
                 margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-                <XAxis dataKey="date" stroke="#888" />
-                <YAxis allowDecimals={false} stroke="#888" />
+                <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+                <XAxis dataKey="date" stroke={c.axis} />
+                <YAxis allowDecimals={false} stroke={c.axis} />
                 <Tooltip
-                  contentStyle={{ borderRadius: 6, border: "1px solid #e5e5e5" }}
+                  contentStyle={{ borderRadius: 6, border: `1px solid ${c.border}`, background: c.surface }}
                 />
-                <Bar dataKey="users" name="用户" fill="#1f8a4c" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="events" name="事件" fill="#7bc097" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="users" name="用户" fill={c.series1} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="events" name="事件" fill={c.series2} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -422,7 +424,7 @@ export function UsageDashboard() {
               近 {days} 天没有用户活动
             </p>
           ) : (
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-table text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="py-2 pr-3 font-medium">用户</th>
@@ -563,7 +565,7 @@ export function UsageDashboard() {
             {rawLoading ? (
               <p className="py-4 text-center text-sm text-muted-foreground">加载中...</p>
             ) : (
-              <table className="w-full min-w-[760px] text-xs">
+              <table className="w-full min-w-table text-xs">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="py-2 pr-3 font-medium">时间</th>

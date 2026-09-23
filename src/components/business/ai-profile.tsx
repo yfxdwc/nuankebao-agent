@@ -71,7 +71,7 @@ export function AIProfile({ customerId }: { customerId: string }) {
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2 text-xs">
               {data.aiMock && (
-                <Badge className="bg-yellow-100 text-yellow-800">
+                <Badge className="bg-warning-surface text-warning">
                   Mock (未配置 MINIMAX_API_KEY)
                 </Badge>
               )}

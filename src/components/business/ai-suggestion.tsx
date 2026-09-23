@@ -89,7 +89,7 @@ export function AISuggestion({ customerId }: { customerId: string }) {
                 </Badge>
               )}
               {data.aiMock && (
-                <Badge className="bg-yellow-100 text-yellow-800">
+                <Badge className="bg-warning-surface text-warning">
                   Mock (未配置 MINIMAX_API_KEY)
                 </Badge>
               )}
