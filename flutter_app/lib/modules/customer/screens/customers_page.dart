@@ -689,7 +689,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(height: AppSpace.s16),
+                const SizedBox(height: AppSpace.s12),
                 FilledButton(
                   onPressed: () {
                     Navigator.of(ctx).pop();
@@ -2476,7 +2476,7 @@ class CustomerDetailPage extends ConsumerWidget {
                 decoration: const InputDecoration(
                     labelText: '聊了什么 (可选)', hintText: '例: 说腰疼好多了, 约下周三'),
               ),
-              const SizedBox(height: AppSpace.s16),
+              const SizedBox(height: AppSpace.s12),
               BigButton(
                 label: saving ? '保存中...' : '保存',
                 icon: Icons.check,
@@ -3241,7 +3241,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 const SizedBox(height: AppSpace.s8),
                 _lookupHint(_lookup!),
               ],
-              const SizedBox(height: AppSpace.s16),
+              const SizedBox(height: AppSpace.s12),
             ],
             TextFormField(
               controller: _nameController,
@@ -3253,7 +3253,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               ),
               validator: (v) => (v == null || v.trim().isEmpty) ? '请输入姓名' : null,
             ),
-            const SizedBox(height: AppSpace.s16),
+            const SizedBox(height: AppSpace.s12),
             // 已注册用户: 手机号在对方账号里, 不需要录 (档案已存在)
             if (!_claimMode) ...[
               TextFormField(
@@ -3268,7 +3268,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                   return null;
                 },
               ),
-              const SizedBox(height: AppSpace.s16),
+              const SizedBox(height: AppSpace.s12),
             ],
             // 性别 (大按钮组)
             const Text('性别', style: TextStyle(fontSize: AppTheme.fontMd)),
@@ -3282,7 +3282,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 _genderButton('未知', 'U'),
               ],
             ),
-            const SizedBox(height: AppSpace.s16),
+            const SizedBox(height: AppSpace.s12),
             // ===== 生日 (主人 2026-09-18: 年月日可选填 + 农历/阳历 + 生日提醒) =====
             const Text('生日', style: TextStyle(fontSize: AppTheme.fontMd)),
             const SizedBox(height: AppSpace.s4),
@@ -3389,7 +3389,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ),
               ),
             ],
-            const SizedBox(height: AppSpace.s16),
+            const SizedBox(height: AppSpace.s12),
             // ===== 健康标签 (默认候选 + 自定义, 单个 ≤6 汉字; 主人 2026-09-18) =====
             const Text('健康标签', style: TextStyle(fontSize: AppTheme.fontMd)),
             const SizedBox(height: AppSpace.s4),
@@ -3455,7 +3455,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpace.s16),
+            const SizedBox(height: AppSpace.s12),
             // ===== 既往病史 / 过敏史 (主人 2026-09-18: 过敏史新增) =====
             TextField(
               controller: _diseaseController,
@@ -3476,7 +3476,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 hintText: '例: 青霉素过敏 / 对薰衣草精油过敏 / 皮肤敏感',
               ),
             ),
-            const SizedBox(height: AppSpace.s16),
+            const SizedBox(height: AppSpace.s12),
             // 种子客户开关 (潜在客户, 胶囊筛选「种子」命中这里)
             Container(
               decoration: BoxDecoration(
@@ -3499,7 +3499,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ),
               ),
             ),
-            const SizedBox(height: AppSpace.s16),
+            const SizedBox(height: AppSpace.s12),
             TextFormField(
               controller: _notesController,
               style: const TextStyle(fontSize: AppTheme.fontMd),

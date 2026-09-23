@@ -26,10 +26,10 @@ class WellnessRecordDetailPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('养生详情'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit, size: 28),
+            icon: const Icon(Icons.edit, size: AppSize.iconLg),
             tooltip: '编辑',
             onPressed: () => context.push('/wellness-records/$recordId/edit'),
           ),
@@ -79,7 +79,7 @@ class WellnessRecordDetailPage extends ConsumerWidget {
                         color: AppTheme.accent.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(AppRadius.r32),
                       ),
-                      child: const Icon(Icons.favorite, color: AppTheme.accent, size: 36),
+                      child: const Icon(Icons.favorite, color: AppTheme.accent, size: AppSize.avatarMd),
                     ),
                     const SizedBox(width: AppSpace.s16),
                     Expanded(
