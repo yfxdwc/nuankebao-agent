@@ -684,7 +684,7 @@ bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached +
 
 不在冻结清单的相邻文件:
   ❌ flutter_app/lib/**           (业务源码, 改业务 ≠ 改 preview)
-  ❌ src/app/(admin)/             (已 freeze-keep, 跟本机制独立)
+  ❌ src/app/admin/               (web admin, ADR-0017 已解冻活跃; 跟 preview 冻结机制无关)
   ❌ src/components/business/     (WEB admin 业务组件)
   ❌ tools/pre-commit-preview-guard.sh  (guard 自身, 改它要走 §9.3 SOP)
   ❌ docs/dev-modules/flutter-preview.md (治理文档, 可演进)
@@ -749,7 +749,7 @@ git commit --no-verify -m "fix(preview): 紧急回滚整个 preview framework �
 | **CHANGELOG [0.5.2]** | 任何 preview framework bypass commit 必须同时更新 CHANGELOG, 否则 PR 阻断 |
 | **CI `pnpm test` / `pnpm test:e2e`** | preview-framework-snapshot.test.ts + preview-smoke.spec.ts 是 gate, fail = 不收 |
 | **CHARTER §7 反模式沉淀** | 本机制是 W14 R12 三次复发的"治本沉淀", 写在这里是反模式沉淀的代表案例 |
-| **ADR-0005 web admin freeze-keep** | 平行机制 (web admin 冻结 vs preview 冻结), 各自独立 |
+| **ADR-0017 web admin 解冻** (部分 Supersede ADR-0005) | 平行机制 (web admin 活跃 vs preview 冻结), 各自独立 |
 
 ### §9.6 验收清单 (新装 / 改 / 排错后必看)
 

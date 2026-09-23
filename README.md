@@ -1,9 +1,10 @@
 # 暖客宝 — 大健康行业客户管理系统
 
-> v0.1.2 — Phase 1 W2-3 进行中 (Mobile-Only 阶段, 2026-09-07)
+> **v0.1.6** — Phase 1 W2-3 进行中 (双域活跃, 2026-09-23)
 >
-> 📱 **当前策略**: **Mobile-Only** — 接下来开发只做 Flutter 移动端, web admin 冻结 (`freeze-keep`), backend 同步走 `flutter-only-sync`, 解冻条件 `master-decide`。
-> 详见 [`docs/CHARTER.md`](docs/CHARTER.md) §4.4 + [`ADR-0005`](docs/adr/0005-mobile-only-phase.md)。
+> 🔀 **当前策略**: **双域活跃** — **APK 域** (Flutter 移动端, 销售员主产品) + **WEB 域** (Next.js admin, 管理与分析主入口) **并行开发**。
+> backend / schema 改动走 **双线同步** (Flutter + web admin 同批更新, `pnpm type-check` 必过)。
+> 详见 [`docs/CHARTER.md`](docs/CHARTER.md) §4.4 + [`ADR-0017`](docs/adr/0017-web-admin-unfreeze.md) (解冻 web admin, 部分 Supersede ADR-0005)。
 
 ## 这个项目是干嘛的
 
@@ -43,35 +44,35 @@
 
 详见 [`docs/tech-stack-v0.1.md`](./docs/tech-stack-v0.1.md) 和 [`docs/references.md`](./docs/references.md)。
 
-## Phase 1 状态 (v0.1.2 mobile-only)
+## Phase 1 状态 (v0.1.6 双域活跃)
 
 | Week | 状态 | 说明 |
 |---|---|---|
 | W1 | ✅ 完成 (2026-09-03) | 项目骨架 + Docker + Next.js + Drizzle + Auth.js |
-| W2-3 | 🔄 进行中 | Flutter 移动端 12 screen + Drizzle schema + 字段加密 + 审计; web admin 冻结 |
-| W4 | ⏳ 待开始 | Flutter 报表 + APK 内测; web admin 报表后补 |
-| W5-6 | ⏳ 待开始 | 部署 + 备份 + Flutter APK 销售内测; web admin 解冻 master-decide |
+| W2-3 | 🔄 进行中 | Flutter 移动端 12 screen + Drizzle schema + 字段加密 + 审计; web admin **并行活跃** |
+| W4 | ⏳ 待开始 | Flutter 报表 + APK 内测; web admin 报表**同步推进** |
+| W5-6 | ⏳ 待开始 | 部署 + 备份 + Flutter APK 销售内测; 用量数据 (`/admin/usage`) 作为 W6 拍板依据 |
 
-### Mobile-Only 阶段要点 (v0.1.2)
+### 双域策略要点 (v0.1.6)
 
-- ✅ **Flutter 移动端** = 唯一 active frontend (双线 → 单线, 释放精力)
-- ❄ **Web admin** (`/admin/*`) = 冻结但保持运行, 不下线, 不加新 UI, 仅 P0 bug fix
-- 🔄 **Backend / API** = 改动只同步 Flutter service (web admin client 类型/调用暂停同步, 解冻时 catch-up)
-- 🕐 **Web 解冻** = 主人 ask_user 明确说「移动端 OK, 解冻 web」才触发 (master-decide)
+> 2026-09-22 主人拍板**解冻 web admin** (ADR-0017)，v0.1.2 的 Mobile-Only 阶段结束。
+
+- ✅ **APK 域** (Flutter) = **销售侧主产品** — 录入 / 拍照 / 跟进 / 客户详情，仍以 Flutter 为准 (**apk-first 不变**)
+- ✅ **WEB 域** (Next.js admin) = **管理与分析主入口** — 报表 / 导入 / 审计 / 用量 / 团队管理，以 web admin 为主
+- 🔄 **Backend / API / schema 改动** = **双线同步**：Flutter service 必同步 + web admin client 同批更新，`pnpm type-check` 必须过
+- ⚠ **不要求两边功能对齐** — 同一功能单一入口即可 (解冻 ≠ 重做存量 web 页面)
 
 **活跃目录** (可改):
-- `flutter_app/lib/**` (主战场)
-- `src/app/api/**` (backend, Flutter 消费)
-- `src/lib/**` (业务逻辑)
-- `src/middleware.ts`
-- `src/app/(auth)/login/**`
+- `flutter_app/lib/**` (APK 域主战场)
+- `src/app/admin/**` (WEB 域 admin)
+- `src/app/api/**` · `src/lib/**` (共享 backend)
+- `src/components/{admin,business,ui}/**`
+- `src/middleware.ts` · `src/app/(auth)/login/**`
 
-**冻结目录** (仅 P0 bug fix):
-- `src/app/admin/**` (web admin 16 page)
-- `src/components/business/**` (web 业务组件 12 个)
-- `src/components/admin/**` (sidebar/topbar/bottom-tab)
+**仍冻结** (独立机制，与本次解冻无关):
+- preview framework 9 个路径 (AGENTS §9 + ADR-0009)
 
-详见 [`AGENTS.md` §3 同步策略](./AGENTS.md) + [`docs/CHARTER.md` §4.4](./docs/CHARTER.md)。
+详见 [`AGENTS.md` §3 同步策略](./AGENTS.md) + [`docs/CHARTER.md` §4.4](./docs/CHARTER.md) + [`ADR-0017`](./docs/adr/0017-web-admin-unfreeze.md)。
 
 ---
 
@@ -227,13 +228,13 @@ nuankebao-agent/
     └── check-env.sh
 ```
 
-## 实施路线图 (v0.1.2 mobile-only)
+## 实施路线图 (v0.1.6 双域活跃)
 
 | 阶段 | 时间 | 内容 |
 |---|---|---|
-| **Phase 1 MVP** | W1-W6 | Flutter 移动端主 + 1-2 销售 APK 内测; web admin 冻结 (后补, 解冻 master-decide) |
-| Phase 2 AI Copilot | W7-W10 | MiniMax 接入 + 客户画像 + 跟进话术 (Flutter 优先) |
-| Phase 3 SaaS 化 | W11+ | 多租户 + 计费; web admin 解冻后双线推进 |
+| **Phase 1 MVP** | W1-W6 | Flutter 移动端 + 1-2 销售 APK 内测; web admin **并行推进** (报表 / 用量 / 审计) |
+| Phase 2 AI Copilot | W7-W10 | MiniMax 接入 + **跟进指引**(客户画像 / 跟进话术 / 效果分析); 优先级 = 可执行性 > AI 能力 |
+| Phase 3 SaaS 化 | W11+ | 多租户 + 计费; 双域并行 |
 
 详见 [`docs/phase-1-mvp.md`](./docs/phase-1-mvp.md)。
 
