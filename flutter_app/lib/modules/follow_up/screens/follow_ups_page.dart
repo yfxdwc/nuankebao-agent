@@ -65,7 +65,7 @@ class FollowUpsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('跟进待办'),
-        toolbarHeight: 64,
+        toolbarHeight: AppSize.appBarHeight,
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -92,7 +92,7 @@ class FollowUpsPage extends ConsumerWidget {
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(pendingFollowUpsProvider),
             child: ListView(
-              padding: const EdgeInsets.only(bottom: AppSpace.s32),
+              padding: const EdgeInsets.only(bottom: AppSpace.s24),
               children: [
                 for (final g in ordered) ...[
                   _groupHeader(g, grouped[g]!.length),
@@ -111,7 +111,7 @@ class FollowUpsPage extends ConsumerWidget {
     final color = urgent ? AppTheme.danger : AppTheme.primary;
     return Container(
       color: AppTheme.bgWarm,
-      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 14, 16, 6),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s14, AppSpace.s8, AppSpace.s14, AppSpace.s4),
       child: Row(
         children: [
           Container(
@@ -139,7 +139,7 @@ class FollowUpsPage extends ConsumerWidget {
     final t = todo.task;
     final overdue = _groupOf(t.dueAt) == '逾期';
     return Container(
-      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s14, AppSpace.s8, AppSpace.s14, AppSpace.s8),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.divider)),
       ),
@@ -181,7 +181,7 @@ class FollowUpsPage extends ConsumerWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('已标记「${todo.customerName}」跟进完成',
-                        style: const TextStyle(fontSize: AppTheme.fontSm)),
+                        style: const TextStyle(fontSize: AppType.sm)),
                     duration: const Duration(seconds: 2),
                   ),
                 );
@@ -189,9 +189,10 @@ class FollowUpsPage extends ConsumerWidget {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primary,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s12),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s6),
+              minimumSize: const Size(0, AppSize.tapCompact),  // 紧凑 + 触摸下限 44
             ),
-            child: const Text('完成', style: TextStyle(fontSize: AppTheme.fontSm)),
+            child: const Text('完成', style: TextStyle(fontSize: AppType.sm, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

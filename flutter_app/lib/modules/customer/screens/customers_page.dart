@@ -1957,7 +1957,7 @@ class CustomerDetailPage extends ConsumerWidget {
     AsyncValue<List<dynamic>> asyncRecords,
   ) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(AppSpace.s16, 8, 16, 80),
+      padding: const EdgeInsets.fromLTRB(AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, AppSpace.s48),
       children: [
         // 1) 大头像 + 基本信息 (类型徽章 / 年龄 / 拨号)
         _buildHeader(context, ref, customer),
@@ -2007,7 +2007,7 @@ class CustomerDetailPage extends ConsumerWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
+        padding: const EdgeInsets.all(AppSpace.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -2137,7 +2137,7 @@ class CustomerDetailPage extends ConsumerWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
+        padding: const EdgeInsets.all(AppSpace.cardPadding),
         child: Column(
           children: [
             // 头像 + 右下角相机角标 (主人 2026-09-18 拍: 点它设置客户头像)
@@ -3202,7 +3202,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(AppSpace.s16),
+          padding: const EdgeInsets.all(AppSpace.cardPadding),
           children: [
             // 推荐码识别 (只新建时; ADR-0015 Q10): 填已注册朋友的码 → 把她加为客户
             if (widget.customerId == null) ...[

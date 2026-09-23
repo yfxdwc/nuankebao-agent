@@ -56,15 +56,15 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: AppSpace.s12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s8),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
+        padding: const EdgeInsets.all(AppSpace.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(Icons.insights, size: 26, color: AppTheme.primary),
+                const Icon(Icons.insights, size: 22, color: AppTheme.primary),
                 const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text(
@@ -91,10 +91,10 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
                 color: AppTheme.textSecondary,
               ),
             ),
-            const SizedBox(height: AppSpace.s12),
+            const SizedBox(height: AppSpace.s8),
             if (_loading)
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpace.s12),
+                padding: EdgeInsets.symmetric(vertical: AppSpace.s8),
                 child: Row(
                   children: [
                     SizedBox(
@@ -142,7 +142,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
         // 一句话总结 (免费层, 服务端拼的)
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(AppSpace.s12),
+          padding: const EdgeInsets.all(AppSpace.s8),
           decoration: BoxDecoration(
             color: AppTheme.bgWarm,
             borderRadius: BorderRadius.circular(AppRadius.r10),
@@ -156,7 +156,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
             ),
           ),
         ),
-        const SizedBox(height: AppSpace.s12),
+        const SizedBox(height: AppSpace.s8),
 
         // 趋势 (颜色 + 文字双编码)
         if (a.trend != 'unknown')
@@ -182,7 +182,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
               ),
             ],
           ),
-        const SizedBox(height: AppSpace.s12),
+        const SizedBox(height: AppSpace.s8),
 
         // 指标网格
         Wrap(
@@ -234,13 +234,13 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
             ),
           ],
         ),
-        const SizedBox(height: AppSpace.s12),
+        const SizedBox(height: AppSpace.s8),
 
         // AI 解读: 会员提示 (客观指标不锁, 只锁解读)
         if (!a.aiTipAvailable)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(AppSpace.s10),
+            padding: const EdgeInsets.all(AppSpace.s8),
             decoration: BoxDecoration(
               color: AppTheme.accent.withOpacity(0.12),
               borderRadius: BorderRadius.circular(AppRadius.r10),
