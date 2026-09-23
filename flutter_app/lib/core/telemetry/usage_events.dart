@@ -92,10 +92,18 @@ class UsageEntityType {
   ];
 }
 
-/// AI 卡片枚举 (与 ai_insight_cards.dart 的 4 张卡对齐)
+/// AI 卡片枚举 (与 ai_insight_cards.dart 对齐)
+///
+/// ⚠ P5 (主人 2026-09-23): 画像/话术/效果 三张卡合并成**一次**调用 → 埋点统一用
+///   `insight` (一次生成 = 一条事件)。旧值保留是因为**历史数据里已有**这些 card 的
+///   事件, 删掉会让看板的分组出现空洞。`repurchase` 仍是独立卡片 (纯 DB, 不烧 AI)。
 class AiCard {
+  /// P5 合并洞察 (画像 + 话术 + 效果 一次生成)
+  static const insight = 'insight';
+  /// 复购预测 (自动加载, 不烧 AI)
+  static const repurchase = 'repurchase';
+  // 以下为 P5 之前的旧值, 仅为兼容历史埋点数据
   static const profile = 'profile';
   static const followUp = 'follow_up';
-  static const repurchase = 'repurchase';
   static const effect = 'effect';
 }

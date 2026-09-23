@@ -142,7 +142,8 @@ describe("会员/推荐 S0 闭环", () => {
 
     const refereeView = await getMembershipView(userB);
     expect(refereeView.isMember).toBe(true);
-    expect(refereeView.features.length).toBe(9);
+    // P5 (2026-09-23): AI 三项合并成 ai.insight → 会员功能 9 项变 7 项
+    expect(refereeView.features.length).toBe(7);
 
     // 推荐人还没拿到
     const referrerView = await getMembershipView(userA);
@@ -221,7 +222,7 @@ describe("会员/推荐 S0 闭环", () => {
     const after = await getMembershipView(userC);
     expect(after.isMember).toBe(true);
     expect(after.planCode).toBe("member");
-    expect(after.features.length).toBe(9);
+    expect(after.features.length).toBe(7); // P5: 9 → 7
   });
 });
 
@@ -319,7 +320,7 @@ describe("人工收款 (内测: 个人微信收款码 + 管理员核销)", () =>
 });
 
 describe("系统管理员 = 永久会员 (角色即规则, 主人 2026-09-19)", () => {
-  it("admin 角色: isMember=true + permanent=true + 9 项功能, 且不写任何权益行", async () => {
+  it("admin 角色: isMember=true + permanent=true + 7 项功能 (P5 合并后), 且不写任何权益行", async () => {
     const [admin] = await db
       .insert(user)
       .values({
@@ -335,7 +336,8 @@ describe("系统管理员 = 永久会员 (角色即规则, 主人 2026-09-19)", 
     expect(view.permanent).toBe(true);
     expect(view.membershipSource).toBe("admin");
     expect(view.planCode).toBe("admin");
-    expect(view.features.length).toBe(9);
+    // P5 (2026-09-23): AI 三项合并成 ai.insight → 9 项变 7 项
+    expect(view.features.length).toBe(7);
     expect(view.memberUntil).toBe(null); // 没有到期日 = 永久
 
     // 关键: 判定是规则, 不落库 → 没有 membership 行 / 没有 grant 行
@@ -352,7 +354,7 @@ describe("系统管理员 = 永久会员 (角色即规则, 主人 2026-09-19)", 
 
     // 会员功能直接放行 (不抛 402)
     await expect(
-      requireFeature(admin.id, "ai.follow_up")
+      requireFeature(admin.id, "ai.insight")
     ).resolves.toBeUndefined();
 
     // 清理
@@ -557,7 +559,8 @@ describe("B1 自助注册 (凭推荐码) + 推荐人确认 (主人 2026-09-20)",
 
     const view = await getMembershipView(signupUserId!);
     expect(view.isMember).toBe(true);
-    expect(view.features.length).toBe(9);
+    // P5 (2026-09-23): AI 三项合并成 ai.insight → 9 项变 7 项
+    expect(view.features.length).toBe(7);
 
     const r2 = await confirmReferral({ referrerUserId: userA, rewardId: row.id });
     expect(r2.grantedDays).toBe(0); // 幂等

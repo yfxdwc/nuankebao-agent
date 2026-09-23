@@ -597,52 +597,33 @@ class FranchiseeService {
 }
 
 // ============================================
-// AiService (AI 客户画像 + 跟进话术)
+// AiService (AI 洞察)
 // ============================================
+// ⚠ P5 (主人 2026-09-23): 原先 4 个方法 (profileInsight / followUpInsight /
+//   effectAnalysis / followUpSuggestion) 各自打一个后端路由、各自烧一次 AI。
+//   现合并为 `insight()` —— **一次调用** 拿回三段内容 + 复购预测。
 
 class AiService {
   final Dio _dio;
   AiService(this._dio);
 
-  /// AI 客户画像 (旧接口: 只拿 content 文本)
-  Future<String> profile(String customerId) async {
-    final res = await _dio.get('/ai/profile/$customerId');
-    return res.data['content'] as String? ?? '暂无画像';
-  }
-
-  /// AI 客户画像 (结构化: 总结 + 近期记录摘要)
-  Future<CustomerProfileInsight> profileInsight(String customerId) async {
-    final res = await _dio.get('/ai/profile/$customerId');
-    return CustomerProfileInsight.fromJson(res.data as Map<String, dynamic>);
-  }
-
-  /// AI 跟进话术 (可选 reason = 为什么跟进)
-  Future<FollowUpSuggestion> followUpInsight(
-    String customerId, {
-    String? reason,
-  }) async {
-    final res = await _dio.post('/ai/follow-up', data: {
+  /// AI 洞察 (P5 唯一入口): 一次调用 → 画像 + 话术 + 效果 + 复购预测
+  ///
+  /// `reason` = 跟进理由 (只影响「话术」那段; 来自 L0 行动规则 / 用户下拉)
+  Future<AiInsightResult> insight(String customerId, {String? reason}) async {
+    final res = await _dio.post('/ai/insight', data: {
       'customerId': customerId,
       if (reason != null && reason.isNotEmpty) 'reason': reason,
     });
-    return FollowUpSuggestion.fromJson(res.data as Map<String, dynamic>);
+    return AiInsightResult.fromJson(res.data as Map<String, dynamic>);
   }
 
-  Future<String> followUpSuggestion(Map<String, dynamic> data) async {
-    final res = await _dio.post('/ai/follow-up', data: data);
-    return res.data['suggestion'] as String? ?? '暂无建议';
-  }
-
-  /// 复购预测 (纯 DB 计算, 不消耗 AI 额度)
+  /// 复购预测 (纯 DB 计算, **不消耗 AI**)
+  ///
+  /// 单独保留一个路由: 这张卡是**自动加载**的 (进页就看), 不能为了它去调 AI。
   Future<RepurchasePrediction> repurchasePrediction(String customerId) async {
     final res = await _dio.get('/ai/repurchase-prediction/$customerId');
     return RepurchasePrediction.fromJson(res.data as Map<String, dynamic>);
-  }
-
-  /// 效果分析 (多疗程趋势 + AI 总结)
-  Future<EffectAnalysis> effectAnalysis(String customerId) async {
-    final res = await _dio.get('/ai/effect-analysis/$customerId');
-    return EffectAnalysis.fromJson(res.data as Map<String, dynamic>);
   }
 }
 

@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/models/ai_insight.dart';
+import '../../../core/providers/ai_insight_provider.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_events.dart' show AiCard;
 import '../../../core/telemetry/usage_providers.dart';
@@ -25,11 +26,21 @@ import '../../../core/theme/tokens.g.dart';
 // 用量埋点 helper (主人 2026-09-22: 用真实数据回答「AI 卡片到底有没有人点」)
 // ============================================
 
+/// 埋点一律**不能阻断业务** (2026-09-23 P5 测出来):
+///   原先 `_trackAiClick` 直接 `ref.read(usageServiceProvider)`,
+///   usageServiceProvider 依赖 sharedPreferencesProvider —— 一旦它没就绪 (测试环境 /
+///   插件异常) 就抛错, 而调用处是「先埋点再 generate, 中间无 try」→
+///   **用户点了生成但一次请求都没发** (排查半天)。
+///   埋点是辅助, 永远不该让主流程静默失败。
 void _trackAiClick(WidgetRef ref, String card, {bool regenerate = false}) {
-  ref.read(usageServiceProvider).track(
-        regenerate ? 'ai_regenerate' : 'ai_generate_click',
-        props: {'card': card},
-      );
+  try {
+    ref.read(usageServiceProvider).track(
+          regenerate ? 'ai_regenerate' : 'ai_generate_click',
+          props: {'card': card},
+        );
+  } catch (_) {
+    // 埋点失败静默忽略
+  }
 }
 
 void _trackAiResult(
@@ -38,13 +49,17 @@ void _trackAiResult(
   required bool ok,
   required int ms,
 }) {
-  ref.read(usageServiceProvider).track(
-        'ai_generate_result',
-        props: {'card': card},
-        success: ok,
-        durationMs: ms,
-        errorCode: ok ? null : 'generate_failed',
-      );
+  try {
+    ref.read(usageServiceProvider).track(
+          'ai_generate_result',
+          props: {'card': card},
+          success: ok,
+          durationMs: ms,
+          errorCode: ok ? null : 'generate_failed',
+        );
+  } catch (_) {
+    // 埋点失败静默忽略
+  }
 }
 
 // ============================================
@@ -220,364 +235,379 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
 // AI 客户画像 (点一下生成)
 // ============================================
 
-class AiProfileCard extends ConsumerStatefulWidget {
+// ============================================
+// P5: 三张 AI 卡 (画像 / 话术 / 效果) 共用**一次**调用
+//
+// 主人 2026-09-23 拍「AI 4 卡合并成 1 次调用」。
+//   · 三张卡不再是 3 个 StatefulWidget 各持一份 state, 而是 watch 同一个
+//     `aiInsightProvider(customerId)` —— 任意一张卡的「生成」都会让三张卡同时出内容。
+//   · 卡片仍是三张 (场景不同: 早上看画像了解人 / 打电话看话术 / 复盘看效果),
+//     合的是**调用**, 不是界面。
+//   · 「复购预测」保持独立 (纯 DB 计算, 自动加载, 不烧 AI)。
+//
+// ⚠ 谁都不许在这里直接调 aiService.insight —— 必须走 notifier,
+//   否则又退回"每张卡各打一次" (P5 白做)。
+// ============================================
+
+class AiProfileCard extends ConsumerWidget {
   final String customerId;
   const AiProfileCard({super.key, required this.customerId});
 
   @override
-  ConsumerState<AiProfileCard> createState() => _AiProfileCardState();
-}
-
-class _AiProfileCardState extends ConsumerState<AiProfileCard> {
-  CustomerProfileInsight? _data;
-  bool _loading = false;
-  String? _error;
-
-  Future<void> _generate({bool regenerate = false}) async {
-    _trackAiClick(ref, AiCard.profile, regenerate: regenerate);
-    final sw = Stopwatch()..start();
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final d = await ref.read(aiServiceProvider).profileInsight(widget.customerId);
-      if (mounted) setState(() => _data = d);
-      _trackAiResult(ref, AiCard.profile,
-          ok: true, ms: sw.elapsedMilliseconds);
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
-      _trackAiResult(ref, AiCard.profile,
-          ok: false, ms: sw.elapsedMilliseconds);
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _AiCardShell(
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _AiSectionCard(
+      customerId: customerId,
       icon: Icons.auto_awesome,
       iconColor: AppTheme.franchisee,
       title: 'AI 客户画像',
       subtitle: '把健康标签 + 历史记录读一遍, 总结这位客户是谁',
-      trailing: _data == null
-          ? null
-          : IconButton(
-              icon: const Icon(Icons.refresh, size: AppSize.iconMd),
-              tooltip: '重新生成',
-              onPressed: _loading ? null : () => _generate(regenerate: true),
-            ),
-      child: _loading
-          ? const _AiLoading('AI 正在总结客户画像...')
-          : _error != null
-              ? _AiError(message: _error!, onRetry: () => _generate())
-              : _data == null
-                  ? _GenerateButton(
-                      label: '生成客户画像',
-                      icon: Icons.auto_awesome,
-                      onTap: () => _generate(),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _AiBody(text: _data!.aiSummary),
-                        if (_data!.recentSummaries.isNotEmpty) ...[
-                          const SizedBox(height: AppSpace.s12),
-                          const Text('参考的近期记录',
-                              style: TextStyle(
-                                  fontSize: AppTheme.fontXs,
-                                  color: AppTheme.textSecondary)),
-                          const SizedBox(height: AppSpace.s4),
-                          ..._data!.recentSummaries.take(5).map((s) => Padding(
-                                padding: const EdgeInsets.only(bottom: AppSpace.s2),
-                                child: Text('· $s',
-                                    style: const TextStyle(
-                                        fontSize: AppTheme.fontXs,
-                                        color: AppTheme.textSecondary)),
-                              )),
-                        ],
-                        if (_data!.aiMock) ...[
-                          const SizedBox(height: AppSpace.s8),
-                          const _AiMockBadge(),
-                        ],
-                      ],
-                    ),
+      emptyLabel: '生成客户画像',
+      emptyIcon: Icons.auto_awesome,
+      loadingLabel: 'AI 正在总结客户画像...',
+      section: (r) => r.sections.profile,
     );
   }
 }
 
-// ============================================
-// AI 跟进建议 (点一下生成话术)
-// ============================================
-
-class AiFollowUpCard extends ConsumerStatefulWidget {
+class AiFollowUpCard extends ConsumerWidget {
   final String customerId;
   const AiFollowUpCard({super.key, required this.customerId});
 
-  @override
-  ConsumerState<AiFollowUpCard> createState() => _AiFollowUpCardState();
-}
-
-class _AiFollowUpCardState extends ConsumerState<AiFollowUpCard> {
-  FollowUpSuggestion? _data;
-  bool _loading = false;
-  String? _error;
-  String? _reason;
-
   static const _reasonOptions = ['好久没来了', '想约她到店', '生日/节日问候', '该复购了'];
 
-  Future<void> _generate([String? reason, bool regenerate = false]) async {
-    _trackAiClick(ref, AiCard.followUp, regenerate: regenerate);
-    final sw = Stopwatch()..start();
-    setState(() {
-      _loading = true;
-      _error = null;
-      if (reason != null) _reason = reason;
-    });
-    try {
-      final d = await ref
-          .read(aiServiceProvider)
-          .followUpInsight(widget.customerId, reason: _reason);
-      if (mounted) setState(() => _data = d);
-      _trackAiResult(ref, AiCard.followUp,
-          ok: true, ms: sw.elapsedMilliseconds);
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
-      _trackAiResult(ref, AiCard.followUp,
-          ok: false, ms: sw.elapsedMilliseconds);
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(aiInsightProvider(customerId).notifier);
+    final async = ref.watch(aiInsightProvider(customerId));
+    final data = async.valueOrNull;
+
     return _AiCardShell(
       icon: Icons.chat_bubble_outline,
       iconColor: AppTheme.accent,
       title: 'AI 跟进建议',
       subtitle: '按她的情况写一段可以直接发的开口话术',
-      trailing: _data == null
+      trailing: data == null
           ? null
           : IconButton(
               icon: const Icon(Icons.refresh, size: AppSize.iconMd),
               tooltip: '重新生成',
-              onPressed: _loading ? null : () => _generate(_reason, true),
+              onPressed: async.isLoading
+                  ? null
+                  : () => _triggerInsight(ref, customerId, regenerate: true),
             ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 跟进原因 (可选): 选了话术更贴场景
+          //
+          // 理由存在 notifier 上 (不是本卡 local state) —— 三张卡共用一次调用,
+          // 理由必须统一, 否则"在跟进卡选了理由, 去点画像卡的重新生成"会丢掉理由。
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: _reasonOptions
                 .map((r) => ChoiceChip(
-                      label: Text(r, style: const TextStyle(fontSize: AppTheme.fontSm)),
-                      selected: _reason == r,
-                      onSelected: (v) =>
-                          setState(() => _reason = v ? r : null),
+                      label: Text(r,
+                          style: const TextStyle(fontSize: AppTheme.fontSm)),
+                      selected: notifier.reason == r,
+                      onSelected: (v) => _triggerInsight(
+                        ref,
+                        customerId,
+                        reason: v ? r : null,
+                      ),
                     ))
                 .toList(),
           ),
           const SizedBox(height: AppSpace.s12),
-          if (_loading)
-            const _AiLoading('AI 正在写话术...')
-          else if (_error != null)
-            _AiError(message: _error!, onRetry: () => _generate(_reason))
-          else if (_data == null)
-            _GenerateButton(
-              label: '生成跟进话术',
-              icon: Icons.chat,
-              onTap: () => _generate(_reason),
-            )
-          else ...[
-            _AiBody(text: _data!.suggestion),
-            const SizedBox(height: AppSpace.s10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (_data!.daysSinceLastVisit != null)
-                  _pill('距上次 ${_data!.daysSinceLastVisit} 天'),
-                if (_data!.avgInterval != null)
-                  _pill('平均 ${_data!.avgInterval} 天一次'),
-                if (_data!.reason.isNotEmpty) _pill(_data!.reason),
-              ],
-            ),
-            const SizedBox(height: AppSpace.s12),
-            Row(
-              children: [
-                Expanded(
-                  child: BigActionButton(
-                    icon: Icons.copy_all,
-                    label: '复制话术',
-                    compact: true,
-                    onTap: () {
-                      // 复制到剪贴板 (web + native 都支持)
-                      Clipboard.setData(ClipboardData(text: _data!.suggestion));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('话术已复制')),
-                      );
-                    },
+          ..._buildInsightBody(
+            context: context,
+            ref: ref,
+            customerId: customerId,
+            async: async,
+            pick: (r) => r.sections.followUp,
+            emptyLabel: '生成跟进话术',
+            emptyIcon: Icons.chat,
+            loadingLabel: 'AI 正在写话术...',
+            onGenerated: (r, context) => [
+              // 话术段独有: 一键复制 + 建任务 (闭环, CHARTER §1.4)
+              Row(
+                children: [
+                  Expanded(
+                    child: BigActionButton(
+                      icon: Icons.copy_all,
+                      label: '复制话术',
+                      compact: true,
+                      onTap: () {
+                        Clipboard.setData(
+                            ClipboardData(text: r.sections.followUp));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('话术已复制')),
+                        );
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppSpace.s8),
-                Expanded(
-                  child: BigActionButton(
-                    icon: Icons.add_task,
-                    label: '建跟进任务',
-                    compact: true,
-                    onTap: () => showAddFollowUpSheet(context, ref,
-                        customerId: widget.customerId,
-                        aiSuggestion: _data?.suggestion),
+                  const SizedBox(width: AppSpace.s8),
+                  Expanded(
+                    child: BigActionButton(
+                      icon: Icons.add_task,
+                      label: '建跟进任务',
+                      compact: true,
+                      onTap: () => showAddFollowUpSheet(context, ref,
+                          customerId: customerId,
+                          aiSuggestion: r.sections.followUp),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            if (_data!.aiMock) ...[
-              const SizedBox(height: AppSpace.s8),
-              const _AiMockBadge(),
+                ],
+              ),
             ],
-          ],
+          ),
         ],
       ),
     );
   }
-
-  Widget _pill(String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s4),
-        decoration: BoxDecoration(
-          color: AppTheme.bgWarm,
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(AppRadius.r12),
-        ),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
-      );
 }
 
-// ============================================
-// AI 效果分析 (点一下生成)
-// ============================================
-
-class EffectAnalysisCard extends ConsumerStatefulWidget {
+class EffectAnalysisCard extends ConsumerWidget {
   final String customerId;
   const EffectAnalysisCard({super.key, required this.customerId});
 
   @override
-  ConsumerState<EffectAnalysisCard> createState() => _EffectAnalysisCardState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _AiSectionCard(
+      customerId: customerId,
+      icon: Icons.trending_up,
+      iconColor: AppTheme.primaryDark,
+      title: 'AI 效果分析',
+      subtitle: '几疗程下来到底有没有用, 趋势 + 建议',
+      emptyLabel: '生成效果分析',
+      emptyIcon: Icons.insights,
+      loadingLabel: 'AI 正在分析效果...',
+      section: (r) => r.sections.effect,
+    );
+  }
 }
 
-class _EffectAnalysisCardState extends ConsumerState<EffectAnalysisCard> {
-  EffectAnalysis? _data;
-  bool _loading = false;
-  String? _error;
+// ============================================
+// P5 共用部件: 「生成」入口 + 事实底稿 + 通用卡壳
+// ============================================
 
-  Future<void> _generate({bool regenerate = false}) async {
-    _trackAiClick(ref, AiCard.effect, regenerate: regenerate);
-    final sw = Stopwatch()..start();
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final d = await ref.read(aiServiceProvider).effectAnalysis(widget.customerId);
-      if (mounted) setState(() => _data = d);
-      _trackAiResult(ref, AiCard.effect,
-          ok: true, ms: sw.elapsedMilliseconds);
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
-      _trackAiResult(ref, AiCard.effect,
-          ok: false, ms: sw.elapsedMilliseconds);
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+/// 唯一的 AI 触发入口
+///
+/// 三张卡的按钮/芯片都走这里 —— 保证「一次生成 = 一次调用」。
+/// 埋点也在这里: 一次生成只报一条 `ai_generate_click` (card=insight),
+/// 不再像 P5 之前那样三张卡各报各的 (看板会把一次行为算成三次)。
+void _triggerInsight(
+  WidgetRef ref,
+  String customerId, {
+  String? reason,
+  bool regenerate = false,
+}) {
+  _trackAiClick(ref, AiCard.insight, regenerate: regenerate);
+  final sw = Stopwatch()..start();
+  ref
+      .read(aiInsightProvider(customerId).notifier)
+      .generate(reason: reason, regenerate: regenerate)
+      .then((_) {
+    final failed = ref.read(aiInsightProvider(customerId)).hasError;
+    _trackAiResult(ref, AiCard.insight,
+        ok: !failed, ms: sw.elapsedMilliseconds);
+  });
+}
+
+/// 生成后统一展示的东西: 事实底稿 pills + 内容 + mock 标记
+List<Widget> _insightFooter(
+  BuildContext context,
+  WidgetRef ref,
+  AiInsightResult r,
+) {
+  final f = r.facts;
+  final pills = <String>[
+    if (f.totalVisits > 0) '累计 ${f.totalVisits} 次',
+    if (f.daysSinceLastVisit != null) '距上次 ${f.daysSinceLastVisit} 天',
+    if (f.avgIntervalDays != null) '平均 ${f.avgIntervalDays} 天一次',
+    if (f.trend != 'unknown') '趋势 ${f.trendLabel}',
+  ];
+
+  return [
+    if (pills.isNotEmpty) ...[
+      const SizedBox(height: AppSpace.s10),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: pills.map((t) => _InsightPill(text: t)).toList(),
+      ),
+    ],
+    // 模型没按分隔符输出: 全文都挤在「画像」里, 提示一句免得用户以为其他卡坏了
+    if (!r.sectionsParsed) ...[
+      const SizedBox(height: AppSpace.s8),
+      const Text(
+        '提示: 这次 AI 没按分段格式回复, 完整内容已放在「客户画像」卡里',
+        style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+      ),
+    ],
+    if (r.aiMock) ...[
+      const SizedBox(height: AppSpace.s8),
+      const _AiMockBadge(),
+    ],
+  ];
+}
+
+/// 生成后统一拼 body 段落 (loading / error / 未生成 / 已生成)
+List<Widget> _buildInsightBody({
+  required BuildContext context,
+  required WidgetRef ref,
+  required String customerId,
+  required AsyncValue<AiInsightResult?> async,
+  required String Function(AiInsightResult) pick,
+  required String emptyLabel,
+  required IconData emptyIcon,
+  required String loadingLabel,
+  List<Widget> Function(AiInsightResult r, BuildContext context)? onGenerated,
+}) {
+  final data = async.valueOrNull;
+
+  if (async.isLoading) return [const _AiLoadingInline()];
+  if (async.hasError) {
+    return [
+      _AiError(
+        message: '${async.error}',
+        onRetry: () => _triggerInsight(ref, customerId),
+      ),
+    ];
+  }
+  if (data == null) {
+    return [
+      _GenerateButton(
+        label: emptyLabel,
+        icon: emptyIcon,
+        onTap: () => _triggerInsight(ref, customerId),
+      ),
+    ];
   }
 
+  final text = pick(data).trim();
+  return [
+    if (text.isEmpty)
+      const Text(
+        '这次没有生成这一段, 可以点右上角重新生成',
+        style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+      )
+    else
+      _AiBody(text: text),
+    ..._insightFooter(context, ref, data),
+    if (onGenerated != null) ...[
+      const SizedBox(height: AppSpace.s12),
+      ...onGenerated(data, context),
+    ],
+  ];
+}
+
+/// 只有一段内容的卡 (画像 / 效果分析) 的统一壳
+class _AiSectionCard extends ConsumerWidget {
+  final String customerId;
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final String emptyLabel;
+  final IconData emptyIcon;
+  final String loadingLabel;
+  final String Function(AiInsightResult) section;
+
+  const _AiSectionCard({
+    required this.customerId,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.emptyLabel,
+    required this.emptyIcon,
+    required this.loadingLabel,
+    required this.section,
+  });
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(aiInsightProvider(customerId));
+    final data = async.valueOrNull;
+
     return _AiCardShell(
-      icon: Icons.timeline,
-      iconColor: AppTheme.franchiseeA,
-      title: '效果分析',
-      subtitle: '多疗程前后变化趋势 + AI 总结',
-      trailing: _data == null
+      icon: icon,
+      iconColor: iconColor,
+      title: title,
+      subtitle: subtitle,
+      trailing: data == null
           ? null
           : IconButton(
               icon: const Icon(Icons.refresh, size: AppSize.iconMd),
-              tooltip: '重新分析',
-              onPressed: _loading ? null : () => _generate(regenerate: true),
+              tooltip: '重新生成',
+              onPressed: async.isLoading
+                  ? null
+                  : () => _triggerInsight(ref, customerId, regenerate: true),
             ),
-      child: _loading
-          ? const _AiLoading('AI 正在分析疗程效果...')
-          : _error != null
-              ? _AiError(message: _error!, onRetry: () => _generate())
-              : _data == null
-                  ? _GenerateButton(
-                      label: '分析效果',
-                      icon: Icons.timeline,
-                      onTap: () => _generate(),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _metric('记录次数', '${_data!.totalVisits} 次'),
-                            _metric('趋势', _data!.trendLabel),
-                          ],
-                        ),
-                        if (_data!.from != null && _data!.to != null) ...[
-                          const SizedBox(height: AppSpace.s8),
-                          Text('统计区间: ${_data!.from} ~ ${_data!.to}',
-                              style: const TextStyle(
-                                  fontSize: AppTheme.fontXs,
-                                  color: AppTheme.textSecondary)),
-                        ],
-                        if (_data!.aiSummary.isNotEmpty) ...[
-                          const SizedBox(height: AppSpace.s10),
-                          _AiBody(text: _data!.aiSummary),
-                        ],
-                        if (_data!.aiMock) ...[
-                          const SizedBox(height: AppSpace.s8),
-                          const _AiMockBadge(),
-                        ],
-                      ],
-                    ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: _buildInsightBody(
+          context: context,
+          ref: ref,
+          customerId: customerId,
+          async: async,
+          pick: section,
+          emptyLabel: emptyLabel,
+          emptyIcon: emptyIcon,
+          loadingLabel: loadingLabel,
+        ),
+      ),
     );
   }
-
-  Widget _metric(String label, String value) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s8),
-        decoration: BoxDecoration(
-          color: AppTheme.primaryLight.withOpacity(0.35),
-          borderRadius: BorderRadius.circular(AppRadius.r10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: const TextStyle(
-                    fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
-            const SizedBox(height: AppSpace.s2),
-            Text(value,
-                style: const TextStyle(
-                    fontSize: AppTheme.fontMd,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.primaryDark)),
-          ],
-        ),
-      );
 }
 
-// ============================================
-// 共用小组件 (卡片外壳 / 加载 / 错误 / 生成按钮 / 正文 / mock 标)
-// ============================================
+class _InsightPill extends StatelessWidget {
+  final String text;
+  const _InsightPill({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.s10, vertical: AppSpace.s4),
+      decoration: BoxDecoration(
+        color: AppTheme.bgWarm,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      child: Text(text,
+          style: const TextStyle(
+              fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
+    );
+  }
+}
+
+/// 内联 loading (不带整卡骨架, 免得三张卡同时闪)
+class _AiLoadingInline extends StatelessWidget {
+  const _AiLoadingInline();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpace.s12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: AppSize.iconMd,
+            height: AppSize.iconMd,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: AppSpace.s10),
+          Text('AI 正在生成 (画像 + 话术 + 效果 一起)...',
+              style: TextStyle(
+                  fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
+        ],
+      ),
+    );
+  }
+}
+
 
 class _AiCardShell extends StatelessWidget {
   final IconData icon;

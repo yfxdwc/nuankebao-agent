@@ -25,21 +25,24 @@ import {
   normalizeReferralCode,
 } from "@/lib/billing/referral";
 
-describe("会员功能清单 (主人 2026-09-19 口述的 9 项)", () => {
-  it("正好 9 项, 且 key 不重复", () => {
-    expect(ALL_FEATURES.length).toBe(9);
-    expect(new Set(ALL_FEATURES).size).toBe(9);
+describe("会员功能清单 (主人 2026-09-19 口述 9 项 → P5 合并后 7 项)", () => {
+  it("正好 7 项, 且 key 不重复", () => {
+    // P5 (主人 2026-09-23 拍「AI 4 卡合并成 1 次调用, 单个 ai.insight key」):
+    //   ai.follow_up + ai.customer_profile + ai.effect_analysis (3 项)
+    //     → ai.insight (1 项)
+    //   能力没减 (三段内容仍全在), 只是从 3 个会员条目/3 次 AI 调用 变成 1 个/1 次。
+    //   9 - 3 + 1 = 7
+    expect(ALL_FEATURES.length).toBe(7);
+    expect(new Set(ALL_FEATURES).size).toBe(7);
   });
 
-  it("9 项都对应主人点名的功能", () => {
+  it("7 项都对应主人点名的功能", () => {
     expect(ALL_FEATURES).toEqual(
       expect.arrayContaining([
         "ai.assistant", // AI助手
-        "ai.follow_up", // 跟进建议
+        "ai.insight", // AI洞察 (跟进建议 + 客户画像 + 效果分析, P5 合并)
         "salon.create", // 沙龙发起
-        "ai.customer_profile", // 客户画像
         "ai.repurchase", // 跟进推荐 (复购预测)
-        "ai.effect_analysis", // 效果分析
         "crm.interaction", // 互动记录
         "crm.birthday_reminder", // 生日提醒
         "media.upload", // 图片上传
@@ -47,7 +50,7 @@ describe("会员功能清单 (主人 2026-09-19 口述的 9 项)", () => {
     );
   });
 
-  it("免费档: 9 项全部不可用; 会员档: 9 项全可用", () => {
+  it("免费档: 7 项全部不可用; 会员档: 7 项全可用", () => {
     expect(FREE_FEATURES).toEqual([]);
     for (const key of ALL_FEATURES) {
       expect(canUseFeature(false, key)).toBe(false);

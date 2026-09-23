@@ -4,11 +4,12 @@
 // ADR-0012 + docs/membership-billing-draft.md v0.2
 //
 // 产品口径 (主人 2026-09-19):
-//   免费档 = 除下面 9 项外的**全部功能**; 会员档 = 全部功能
+//   免费档 = 除下面 7 项外的**全部功能**; 会员档 = 全部功能
+//   (2026-09-23 P5: AI 三项合并 → 由 9 项变 7 项; 能力没减, 只是条目更少)
 //   到期 = 降级免费档 (基础功能照用, 数据不删不锁)
 //
 // 用法 (服务端唯一安全边界):
-//   const m = await requireFeature(userId, "ai.follow_up");   // 非会员 → 402
+//   const m = await requireFeature(userId, "ai.insight");    // 非会员 → 402
 //   if (!m) → 客户端只负责"别显示入口", 断不了后端的门
 //
 // 新增会员功能时: 先在这里加 key → 再在 plan.features 里挂上 → 再在 route 首行判权
@@ -23,17 +24,13 @@ export const FEATURES = {
    * 一次调用产出 三段: 客户画像 + 跟进话术 + 效果分析
    *   (复购预测是纯 DB 计算, 一并返回但不烧 AI)
    *
-   * 取代原先拆开的 3 个 key (ai.follow_up / ai.customer_profile /
-   * ai.effect_analysis) —— 那三个路由已删; `ai.repurchase` 因历史数据
-   * 仍留在表里, 但已不再被任何 route 判权 (客户端入口已走本 key)。
+   * 取代原先拆开的 3 项 (ai.follow_up / ai.customer_profile / ai.effect_analysis)
+   * —— 那 3 个 key 与路由已删 (P5 完整切换)。会员清单从 9 项变 7 项:
+   *   ai.assistant / **ai.insight** / salon.create / ai.repurchase /
+   *   crm.interaction / crm.birthday_reminder / media.upload
+   * 对用户是**减法向**: 原先 3 项会员能力合并后仍全在, 但只占 1 次调用。
    */
   AI_INSIGHT: "ai.insight",
-  /** 跟进建议 (AI 话术) —— @deprecated 已并入 AI_INSIGHT */
-  AI_FOLLOW_UP: "ai.follow_up",
-  /** 客户画像 (AI) —— @deprecated 已并入 AI_INSIGHT */
-  AI_CUSTOMER_PROFILE: "ai.customer_profile",
-  /** 效果分析 (AI) —— @deprecated 已并入 AI_INSIGHT */
-  AI_EFFECT_ANALYSIS: "ai.effect_analysis",
   /** 跟进推荐 (复购预测; 纯 DB 计算, 但主人拍板归会员 — D21) */
   AI_REPURCHASE: "ai.repurchase",
   /** 沙龙发起 (另一 session 正在建的 modules/salon; 建好即会员功能) */
@@ -51,7 +48,7 @@ export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
 /** 全部会员功能 (会员档 = 全部) */
 export const ALL_FEATURES: FeatureKey[] = Object.values(FEATURES);
 
-/** 免费档能用的会员功能: 空 (免费档 = 基础功能, 下面 9 项都没有) */
+/** 免费档能用的会员功能: 空 (免费档 = 基础功能, 下面 7 项都没有) */
 export const FREE_FEATURES: FeatureKey[] = [];
 
 /** 是不是合法的 feature key (防止约定写错时静默放行) */

@@ -36,7 +36,7 @@ export async function GET(
 
   const aiTipAvailable = await hasFeatureAccess(
     session?.user?.id,
-    FEATURES.AI_FOLLOW_UP
+    FEATURES.AI_INSIGHT
   );
 
   return NextResponse.json({ ...analysis, aiTipAvailable });
