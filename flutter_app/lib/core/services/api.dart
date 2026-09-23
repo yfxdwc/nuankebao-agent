@@ -264,6 +264,21 @@ class CustomerService {
     return Customer.fromJson(data['customer'] as Map<String, dynamic>);
   }
 
+  /// 合并重复客户 (P8)
+  ///
+  /// 语义: 把**这位**客户合并进 `intoCustomerId` (对方保留, 这位软删)。
+  /// 搬的是 wellness_record / interaction / follow_up_task 三张子表 + 账号列连接。
+  /// ⚠ 不可逆 (来源软删, App 内无恢复入口) —— 调用方必须先让用户确认。
+  Future<Map<String, dynamic>> merge(
+    String customerId, {
+    required String intoCustomerId,
+  }) async {
+    final res = await _dio.post('/customers/$customerId/merge', data: {
+      'intoCustomerId': intoCustomerId,
+    });
+    return res.data as Map<String, dynamic>;
+  }
+
   /// 把客户归属转给同事 (P8)
   ///
   /// 接收人用**邀请码**定位 (不用 userId):

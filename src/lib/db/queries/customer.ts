@@ -5,6 +5,9 @@ import {
   user,
   type Customer,
   type NewCustomer,
+  wellnessRecord,
+  interaction,
+  followUpTask,
 } from "@/lib/db/schema";
 import {
   eq,
@@ -1191,5 +1194,141 @@ export async function transferCustomerOwnership(
     fromUserId: row.ownerId,
     toUserId: target.userId,
     toName: target.name,
+  };
+}
+
+// ============================================
+// 合并重复客户 (P8 管理维度, 主人 2026-09-23)
+// ============================================
+// 场景: 同一个人被建了两条档案 (手工重复录入 / 撞号后各自建档 / 邀请码没对上)。
+//
+// ⚠ 与 ADR-0016「撞号不静默合并」的关系:
+//   那条禁的是**系统自动**按手机号合并 (同号可能是两个人, 静默合并 = 丢数据)。
+//   本函数是**人明确指定**"这两条是同一个人, 把这条并进那条" —— 明确、留痕、可解释。
+//
+// 搬什么 (全仓只有这 3 张表引用 customer_id, 已核):
+//   wellness_record / interaction / follow_up_task  → 改指 target
+// 搬完做什么:
+//   ① 重算 target 的 last_visit_at / last_interaction_at (它们喂评分和紧急度排序,
+//      不重算会让合并后的客户看起来"很久没来")
+//   ② source 软删 (deleted_at) —— 数据行都在, 但不再出现在任何列表
+//   ③ 审计 (customer 表触发器 + 三张表各自触发器都会记)
+//
+// adapter 冲突 (为什么这几种情况直接拒绝而不是"聪明地处理"):
+//   · 两条都绑了账号 → 两个真人在争同一条档案的身份, 系统无法判断谁是本人 → 拒
+//   · 合并到自己 → 拒
+//   · 目标不存在 / 已删 → 拒
+//   宁可让人工走「绑定账号」/ 管理员处理, 也不要自动猜 (猜错 = 一个人的记录跑到另一个人名下)
+
+export type MergeCustomersFailure =
+  | "NOT_FOUND" // 来源或目标客户不存在 (已删也算)
+  | "SAME" // 自己并自己
+  | "BOTH_LINKED" // 两条档案都绑了 app 账号 → 身份二义, 无法自动判
+  | "NO_SCOPE"; // 越权 (不在我可管的客户里)
+
+export type MergeCustomersResult =
+  | {
+      ok: true;
+      movedRecords: number;
+      movedInteractions: number;
+      movedTasks: number;
+      /** 来源档案绑的账号被改指到目标 (null = 来源本来没绑账号) */
+      relinkedUserId: bigint | null;
+    }
+  | { ok: false; code: MergeCustomersFailure };
+
+export async function mergeCustomers(
+  sourceId: bigint,
+  targetId: bigint,
+  opts: {
+    /** 来源档案必须在此范围内 (IDOR 防护); undefined = 不过滤 (admin/dev) */
+    sourceScope?: SQL | undefined;
+    /** 目标要不要也受范围限制 (admin 可跨范围合并) */
+    targetScope?: SQL | undefined;
+  },
+  ctx: AuditContext
+): Promise<MergeCustomersResult> {
+  if (sourceId === targetId) return { ok: false, code: "SAME" };
+
+  const [source] = await db
+    .select({ id: customer.id })
+    .from(customer)
+    .where(and(eq(customer.id, sourceId), isNull(customer.deletedAt), opts.sourceScope))
+    .limit(1);
+  if (!source) return { ok: false, code: "NO_SCOPE" };
+
+  const [target] = await db
+    .select({ id: customer.id })
+    .from(customer)
+    .where(and(eq(customer.id, targetId), isNull(customer.deletedAt), opts.targetScope))
+    .limit(1);
+  if (!target) return { ok: false, code: "NOT_FOUND" };
+
+  // 两条都绑了账号 = 两个真人在争同一条档案的身份 → 不猜
+  const linked = await db
+    .select({ id: user.id, customerId: user.customerId })
+    .from(user)
+    .where(inArray(user.customerId, [sourceId, targetId]));
+  const sourceOwner = linked.find((u) => u.customerId === sourceId);
+  const targetOwner = linked.find((u) => u.customerId === targetId);
+  if (sourceOwner && targetOwner) return { ok: false, code: "BOTH_LINKED" };
+
+  let movedRecords = 0;
+  let movedInteractions = 0;
+  let movedTasks = 0;
+
+  await withAuditContext(ctx, async (tx) => {
+    // ① 搬三张子表
+    const r1 = await tx
+      .update(wellnessRecord)
+      .set({ customerId: targetId })
+      .where(eq(wellnessRecord.customerId, sourceId))
+      .returning({ id: wellnessRecord.id });
+    movedRecords = r1.length;
+
+    const r2 = await tx
+      .update(interaction)
+      .set({ customerId: targetId })
+      .where(eq(interaction.customerId, sourceId))
+      .returning({ id: interaction.id });
+    movedInteractions = r2.length;
+
+    const r3 = await tx
+      .update(followUpTask)
+      .set({ customerId: targetId })
+      .where(eq(followUpTask.customerId, sourceId))
+      .returning({ id: followUpTask.id });
+    movedTasks = r3.length;
+
+    // ② 来源档案绑的账号改指目标 (ADR-0016 D3 的列连接; 上一步已保证不会撞)
+    if (sourceOwner) {
+      await tx
+        .update(user)
+        .set({ customerId: targetId })
+        .where(eq(user.id, sourceOwner.id));
+    }
+
+    // ③ 重算目标的聚合字段 (喂评分/紧急度, 不重算会让合并后的客户看起来"很久没来")
+    await tx.execute(sql`
+      UPDATE customer SET
+        last_visit_at = (SELECT MAX(service_date) FROM wellness_record WHERE customer_id = ${targetId}),
+        last_interaction_at = (SELECT MAX(created_at) FROM interaction WHERE customer_id = ${targetId}),
+        updated_at = NOW()
+      WHERE id = ${targetId}
+    `);
+
+    // ④ 来源软删 (数据行都在, 只是不再出现在列表)
+    await tx
+      .update(customer)
+      .set({ deletedAt: new Date() })
+      .where(eq(customer.id, sourceId));
+  });
+
+  return {
+    ok: true,
+    movedRecords,
+    movedInteractions,
+    movedTasks,
+    relinkedUserId: sourceOwner?.id ?? null,
   };
 }

@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuankebao/core/models/customer.dart';
+import 'package:nuankebao/core/models/follow_up_info.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/providers/settings_provider.dart';
 import 'package:nuankebao/core/services/api.dart';
@@ -28,13 +29,41 @@ class _FakeCustomerService extends CustomerService {
   _FakeCustomerService() : super(Dio());
 
   int deleteCalls = 0;
+  int mergeCalls = 0;
+  String? mergedInto;
   Object? deleteError;
+  Object? mergeError;
+  List<CustomerWithFollowUp> searchResults = const [];
 
   @override
   Future<void> delete(String id) async {
     deleteCalls++;
     if (deleteError != null) throw deleteError!;
   }
+
+  @override
+  Future<Map<String, dynamic>> merge(String customerId,
+      {required String intoCustomerId}) async {
+    mergeCalls++;
+    mergedInto = intoCustomerId;
+    if (mergeError != null) throw mergeError!;
+    return {'movedRecords': 3};
+  }
+
+  @override
+  Future<CustomerListResult> list({
+    String? search,
+    String? type,
+    String? sort,
+    int limit = 50,
+    int offset = 0,
+  }) async =>
+      CustomerListResult(
+        items: searchResults,
+        total: searchResults.length,
+        sort: 'new',
+        urgencyLocked: false,
+      );
 }
 
 Future<void> _pump(WidgetTester tester, _FakeCustomerService svc) async {
@@ -93,6 +122,116 @@ void main() {
     expect(find.text('危险操作'), findsOneWidget);
     expect(find.text('归档这位客户'), findsOneWidget);
     expect(find.textContaining('无法撤销'), findsOneWidget);
+  });
+
+  group("合并重复客户 (P8)", () {
+    Customer other(String id, String name, {bool hasAccount = false}) => Customer(
+          id: id,
+          name: name,
+          phone: '13900000000',
+          hasAccount: hasAccount,
+          createdAt: DateTime(2026, 9, 1),
+          updatedAt: DateTime(2026, 9, 1),
+        );
+
+    CustomerWithFollowUp wrap(Customer c) =>
+        CustomerWithFollowUp(customer: c, isMember: false);
+
+    testWidgets("有「合并重复客户」按钮 + 说清用途", (tester) async {
+      await _pump(tester, _FakeCustomerService());
+      await _enter(tester);
+      expect(find.text('合并重复客户'), findsOneWidget);
+      expect(find.textContaining('并成一条'), findsOneWidget);
+    });
+
+    testWidgets("点它 → 弹「保留哪条客户」搜索框", (tester) async {
+      await _pump(tester, _FakeCustomerService());
+      await _enter(tester);
+      await tester.tap(find.text('合并重复客户'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('保留哪条客户？'), findsOneWidget);
+      expect(find.text('搜索'), findsOneWidget);
+    });
+
+    testWidgets("搜到 → 点选 → 确认框说清「搬什么 / 不搬什么 / 不可逆」", (tester) async {
+      final svc = _FakeCustomerService();
+      svc.searchResults = [wrap(other('801', '演示-蒋金娣'))];
+      await _pump(tester, svc);
+      await _enter(tester);
+
+      await tester.tap(find.text('合并重复客户'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, '蒋');
+      await tester.tap(find.text('搜索'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('演示-蒋金娣'), findsWidgets);
+      await tester.tap(find.text('演示-蒋金娣').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('合并客户？'), findsOneWidget);
+      // 搬家清单必须写清 (养生记录/联系记录/跟进任务)
+      expect(find.textContaining('养生记录、联系记录、跟进任务'), findsOneWidget);
+      // 不能让人以为档案字段也会搬
+      expect(find.textContaining('不会搬'), findsOneWidget);
+      expect(find.textContaining('App 里无法撤销'), findsOneWidget);
+    });
+
+    testWidgets("确认 → 真调 merge(目标 id) + 退回列表", (tester) async {
+      final svc = _FakeCustomerService();
+      svc.searchResults = [wrap(other('801', '演示-蒋金娣'))];
+      await _pump(tester, svc);
+      await _enter(tester);
+
+      await tester.tap(find.text('合并重复客户'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, '蒋');
+      await tester.tap(find.text('搜索'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('演示-蒋金娣').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('确定合并'));
+      await tester.pumpAndSettle();
+
+      expect(svc.mergeCalls, 1);
+      expect(svc.mergedInto, '801');
+      expect(find.textContaining('已合并进'), findsOneWidget);
+      expect(find.text('上一页'), findsOneWidget); // 已归档 → 退回
+    });
+
+    testWidgets("双绑定被拒 → 显示后端人话, 不崩", (tester) async {
+      final svc = _FakeCustomerService();
+      svc.searchResults = [wrap(other('801', '演示-蒋金娣', hasAccount: true))];
+      svc.mergeError = Exception('两条档案都绑了 app 账号 —— 无法判断谁是谁');
+      await _pump(tester, svc);
+      await _enter(tester);
+
+      await tester.tap(find.text('合并重复客户'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, '蒋');
+      await tester.tap(find.text('搜索'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('演示-蒋金娣').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('确定合并'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('都绑了 app 账号'), findsOneWidget);
+      expect(find.text('危险操作'), findsOneWidget); // 没被踢出页面
+    });
+
+    testWidgets("搜不到 → 明确说「没找到」", (tester) async {
+      await _pump(tester, _FakeCustomerService());
+      await _enter(tester);
+      await tester.tap(find.text('合并重复客户'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, '不存在');
+      await tester.tap(find.text('搜索'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('没找到匹配的客户'), findsOneWidget);
+    });
   });
 
   testWidgets('⚠ 高度不是 0 (P4 踩过: 单测绿但真机零高)', (tester) async {
