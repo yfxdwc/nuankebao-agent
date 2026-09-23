@@ -2,6 +2,20 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 工具化: Flutter 硬数字扫描加进护栏 (2026-09-24)
+
+主人 2026-09-23 拍板「继续工具化」: 让 P2-P5 成果不再被回退。
+
+- 护栏新加 4 个 Flutter 指标 (之前漏扫, P2-P5 实施时补漏):
+  - `flutter.toolbarHeight` —— `toolbarHeight: 64` (P2 元凶, 当时 15 处全 Flutter 写死)
+  - `flutter.iconSize` —— `Icon(...)` 内的 size 硬数字 (批次 4 修了 141 处)
+  - `flutter.motionDuration` —— SnackBar 等 UI 反馈时长 (业务 timing 在白名单)
+  - `flutter.radiusRadius` —— 独立 `Radius.circular(N)` (不经 BorderRadius)
+- 修了 count() 函数的 bash 数组展开 bug (选项被当文件名)
+- 加 `r5` 到 radius scale (图谱节点画笔用)
+- LoadingState 加注释: 按钮内不要用 LoadingState (Center 包装破坏按钮布局)
+- **基线锁定 0**: 任意指标上涨 → CI / pre-commit 立即报错
+
 ## [Unreleased] — 核心定位核实: 客户管理为核心 + 三大动作 + 跟进指引 → 付费/加盟转化 (2026-09-23)
 
 > **主人原话**: 「本应用的核心功能是客户管理。协助用户记录、管理、分析客户信息，给用户明确的行动（跟进）指引，进而提高用户付费率、加盟率。」
