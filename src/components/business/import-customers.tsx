@@ -111,7 +111,7 @@ export function ImportCustomers() {
       {/* 模板下载 + 上传区 */}
       {state.kind === "idle" && (
         <Card>
-          <CardContent className="pt-6 space-y-4">
+          <CardContent className="py-4 px-card-y space-y-4">
             <div className="flex items-start gap-3 p-4 bg-muted rounded-md">
               <FileDown className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div className="flex-1 text-sm">
@@ -148,7 +148,7 @@ export function ImportCustomers() {
       {/* 上传中 */}
       {state.kind === "uploading" && (
         <Card>
-          <CardContent className="pt-6 flex items-center gap-3 text-muted-foreground">
+          <CardContent className="py-4 px-card-y flex items-center gap-3 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             正在解析文件...
           </CardContent>
@@ -228,7 +228,7 @@ export function ImportCustomers() {
       {/* 导入中 */}
       {state.kind === "committing" && (
         <Card>
-          <CardContent className="pt-6 flex items-center gap-3 text-muted-foreground">
+          <CardContent className="py-4 px-card-y flex items-center gap-3 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             正在导入 {state.kind === "committing" ? "" : ""}...
           </CardContent>

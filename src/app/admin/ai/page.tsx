@@ -72,7 +72,7 @@ export default async function AIPage({
 
       {customers.length === 0 && (
         <Card>
-          <CardContent className="py-8 md:py-12 text-center text-muted-foreground text-sm">
+          <CardContent className="py-6 px-card-y text-center text-muted-foreground text-sm">
             暂无客户, 先在"客户"页添加
           </CardContent>
         </Card>
@@ -95,7 +95,7 @@ export default async function AIPage({
       ) : (
         customers.length > 0 && (
           <Card className="border-dashed border-primary/30 bg-primary/5">
-            <CardContent className="py-6 md:py-8 text-center text-sm text-muted-foreground">
+            <CardContent className="py-4 px-card-y text-center text-sm text-muted-foreground">
               <Sparkles className="h-8 w-8 text-primary/40 mx-auto mb-2" />
               <p>从上方选择一位客户, AI 自动生成:</p>
               <ul className="text-xs space-y-0.5 mt-2 inline-block text-left">

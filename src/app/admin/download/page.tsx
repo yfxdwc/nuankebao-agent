@@ -27,7 +27,7 @@ export default async function DownloadPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {/* 二维码 */}
         <Card>
           <CardHeader>
@@ -51,7 +51,7 @@ export default async function DownloadPage() {
           <CardHeader>
             <CardTitle className="text-base">直接下载</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <div className="space-y-2">
               <div className="text-sm flex flex-wrap items-center gap-1">
                 <strong>暖客宝 v{version}</strong>

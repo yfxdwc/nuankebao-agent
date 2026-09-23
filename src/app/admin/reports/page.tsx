@@ -29,7 +29,7 @@ export default async function ReportsPage() {
 
       {/* 客户活跃度 */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card variant="outlined">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">本月新增客户</CardTitle>
           </CardHeader>
@@ -37,7 +37,7 @@ export default async function ReportsPage() {
             <div className="text-3xl font-bold">{overview.customerActivity.newCustomersThis}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card variant="outlined">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">本月回访客户</CardTitle>
           </CardHeader>
@@ -45,7 +45,7 @@ export default async function ReportsPage() {
             <div className="text-3xl font-bold">{overview.customerActivity.returningCustomers}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card variant="outlined">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">总活跃客户</CardTitle>
           </CardHeader>
@@ -58,7 +58,7 @@ export default async function ReportsPage() {
       </div>
 
       {/* 月度趋势 */}
-      <Card>
+      <Card variant="outlined">
         <CardHeader>
           <CardTitle className="text-base">最近 6 个月到店趋势</CardTitle>
         </CardHeader>
@@ -69,7 +69,7 @@ export default async function ReportsPage() {
 
       {/* 项目分布 */}
       {distribution.length > 0 && (
-        <Card>
+        <Card variant="outlined">
           <CardHeader>
             <CardTitle className="text-base">本月项目分布 (Top 5)</CardTitle>
           </CardHeader>
@@ -87,7 +87,7 @@ export default async function ReportsPage() {
       )}
 
       {/* 复购周期 */}
-      <Card>
+      <Card variant="outlined">
         <CardHeader>
           <CardTitle className="text-base">客户复购周期分布</CardTitle>
         </CardHeader>

@@ -103,7 +103,7 @@ export default function DevOverviewPage() {
             const Icon = m.icon;
             return (
               <Link key={m.href} href={m.href} className="group">
-                <Card className="h-full transition-all hover:shadow-md hover:border-border">
+                <Card variant="outlined" className="h-full transition-colors hover:border-primary/50 hover:bg-surface-subtle">
                   <CardHeader>
                     <div className="flex items-center justify-between mb-1">
                       <div
