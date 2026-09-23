@@ -1998,7 +1998,15 @@ class CustomerDetailPage extends ConsumerWidget {
   }
 
   /// 各 Tab 统一的滚动容器 (防止三个各写一遍 padding 漂移)
+  ///
+  /// ⚠ `primary: false` 是**必须的**, 不是可选优化 ——
+  ///   三个 Tab 各有一个纵向 ListView, 默认 `primary: true` 时它们会**共用**
+  ///   外层继承到的 `PrimaryScrollController` → 滚动位置互相串:
+  ///   切到「分析」时继承了「记录」的偏移 → 顶部图表被顶出视口 →
+  ///   语义树/截图里都看不到, 而 `find.text` 却仍能找到 **(极难排查)**。
+  ///   每个 Tab 独立滚动位置本来就是正确的交互 (切 Tab 不该共享滚动)。
   Widget _tabScroll({required List<Widget> children}) => ListView(
+        primary: false,
         padding: const EdgeInsets.fromLTRB(AppSpace.pagePadding, AppSpace.s12,
             AppSpace.pagePadding, AppSpace.s48),
         children: children,
@@ -2034,12 +2042,15 @@ class CustomerDetailPage extends ConsumerWidget {
     return _tabScroll(children: [
       // ★ P4 图谱 (主人 2026-09-23 拍): 雷达 / 效果趋势 / 部位热力
       //   放最上面: 图比文字快 —— "她整体怎样" 一眼就能看出
-      if (insight != null)
-        CustomerAnalysisCharts(
-          customerId: customerId,
-          score: insight.score,
-        ),
-      if (insight != null) const SizedBox(height: AppSpace.cardGap),
+      //
+      // ⚠ 不要写成 `if (insight != null) CustomerAnalysisCharts(...)` ——
+      //   那会让"洞察还没就绪"时整块图表消失 (趋势/部位只依赖 /charts, 被无关依赖拖累)。
+      //   传可空 score, 组件内部显示加载/空态。
+      CustomerAnalysisCharts(
+        customerId: customerId,
+        score: insight?.score,
+      ),
+      const SizedBox(height: AppSpace.cardGap),
       // 客观指标 (免费)
       FollowUpAnalysisCard(customerId: customerId),
       const SizedBox(height: AppSpace.cardGap),

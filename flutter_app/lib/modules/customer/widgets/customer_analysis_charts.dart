@@ -29,20 +29,31 @@ class CustomerAnalysisCharts extends ConsumerWidget {
   const CustomerAnalysisCharts({
     super.key,
     required this.customerId,
-    required this.score,
+    this.score,
   });
 
   final String customerId;
 
-  /// 雷达图直接吃 L0 的评分 (不重复请求) —— 由详情页从 insight 传下来
-  final CustomerScore score;
+  /// 雷达图直接吃 L0 的评分 (不重复请求) —— 由详情页从 insight 传下来。
+  ///
+  /// ⚠ **可选**: 洞察还没就绪时传 null → 雷达显示"还差数据"空态。
+  ///   不要用 `if (score != null)` 把整块图表**藏起来** ——
+  ///   趋势/部位只依赖 /charts, 不该被一个无关依赖的加载状态拖累
+  ///   (踩过: 详情页最初用 if (insight != null) 门控, 结果洞察慢一拍时
+  ///    整个分析 Tab 的图全都不渲染, 排查了很久)
+  final CustomerScore? score;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(customerChartsProvider(customerId));
 
+    // ⚠ 不要用 CrossAxisAlignment.stretch ——
+    //   本组件是「分析 Tab 的 ListView」的直接子节点, 拿到的是**无界高度**;
+    //   stretch 会让 Column 尝试撑满交叉轴, 在无界约束下布局塌成 **0 高**:
+    //   不抛任何异常, 但整块图完全不可见, 连语义树里都没有 (排查了很久)。
+    //   子组件自己决定宽度的话用 start 即可 (它们本来就是 block 级, 会占满可用宽度)。
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ① 雷达: 数据来自 score, 无需等 charts
         _RadarCard(score: score),
@@ -52,7 +63,7 @@ class CustomerAnalysisCharts extends ConsumerWidget {
           loading: () => const _ChartsSkeleton(),
           error: (_, __) => const SizedBox.shrink(), // 静默降级, 不拖垮分析 Tab
           data: (c) => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _TrendCard(charts: c),
               const SizedBox(height: AppSpace.cardGap),
@@ -71,12 +82,25 @@ class CustomerAnalysisCharts extends ConsumerWidget {
 
 class _RadarCard extends StatelessWidget {
   const _RadarCard({required this.score});
-  final CustomerScore score;
+  final CustomerScore? score;
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    final dims = score.dimensions;
+    final s = score;
+    if (s == null) {
+      return _chartCard(
+        context,
+        title: '能力雷达',
+        subtitle: '三个维度对比一眼看清',
+        child: _EmptyHint(
+          icon: Icons.radar_outlined,
+          text: '评分正在加载…',
+          hint: '稍等片刻, 或下拉刷新',
+        ),
+      );
+    }
+    final dims = s.dimensions;
     final withScore = dims.where((d) => d.hasScore).toList();
 
     // fl_chart 的 RadarDataSet assert: 至少 3 个 entry。

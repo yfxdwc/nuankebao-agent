@@ -338,6 +338,21 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   - **修法 = `cp flutter_app/build/app/outputs/flutter-apk/app-release.apk data/prod/downloads/NUANKEBAO-release.apk`**, 立即生效 (无需重 build 镜像 / 重启容器)
   - 验证: `curl /api/apk-download | md5sum` 应等于 `md5sum data/prod/downloads/NUANKEBAO-release.apk`
   - 反模式: 把 APK 编进 docker 镜像 = 每次发版都重 build 镜像 (90s+); commit APK 进 git = APK 不是源码 = 不该跟踪。同根: §5 "migration NOT NULL 列不加 DEFAULT" — 把运行时产物当部署真相。
+
+- ❌ **等构建用 `sleep N` 猜时间 → 验证打到旧产物 (2026-09-23 P4 图谱排查, 白烧 3 小时)** — Flutter web watch 服务是
+  「**20s 去抖 + ~50s dart2js 构建**」≈ **70s 起**, `sleep 75` 处在临界点上: 构建没完就跑浏览器, 看到的是**上一版产物**。
+  再叠加 Flutter web 的 **Service Worker / HTTP 缓存** (`transferSize=300` = 命中缓存), 连 `curl` 拿到的都可能是旧的。
+  后果是**得出完全错误的结论**并据此改代码 —— 本次连续误判「组件没进树」「我的改动没生效」「CrossAxisAlignment 是元凶」,
+  其实全是构建没跟上。**修法 = `bash tools/wait-flutter-web-build.sh` 轮询日志判定构建完成, 不猜时间**;
+  浏览器验证要带 cache-bypass。
+  🚩 **危险信号**: 加了显眼的临时标记 (`Text('MARKER')`) 页面里却**看不到** → 先怀疑**构建/缓存**, 别怀疑布局。
+
+- ❌ **dev server 被打挂时验证 UI = 看缓存自欺 (2026-09-23 同次)** — 反复 `curl` 3.6MB 的 `main.dart.js` 把 Next.js dev 服务
+  (已知 1.5G 内存问题) 压死, 之后 `/app/index.html` 返回 **000**; 此时页面**依旧能渲染**(全部来自缓存/Service Worker),
+  于是「客户列表空的」「图表不渲染」等假象全出来了。
+  **修法 = UI 验证前先 `curl -s -o /dev/null -w "%{http_code}" <base>/app/index.html` 确认 200**,
+  挂了先 `systemctl --user restart nuankebao-nextjs.service` 再验。
+
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
 > **历史**:

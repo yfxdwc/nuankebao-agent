@@ -1,5 +1,5 @@
 // ============================================
-// Flutter P2/P3 视觉验证 —— 真浏览器驱动 Flutter web
+// Flutter P2/P3/P4 视觉验证 —— 真浏览器驱动 Flutter web
 // ============================================
 // 为什么需要它:
 //   Flutter web 渲染到 canvas, 传统 DOM 断言/选择器点不中。
@@ -182,6 +182,26 @@ try {
   const aHit = aSig.filter((s) => analysisText.includes(s));
   if (aHit.length >= 2) ok(`分析 Tab 内容就位 (命中: ${aHit.join(" / ")})`);
   else note(`分析 Tab 命中较少: ${aHit.join(" / ") || "(无)"}`);
+
+  // ── P4: 分析 Tab 的三张图 ──
+  // 切回分析 Tab 看图谱
+  await tapText(page, "^分析 Tab");
+  await page.waitForTimeout(5000);
+  await page.screenshot({ path: `${OUT}/06-tab-analysis-charts.png` });
+  const chartText = await text(page);
+  const charts = [
+    ["能力雷达", "雷达图卡片"],
+    ["效果趋势", "趋势线卡片"],
+    ["部位分布", "部位热力卡片"],
+  ];
+  for (const [label, what] of charts) {
+    if (chartText.includes(label)) ok(`P4 ${what}「${label}」已渲染`);
+    else note(`P4 ${what}「${label}」未出现 (可能被折叠/在下方)`);
+  }
+  // 数据不足时应有明确提示 (不画误导人的空图)
+  const emptyHints = ["还差", "至少 2 次", "还没选过", "还没选过身体部位"];
+  const eh = emptyHints.filter((h) => chartText.includes(h));
+  if (eh.length > 0) note(`数据不足提示出现: ${eh.join(" / ")}`);
 
   await tapText(page, "^管理 Tab");
   await page.waitForTimeout(4500);

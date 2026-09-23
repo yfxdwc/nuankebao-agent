@@ -52,7 +52,7 @@ TrendPoint tp(int day, double? prePain, double? postPain) => TrendPoint(
     );
 
 Widget host({
-  required CustomerScore s,
+  required CustomerScore? s,
   CustomerCharts? charts,
   bool chartsError = false,
 }) {
@@ -76,7 +76,7 @@ Widget host({
 }
 
 Future<void> pump(WidgetTester tester,
-    {required CustomerScore s, CustomerCharts? charts, bool chartsError = false}) async {
+    {required CustomerScore? s, CustomerCharts? charts, bool chartsError = false}) async {
   await tester.binding.setSurfaceSize(const Size(500, 2200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(host(s: s, charts: charts, chartsError: chartsError));
@@ -97,10 +97,45 @@ void main() {
       expect(find.textContaining("还差 1 个维度"), findsOneWidget);
     });
 
+    testWidgets("score 为 null (洞察未就绪) → 雷达显示空态, 整块不消失", (tester) async {
+      await pump(tester, s: null);
+      expect(find.byType(RadarChart), findsNothing);
+      expect(find.text("能力雷达"), findsOneWidget); // 卡片标题仍在
+      expect(find.textContaining("正在加载"), findsOneWidget);
+    });
+
     testWidgets("一个维度都没分 → 还差 3 个 (不给空图)", (tester) async {
       await pump(tester, s: score(effect: null, engagement: null, value: null));
       expect(find.byType(RadarChart), findsNothing);
       expect(find.textContaining("还差 3 个维度"), findsOneWidget);
+    });
+  });
+
+  group("①b 布局真的占位 (find.text 不查布局!)", () {
+    // ⚠ 这条是**踩过坑才加的**: 组件根是 Column, 若它用了 CrossAxisAlignment.stretch
+    //   而父级是垂直 ListView (无界高度) → 布局塌成 **0 高**。
+    //   此时 find.text 仍然找得到 widget (完全不报错), 只有 getSize 才看得出来。
+    //   真机上表现 = 整块图不可见, 排查了很久。
+    testWidgets("根组件高度 > 0 (塌成 0 高时这条会挂)", (tester) async {
+      await pump(
+        tester,
+        s: score(),
+        charts: CustomerCharts(
+          trend: [tp(2, 8, 4), tp(9, 7, 3)],
+          bodyParts: [const BodyPartStat(id: "1", name: "肩颈", count: 3, medianPainDrop: 4)],
+          recordCount: 3,
+          scoredRecordCount: 2,
+        ),
+      );
+      // 雷达(约 300) + 趋势(约 280) + 部位(约 200) → 总量应远超 600
+      final h = tester.getSize(find.byType(CustomerAnalysisCharts)).height;
+      expect(h, greaterThan(600),
+          reason: "图表区塌成 ${h}px —— 多半是父级约束/交叉轴设置把高度吃掉了");
+      // 每张卡的标题也要真的占位
+      for (final title in ["能力雷达", "效果趋势", "部位分布"]) {
+        expect(tester.getSize(find.text(title)).height, greaterThan(0),
+            reason: "「$title」标题高度为 0");
+      }
     });
   });
 
