@@ -36,23 +36,64 @@
 本次按既有约定手写 `0024_app_config.sql` + 手工追加 `drizzle/meta/_journal.json`。
 后续要么补齐 snapshot, 要么在 `db:generate` 上加护栏 —— 已记入下方技术债。
 
-## 技术债 · drizzle snapshot 只到 0016, `db:generate` 会整段重放 (2026-09-23 发现)
+## 技术债 · drizzle snapshot 只到 0016, `db:generate` 会整段重放 (2026-09-23 发现, **已落地护栏 (b) 2026-09-23**)
 
 **现象**: `npx drizzle-kit generate` 输出 `0024_*.sql` 里包着 **0020-0023 的全部变更**
 (建表 + 重复 ALTER `customer.owner_id` 等)。原因是 `drizzle/meta/` 的 snapshot 停在 `0016`,
-之后 0017-0023 都是手写迁移 + 手工改 `_journal.json`。
+之后 0017-0024 都是手写迁移 + 手工改 `_journal.json`。
 
 **风险**: 谁在不了解这一点时跑一次 `db:generate` 并 apply, 对已有库 = 重复 ALTER / 重复建表,
 可能直接挂。
 
 **可选方案**:
-- (a) 补齐 0017-0023 的 snapshot 链 (工作量大, 但一劳永逸)
-- (b) 在 `package.json` 的 `db:generate` 外面包一层护栏脚本: 先 dry-run, 若 diff 里出现
-      已知表名 (customer/user/franchisee...) 的 ALTER/建表就拒绝并提示"手写迁移"
+- (a) 补齐 0017-0024 的 snapshot 链 (工作量大, 但一劳永逸; **未做**, 评估见下方 §Snapshot 补齐 评估)
+- (b) ✅ 在 `package.json` 的 `db:generate` 外面包一层护栏脚本: 先 dry-run, 若 diff 里出现
+      已知表/列/索引的危险重放就拒绝并提示"手写迁移"
 - (c) 只在 README/AGENTS 写明 (最轻, 但靠人记)
 
-**倾向 (b)**: 护栏比告示可靠 (AGENTS §5「贴告示 ≠ 修复」同一根)。
-**当前状态**: 未做; 本次已按既有约定手写迁移绕开。
+**已落地 (b) 2026-09-23**:
+
+| # | 东西 | 位置 |
+|---|---|---|
+| 1 | **bash 包装** (隔离临时目录跑 drizzle-kit + 调纯函数检测) | `tools/check-drizzle-generate.sh` |
+| 2 | **检测纯函数** (`detectReplay` / `collectExistingObjects`, 可单测) | `tools/check-drizzle-generate.ts` |
+| 3 | **package.json 接入** | `"db:generate": "bash tools/check-drizzle-generate.sh"` (替代原 `drizzle-kit generate`) |
+| 4 | **单测** | `tests/drizzle-generate-guard.test.ts` (16 例, 全 pass) |
+| 5 | **设计要点** | 仓库 `drizzle/` **永不被碰** (drizzle-kit 跑在 `/tmp/drizzle-generate-guard.*/`, `trap EXIT` 兜底清理); 「已知表/索引」自动 grep `drizzle/*.sql` (33 表 / 71 索引, 不维护硬编码清单) |
+| 6 | **危险判定** | ① CREATE 已存在表 ② ALTER 已存在表 (任意 ADD/DROP/RENAME/ALTER COLUMN) ③ DROP 已存在索引 (含 IF EXISTS) |
+| 7 | **不误报** | CREATE INDEX IF NOT EXISTS / 全新表 / 空文件 / 纯注释 / 仅 DROP 不存在索引 全部放行 |
+
+**为什么 (b) 而不是 (a)**: AGENTS §5「贴告示 ≠ 修复」同根 — 信任手写检查 = 复发温床;
+护栏让「危险 diff 静默 apply 到已有库」物理上不可能。
+
+**以后要加 migration 的正确姿势 (主路径, 必走)**:
+
+```bash
+# 1. 自己写 drizzle/<NNNN>_your_change.sql (见 0024_app_config.sql 格式 / ADR-0004)
+#    纯 additive (CREATE TABLE / ADD COLUMN + DEFAULT / CREATE INDEX IF NOT EXISTS)
+# 2. 在 drizzle/meta/_journal.json 追加一条:
+cat drizzle/meta/_journal.json | jq '.entries[-1].idx'  # 取最新 idx
+# 然后手添一条 { idx: <last+1>, version: "7", when: <Date.now()>, tag: "<NNNN>_your_change", breakpoints: true }
+# 3. (破坏性变更) 补 drizzle/down/<同名>.down.sql + 跑 pnpm db:compat
+# 4. 跑 pnpm db:generate 验证护栏无错 (应该 exit 0, 没命中危险)
+#    - exit 0 = "你的 schema.ts 与新 snapshot 一致" 或 "新变更没命中危险模式" ✓
+#    - exit 1 = "危险命中" → 修护栏的现有对象识别 (或确认是误报后 bypass)
+```
+
+**禁止 (反模式)**:
+- ❌ 直接 `npx drizzle-kit generate` 绕过护栏 (护栏就是为这个设的)
+- ❌ 把 generate 出来的 .sql 原样放进 `drizzle/` (即使护栏绿灯, 它是按 0016 snapshot 算的 diff, 仍可能与新加的 0025 snapshot 错位)
+- ❌ 删旧 migration 让 snapshot 自动重算 (CHARTER §3.5 红线)
+
+### Snapshot 补齐 (方案 a) 评估 — **未做**
+
+| 维度 | 评估 |
+|---|---|
+| 可行性 | 可行 — drizzle-kit 在 0016 snapshot 上跑一次 generate, 拿输出当 0017_snapshot.json, 依此类推到 0024。需要 `drizzle/0025_<empty>.sql` 当起点。 |
+| 工作量 | 中 — 8 个 snapshot (0017-0024), 每个需要手工校对 vs 手写 .sql 的字段差异 (函数签名 / 默认值 / 列顺序)。预估 2-3 小时。 |
+| 风险 | 中 — ① 校对漏字段会让下次 generate 重新输出旧结构, 假阴性消失但**真变更也被吞**; ② snapshot 一旦走错, 之后所有 generate 都基于错基线, 污染扩散; ③ 与现有 0017-0024 .sql 头部注释里写的「snapshot 不再更新」叙事冲突, 需主人拍「我们改主意了」。 |
+| 收益 | 长期 — `pnpm db:generate` 恢复「真 diff」语义, 不用手写 migration (除非要加对象)。但主人已接受手写流程 (0022-0024 都是这么做的), 收益边际。 |
+| 结论 | **不做** — 护栏 (b) 已经把「灾难级误操作」堵死, 剩余收益不足以抵消校对风险 + 主人已接受的工作流变更成本。**留作 future ticket**: 若主人在某天主动问「让 db:generate 恢复正常」再启动; 启动前需主人 ask_user 拍 (AGENTS §3 该做项「改了 migration 必跑 db:compat」同根 = 主人决策, 不 agent 自决)。 |
 
 ---
 

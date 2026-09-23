@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "bash tools/check-drizzle-generate.sh",
     "db:migrate": "tsx src/lib/db/migrate.ts",
     "db:ensure-admin": "tsx scripts/ensure-admin.ts",
     "db:migrate:check": "tsx src/lib/db/migrate.ts check",

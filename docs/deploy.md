@@ -420,6 +420,13 @@ docker compose up -d --no-deps web
 curl https://nuankebao.tooyang.top/api/health
 ```
 
+> 📌 **新增迁移的标准姿势 (2026-09-23 拍)**:
+> 本仓 `drizzle/meta/` 的 snapshot 只到 `0016`, 之后 0017-0024 都是**手写迁移**
+> (原因 + 详细流程见 `docs/backlog.md` 技术债条目)。
+>  **不要直接 `npx drizzle-kit generate`** — 那里有护栏会拦, 但也会让人手写时错过加 journal 条目。
+>  正确做法 = 仿 `drizzle/0024_app_config.sql` 格式手写 `.sql` + 手工往 `drizzle/meta/_journal.json` 追加一条 + `pnpm db:compat` (CHARTER §3.5)。
+> `pnpm db:generate` 可跑 = 验证"你的 schema.ts 与新加的 snapshot 一致" / "没命中危险重放"; 但**不要把它当生成工具**。
+
 ### 6.1 Migration 回滚 SOP (跑挂了怎么办)
 
 > **背景**: CHARTER §3.5 规定 `pnpm db:migrate` 创破坏性 migration 必带 `drizzle/down/<同名>.sql`。本节讲怎么用。
