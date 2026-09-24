@@ -34,7 +34,6 @@ import 'package:nuankebao/core/theme/app_theme.dart' show AppTheme;
 import 'package:nuankebao/core/theme/tokens.g.dart' show AppColors, AppThemes;
 import 'package:nuankebao/core/widgets/app_list_row.dart' show AppListRow;
 import 'package:nuankebao/core/widgets/app_skeleton.dart' show AppSkeletonList;
-import 'package:nuankebao/core/widgets/b2_no_chrome.dart';
 import 'package:nuankebao/modules/customer/widgets/customer_timeline_section.dart';
 
 // ============================================

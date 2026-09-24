@@ -1,14 +1,33 @@
 // ============================================
-// 客户详情页 — AI 智能卡片 (主人 2026-09-18 拍: 详情页要"养生记录 + AI 画像 +
-// AI 跟进建议 + 复购预测 + 效果分析 或更多")
-//
+// 客户详情页 — AI 智能卡片
+// ============================================
 // 设计原则:
-//   1. **省钱**: 复购预测是纯 DB 计算 → 自动加载; 其余 3 个烧 MiniMax 额度 → 点了才生成
-//      (按钮文案写清「点一下生成」, 生成后缓存, 可重新生成)
-//   2. **中老年友好**: 字号 16+ / 大按钮 / 结果用大白话 + 一眼能看到的关键数字
-//   3. **失败可恢复**: 生成失败给明确文案 + 重试按钮 (不静默吞错)
+//   1. **省钱**: 三张卡 (画像 / 话术 / 效果) 共用**一次**调用 (P5, 主人 2026-09-23 拍);
+//      卡片仍是三张 (场景不同), 合的是**调用**不是界面。
+//   2. **中老年友好**: 字号 16+ / 大按钮 / 结果用大白话。
+//   3. **失败可恢复**: 生成失败给明确文案 + 重试按钮 (不静默吞错; 402 走锁态)。
+//
+// 2026-09-25 改造 (P0 锁态 / P1 节奏卡 / P2 单入口):
+//   · P0 会员锁态: 后端已返回 `customerInsightProvider(scriptAvailable)`,
+//     Flutter 模型已解析, 此前没人用。scriptAvailable == false 时:
+//     - 第一张 AI 卡 (话术卡) 出「升级会员」按钮 + 一行小字「一次生成: 画像 + 话术 + 效果」;
+//     - 画像卡 / 效果分析卡 出同款锁块 (无按钮);
+//     - 话术卡的 4 个「跟进理由」ChoiceChip 一并隐藏 (选了就要触发生成, 没意义)。
+//   · P1 节奏卡: 旧的 RepurchaseCard 已并入 customer_rhythm_card.dart
+//     (跟进分析 + 复购预测合并卡); 本文件只剩 3 张 AI 卡 + 通用部件。
+//   · P2 单入口: 三张卡不再各自出「生成」按钮, 只在话术卡 (AiFollowUpCard) 出
+//     「生成 AI 解读」+ 一行小字; 画像/效果卡在没数据时改为提示
+//     「点上方「生成 AI 解读」，三段一起出」;
+//     loading / 已生成 / 重新生成 (三卡各自的 refresh) 行为不变;
+//     P5 不变量保持: 三个入口的触发都走同一个 _triggerInsight → 一次调用。
+//   · P2 错误态: hasError 分支若是 DioException 402 → 锁块;
+//     其他错误 → 主文案「生成失败, 请稍后重试」+ 小字原始信息 + 重试按钮。
+//     不再裸出「生成失败: DioException...」。
+//   · P0 样本来源: facts 带 dateRange.from/to 时, footer 加一行
+//     「数据范围: {from} → {to}」, 让销售知道 AI 看的是哪段历史。
 // ============================================
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -19,10 +38,12 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_events.dart' show AiCard;
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import 'customer_activity_cards.dart' show showAddFollowUpSheet;
-
+import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/widgets/b2_no_chrome.dart';
+import '../../../screens/profile_sheets.dart' show showMembershipPurchaseSheet;
+import 'customer_activity_cards.dart' show showAddFollowUpSheet;
+
 // ============================================
 // 用量埋点 helper (主人 2026-09-22: 用真实数据回答「AI 卡片到底有没有人点」)
 // ============================================
@@ -64,176 +85,7 @@ void _trackAiResult(
 }
 
 // ============================================
-// 复购预测 (自动加载, 不烧 AI)
-// ============================================
-
-class RepurchaseCard extends ConsumerStatefulWidget {
-  final String customerId;
-  const RepurchaseCard({super.key, required this.customerId});
-
-  @override
-  ConsumerState<RepurchaseCard> createState() => _RepurchaseCardState();
-}
-
-class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
-  RepurchasePrediction? _data;
-  bool _loading = true;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load({bool manual = false}) async {
-    if (manual) _trackAiClick(ref, AiCard.repurchase);
-    final sw = Stopwatch()..start();
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final d = await ref
-          .read(aiServiceProvider)
-          .repurchasePrediction(widget.customerId);
-      if (mounted) setState(() => _data = d);
-      if (manual) {
-        _trackAiResult(ref, AiCard.repurchase,
-            ok: true, ms: sw.elapsedMilliseconds);
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
-      if (manual) {
-        _trackAiResult(ref, AiCard.repurchase,
-            ok: false, ms: sw.elapsedMilliseconds);
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _AiCardShell(
-      icon: Icons.autorenew,
-      iconColor: AppTheme.primary,
-      title: '复购预测',
-      subtitle: '根据历史到店间隔算下次该什么时候约',
-      trailing: IconButton(
-        icon: const Icon(Icons.refresh, size: AppSize.iconMd),
-        tooltip: '重新计算',
-        onPressed: _loading ? null : () => _load(manual: true),
-      ),
-      child: _loading
-          ? const _AiLoading('正在算复购周期...')
-          : _error != null
-              ? _AiError(message: _error!, onRetry: () => _load(manual: true))
-              : _data == null
-                  ? const _AiHint('暂无数据')
-                  : _buildResult(_data!),
-    );
-  }
-
-  Widget _buildResult(RepurchasePrediction d) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _metric('距上次到店',
-                d.daysSinceLastVisit == null ? '—' : '${d.daysSinceLastVisit} 天'),
-            _metric('平均复购周期',
-                d.avgIntervalDays == null ? '—' : '${d.avgIntervalDays} 天'),
-            _metric('预计下次', d.predictedNextVisit ?? '—',
-                highlight: d.isDue),
-          ],
-        ),
-        const SizedBox(height: AppSpace.s10),
-        Row(
-          children: [
-            _confidenceChip(d.confidence),
-            const SizedBox(width: AppSpace.s8),
-            if (d.daysUntilPredicted != null)
-              Text(
-                d.daysUntilPredicted! < 0
-                    ? '已过 ${-d.daysUntilPredicted!} 天'
-                    : '还有 ${d.daysUntilPredicted} 天',
-                style: TextStyle(
-                  fontSize: AppTheme.fontSm,
-                  fontWeight: FontWeight.w600,
-                  color: d.isDue ? AppTheme.danger : AppTheme.textSecondary,
-                ),
-              ),
-          ],
-        ),
-        if (d.reason.isNotEmpty) ...[
-          const SizedBox(height: AppSpace.s10),
-          _AiBody(text: d.reason),
-        ],
-        if (d.isDue) ...[
-          const SizedBox(height: AppSpace.s12),
-          BigActionButton(
-            icon: Icons.add_task,
-            label: '建一条跟进任务',
-            onTap: () => showAddFollowUpSheet(context, ref,
-                customerId: widget.customerId),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _metric(String label, String value, {bool highlight = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s8),
-      decoration: BoxDecoration(
-        color: highlight
-            ? AppTheme.danger.withOpacity(0.08)
-            : AppTheme.primaryLight.withOpacity(0.35),
-        borderRadius: BorderRadius.circular(AppRadius.r10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
-          const SizedBox(height: AppSpace.s2),
-          Text(value,
-              style: TextStyle(
-                fontSize: AppTheme.fontMd,
-                fontWeight: FontWeight.w700,
-                color: highlight ? AppTheme.danger : AppTheme.primaryDark,
-              )),
-        ],
-      ),
-    );
-  }
-
-  Widget _confidenceChip(String c) {
-    final (label, color) = switch (c) {
-      'high' => ('数据充分', AppTheme.primary),
-      'medium' => ('数据一般', AppTheme.accent),
-      _ => ('数据较少', AppTheme.textSecondary),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(AppRadius.r8),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              fontSize: AppTheme.fontXs, color: color, fontWeight: FontWeight.w600)),
-    );
-  }
-}
-
-// ============================================
-// AI 客户画像 (点一下生成)
+// AI 客户画像 (无独立入口: 数据由 AiFollowUpCard 的「生成 AI 解读」一次产出)
 // ============================================
 
 // ============================================
@@ -244,10 +96,14 @@ class _RepurchaseCardState extends ConsumerState<RepurchaseCard> {
 //     `aiInsightProvider(customerId)` —— 任意一张卡的「生成」都会让三张卡同时出内容。
 //   · 卡片仍是三张 (场景不同: 早上看画像了解人 / 打电话看话术 / 复盘看效果),
 //     合的是**调用**, 不是界面。
-//   · 「复购预测」保持独立 (纯 DB 计算, 自动加载, 不烧 AI)。
+//   · 「复购预测」已并入 customer_rhythm_card.dart (P1)。
 //
 // ⚠ 谁都不许在这里直接调 aiService.insight —— 必须走 notifier,
 //   否则又退回"每张卡各打一次" (P5 白做)。
+//
+// 2026-09-25 P2: 只有 AiFollowUpCard 出「生成 AI 解读」入口; 画像/效果
+//   在没有数据时改为提示「点上方「生成 AI 解读」, 三段一起出」。
+//   已生成的卡片**仍**有自己的 refresh 按钮 (重新生成, 走 _triggerInsight)。
 // ============================================
 
 class AiProfileCard extends ConsumerWidget {
@@ -256,6 +112,9 @@ class AiProfileCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final insight = ref.watch(customerInsightProvider(customerId)).valueOrNull;
+    final isMember = insight?.scriptAvailable ?? true;
+
     return _AiSectionCard(
       customerId: customerId,
       icon: Icons.auto_awesome,
@@ -266,6 +125,7 @@ class AiProfileCard extends ConsumerWidget {
       emptyIcon: Icons.auto_awesome,
       loadingLabel: 'AI 正在总结客户画像...',
       section: (r) => r.sections.profile,
+      isMember: isMember,
     );
   }
 }
@@ -278,6 +138,9 @@ class AiFollowUpCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final insight = ref.watch(customerInsightProvider(customerId)).valueOrNull;
+    final isMember = insight?.scriptAvailable ?? true;
+
     final notifier = ref.read(aiInsightProvider(customerId).notifier);
     final async = ref.watch(aiInsightProvider(customerId));
     final data = async.valueOrNull;
@@ -303,23 +166,26 @@ class AiFollowUpCard extends ConsumerWidget {
           //
           // 理由存在 notifier 上 (不是本卡 local state) —— 三张卡共用一次调用,
           // 理由必须统一, 否则"在跟进卡选了理由, 去点画像卡的重新生成"会丢掉理由。
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _reasonOptions
-                .map((r) => ChoiceChip(
-                      label: Text(r,
-                          style: const TextStyle(fontSize: AppTheme.fontSm)),
-                      selected: notifier.reason == r,
-                      onSelected: (v) => _triggerInsight(
-                        ref,
-                        customerId,
-                        reason: v ? r : null,
-                      ),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: AppSpace.s12),
+          //
+          // 锁态时隐藏: 选了就要触发生成 → 锁态下点了会白出锁块, 体验差。
+          if (isMember)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _reasonOptions
+                  .map((r) => ChoiceChip(
+                        label: Text(r,
+                            style: const TextStyle(fontSize: AppType.sm)),
+                        selected: notifier.reason == r,
+                        onSelected: (v) => _triggerInsight(
+                          ref,
+                          customerId,
+                          reason: v ? r : null,
+                        ),
+                      ))
+                  .toList(),
+            ),
+          if (isMember) const SizedBox(height: AppSpace.s12),
           ..._buildInsightBody(
             context: context,
             ref: ref,
@@ -329,7 +195,9 @@ class AiFollowUpCard extends ConsumerWidget {
             emptyLabel: '生成跟进话术',
             emptyIcon: Icons.chat,
             loadingLabel: 'AI 正在写话术...',
-            onGenerated: (r, context) => [
+            isMember: isMember,
+            primaryEntry: true, // 话术卡 = 三段卡中**唯一**的生成入口
+            onGenerated: (r, context, ref) => [
               // 话术段独有: 一键复制 + 建任务 (闭环, CHARTER §1.4)
               Row(
                 children: [
@@ -374,6 +242,9 @@ class EffectAnalysisCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final insight = ref.watch(customerInsightProvider(customerId)).valueOrNull;
+    final isMember = insight?.scriptAvailable ?? true;
+
     return _AiSectionCard(
       customerId: customerId,
       icon: Icons.trending_up,
@@ -384,6 +255,7 @@ class EffectAnalysisCard extends ConsumerWidget {
       emptyIcon: Icons.insights,
       loadingLabel: 'AI 正在分析效果...',
       section: (r) => r.sections.effect,
+      isMember: isMember,
     );
   }
 }
@@ -415,7 +287,56 @@ void _triggerInsight(
   });
 }
 
-/// 生成后统一展示的东西: 事实底稿 pills + 内容 + mock 标记
+/// 锁块 (复用): 锁态时所有 AI 卡用它替掉「生成」按钮 / 卡片空态。
+///
+/// 设计:
+///   · 琥珀底色 (warningSurface) —— 警示而不抢主体
+///   · 主文案「🔒 升级会员可看 AI 解读」
+///   · 只有第一张卡 (话术卡, primaryEntry=true) 才出「升级会员」按钮:
+///     销售只需要一个行动入口, 三张卡各出按钮 = 视觉噪音 + 用户选哪个
+///   · 画像/效果分析卡复用同样的锁块, 但**不**出按钮
+///
+/// 需要 ref: 「升级会员」按钮调 showMembershipPurchaseSheet(context, ref, ...),
+///   ref 来自 ConsumerWidget 的 build context。
+Widget _memberLockBlockWithRef(
+  BuildContext context,
+  WidgetRef ref, {
+  bool showCta = false,
+}) {
+  final t = context.tokens;
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(AppSpace.s12),
+    decoration: BoxDecoration(
+      color: t.warningSurface,
+      borderRadius: BorderRadius.circular(AppRadius.r10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '🔒 升级会员可看 AI 解读',
+          style: TextStyle(
+            fontSize: AppType.sm,
+            color: AppColors.warning,
+            fontWeight: AppWeight.semibold,
+          ),
+        ),
+        if (showCta) ...[
+          const SizedBox(height: AppSpace.s10),
+          BigActionButton(
+            icon: Icons.workspace_premium,
+            label: '升级会员',
+            onTap: () => showMembershipPurchaseSheet(context, ref,
+                isMember: false),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+/// 生成后统一展示的东西: 事实底稿 pills + 内容 + mock 标记 + 样本来源
 List<Widget> _insightFooter(
   BuildContext context,
   WidgetRef ref,
@@ -443,17 +364,36 @@ List<Widget> _insightFooter(
       const SizedBox(height: AppSpace.s8),
       const Text(
         '提示: 这次 AI 没按分段格式回复, 完整内容已放在「客户画像」卡里',
-        style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+        style: TextStyle(fontSize: AppType.xs, color: AppColors.textSecondary),
       ),
     ],
     if (r.aiMock) ...[
       const SizedBox(height: AppSpace.s8),
       const _AiMockBadge(),
     ],
+    // 样本来源 (P0): facts.dateRange.from/to 都非空才显示
+    //   让销售知道 AI 看的是哪段历史 (例: "近 90 天" → "2026-06-25 → 2026-09-25")。
+    //   字号 micro (11) + textTertiary —— 是不重要的辅助信息, 但能消除
+    //   「AI 是不是用了最近的数据」这种怀疑。
+    if (f.dateFrom != null && f.dateTo != null) ...[
+      const SizedBox(height: AppSpace.s6),
+      Text(
+        '数据范围: ${f.dateFrom} → ${f.dateTo}',
+        style: const TextStyle(
+          fontSize: AppType.micro,
+          color: AppColors.textTertiary,
+        ),
+      ),
+    ],
   ];
 }
 
 /// 生成后统一拼 body 段落 (loading / error / 未生成 / 已生成)
+///
+/// 锁态 (isMember=false) 时:
+///   · primaryEntry=true (话术卡) → 锁块 + 「升级会员」按钮 + 一行小字「一次生成: ...」
+///   · primaryEntry=false (画像/效果) → 锁块 (无按钮) ——
+///     「点上方「生成 AI 解读」」的提示挂在锁块正上方
 List<Widget> _buildInsightBody({
   required BuildContext context,
   required WidgetRef ref,
@@ -463,25 +403,81 @@ List<Widget> _buildInsightBody({
   required String emptyLabel,
   required IconData emptyIcon,
   required String loadingLabel,
-  List<Widget> Function(AiInsightResult r, BuildContext context)? onGenerated,
+  required bool isMember,
+  bool primaryEntry = false,
+  List<Widget> Function(AiInsightResult r, BuildContext context, WidgetRef ref)?
+      onGenerated,
 }) {
+  // 锁态: 已生成的内容不受影响 (老客户付款后还能看到历史洞察); 仅未生成时显示锁块
+  if (!isMember && async.valueOrNull == null) {
+    return [
+      if (primaryEntry) ...[
+        const Text(
+          'AI 画像 / 跟进话术 / 效果分析 · 一次生成',
+          style: TextStyle(
+            fontSize: AppType.xs,
+            color: AppColors.textTertiary,
+          ),
+        ),
+        const SizedBox(height: AppSpace.s10),
+      ] else ...[
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpace.s8),
+          child: Text(
+            '点上方「生成 AI 解读」, 三段一起出',
+            style: TextStyle(
+              fontSize: AppType.xs,
+              color: AppColors.textTertiary,
+            ),
+          ),
+        ),
+      ],
+      _memberLockBlockWithRef(context, ref, showCta: primaryEntry),
+    ];
+  }
+
   final data = async.valueOrNull;
 
   if (async.isLoading) return [const _AiLoadingInline()];
   if (async.hasError) {
+    // 错误分支:
+    //   402 = 会员权限, 落到锁块 (同 P0 锁态, 用户体验一致);
+    //   其他 = 主文案 + 小字原始信息 + 重试 (不裸出 DioException)
+    if (_isPaymentRequired(async.error)) {
+      return [
+        _memberLockBlockWithRef(context, ref, showCta: primaryEntry),
+      ];
+    }
     return [
       _AiError(
-        message: '${async.error}',
+        message: '生成失败, 请稍后重试',
+        detail: '${async.error}',
         onRetry: () => _triggerInsight(ref, customerId),
       ),
     ];
   }
   if (data == null) {
+    // 已生成的分支走这里: data == null + !isMember 已被前置拦截;
+    // 这里只可能是 !isMember 的非空 async / 正常未生成 / 已生成
+    if (primaryEntry) {
+      return [
+        _GenerateButton(
+          label: '生成 AI 解读',
+          icon: emptyIcon,
+          onTap: () => _triggerInsight(ref, customerId),
+        ),
+      ];
+    }
     return [
-      _GenerateButton(
-        label: emptyLabel,
-        icon: emptyIcon,
-        onTap: () => _triggerInsight(ref, customerId),
+      const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpace.s8),
+        child: Text(
+          '点上方「生成 AI 解读」, 三段一起出',
+          style: TextStyle(
+            fontSize: AppType.xs,
+            color: AppColors.textTertiary,
+          ),
+        ),
       ),
     ];
   }
@@ -491,16 +487,26 @@ List<Widget> _buildInsightBody({
     if (text.isEmpty)
       const Text(
         '这次没有生成这一段, 可以点右上角重新生成',
-        style: TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+        style: TextStyle(fontSize: AppType.sm, color: AppColors.textSecondary),
       )
     else
       _AiBody(text: text),
     ..._insightFooter(context, ref, data),
     if (onGenerated != null) ...[
       const SizedBox(height: AppSpace.s12),
-      ...onGenerated(data, context),
+      ...onGenerated(data, context, ref),
     ],
   ];
+}
+
+/// 错误是不是 402 (Payment Required, 后端用会员门槛)
+///
+/// 用 try-match 不抛: 任何类型 / null 都当 false 处理, 不让错误分类炸主流程。
+bool _isPaymentRequired(Object? error) {
+  if (error is DioException) {
+    return error.response?.statusCode == 402;
+  }
+  return false;
 }
 
 /// 只有一段内容的卡 (画像 / 效果分析) 的统一壳
@@ -514,6 +520,7 @@ class _AiSectionCard extends ConsumerWidget {
   final IconData emptyIcon;
   final String loadingLabel;
   final String Function(AiInsightResult) section;
+  final bool isMember;
 
   const _AiSectionCard({
     required this.customerId,
@@ -525,6 +532,7 @@ class _AiSectionCard extends ConsumerWidget {
     required this.emptyIcon,
     required this.loadingLabel,
     required this.section,
+    required this.isMember,
   });
 
   @override
@@ -557,6 +565,8 @@ class _AiSectionCard extends ConsumerWidget {
           emptyLabel: emptyLabel,
           emptyIcon: emptyIcon,
           loadingLabel: loadingLabel,
+          isMember: isMember,
+          primaryEntry: false, // 画像/效果卡不是入口; 让位给话术卡
         ),
       ),
     );
@@ -569,17 +579,22 @@ class _InsightPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Container(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpace.s10, vertical: AppSpace.s4),
       decoration: BoxDecoration(
-        color: AppTheme.bgWarm,
-        border: Border.all(color: AppColors.border),
+        color: t.surfaceSubtle,
+        border: Border.all(color: t.borderStrong),
         borderRadius: BorderRadius.circular(AppRadius.r12),
       ),
-      child: Text(text,
-          style: const TextStyle(
-              fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: AppType.micro,
+          color: AppColors.textSecondary,
+        ),
+      ),
     );
   }
 }
@@ -600,15 +615,18 @@ class _AiLoadingInline extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
           SizedBox(width: AppSpace.s10),
-          Text('AI 正在生成 (画像 + 话术 + 效果 一起)...',
-              style: TextStyle(
-                  fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
+          Text(
+            'AI 正在生成 (画像 + 话术 + 效果 一起)...',
+            style: TextStyle(
+              fontSize: AppType.sm,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );
   }
 }
-
 
 class _AiCardShell extends StatelessWidget {
   final IconData icon;
@@ -644,9 +662,9 @@ class _AiCardShell extends StatelessWidget {
                   child: Text(
                     title,
                     style: const TextStyle(
-                      fontSize: AppTheme.fontMd,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
+                      fontSize: AppType.md,
+                      fontWeight: AppWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
@@ -654,9 +672,13 @@ class _AiCardShell extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpace.s4),
-            Text(subtitle,
-                style: const TextStyle(
-                    fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: AppType.micro,
+                color: AppColors.textSecondary,
+              ),
+            ),
             const SizedBox(height: AppSpace.s12),
             child,
           ],
@@ -666,41 +688,40 @@ class _AiCardShell extends StatelessWidget {
   }
 }
 
-class _AiLoading extends StatelessWidget {
-  final String label;
-  const _AiLoading(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const SizedBox(
-          width: AppSpace.s20,
-          height: AppSpace.s20,
-          child: CircularProgressIndicator(strokeWidth: 2.5),
-        ),
-        const SizedBox(width: AppSpace.s12),
-        Text(label,
-            style: const TextStyle(
-                fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
-      ],
-    );
-  }
-}
-
 class _AiError extends StatelessWidget {
   final String message;
+  final String detail;
   final VoidCallback onRetry;
-  const _AiError({required this.message, required this.onRetry});
+  const _AiError({
+    required this.message,
+    required this.detail,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('生成失败: $message',
+        Text(
+          message,
+          style: const TextStyle(
+            fontSize: AppType.sm,
+            color: AppColors.danger,
+          ),
+        ),
+        if (detail.isNotEmpty) ...[
+          const SizedBox(height: AppSpace.s4),
+          Text(
+            detail,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                fontSize: AppTheme.fontSm, color: AppTheme.danger)),
+              fontSize: AppType.micro,
+              color: AppColors.textTertiary,
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpace.s8),
         BigActionButton(
           icon: Icons.refresh,
@@ -713,16 +734,6 @@ class _AiError extends StatelessWidget {
   }
 }
 
-class _AiHint extends StatelessWidget {
-  final String text;
-  const _AiHint(this.text);
-
-  @override
-  Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(
-          fontSize: AppTheme.fontSm, color: AppTheme.textSecondary));
-}
-
 class _AiBody extends StatelessWidget {
   final String text;
   const _AiBody({required this.text});
@@ -733,16 +744,16 @@ class _AiBody extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpace.s14),
       decoration: BoxDecoration(
-        color: AppTheme.bgWarm,
+        color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(AppRadius.r12),
         border: Border.all(color: AppColors.divider),
       ),
       child: SelectableText(
         text,
         style: const TextStyle(
-          fontSize: AppTheme.fontSm,
+          fontSize: AppType.sm,
           height: 1.6,
-          color: AppTheme.textPrimary,
+          color: AppColors.textPrimary,
         ),
       ),
     );
@@ -760,8 +771,13 @@ class _AiMockBadge extends StatelessWidget {
         color: AppTheme.accent.withOpacity(0.15),
         borderRadius: BorderRadius.circular(AppRadius.r6),
       ),
-      child: const Text('示例数据 (AI 未接入时)',
-          style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary)),
+      child: const Text(
+        '示例数据 (AI 未接入时)',
+        style: TextStyle(
+          fontSize: AppType.micro,
+          color: AppColors.textSecondary,
+        ),
+      ),
     );
   }
 }
@@ -806,11 +822,16 @@ class BigActionButton extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onTap,
         icon: Icon(icon, size: compact ? 20 : 24),
-        label: Text(label, style: TextStyle(fontSize: compact ? AppTheme.fontSm : AppTheme.fontMd)),
+        label: Text(
+          label,
+          style: TextStyle(fontSize: compact ? AppType.sm : AppType.md),
+        ),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppTheme.primaryDark,
           side: const BorderSide(color: AppTheme.primary, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.r12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.r12),
+          ),
         ),
       ),
     );

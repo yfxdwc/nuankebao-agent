@@ -45,6 +45,7 @@ import '../../../core/models/placement_request.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/utils/birthday.dart';
 import '../../../core/widgets/app_empty.dart';
@@ -53,11 +54,11 @@ import '../../../core/widgets/placement_target_sheet.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../screens/profile_sheets.dart' show showAvatarPickerSheet;
 import '../../follow_up/widgets/complete_follow_up_sheet.dart' show showAddInteractionSheet;
-import '../../follow_up/widgets/follow_up_analysis_card.dart';
 import '../widgets/ai_insight_cards.dart';
 import '../widgets/customer_activity_cards.dart';
 import '../widgets/customer_analysis_charts.dart';
 import '../widgets/customer_insight_actions.dart';
+import '../widgets/customer_rhythm_card.dart';
 import '../widgets/customer_score_card.dart';
 import '../widgets/customer_timeline_section.dart';
 import '../widgets/danger_zone_card.dart';
@@ -362,7 +363,13 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     );
   }
 
-  /// **分析 Tab** —— 三大动作之「分析」: 评分卡 → 图谱 → 客观指标 → AI 解读
+  /// **分析 Tab** —— 三大动作之「分析」: 评分卡 → 图谱 → 跟进节奏(含复购预测) → AI 解读
+  ///
+  /// 2026-09-25 改造 (P1 合并节奏卡):
+  ///   · 旧的 FollowUpAnalysisCard + RepurchaseCard 已合并成 CustomerRhythmCard
+  ///     (跟进分析 + 复购预测 两段独立加载, 一段挂了另一段照常显示)
+  ///   · 雷达已删 (2026-09-24), 见 CustomerAnalysisCharts 头部注释
+  ///   · AI 区只剩三张卡 (画像 / 话术 / 效果), 共用一次调用 (P5)
   Widget _buildAnalysisTab(
     BuildContext context,
     WidgetRef ref,
@@ -379,13 +386,17 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
       //   雷达已删 (同源重复 + 3 维可读性差 + Tab 太长), 见组件头部注释。
       CustomerAnalysisCharts(customerId: customerId),
       const SizedBox(height: AppSpace.cardGap),
-      // 客观指标 (免费)
-      FollowUpAnalysisCard(customerId: customerId),
+      // ★ 客观指标 + 复购预测 合并卡 (P1, 2026-09-25):
+      //   跟进分析 (免费) + 复购预测 (纯 DB 自动加载) 合并成一张卡,
+      //   两段独立加载 / 独立错误态 (静默降级); 复购预测已不再单独成卡。
+      CustomerRhythmCard(customerId: customerId),
       const SizedBox(height: AppSpace.cardGap),
       // AI 智能区 (会员): 顺序按「销售员每天最用得上」排
-      //   复购预测 (自动算, 不烧额度) → 跟进建议 (开口话术) → 轮廓画像 (这人是谁) → 效果分析 (疗程有没有用)
+      //   跟进建议 (开口话术 · 唯一生成入口) → 客户画像 (这人是谁) → 效果分析 (疗程有没有用)
+      //   P5: 三张卡共用一次调用; P2: 只有话术卡出「生成 AI 解读」按钮 (单入口)
+      //   P0: 会员判定走 customerInsightProvider.scriptAvailable, 锁态时
+      //   改出「升级会员」按钮 (话术卡) / 锁块 (其他两张卡)
       _buildSectionTitle('AI 助手'),
-      RepurchaseCard(customerId: customerId),
       AiFollowUpCard(customerId: customerId),
       AiProfileCard(customerId: customerId),
       EffectAnalysisCard(customerId: customerId),
@@ -1131,14 +1142,15 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
   }
 
   Widget _buildSectionTitle(String title) {
+    final t = context.tokens;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpace.s12),
       child: Text(
         title,
-        style: const TextStyle(
-          fontSize: AppTheme.fontMd,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.textPrimary,
+        style: TextStyle(
+          fontSize: AppType.md,
+          fontWeight: AppWeight.semibold,
+          color: t.textPrimary,
         ),
       ),
     );
