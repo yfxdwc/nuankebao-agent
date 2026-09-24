@@ -409,6 +409,23 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   ```
   第 ④ 步是关键: **树哈希相同才算“只改了 commit 边界”**; 不同就说明丢/改了内容, 立即停手。
 
+-
+
+- ❌ **git log --diff-filter 扫新增文件, 路径含 `/` 必须加 `--` 分隔或全用 `git diff-tree` (2026-09-24 P4 deploy 漏扫 0024/0025)** — `git log --diff-filter=A --name-only origin/main..HEAD -- 'drizzle/migrations/'` 这种形式, **路径模式里有 `/` 又不写完整 glob, git 会按"字面前缀"匹配 = 把 `drizzle/migrations/` 当成精确路径 / 路径前缀**, 漏掉真实新增 (本轮漏了 `0008_rich_ink.sql` 之外 + `0024_app_config.sql` + `0025_idea.sql` 全没扫到, deploy 才从 `db:migrate` 输出惊觉)。**修法**:
+  - **方案 A**: 写完整 glob: `-- 'drizzle/migrations/*.sql'` (注意 `.sql` 后缀)
+  - **方案 B**: 用 `git diff-tree --no-commit-id --name-only -r origin/main HEAD | grep '^drizzle/migrations/'`
+  - **方案 C**: 直接 `ls drizzle/migrations/` + `git log --format=%H -- drizzle/migrations/0001_wild_shooting_star.sql` 看时间线
+  - 部署 23+ migrations 的项目必跑上述任一**两次** (一遍扫, 一遍查), **不能只信一条命令**。同根: §5 「修一个根因就 commit」—— 单一检测路径 = 漏检, 必双轨验证。
+
+- ❌ **dev db 不该当 prod 的真相源 (2026-09-22 + 2026-09-24 两次误报)** — 主人机器上**两个 postgres 并存**:
+  - `nuankebao-postgres` (dev, 端口 5432 暴露给 host) ← `.env.local` DATABASE_URL = `localhost:5432`
+  - `nuankebao-prod-postgres` (prod, 5432 仅内网) ← `.env.prod` DATABASE_URL = `postgres:5432`
+  - **跑 `npx tsx scripts/audit-*.ts` 默认走 dev → 报的"违规"全是 dev 数据** (合并测试 / 冒烟 / SeedTest), 不是 prod。
+  - **后果**: ① 误把 dev 测试数据当 prod 漂移报警, 折腾半天是空警 ② dev 删/改数据**不影响 prod**, 但 audit 给主人感觉"生产有 danger" → 过度信任 (错决策) ③ 反过来, 真在 dev 跑 `--fix` 改的也是 dev (prod 数据漂移仍然存在, 但脚本说"通过"= 漏报告)。
+  - **修法 = 报告 audit 结果时必带「db 来源」前缀**, 默认假设 DEV (除非显式 `--prod` flag 或 psql 进 `nuankebao-prod-postgres`):
+    - ❌ 「audit 报 3 个 phone drift」 → 主家不知道是 dev 还是 prod
+    - ✅ 「audit (db = dev/.env.local) 报 3 个 phone drift, prod psql 直查: 0 条」 → 主家一眼看懂
+  - **终极修法 (待做)**: `scripts/audit-*.ts` 启动时 echo 当前 DATABASE_URL host, 主家第一时间知道连的是哪个。同根: §5 「apk-download 公开」—— "看起来保护了" ≠ 真的保护了; "看起来通过了" ≠ 真的覆盖全。
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
 > **历史**:

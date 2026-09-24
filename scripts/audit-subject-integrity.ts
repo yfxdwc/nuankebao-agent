@@ -32,6 +32,9 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { ensureAccountProfile } from "@/lib/auth/registration";
 
+// 测试数据前缀过滤 (合并测试-* / 冒烟-* / SeedTest-* 都是 dev 噪声; ADR-0015 之后用真数据)
+const TEST_NAME_REGEX = '^(合并测试|冒烟|SeedTest)-';
+
 const fix = process.argv.includes("--fix");
 
 interface Row {
@@ -110,6 +113,7 @@ async function main() {
     FROM "user" u
     WHERE u.role <> 'admin'
       AND u.is_active = true
+      AND u.name !~ '^(合并测试|冒烟|SeedTest)-'
       AND NOT EXISTS (
         SELECT 1 FROM customer c
         WHERE c.phone_hash = u.phone_hash AND c.deleted_at IS NULL
@@ -160,6 +164,8 @@ async function main() {
     FROM "user" u
     JOIN customer c ON c.id = u.customer_id
     WHERE c.phone_hash <> u.phone_hash
+      AND u.name !~ '^(合并测试|冒烟|SeedTest)-'
+      AND c.name !~ '^(合并测试|冒烟|SeedTest)-'
     ORDER BY u.id LIMIT 20
   `);
   console.log(`⑤ 列连接漂移 (customer_id 指向的档案不是同一手机号): ${drift.length}`);
@@ -188,6 +194,8 @@ async function main() {
     FROM franchisee f
     JOIN "user" u ON u.franchisee_id = f.id AND u.is_active = true
     WHERE f.deleted_at IS NULL AND u.phone_hash <> f.phone_hash
+      AND u.name !~ '^(合并测试|冒烟|SeedTest)-'
+      AND f.name !~ '^(合并测试|冒烟|SeedTest)-'
     ORDER BY f.id LIMIT 20
   `);
   console.log(`⑦ 节点手机号漂移 (绑定账号的号 ≠ 节点记录的号): ${nodeDrift.length}`);
