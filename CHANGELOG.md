@@ -54,20 +54,29 @@
 
 主人 2026-09-24 诉求 (本日折叠诉求的续): 「"现在该做"折叠后, 颜色要高亮显示」—— 折叠成一行时卡片要有高亮色, 跟展开态的白卡明显区分, 一眼能看出「这里还有事要做」。
 
+**同日主人修正**: 「"现在该做"折叠后, 高亮色不应该是绿色, 警示放色你不知道吗」——
+折叠是「还有待办被收起」的告警信号, 不是「完成 / 已注册」类的正向状态; 品牌绿
+(`primaryLight`) 用在这里是语义错位。改用 warning 琥珀色 (`warningSurface` +
+`warning` + `warningDark`), 警示场景一律走琥珀色, 对齐 ui-principles.md §1
+原则 5「颜色是信号, 不是装饰」。最终实现按 warning 落地 (下面以琥珀为唯一描述)。
+
 ### 做法 (A)
 
 1. **`_ActionsBody` 最外层 Container 加 key + 分支着色**:
    · `key: const ValueKey('insightActionsCard')` —— 测试锁卡用 (页面级测试也共用)
-   · `_isCollapsed = true` → `color: t.primaryLight` (品牌浅绿) + `border: t.primary` (深绿)
+   · `_isCollapsed = true` → `color: t.warningSurface` (浅琥珀 #FFF3CD) + `border: t.warning` (深琥珀 #8A6D1F)
    · `_isCollapsed = false` → 维持 `t.surfaceCard` (白) + `t.divider` (灰)
 
-2. **`_CollapsedHeader` 前景色全用 `t.primaryDark`**:
+2. **`_CollapsedHeader` 前景色全用 `t.warningDark`**:
    · 左侧 checklist 图标 + 「现在该做 (N)」标题 + 「共 N 条」计数 + `Icons.expand_more`
-   · 不要再用 `textTertiary` (灰字在浅绿底上发灰) 或默认黑 (`textPrimary`, 没信号意义)
+   · 不要再用 `warning` (#8A6D1F, 在 warningSurface 上对比度约 4.3 略低于 AA),
+     `textTertiary` (灰字在浅琥珀底上发灰), 或默认黑 (`textPrimary`, 没信号意义)
+   · 选 `warningDark` (#8A5A1F, 在 warningSurface 上对比度约 4.7) 是因为警示色
+     还要**看得清**, 不然信号就失效了
 
 ### 为什么不影响展开态
 
-- `_isCollapsed` = `collapsed && todos.isNotEmpty` —— 只有「折叠了 + 有行动」才走浅绿底分支;
+- `_isCollapsed` = `collapsed && todos.isNotEmpty` —— 只有「折叠了 + 有行动」才走浅琥珀底分支;
   展开 + 无行动都仍走白卡路径, 渲染逻辑**整块不动**。
 - 既有测试 `collapsed=false` 仍断言白卡 (`decoration.color == tokens.surfaceCard`),
   这是主人诉求的字面边界「折叠后高亮」= 顺向白卡 → 折叠态切色, 反向折叠 → 展开态复原。
@@ -81,16 +90,22 @@
 - 卡片颜色一变就跟展开态明确区分 —— 切回去销售也能立刻知道「我展开回来了」
   (避免销售点开又觉得"跟刚折叠的差不多"折叠回去)。
 
-### 信号色模式 (整套色域内已有先例)
+### 为什么选 warning 琥珀而不是 primary 品牌绿
 
-- `AppTheme.primaryLight` 做「已注册」胶囊底 + `primaryDark` 字, profile / 我的推荐页沿用
-- 新卡片只在这块复用同模式, **不**新引入硬编码色 (`AppColors.xxx` / hex) —— 颜色一律
-  `context.tokens.xxx` (换肤不失效)。
+- 语义匹配: 折叠 = 「还有待办没处理」= **警示**; warning 是整套 tokens 里**唯一**
+  用来表警示的色 (danger 是「严重错误 / 失败」更重, success / primary 是正向)。
+- 不要复用「已注册」胶囊模式: 那条路径 (`primaryLight` + `primaryDark`) 的语义
+  = 正向完成态, profile / 我的推荐页沿用; 折叠态把同一色拿来 = **语义错位**。
+- 警示色与正向色要在视觉上**可区分** —— 琥珀 vs 翠绿, 在色相环上隔得远, 销售一眼
+  能区分「这条线还没处理」vs 「这条已经搞定」。
 
 ### 验证
 
 - `flutter analyze` → 0 issue
 - `flutter test test/customer_insight_actions_test.dart` → +3 (折叠高亮 + 展开回归 + 无行动折叠回归)
+- 折叠态断言 = `tokens.warningSurface` / `tokens.warning` / `tokens.warningDark`,
+  顺带加 3 条**反向断言** (`isNot(primaryLight)` / `isNot(primary)` /
+  `isNot(primaryDark)`) —— 防有人手滑改回品牌绿 (主人明确否过绿色)
 - `flutter test` → 全绿
 - `bash tools/check-ui-tokens.sh --strict` → exit 0 (cardWidget 持平基线 1, 不新增 Card)
 

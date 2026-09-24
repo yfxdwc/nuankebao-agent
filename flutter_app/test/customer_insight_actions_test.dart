@@ -262,21 +262,27 @@ void main() {
   });
 
   // ============================================
-  // ⑧ 折叠态 (2026-09-24 主人诉求)
+  // ⑧ 折叠态 (2026-09-24 主人诉求 + 同日修正)
   //
   // 主人原话: 「随页面上滑折叠到最少一行, 补折叠状态时卡片右上角出现
   //   图标 (向下展开)」 + 「现在该做折叠后, 颜色要高亮显示」
   //   (折叠成一行时卡片要有高亮色, 跟展开态的白卡明显区分, 一眼能看出
   //   "这里还有事要做」)。
   //
+  // 同日主人修正: 「"现在该做"折叠后, 高亮色不应该是绿色, 警示放色你不知道吗」
+  //   → 折叠 = "还有待办没处理" 的**警示**信号, 不是正向完成态, 改用 warning 琥珀
+  //   (warningSurface 底 + warning 边 + warningDark 字), **不**走品牌绿。
+  //
   // 守什么:
   //   · collapsed == true + 有行动 → 只显示一行 header, 行动行不可见, 右上角
-  //     出现 Icons.expand_more + **卡片高亮**: 浅绿底 (primaryLight) + 深绿边
-  //     (primary) + 深绿字 (primaryDark) —— 跟展开态白卡明确区分。
+  //     出现 Icons.expand_more + **卡片高亮**: 浅琥珀底 (warningSurface) +
+  //     深琥珀边 (warning) + 深琥珀字 (warningDark) —— 跟展开态白卡明确区分。
   //   · 点 expand_more → 回调被调 (详情页负责把状态收回展开)
   //   · collapsed == false → 现有展开态不受影响 (仍白卡, 防止把展开态也染了)
   //   · collapsed == true + **无**行动 → 「节奏正常」可见, **不**出图标,
   //     **不**高亮 (没东西可折叠 → 不高亮)
+  //   · **反向断言**: 折叠态底色 **不**等于 primaryLight (品牌绿) —— 防有人手滑改回
+  //     绿色 (主人明确否过)
   //
   // 页面上滑驱动折叠 = 详情页 (页面级测试) 的职责 —— 本文件只守 widget 级
   // 「传入 collapsed 后渲染对不对」。
@@ -304,7 +310,7 @@ void main() {
     );
 
     testWidgets(
-      'collapsed=true + 有行动 → 卡片高亮 (浅绿底 + 深绿边 + 深绿字, 与展开态明确区分)',
+      'collapsed=true + 有行动 → 卡片高亮 (warning 琥珀底 + 深琥珀边 + 深琥珀字, 与展开态明确区分)',
       (tester) async {
         await pump(tester, insight(actions: [action()]), collapsed: true);
         final tokens = AppThemes.resolve(null);
@@ -317,20 +323,31 @@ void main() {
 
         final decoration = tester.widget<Container>(cardFinder).decoration
             as BoxDecoration;
-        // 浅绿底 — 这就是"高亮"的视觉落点
-        expect(decoration.color, tokens.primaryLight,
-            reason: '折叠态卡片底应是浅绿 (primaryLight), 跟展开态白卡区分');
-        // 深绿边 — 同色系, 比底更深一档做轮廓
+        // 浅琥珀底 — 警示信号色 (折叠 = "还有待办被收起" 的告警, 不是正向完成态)
+        expect(decoration.color, tokens.warningSurface,
+            reason: '折叠态卡片底应是浅琥珀 (warningSurface), 跟展开态白卡区分');
+        // 深琥珀边 — 同色系, 比底更深一档做轮廓
         expect(decoration.border, isA<Border>());
         final borderTop =
             (decoration.border as Border).top;
-        expect(borderTop.color, tokens.primary,
-            reason: '折叠态卡片边框应是深绿 (primary)');
+        expect(borderTop.color, tokens.warning,
+            reason: '折叠态卡片边框应是深琥珀 (warning)');
 
-        // 「现在该做」文字颜色 = primaryDark
+        // 「现在该做」文字颜色 = warningDark (浅琥珀底上对比度 ≈4.7, 达 AA)
         final titleText = tester.widget<Text>(find.text('现在该做 (1)'));
-        expect(titleText.style?.color, tokens.primaryDark,
-            reason: '折叠态标题文字应是深绿 (primaryDark), 浅绿底上读得清');
+        expect(titleText.style?.color, tokens.warningDark,
+            reason: '折叠态标题文字应是深琥珀 (warningDark), 浅琥珀底上读得清');
+
+        // ⚠ 反向断言: 折叠态底色 **不能**是品牌绿 (主人 2026-09-24 明确否过绿色
+        //   「高亮色不应该是绿色」)。这是防回归的核心护栏 —— 有人手滑改回
+        //   primaryLight / primary / primaryDark 时, 这条反向断言立即失败,
+        //   强制重读本次警示色决策的语义 (警示 ≠ 正向)。
+        expect(decoration.color, isNot(tokens.primaryLight),
+            reason: '折叠态不能用品牌绿 (primaryLight) — 警示语义, 不是正向完成态');
+        expect(borderTop.color, isNot(tokens.primary),
+            reason: '折叠态边框不能用品牌深绿 (primary) — 同上');
+        expect(titleText.style?.color, isNot(tokens.primaryDark),
+            reason: '折叠态文字不能用品牌深绿 (primaryDark) — 同上');
       },
     );
 

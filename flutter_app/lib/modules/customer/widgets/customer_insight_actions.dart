@@ -119,24 +119,31 @@ class _ActionsBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tokens;
 
-    // 高亮信号色 (2026-09-24 主人诉求):
-    //   折叠态 = 「这里还有事要做, 收起来了」→ 用品牌浅绿 (primaryLight) 底 +
-    //   深绿边框 (primary) + 深绿字 (primaryDark) —— 一眼可见「这条线还没处理完」。
+    // 高亮信号色 (2026-09-24 主人诉求 + 同日修正):
+    //   折叠态 = 「这里还有事要做, 收起来了」= **警示信号** (有待办没处理) →
+    //   用 warning 琥珀色: warningSurface (#FFF3CD) 底 + warning (#8A6D1F) 深琥珀边
+    //   + warningDark (#8A5A1F) 文字。
+    //   **为什么不是品牌绿** —— 折叠 = "有待办被收起" 的告警信号, 不是 "完成 / 已注册"
+    //   类的正向状态; 品牌绿 (primaryLight) 是已注册胶囊沿用的正向色, 用在「还没处理」
+    //   的状态上是**语义错位**。警示场景一律走 warning 琥珀, 对齐 ui-principles.md §1
+    //   原则 5「颜色是信号, 不是装饰」。
+    //   **为什么文字用 warningDark 而不是 warning** —— warning 直接放在 warningSurface
+    //   (#FFF3CD) 上对比度约 4.3, 小字略低于 WCAG AA; warningDark (#8A5A1F) 在同一底上
+    //   对比度约 4.7, 达到 AA, 适合做正文/图标。
     //   展开态 = 仍是白卡 (列行动, 重点在文字内容, 不需要"还在等你"的视觉强调),
     //     跟折叠态**明确**区分 (避免"展开后看着跟折叠差不多, 销售以为没点开" 错觉)。
-    //   对齐 ui-principles.md §1 原则 5「颜色是信号, 不是装饰」 —— 信号色只在
-    //   "被收起的待办"这个状态出现, 不是给所有卡都染色。
+    //   信号色只在 "被收起的待办" 这个状态出现, 不是给所有卡都染色。
     //
     // key = 'insightActionsCard' 给测试锁定卡片 (避免 descendant + 父级 BoxDecoration
     //   在页面级测试里一并报上来)。**不要**改这个 key —— 已有测试按它抓。
     return Container(
       key: const ValueKey('insightActionsCard'),
       decoration: BoxDecoration(
-        // 折叠态 = sage 浅绿底 + 深绿边; 展开态 = 白卡 + 细灰边 (维持现状)
-        color: _isCollapsed ? t.primaryLight : t.surfaceCard,
+        // 折叠态 = warning 琥珀色底 + 深琥珀边; 展开态 = 白卡 + 细灰边 (维持现状)
+        color: _isCollapsed ? t.warningSurface : t.surfaceCard,
         borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(
-          color: _isCollapsed ? t.primary : t.divider,
+          color: _isCollapsed ? t.warning : t.divider,
         ),
       ),
       // AnimatedSize: 折叠 / 展开切换平滑过渡 (~180ms easeOut),
@@ -243,11 +250,14 @@ class _ActionsBody extends StatelessWidget {
 // 触摸区 ≥ AppSize.tapMin (48pt): IconButton 默认 MaterialTapTargetSize.padded
 // 是 48×48, 中老年手指友好 —— 同 AGENTS §1「移动优先, 移动端重度使用」。
 //
-// 2026-09-24 折叠态高亮: 卡片底是 primaryLight (浅绿), 这块的所有前景色必须用
-//   primaryDark (深绿) —— 不要用 textPrimary (近似黑, 在浅绿上刺眼且无信号意义)
-//   也不要 textTertiary (灰字, 在浅绿底上几乎看不见)。
-//   既有的 "primaryLight 底 + primaryDark 字" 模式参考 profile_page / 我的推荐页
-//   的 "已注册" 胶囊 (主人原话 2026-09-24)。
+// 2026-09-24 折叠态高亮 (同日主人修正): 折叠 = "还有待办被收起" = 警示, 不是
+//   正向完成态, 改用 warning 琥珀色, 不用品牌绿。
+//   卡片底是 warningSurface (#FFF3CD 浅琥珀), 这块的所有前景色必须用 warningDark
+//   (#8A5A1F) —— 不要用 warning (#8A6D1F, 在浅琥珀底上对比度约 4.3 略低于 AA),
+//   也不要 textPrimary (近似黑, 刺眼且无信号意义) / textTertiary (灰字, 在浅琥珀底
+//   上几乎看不见)。
+//   选择 warningDark 而不是 warning 的原因就是上面的对比度数值 —— 警示色还要
+//   **看得清**, 不然信号就失效了 (主人原话 2026-09-24 「警示放色你不知道吗」)。
 // ============================================
 
 class _CollapsedHeader extends StatelessWidget {
@@ -263,8 +273,9 @@ class _CollapsedHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 折叠态一定是在 primaryLight 底色下渲染 (调用方 _ActionsBody 根据
-    //   _isCollapsed 分支已切色); 整块前景色统一用 primaryDark 才能在浅绿底上读得清。
+    // 折叠态一定是在 warningSurface (浅琥珀) 底色下渲染 (调用方 _ActionsBody 根据
+    //   _isCollapsed 分支已切色); 整块前景色统一用 warningDark (深琥珀) 才能在
+    //   浅琥珀底上既看得清 (≈4.7 对比度, 达 AA) 又有警示信号的语义分量。
     final t = context.tokens;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -275,7 +286,7 @@ class _CollapsedHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.checklist_rtl, size: AppSize.iconSm, color: t.primaryDark),
+          Icon(Icons.checklist_rtl, size: AppSize.iconSm, color: t.warningDark),
           const SizedBox(width: AppSpace.s6),
           Expanded(
             child: Text(
@@ -283,9 +294,9 @@ class _CollapsedHeader extends StatelessWidget {
               style: TextStyle(
                 fontSize: AppType.sm,
                 fontWeight: AppWeight.semibold,
-                // 折叠态在浅绿底上 —— 跟展开态的 textPrimary 区分开,
-                //   "深绿信号字" 是这个卡片独有的折叠特征
-                color: t.primaryDark,
+                // 折叠态在浅琥珀底上 —— 跟展开态的 textPrimary 区分开,
+                //   "深琥珀警示字" 是这个卡片独有的折叠特征
+                color: t.warningDark,
               ),
             ),
           ),
@@ -296,13 +307,13 @@ class _CollapsedHeader extends StatelessWidget {
               child: Text(
                 '共 $totalActions 条',
                 style:
-                    TextStyle(fontSize: AppType.xs, color: t.primaryDark),
+                    TextStyle(fontSize: AppType.xs, color: t.warningDark),
               ),
             ),
           // 展开图标 —— IconButton 自带 tooltip「展开」 + 48×48 触摸区。
-          //   折叠态唯一可见的图标 → 用信号色, 不要用默认灰 (灰在浅绿上发虚)
+          //   折叠态唯一可见的图标 → 用信号色, 不要用默认灰 (灰在浅琥珀底上发虚)
           IconButton(
-            icon: Icon(Icons.expand_more, size: AppSize.iconMd, color: t.primaryDark),
+            icon: Icon(Icons.expand_more, size: AppSize.iconMd, color: t.warningDark),
             tooltip: '展开',
             // 详情页在「确实有内容可展开」时才会传回调 (collapsed && todos.isNotEmpty),
             // 这里给个空保护: 即便外部传了 null, 按钮也不该可点 (避免点了没反应)
