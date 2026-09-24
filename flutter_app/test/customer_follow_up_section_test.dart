@@ -434,5 +434,64 @@ void main() {
             reason: '展开态**不**该出现展开图标');
       },
     );
+
+    testWidgets(
+      '「+ 新建」固定在卡片右上角 (最右控件 + 贴右边) —— 折叠/展开两态都成立',
+      (tester) async {
+        // 主人 2026-09-24: 「'+新建'按键整体靠右，固定到卡片的右上角」
+        //   锁两件事:
+        //     ① 它必须是**最右侧控件** —— 展开箭头 (⌄) 不许抢最右位
+        //        (2026-09-24 调序: 箭头已移到按钮**左侧**)
+        //     ② 它要**贴右边缘** —— 距卡片右缘 ≤ 24px (不是飘在 header 中间)
+        final tasks = [
+          FollowUpTask(
+            id: 't1',
+            customerId: 'c1',
+            dueAt: _local(2026, 9, 25, 9, 0),
+            reason: '贴角验证',
+            status: 'pending',
+            createdAt: _local(2026, 9, 24, 10, 0),
+          ),
+        ];
+
+        Future<void> checkAtCorner({required bool collapsed}) async {
+          final fake = _FakeFollowUpService(tasks);
+          await tester.pumpWidget(_wrap(
+            child: CustomerFollowUpSection(
+              customerId: 'c1',
+              collapsed: collapsed,
+              onToggleCollapsed: () {},
+            ),
+            fake: fake,
+          ));
+          await _pumpUntilSettled(tester);
+
+          // 按 widget 里的测试契约 key 抓 (TextButton.icon 是私有子类,
+          //   find.byType(TextButton) 抓不到)
+          final btn = find.byKey(const ValueKey('followUpNewButton'));
+          expect(btn, findsOneWidget,
+              reason: 'collapsed=$collapsed 时「+ 新建」必须可见');
+          final btnRect = tester.getRect(btn);
+          final cardRect =
+              tester.getRect(find.byKey(CustomerFollowUpSection.cardKey));
+
+          // ② 贴角 (折叠态实际 ~4px 内边距, 展开态 ~16px)
+          expect(cardRect.right - btnRect.right, lessThanOrEqualTo(24.0),
+              reason:
+                  'collapsed=$collapsed: 「+ 新建」要贴卡片右上角 (距右缘 ≤ 24px)');
+
+          // ① 最右控件: 若折叠态有展开箭头, 它必须在按钮**左侧**
+          final chev = find.byIcon(Icons.expand_more);
+          if (chev.evaluate().isNotEmpty) {
+            expect(tester.getRect(chev).right,
+                lessThanOrEqualTo(btnRect.left + 0.5),
+                reason: '展开箭头不能占最右位 (主人要求「+ 新建」在卡片右上角)');
+          }
+        }
+
+        await checkAtCorner(collapsed: false);
+        await checkAtCorner(collapsed: true);
+      },
+    );
   });
 }

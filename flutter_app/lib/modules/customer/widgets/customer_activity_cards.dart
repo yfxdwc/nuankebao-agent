@@ -399,15 +399,21 @@ class _FollowUpHeader extends ConsumerWidget {
               style: TextStyle(
                   fontSize: AppTheme.fontMd, fontWeight: FontWeight.w700)),
         ),
-        Flexible(
-          child: Text('$taskCount 条待办',
-              style: const TextStyle(
-                  fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-        ),
+        // ⚠ 计数**不能**用 Flexible (2026-09-24 修): 标题是 Expanded (flex), 若计数
+        //   也带 flex, 两者会平分"剩余空间" —— Flexible 用不完的份额留在行尾,
+        //   导致「+ 新建」按钮浮在中间 (实测距右缘 283px!), 正是主人说的
+        //   「按键整体靠右」没做到。改成**固定宽**子节点 (无 flex) → 让 Expanded
+        //   标题吃掉全部剩余空间 → 计数 + 按钮被顶到右缘 (贴卡片右上角)。
+        Text('$taskCount 条待办',
+            style: const TextStyle(
+                fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
         const SizedBox(width: AppSpace.s8),
         TextButton.icon(
+          // 测试契约 key: 「+ 新建」要固定卡片右上角 (2026-09-24) —— 测试按 key 抓
+          //   它的 rect 断言"最右控件 + 贴右缘"; 改 key 前先 grep 测试引用。
+          key: const ValueKey('followUpNewButton'),
           // 「+ 新建」紧凑按钮 (header 行右侧, 不换行不溢出)
           //   visualDensity: compact 缩 padding 让按钮更紧, 避免中老年字号下被挤到下一行
           onPressed: () => showAddFollowUpSheet(context, ref,
@@ -481,17 +487,36 @@ class _FollowUpCollapsedHeader extends ConsumerWidget {
                     fontWeight: FontWeight.w700,
                     color: AppTheme.textPrimary)),
           ),
-          // 「N 条待办」计数 —— 折叠态保留, 单行信息没成本, 销售一眼看到量
-          Flexible(
-            child: Text('$taskCount 条待办',
-                style: const TextStyle(
-                    fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-          ),
+          // 「N 条待办」计数 —— 折叠态保留, 单行信息没成本, 销售一眼看到量。
+          // ⚠ 同展开态: **不用** Flexible (flex 会跟 Expanded 标题抢空间, 留出
+          //   行尾空隙 → 「+ 新建」贴不到右缘)。
+          Text('$taskCount 条待办',
+              style: const TextStyle(
+                  fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
           const SizedBox(width: AppSpace.s4),
-          // 「+ 新建」按钮 —— 折叠态也要能建任务 (避免展开→建→折叠 多一跳)
+          // 展开图标 —— IconButton 自带 tooltip「展开」 + 48×48 触摸区。
+          // 跟 L0「现在该做」同模式, 默认灰 (跟展开态 header 一致)。
+          // ⚠ 2026-09-24 调序: 主人要求「+新建」贴卡片右上角 → 箭头**不能**再占
+          //   最右位; 箭头移到按钮左边 (仍紧邻 header 右区, 可点展开)。
+          IconButton(
+            icon: const Icon(Icons.expand_more, size: AppSize.iconMd),
+            tooltip: '展开',
+            // 折叠态唯一可见的"展开"入口 —— 即便外部传了 null 也不该可点
+            // (避免点了没反应; 同 L0 防御性处理)
+            onPressed: onToggleCollapsed,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.all(AppSpace.s4),
+          ),
+          const SizedBox(width: AppSpace.s2),
+          // 「+ 新建」按钮 —— **最右位 (卡片右上角)** (主人 2026-09-24 拍):
+          //   折叠态也要能建任务 (避免展开→建→折叠 多一跳);
+          //   箭头已在它左侧 → 它是 header 里唯一贴右边缘的控件。
           TextButton.icon(
+            // 测试契约 key: 跟展开态同一个 key (同一时刻只渲染一个头) ——
+            //   测试用 `find.byKey` 抓 rect 断言"最右控件 + 贴右缘"
+            key: const ValueKey('followUpNewButton'),
             onPressed: () => showAddFollowUpSheet(context, ref,
                 customerId: customerId),
             icon: const Icon(Icons.add, size: AppSize.iconMd),
@@ -504,15 +529,6 @@ class _FollowUpCollapsedHeader extends ConsumerWidget {
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-          ),
-          // 展开图标 —— IconButton 自带 tooltip「展开」 + 48×48 触摸区。
-          // 跟 L0「现在该做」同模式, 默认灰 (跟展开态 header 一致)。
-          IconButton(
-            icon: const Icon(Icons.expand_more, size: AppSize.iconMd),
-            tooltip: '展开',
-            // 折叠态唯一可见的"展开"入口 —— 即便外部传了 null 也不该可点
-            // (避免点了没反应; 同 L0 防御性处理)
-            onPressed: onToggleCollapsed,
           ),
         ],
       ),
