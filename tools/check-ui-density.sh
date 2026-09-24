@@ -63,8 +63,12 @@ NKB_PW=${NKB_PW:-Test12345}
 
 VIEWPORTS="$VIEWPORTS" ROUTES="$ROUTES" OUT_DIR="$OUT_DIR" \
   NKB_IDENT="$NKB_IDENT" NKB_PW="$NKB_PW" \
-  JSON=1 timeout 600 node tools/ui-acceptance-probe.mjs > "$OUT_DIR/probe.json" 2>&1 \
-  || { echo "✗ 探针失败, 看 $OUT_DIR/probe.json"; exit 2; }
+  JSON=1 timeout 600 node tools/ui-acceptance-probe.mjs \
+    > "$OUT_DIR/probe.json" 2> "$OUT_DIR/probe.stderr.log" \
+  || { echo "✗ 探针失败, 看 $OUT_DIR/probe.stderr.log"; exit 2; }
+# ⚠ 这里**不能写 `2>&1`** (2026-09-24 踩过): 探针的告警走 stderr
+#   (例: dev 下登录失败回落 DEV_SKIP_AUTH 的那行「⚠ ...」), 合并进来就污染 JSON
+#   → 下游 JSON.parse 报 'Unexpected token ⚠'。stderr 单独落文件。
 
 # ---- 3. 解析 + 对照基线 ----
 echo ""
