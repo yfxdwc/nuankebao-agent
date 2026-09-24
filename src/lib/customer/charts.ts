@@ -19,12 +19,12 @@
 //   那是技师/店长的判断, 不是系统的。
 // ============================================
 
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { bodyPart, customer, wellnessRecord, wellnessRecordBodyPart } from "@/lib/db/schema";
-import { decryptField } from "@/lib/crypto/field";
+import { bodyPart, customer, wellnessRecordBodyPart } from "@/lib/db/schema";
 import { median } from "@/lib/follow-up/analysis";
+import { loadRecentWellnessParsed } from "@/lib/customer/wellness-history";
 
 // ============================================
 // 类型
@@ -168,18 +168,12 @@ export async function loadCustomerCharts(
     .limit(1);
   if (!cust) return null;
 
-  // 记录 (只取画图需要的字段; 按日期正序便于直接聚合)
-  const rows = await db
-    .select({
-      id: wellnessRecord.id,
-      serviceDate: wellnessRecord.serviceDate,
-      pre: wellnessRecord.preConditionEncrypted,
-      post: wellnessRecord.postConditionEncrypted,
-    })
-    .from(wellnessRecord)
-    .where(eq(wellnessRecord.customerId, customerId))
-    .orderBy(asc(wellnessRecord.serviceDate), asc(wellnessRecord.id))
-    .limit(200);
+  // 记录: 「最近 200 条」是唯一取样口径 (scoring.ts 共用同一个 loader)。
+  //   本 loader 之前的历史 bug: 这里原本按 serviceDate ASC 取**最早** 200 条,
+  //   记录数 >200 的客户看的是最老的样本 —— 趋势图 / 部位统计都跑偏。
+  //   修法 = 改用共享 loader (统一取最近 200); buildCustomerCharts 内部仍按 serviceDate
+  //   正序 sort, 不依赖入参顺序。
+  const rows = await loadRecentWellnessParsed(customerId, 200);
 
   if (rows.length === 0) {
     return { trend: [], bodyParts: [], scoredRecordCount: 0, recordCount: 0 };
@@ -208,21 +202,12 @@ export async function loadCustomerCharts(
 
   return buildCustomerCharts({
     records: rows.map((r) => ({
-      serviceDate: new Date(String(r.serviceDate)),
-      pre: safeParse(r.pre),
-      post: safeParse(r.post),
+      serviceDate: r.serviceDate,
+      pre: r.pre,
+      post: r.post,
       bodyPartIds: byRecord.get(String(r.id)) ?? [],
     })),
     bodyPartNames: names,
     trendLimit: opts.trendLimit,
   });
-}
-
-function safeParse(cipher: string | null): Record<string, unknown> {
-  if (!cipher) return {};
-  try {
-    return JSON.parse(decryptField(cipher)) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
 }

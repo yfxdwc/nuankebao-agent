@@ -166,8 +166,8 @@ String relativeDayLabel(String? ymd, {DateTime? now}) {
   final diff = daysFromToday(ymd, now: now);
   if (diff == null) return '';
   if (diff == 0) return '今天';
-  if (diff == 1) return '昨天';
-  if (diff < 0) return '${-diff} 天前';
+  if (diff == -1) return '昨天';
+  if (diff < -1) return '${-diff} 天前';
   // 未来 (理论上不该发生, 但 API 返回错值时给具体日期兜底)
   return '$diff 天后';
 }

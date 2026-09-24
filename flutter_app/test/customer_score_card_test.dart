@@ -14,6 +14,8 @@
 //   ①d 全部文字对卡片底可读 (不出现白字白底, AGENTS §5 真机白字教训)
 //   ② 总体无分时环显示 — 而不是 0
 //   ③ 展开: 可解释性 —— 销售要能核对"为什么这个分"
+//   ④ 短板提示: weakDimensions 非空才渲染 (P0, 2026-09-24)
+//   ⑥ 错误态: 轻量错误块 + 「重新加载」按钮 (不崩, 不静默)
 //
 // 跑: cd flutter_app && flutter test test/customer_score_card_test.dart
 // ============================================
@@ -86,9 +88,33 @@ Widget host(CustomerInsight data) {
   );
 }
 
+/// 错误态: 让 provider 直接抛错
+Widget hostError() {
+  final tokens = AppThemes.resolve(null);
+  return ProviderScope(
+    overrides: [
+      customerInsightProvider("1")
+          .overrideWith((ref) async => throw Exception("boom")),
+    ],
+    child: MaterialApp(
+      theme: AppTheme.light(tokens),
+      home: Scaffold(
+        body: CustomerScoreCard(customerId: "1"),
+      ),
+    ),
+  );
+}
+
 Future<void> pump(WidgetTester tester, CustomerInsight data) async {
   await tester.pumpWidget(host(data));
   await tester.pumpAndSettle();
+}
+
+Future<void> pumpError(WidgetTester tester) async {
+  await tester.pumpWidget(hostError());
+  // 给异步错误一点时间冒泡 (不 settle: provider 永远 pending 不 settle)
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
 }
 
 void main() {
@@ -171,6 +197,57 @@ void main() {
       expect(find.text("最近一次改善"), findsOneWidget);
       expect(find.text("29/40"), findsOneWidget);
       expect(find.text("上次做完有改善 (+45%)"), findsOneWidget);
+    });
+  });
+
+  group("④ 短板提示 (P0)", () {
+    testWidgets("weak=[\"value\"] → 出现「短板: 价值潜力」", (tester) async {
+      await pump(tester, insight(weak: ["value"]));
+      expect(find.textContaining("短板"), findsOneWidget);
+      // 「价值潜力」既出现在维度小条 label 里, 又出现在短板行里 → findsWidgets
+      expect(find.textContaining("价值潜力"), findsWidgets);
+    });
+
+    testWidgets("weak=多个 → 拼接展示, 顺序按传入顺序 (升序来自后端)", (tester) async {
+      await pump(tester, insight(weak: ["value", "effect"]));
+      // 「短板: 价值潜力 · 健康改善」之类的拼接; 不强行断言分隔符, 只断言两维都在
+      expect(find.textContaining("短板"), findsOneWidget);
+      expect(find.textContaining("价值潜力"), findsWidgets);
+      expect(find.textContaining("健康改善"), findsWidgets);
+    });
+
+    testWidgets("weak=[] → 不出现「短板」", (tester) async {
+      await pump(tester, insight(weak: []));
+      expect(find.textContaining("短板"), findsNothing);
+    });
+
+    testWidgets("weak=未知 key (后端演进) → 不崩, 直接忽略", (tester) async {
+      await pump(tester, insight(weak: ["mystery_key"]));
+      // 映射不到 → 整体提示行不渲染, 卡片其他部分照常
+      expect(find.textContaining("短板"), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group("⑥ 错误态", () {
+    testWidgets("provider 抛错 → 显示「评分没加载出来」+「重新加载」按钮 (不崩)", (tester) async {
+      await pumpError(tester);
+      expect(tester.takeException(), isNull);
+      expect(find.text("评分没加载出来"), findsOneWidget);
+      expect(find.text("重新加载"), findsOneWidget);
+    });
+
+    testWidgets("错误态的文字都有 color (白字防线, AGENTS §5)", (tester) async {
+      await pumpError(tester);
+      final rps = tester.renderObjectList<RenderParagraph>(
+        find.byType(RichText),
+      );
+      for (final rp in rps) {
+        final color = rp.text.style?.color;
+        expect(color, isNotNull, reason: '「${rp.text.toPlainText()}」没写 color');
+        expect(color, isNot(const Color(0xFFFFFFFF)),
+            reason: '「${rp.text.toPlainText()}」是纯白, 看不见');
+      }
     });
   });
 }

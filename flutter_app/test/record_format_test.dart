@@ -38,6 +38,7 @@ WellnessRecord _rec({
   Map<String, dynamic> post = const {'pain_level': 4},
   String? feedback = '挺舒服的, 下次还来',
   String serviceDate = '2026-09-22',
+  String? nextAdviceDate,
 }) =>
     WellnessRecord(
       id: '100',
@@ -49,6 +50,7 @@ WellnessRecord _rec({
       postCondition: post,
       customerFeedback: feedback,
       createdAt: DateTime(2026, 9, 22),
+      nextAdviceDate: nextAdviceDate,
     );
 
 void main() {
@@ -195,6 +197,99 @@ void main() {
 
     test("无指标 → 空串 (副文不带 '疼痛:无' 这类空字段)", () {
       expect(metricDeltaSummary(_rec(pre: {}, post: {})), '');
+    });
+  });
+
+  // ── ⑥ 下次建议日期提示 (adviceHint + adviceOverdue) ──
+  group("adviceHint (⑥)", () {
+    final now = DateTime(2026, 9, 24, 14);
+
+    test("nextAdviceDate 为 null → 返回 null", () {
+      expect(adviceHint(_rec(), now: now), isNull);
+    });
+
+    test("未逾期 (今天) → 「建议 MM-dd 回访」", () {
+      final r = _rec(nextAdviceDate: '2026-09-24');
+      expect(adviceHint(r, now: now), '建议 09-24 回访');
+      expect(adviceOverdue(r, now: now), isFalse);
+    });
+
+    test("未逾期 (明天) → 「建议 MM-dd 回访」", () {
+      final r = _rec(nextAdviceDate: '2026-09-25');
+      expect(adviceHint(r, now: now), '建议 09-25 回访');
+      expect(adviceOverdue(r, now: now), isFalse);
+    });
+
+    test("已逾期 4 天 → 「建议 MM-dd · 已过 4 天」", () {
+      final r = _rec(nextAdviceDate: '2026-09-20');
+      expect(adviceHint(r, now: now), '建议 09-20 · 已过 4 天');
+      expect(adviceOverdue(r, now: now), isTrue);
+    });
+
+    test("解析失败 → 返回 null (不㕵错)", () {
+      expect(adviceHint(_rec(nextAdviceDate: 'not-a-date'), now: now), isNull);
+      expect(adviceOverdue(_rec(nextAdviceDate: 'not-a-date'), now: now), isFalse);
+    });
+  });
+
+  // ── ⑦ 相对时间 (relativeDayLabel) ──
+  group("relativeDayLabel (⑦)", () {
+    final now = DateTime(2026, 9, 24, 14);
+
+    test("今天 → 「今天」", () {
+      expect(relativeDayLabel('2026-09-24', now: now), '今天');
+    });
+
+    test("昨天 → 「昨天」", () {
+      expect(relativeDayLabel('2026-09-23', now: now), '昨天');
+    });
+
+    test("3 天前 → 「3 天前」", () {
+      expect(relativeDayLabel('2026-09-21', now: now), '3 天前');
+    });
+
+    test("跨月 30 天前 → 「30 天前」", () {
+      expect(relativeDayLabel('2026-08-25', now: now), '30 天前');
+    });
+
+    test("null → 空串", () {
+      expect(relativeDayLabel(null, now: now), '');
+    });
+
+    test("解析失败 → 空串", () {
+      expect(relativeDayLabel('not-a-date', now: now), '');
+    });
+  });
+
+  // ── ⑨ 日期分组桶 (bucketOf) ──
+  group("bucketOf (⑨)", () {
+    final now = DateTime(2026, 9, 24, 14); // 周四
+
+    test("今天 (diff=0) → today", () {
+      expect(bucketOf('2026-09-24', now: now), TimelineBucket.today);
+    });
+
+    test("昨天 (diff=-1) → yesterday", () {
+      expect(bucketOf('2026-09-23', now: now), TimelineBucket.yesterday);
+    });
+
+    test("本周 (diff in [-6, -2]) → thisWeek", () {
+      expect(bucketOf('2026-09-22', now: now), TimelineBucket.thisWeek); // 前天
+      expect(bucketOf('2026-09-18', now: now), TimelineBucket.thisWeek); // 周一
+    });
+
+    test("本月 (diff in [-29, -7]) → thisMonth", () {
+      expect(bucketOf('2026-09-17', now: now), TimelineBucket.thisMonth);
+      expect(bucketOf('2026-09-10', now: now), TimelineBucket.thisMonth);
+    });
+
+    test("30 天以上 / 跨月远端 → earlier", () {
+      expect(bucketOf('2026-08-20', now: now), TimelineBucket.earlier);
+    });
+
+    test("解析失败 → earlier 兜底", () {
+      expect(bucketOf(null, now: now), TimelineBucket.earlier);
+      expect(bucketOf('not-a-date', now: now), TimelineBucket.earlier);
     });
   });
 }

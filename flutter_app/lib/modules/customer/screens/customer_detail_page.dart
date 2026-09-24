@@ -341,13 +341,13 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
         // ★ 记录卡 (2026-09-24 第三版, 主人诉求): 「筛选/添加键与列表整体卡片化」
         //   + 「表头不要随列表上滑而隐藏」—— 表头 + 列表现在在**同一张卡**里
         //   (CustomerTimelineSection 内部: 固定表头 + 可滚列表)。
-        //   ⇒ 这里只给横向 pagePadding + 顶部 cardGap, 垂直方向交给 Expanded 撑满;
+        //   ⇒ 这里只给横向 pagePadding + 顶部 s6, 垂直方向交给 Expanded 撑满;
         //     **不再**套外层 SingleChildScrollView (否则整张卡会一起滚走, 表头就没了)。
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpace.pagePadding,
-              AppSpace.cardGap,
+              AppSpace.s6,
               AppSpace.pagePadding,
               0,
             ),
@@ -368,24 +368,16 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     WidgetRef ref,
     Customer customer,
   ) {
-    // 雷达图要吃 L0 的评分 (避免重复请求 /insight)
-    final insight = ref.watch(customerInsightProvider(customerId)).valueOrNull;
     return _tabScroll(children: [
       // ★ 评分卡 (2026-09-24 主人拍: 评分只放在分析 Tab, 不再是 L0)
       //   与 L0 行动卡同源 (都读 customerInsightProvider), 但评分是"参考", 不是"产出",
       //   销售日常看行动 (切 Tab 可见), 真要看分才进分析 Tab。
       CustomerScoreCard(customerId: customerId),
       const SizedBox(height: AppSpace.cardGap),
-      // ★ P4 图谱 (主人 2026-09-23 拍): 雷达 / 效果趋势 / 部位热力
-      //   放评分卡之后: 图比文字快 —— "她整体怎样" 一眼就能看出
-      //
-      // ⚠ 不要写成 `if (insight != null) CustomerAnalysisCharts(...)` ——
-      //   那会让"洞察还没就绪"时整块图表消失 (趋势/部位只依赖 /charts, 被无关依赖拖累)。
-      //   传可空 score, 组件内部显示加载/空态。
-      CustomerAnalysisCharts(
-        customerId: customerId,
-        score: insight?.score,
-      ),
+      // ★ P4 图谱 (主人 2026-09-23 拍, 2026-09-24 砍雷达): 效果趋势 / 部位热力
+      //   放评分卡之后: 图比文字快 —— "她整体怎样" 一眼就能看出。
+      //   雷达已删 (同源重复 + 3 维可读性差 + Tab 太长), 见组件头部注释。
+      CustomerAnalysisCharts(customerId: customerId),
       const SizedBox(height: AppSpace.cardGap),
       // 客观指标 (免费)
       FollowUpAnalysisCard(customerId: customerId),

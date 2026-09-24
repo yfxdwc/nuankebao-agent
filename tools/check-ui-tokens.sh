@@ -111,8 +111,20 @@ if [ -n "$FLUTTER_ACTIVE" ]; then
   else
     FLUTTER_CARD_SCAN="$FLUTTER_ACTIVE"
   fi
-  # shellcheck disable=SC2086
-  count "flutter.cardWidget"     '\bCard\('                     $FLUTTER_CARD_SCAN
+  # ⚠ 2026-09-24 续修: 还要**去注释**再数 —— 否则「文档里提到 Card(」也算违规。
+  #   与下方 legacyBigWidget 同一套路 (先 sed 掉 // 和 /* */ 再 grep),
+  #   否则未来任何 agent 写一句「这里不再用 Card(」都会把棘轮顶上去 = 假告警。
+  #   ⚠ 注意: 只对**文件列表**生效 (count 的最后一个参数); 行内输出沿用原行为。
+  {
+    TMP_CARD=$(mktemp)
+    # shellcheck disable=SC2086
+    sed -E 's|/\*[^*]*\*+([^/*][^*]*\*+)*/||g; s|//.*$||g' $FLUTTER_CARD_SCAN 2>/dev/null \
+      | grep -Eo '\bCard\(' > "$TMP_CARD" || true
+    N_CARD=$(wc -l < "$TMP_CARD" | tr -d ' ')
+    rm -f "$TMP_CARD"
+    COUNTS["flutter.cardWidget"]=$N_CARD
+    TOTAL=$((TOTAL + N_CARD))
+  }
 
   # flutter.legacyBigWidget: BigButton / BigFab 旧大号组件。
   #   ⚠ 这些组件名常出现在注释里 (「已退役」「不再使用」之类说明) —— 注释不算违规。

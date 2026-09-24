@@ -8,7 +8,11 @@
 // 设计依据 (docs/ui-principles.md):
 //   · 原则 1「密度 = 尊重用户时间」: 评分环 + 三维条 + 展开 = 一屏内能扫完
 //   · 原则 2「层级靠对比不靠放大」: 环 + 颜色 + 数字 三重编码, 不靠堆字号
-//   · 原则 4「容器越少内容越强」: 单 Container (surfaceCard + divider 边框), 内部靠分隔线
+//   · 原则 4「容器越少内容越强」: 单 Container (surfaceCard, 无边框), 内部靠分隔线
+//
+// 「短板提示」(P0): 后端已给 `weakDimensions: List<String>` (score < 阈值 的维度 key,
+//   升序), 前端拿到却从来没用 —— 销售一眼能看到「哪几维是软肋」, 是评分→行动
+//   的解释入口。映射走 `score.dimensions.label`, 没映射上的 key 直接忽略。
 //
 // 为什么「行动输出」不搬过来 (这次没动的部分):
 //   CHARTER §1.4 四要素最后一条「行动输出 = **明确的**跟进指引」必须**切 Tab 也可见**。
@@ -16,7 +20,10 @@
 //   评分卡放分析 Tab (要看分数才看), 互不抢位 —— 见 AGENTS §5「贴告示 ≠ 修复」同根,
 //   不该因本次诉求把"现在该做"也顺手移走 (那是已经拍过的板)。
 //
-// 健壮性: 拿不到洞察数据 → 整块 SizedBox.shrink(), 不炸分析 Tab 的其他图表。
+// 健壮性:
+//   · 加载中 → 同高骨架 (不跳动)
+//   · 拿不到洞察 → 轻量错误块 + 「重新加载」按钮 (不是静默消失, 销售知道点哪)
+//   · 数据不足 → 维度显 — 而不是 0 (不假装没分)
 // ============================================
 
 import 'package:flutter/material.dart';
@@ -26,6 +33,7 @@ import '../../../core/models/customer_insight.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 
 /// 评分卡 (评分环 + 三维度小条 + 可展开因子明细)
 /// 仅出现在「分析」Tab 顶部 —— 详情页其他 Tab 不渲染
@@ -38,17 +46,19 @@ class CustomerScoreCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(customerInsightProvider(customerId));
 
-    // 静默降级: 洞察拿不到时整块隐藏, 不影响分析 Tab 的图表 / AI 区
     return async.when(
       loading: () => const _ScoreCardSkeleton(),
-      error: (_, __) => const SizedBox.shrink(),
+      // 错误 → 轻量错误块 (不再静默 SizedBox.shrink, 销售能感知 + 重试)
+      error: (_, __) => _ScoreCardError(
+        customerId: customerId,
+      ),
       data: (insight) => _ScoreCardBody(score: insight.score),
     );
   }
 }
 
 // ============================================
-// 主体 (评分环行 + 可展开维度明细)
+// 主体 (评分环行 + 可展开维度明细 + 短板提示)
 // ============================================
 
 class _ScoreCardBody extends StatefulWidget {
@@ -63,17 +73,25 @@ class _ScoreCardBodyState extends State<_ScoreCardBody> {
   /// 评分明细是否展开 (默认收起 —— 分析 Tab 要克制, 想看细节再点)
   bool _expanded = false;
 
+  /// 把 weakDimensions 的 key 映射到维度 label (「健康改善」/「关系温度」/「价值潜力」)。
+  /// 映射不到的 key 直接忽略 —— 后端可能演进, 前端守住不崩。
+  String? _weakLabelText() {
+    final keys = widget.score.weakDimensions;
+    if (keys.isEmpty) return null;
+    final labels = <String>[];
+    for (final d in widget.score.dimensions) {
+      if (keys.contains(d.key)) labels.add(d.label);
+    }
+    if (labels.isEmpty) return null;
+    return '短板: ${labels.join(' · ')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     final s = widget.score;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: t.surfaceCard,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: t.divider),
-      ),
+    return B2NoChrome(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -99,6 +117,41 @@ class _ScoreCardBodyState extends State<_ScoreCardBody> {
             ),
           ),
 
+          // ── 短板提示 (P0): 只有 weakDimensions 非空才渲染。
+          //   位置: 头部 Row 下方, 展开明细之前。
+          //   颜色: t.warning + 小图标 —— 警示而不抢主体评分。
+          //   注释说「评分→行动的解释入口」: 销售看到「短板」→ 看 L0 行动卡里有没有对应行动。
+          if (_weakLabelText() != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.cardPadding,
+                0,
+                AppSpace.cardPadding,
+                AppSpace.s12,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: AppSize.iconSm,
+                    color: t.warning,
+                  ),
+                  const SizedBox(width: AppSpace.s4),
+                  // ⚠ 显式 color (AGENTS §5 白字教训: 主题里组件 TextStyle
+                  //   不写 color = 引擎兜底白, 真机不可见)
+                  Expanded(
+                    child: Text(
+                      _weakLabelText()!,
+                      style: TextStyle(
+                        fontSize: AppType.xs,
+                        color: t.warning,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // ── 展开: 每个维度的因子明细 (可解释性) ──
           if (_expanded) ...[
             const Divider(height: 1),
@@ -118,6 +171,103 @@ class _ScoreCardBodyState extends State<_ScoreCardBody> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ============================================
+// 错误态: 轻量错误块 + 「重新加载」按钮
+// ============================================
+// 不再 SizedBox.shrink(): 销售看不到卡片 = 不知道为什么「分析 Tab 没东西」。
+// 修法 = 与卡片同风格的 B2NoChrome (无边框), 一行说明 + 一行按钮, 不影响
+// 分析 Tab 其他部分。
+
+class _ScoreCardError extends ConsumerWidget {
+  const _ScoreCardError({required this.customerId});
+
+  final String customerId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tokens;
+    return B2NoChrome(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpace.cardPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: AppSize.iconMd,
+                  color: t.danger,
+                ),
+                const SizedBox(width: AppSpace.s8),
+                Expanded(
+                  child: Text(
+                    '评分没加载出来',
+                    style: TextStyle(
+                      fontSize: AppType.sm,
+                      color: t.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.s10),
+            // ⚠ 显式 color (AGENTS §5)
+            Text(
+              '稍后再试, 或点下面的按钮重试',
+              style: TextStyle(
+                fontSize: AppType.xs,
+                color: t.textTertiary,
+              ),
+            ),
+            const SizedBox(height: AppSpace.s10),
+            // 热区 ≥ tapMin, 中老年友好
+            Align(
+              alignment: Alignment.centerLeft,
+              child: InkWell(
+                onTap: () =>
+                    ref.invalidate(customerInsightProvider(customerId)),
+                borderRadius: BorderRadius.circular(AppRadius.button),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.s14,
+                    vertical: AppSpace.s8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: t.primarySurface,
+                    borderRadius: BorderRadius.circular(AppRadius.button),
+                  ),
+                  constraints: const BoxConstraints(
+                    minHeight: AppSize.tapMin,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.refresh,
+                        size: AppSize.iconSm,
+                        color: t.primaryDark,
+                      ),
+                      const SizedBox(width: AppSpace.s6),
+                      Text(
+                        '重新加载',
+                        style: TextStyle(
+                          fontSize: AppType.sm,
+                          color: t.primaryDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -358,6 +508,8 @@ class _DimensionDetail extends StatelessWidget {
 // ============================================
 // 骨架 (加载中, 与真实内容同高, 不跳动)
 // ============================================
+// 用 surfaceSubtle 而不是 surfaceCard —— 骨架比真实卡片更"灰", 视觉上是「加载中」
+// 而不是「卡片内容」。B2NoChrome 默认 surfaceCard, 这里手写 Container。
 
 class _ScoreCardSkeleton extends StatelessWidget {
   const _ScoreCardSkeleton();

@@ -19,6 +19,8 @@
 // 跑: cd flutter_app && flutter test test/customer_timeline_section_test.dart
 // ============================================
 
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +32,9 @@ import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/services/api.dart';
 import 'package:nuankebao/core/theme/app_theme.dart' show AppTheme;
 import 'package:nuankebao/core/theme/tokens.g.dart' show AppColors, AppThemes;
+import 'package:nuankebao/core/widgets/app_list_row.dart' show AppListRow;
+import 'package:nuankebao/core/widgets/app_skeleton.dart' show AppSkeletonList;
+import 'package:nuankebao/core/widgets/b2_no_chrome.dart';
 import 'package:nuankebao/modules/customer/widgets/customer_timeline_section.dart';
 
 // ============================================
@@ -234,12 +239,12 @@ void main() {
       // 互动行: 默认 type=phone → 「电话」label
       expect(find.text('电话'), findsNWidgets(2));
 
-      // ⑨ 默认显示 5 个分组桶
-      expect(find.text('今天'), findsNothing); // 无今日数据
-      expect(find.text('昨天'), findsNothing); // 无昨日数据
-      expect(find.text('本周'), findsOneWidget);
-      expect(find.text('本月'), findsOneWidget);
-      expect(find.text('更早'), findsNothing); // 无更早数据
+      // ⑨ 默认显示 4 个分组桶 (今日/本月/更早 无数据)
+      expect(find.text('今天'), findsNothing);
+      expect(find.text('昨天'), findsOneWidget); // 09-23 interaction
+      expect(find.text('本周'), findsOneWidget); // 09-20..09-22
+      expect(find.text('本月'), findsNothing);
+      expect(find.text('更早'), findsNothing);
     },
   );
 
@@ -479,6 +484,7 @@ void main() {
       );
 
       // 点击加载更多
+      await tester.ensureVisible(find.textContaining('加载更多'));
       await tester.tap(find.textContaining('加载更多'));
       await tester.pumpAndSettle();
 
@@ -488,7 +494,7 @@ void main() {
   );
 
   testWidgets(
-    '⑤ 加载更多: wellness.length == 50 → 「养生记录较多, 当前仅加载最近 50 条」',
+    '⑤ 加载更多: wellness.length == 50 → 全部加载完后, 依然 50 条 ≥ 50 → 显示「养生记录较多」',
     (tester) async {
       final fifty = <WellnessRecord>[
         for (var i = 0; i < 50; i++)
@@ -501,12 +507,46 @@ void main() {
                 .first,
           ),
       ];
-      await _pumpSection(
-        tester,
-        wellness: fifty,
-        interactions: const [],
+      // 有限高度, 让 section 卡内必须滚动
+      final wsvc = _FakeWellnessService(fifty);
+      final isvc = _FakeInteractionService(const []);
+      final dsvc = _FakeDictionaryService(_dict);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            wellnessRecordServiceProvider.overrideWithValue(wsvc),
+            interactionServiceProvider.overrideWithValue(isvc),
+            dictionaryServiceProvider.overrideWithValue(dsvc),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(AppThemes.sage),
+            home: Scaffold(
+              body: SizedBox(
+                height: 400,
+                child: CustomerTimelineSection(customerId: '798'),
+              ),
+            ),
+          ),
+        ),
       );
+      await tester.pump();
+      await tester.runAsync(() async {
+        await tester.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await tester.pump();
+      });
 
+      // 点两次「加载更多」 (20 → 40 → 60), 50 < 60, 全部显示完
+      // 第一次点击
+      await tester.ensureVisible(find.text('加载更多（还有 30 条）'));
+      await tester.tap(find.text('加载更多（还有 30 条）'));
+      await tester.pumpAndSettle();
+      // 第二次点击
+      await tester.ensureVisible(find.text('加载更多（还有 10 条）'));
+      await tester.tap(find.text('加载更多（还有 10 条）'));
+      await tester.pumpAndSettle();
+
+      // 全部显示完, 且 wellness.length == 50 (provider 拉到上限) → 「养生记录较多」
       expect(find.text('养生记录较多, 当前仅加载最近 50 条'), findsOneWidget);
     },
   );
@@ -529,7 +569,8 @@ void main() {
       );
 
       // 先点加载更多 (visibleCount=40), 按钮消失
-      await tester.tap(find.textContaining('加载更多'));
+      await tester.ensureVisible(find.text('加载更多（还有 1 条）'));
+      await tester.tap(find.text('加载更多（还有 1 条）'));
       await tester.pumpAndSettle();
       expect(find.textContaining('加载更多（还有'), findsNothing);
 
@@ -596,19 +637,48 @@ void main() {
         interactions: const [],
       );
 
-      // 用 widget tree 直接断言「已过 4 天」文本段的 color 是 warning
-      // Text.rich 把字串拆成多段; 我们断言能找到对应字串, 且至少有一段含该字串,
-      // 它的 style.color == AppColors.warning
-      final richTextFinder = find.byType(Text.rich);
-      expect(richTextFinder, findsOneWidget);
-      final richText = tester.widget<Text.rich>(richTextFinder);
-      final spans = richText.text.children!.cast<TextSpan>().toList();
-      final overdueSpan = spans.firstWhere(
-        (s) => s.text != null && s.text!.contains('已过 4 天'),
-        orElse: () => const TextSpan(text: ''),
-      );
-      expect(overdueSpan.style, isNotNull);
-      expect(overdueSpan.style!.color, AppColors.warning);
+      // 文本中包含「已过 4 天」 (Text.rich 把字串拆成多段渲染)
+      expect(find.textContaining('已过 4 天'), findsOneWidget);
+
+      // 从 AppListRow 拿到 subtitle widget, 断言它是 Text.rich
+      //   → 走过 DefaultTextStyle.merge 不修改原 TextSpan 树
+      final rows = tester.widgetList(find.byType(AppListRow)).toList();
+      final row = rows.firstWhere(
+        (w) => w is AppListRow && w.title is Text,
+        orElse: () => rows.firstWhere((w) => w is AppListRow),
+      ) as AppListRow;
+      final subtitle = row.subtitle;
+      expect(subtitle, isNotNull);
+      expect(subtitle, isA<Text>());
+
+      // Text.rich 是 Text 的工厂之一; 但 Flutter 里它们用同一个 Text widget,
+      // Text.rich(TextSpan(...)) → Text 的 textInlineSpan 字段。
+      // 直接查 RichText widget (Text widget 内部用 RichText 渲染)
+      final richTextFinder = find.byType(RichText);
+      expect(richTextFinder, findsWidgets);
+      TextSpan? overdueSpan;
+      final richWidgets = tester.widgetList<RichText>(richTextFinder).toList();
+      // 遍历所有 RichText 的 span tree, 递归找「已过 4 天」片段
+      void findOverdue(InlineSpan s) {
+        if (overdueSpan != null) return;
+        if (s is TextSpan) {
+          if (s.text != null && s.text!.contains('已过 4 天')) {
+            overdueSpan = s;
+            return;
+          }
+          if (s.children != null) {
+            for (final c in s.children!) findOverdue(c);
+          }
+        }
+      }
+      for (final rt in richWidgets) {
+        findOverdue(rt.text);
+        if (overdueSpan != null) break;
+      }
+      expect(overdueSpan, isNotNull,
+          reason: '应能找到含「已过 4 天」的 TextSpan');
+      expect(overdueSpan!.style, isNotNull);
+      expect(overdueSpan!.style!.color, AppColors.warning);
     },
   );
 
@@ -827,10 +897,9 @@ class _PendingWellnessService extends WellnessRecordService {
   _PendingWellnessService() : super(Dio());
 
   @override
-  Future<List<WellnessRecord>> list({String? customerId, int? limit}) async {
-    // 永不返回, 但 test pump 不阻塞
-    await Future<void>.delayed(const Duration(seconds: 30));
-    return [];
+  Future<List<WellnessRecord>> list({String? customerId, int? limit}) {
+    // 永远不完成的 future; 测试期保持 loading 状态
+    return Completer<List<WellnessRecord>>().future;
   }
 }
 
@@ -838,8 +907,7 @@ class _PendingInteractionService extends InteractionService {
   _PendingInteractionService() : super(Dio());
 
   @override
-  Future<List<Interaction>> list({String? customerId}) async {
-    await Future<void>.delayed(const Duration(seconds: 30));
-    return [];
+  Future<List<Interaction>> list({String? customerId}) {
+    return Completer<List<Interaction>>().future;
   }
 }

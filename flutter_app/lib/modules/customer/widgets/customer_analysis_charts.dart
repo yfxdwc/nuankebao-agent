@@ -1,17 +1,28 @@
 // ============================================
-// 客户分析图谱 —— 分析 Tab 的三张图 (P4)
+// 客户分析图谱 —— 分析 Tab 的两张图 (P1 砍雷达后, 2026-09-24)
 // ============================================
-//   ① 三维雷达图   健康 / 温度 / 价值        —— 数据来自 CustomerScore 维度分
-//   ② 效果趋势线   pain+sleep 前→后 随时间   —— 数据来自 /charts trend
-//   ③ 部位热力条   哪些部位反复出问题 + 止痛  —— 数据来自 /charts bodyParts
+//   ① 效果趋势线   pain+sleep 前→后 随时间   —— 数据来自 /charts trend
+//   ② 部位热力条   哪些部位反复出问题 + 止痛  —— 数据来自 /charts bodyParts
+//
+// ⚠ 2026-09-24 主人拍板砍掉「能力雷达图」——
+//   三条理由:
+//   · 与评分卡三维条**同源重复** (评分卡已经有 effect/engagement/value 三维条 + 分,
+//     雷达只是把同样数据换种画法, 信息密度没增)
+//   · 3 维雷达可读性差 (RadarChart 在窄屏尤其糊, 网格 + 标签挤在一起, 销售
+//     看不出"哪个维度突出", 反而要人脑重新解读)
+//   · 分析 Tab 太长 (评分卡 + AI 4 张卡已经把分析 Tab 顶到 2 屏以上, 再加
+//     雷达 = 销售滑到底都看不到第二张)
+//   砍雷达后, 评分卡的三维条就是「这三维度怎样」的唯一视觉入口 —— 唯一性更好。
 //
 // 设计依据 (docs/ui-principles.md):
 //   · 原则 2「层级靠对比不靠放大」: 图里用**颜色 + 数值标签**表达好坏, 不靠放大
-//   · 原则 4「容器越少内容越强」: 一张图一个白底块, 不放边框/阴影叠加
+//   · 原则 4「容器越少内容越强」: 一张图一个白底块 (无边框/阴影)
 //   · ⚠ 只画**描述性统计**: 出现次数 / 中位止痛幅度。
 //     不写"这个部位该用什么方案" —— CHARTER §1.3 不做医疗诊断, 那是技师/店长的判断。
 //
-// 健壮性: 数据不足时明确说"需要几次记录", 不画一张误导人的空图。
+// 健壮性:
+//   · 数据不足时按 recordCount 给**进度** (0 条 / 有条但没填评分 / 还差 1 条)
+//   · charts 请求失败 → 轻量错误块 + 「重新加载」按钮 (不再静默消失)
 // ============================================
 
 import 'package:fl_chart/fl_chart.dart';
@@ -19,29 +30,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/customer_charts.dart';
-import '../../../core/models/customer_insight.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 
-/// 分析 Tab 的图谱区 (雷达 + 趋势 + 部位)
+/// 分析 Tab 的图谱区 (趋势 + 部位)
 class CustomerAnalysisCharts extends ConsumerWidget {
   const CustomerAnalysisCharts({
     super.key,
     required this.customerId,
-    this.score,
   });
 
   final String customerId;
-
-  /// 雷达图直接吃 L0 的评分 (不重复请求) —— 由详情页从 insight 传下来。
-  ///
-  /// ⚠ **可选**: 洞察还没就绪时传 null → 雷达显示"还差数据"空态。
-  ///   不要用 `if (score != null)` 把整块图表**藏起来** ——
-  ///   趋势/部位只依赖 /charts, 不该被一个无关依赖的加载状态拖累
-  ///   (踩过: 详情页最初用 if (insight != null) 门控, 结果洞察慢一拍时
-  ///    整个分析 Tab 的图全都不渲染, 排查了很久)
-  final CustomerScore? score;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -55,13 +56,10 @@ class CustomerAnalysisCharts extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ① 雷达: 数据来自 score, 无需等 charts
-        _RadarCard(score: score),
-        const SizedBox(height: AppSpace.cardGap),
-        // ②③ 需要 charts
         async.when(
           loading: () => const _ChartsSkeleton(),
-          error: (_, __) => const SizedBox.shrink(), // 静默降级, 不拖垮分析 Tab
+          // 错误 → 轻量错误块 + 重新加载 (不再静默 SizedBox.shrink)
+          error: (_, __) => _ChartsError(customerId: customerId),
           data: (c) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -77,83 +75,88 @@ class CustomerAnalysisCharts extends ConsumerWidget {
 }
 
 // ============================================
-// ① 三维雷达图
+// 错误态: 轻量错误块 + 「重新加载」
 // ============================================
 
-class _RadarCard extends StatelessWidget {
-  const _RadarCard({required this.score});
-  final CustomerScore? score;
+class _ChartsError extends ConsumerWidget {
+  const _ChartsError({required this.customerId});
+
+  final String customerId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tokens;
-    final s = score;
-    if (s == null) {
-      return _chartCard(
-        context,
-        title: '能力雷达',
-        subtitle: '三个维度对比一眼看清',
-        child: _EmptyHint(
-          icon: Icons.radar_outlined,
-          text: '评分正在加载…',
-          hint: '稍等片刻, 或下拉刷新',
-        ),
-      );
-    }
-    final dims = s.dimensions;
-    final withScore = dims.where((d) => d.hasScore).toList();
-
-    // fl_chart 的 RadarDataSet assert: 至少 3 个 entry。
-    //   维度不足 3 个有分 → 不画 (画出来必然误导: 空维度落到 0 看着像"极差")
-    if (withScore.length < 3) {
-      return _chartCard(
-        context,
-        title: '能力雷达',
-        subtitle: '三个维度都有数据后才能生成',
-        child: _EmptyHint(
-          icon: Icons.radar_outlined,
-          text: '还差 ${3 - withScore.length} 个维度的数据',
-          hint: withScore.map((d) => '${d.label} ✓').join(' · '),
-        ),
-      );
-    }
-
-    return _chartCard(
-      context,
-      title: '能力雷达',
-      subtitle: '三个维度对比一眼看清',
-      child: SizedBox(
-        height: 230,
-        child: RadarChart(
-          RadarChartData(
-            dataSets: [
-              RadarDataSet(
-                dataEntries: dims
-                    .map((d) => RadarEntry(value: d.score ?? 0))
-                    .toList(),
-                fillColor: t.primary.withOpacity(0.18),
-                borderColor: t.primary,
-                borderWidth: 2,
-                entryRadius: 3,
+    return B2NoChrome(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpace.cardPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: AppSize.iconMd,
+                  color: t.danger,
+                ),
+                const SizedBox(width: AppSpace.s8),
+                Expanded(
+                  child: Text(
+                    '图表没加载出来',
+                    style: TextStyle(
+                      fontSize: AppType.sm,
+                      color: t.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.s10),
+            Text(
+              '稍后再试, 或点下面的按钮重试',
+              style: TextStyle(
+                fontSize: AppType.xs,
+                color: t.textTertiary,
               ),
-            ],
-            radarBackgroundColor: Colors.transparent,
-            radarBorderData: BorderSide(color: t.divider, width: 1),
-            gridBorderData: BorderSide(color: t.divider, width: 1),
-            tickBorderData: BorderSide(color: t.divider, width: 1),
-            tickCount: 4,
-            ticksTextStyle: TextStyle(color: Colors.transparent, fontSize: AppType.micro),
-            titleTextStyle: TextStyle(
-              color: t.textPrimary,
-              fontSize: AppType.xs,
-              fontWeight: AppWeight.medium,
             ),
-            getTitle: (index, angle) => RadarChartTitle(
-              text: dims[index].label,
-              angle: angle,
+            const SizedBox(height: AppSpace.s10),
+            InkWell(
+              onTap: () =>
+                  ref.invalidate(customerChartsProvider(customerId)),
+              borderRadius: BorderRadius.circular(AppRadius.button),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.s14,
+                  vertical: AppSpace.s8,
+                ),
+                decoration: BoxDecoration(
+                  color: t.primarySurface,
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                ),
+                constraints: const BoxConstraints(
+                  minHeight: AppSize.tapMin,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.refresh,
+                      size: AppSize.iconSm,
+                      color: t.primaryDark,
+                    ),
+                    const SizedBox(width: AppSpace.s6),
+                    Text(
+                      '重新加载',
+                      style: TextStyle(
+                        fontSize: AppType.sm,
+                        color: t.primaryDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            titlePositionPercentageOffset: 0.16,
-          ),
+          ],
         ),
       ),
     );
@@ -161,7 +164,7 @@ class _RadarCard extends StatelessWidget {
 }
 
 // ============================================
-// ② 效果趋势线 (pain + sleep, pre 虚线 / post 实线)
+// ① 效果趋势线 (pain + sleep, pre 虚线 / post 实线)
 // ============================================
 
 class _TrendCard extends StatelessWidget {
@@ -174,6 +177,17 @@ class _TrendCard extends StatelessWidget {
     final pts = charts.trend.where((p) => p.hasPain).toList();
 
     if (pts.length < 2) {
+      // 进度化空态 (P0, 2026-09-24):
+      //   pts==1 → 差一条就有图; pts==0 + 有记录 → 缺的是疼痛评分;
+      //   pts==0 + 没记录 → 先去做一条。
+      final String hint;
+      if (pts.length == 1) {
+        hint = '已有 1 次, 再记 1 次就能画';
+      } else if (charts.recordCount > 0) {
+        hint = '已有 ${charts.recordCount} 条记录, 但都还没填疼痛评分';
+      } else {
+        hint = '还没有养生记录, 先记一次';
+      }
       return _chartCard(
         context,
         title: '效果趋势',
@@ -181,7 +195,7 @@ class _TrendCard extends StatelessWidget {
         child: _EmptyHint(
           icon: Icons.show_chart,
           text: '至少 2 次带疼痛评分的记录才能画趋势',
-          hint: '当前 ${pts.length} 次',
+          hint: hint,
         ),
       );
     }
@@ -288,7 +302,7 @@ class _TrendCard extends StatelessWidget {
 }
 
 // ============================================
-// ③ 部位热力 (次数 + 中位止痛)
+// ② 部位热力 (次数 + 中位止痛)
 // ============================================
 
 class _BodyPartCard extends StatelessWidget {
@@ -299,6 +313,14 @@ class _BodyPartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tokens;
     if (!charts.hasBodyParts) {
+      // 进度化空态 (P0, 2026-09-24):
+      //   recordCount>0 → 记录做了, 但没勾部位; recordCount==0 → 还没做记录。
+      final String hint;
+      if (charts.recordCount > 0) {
+        hint = '已有 ${charts.recordCount} 条记录, 但都还没勾部位';
+      } else {
+        hint = '还没有养生记录, 先记一次';
+      }
       return _chartCard(
         context,
         title: '部位分布',
@@ -306,7 +328,7 @@ class _BodyPartCard extends StatelessWidget {
         child: _EmptyHint(
           icon: Icons.accessibility_new,
           text: '记录里还没选过身体部位',
-          hint: '下次记录时勾一下部位即可',
+          hint: hint,
         ),
       );
     }
@@ -421,7 +443,7 @@ class _BodyPartRow extends StatelessWidget {
 }
 
 // ============================================
-// 共用外壳
+// 共用外壳 (无边框, 跟分析 Tab 其他卡片同风格, B2NoChrome 同款)
 // ============================================
 
 Widget _chartCard(
@@ -430,30 +452,32 @@ Widget _chartCard(
   required String subtitle,
   required Widget child,
 }) {
-  final t = context.tokens;
-  return Container(
-    padding: const EdgeInsets.all(AppSpace.cardPadding),
-    decoration: BoxDecoration(
-      color: t.surfaceCard,
-      borderRadius: BorderRadius.circular(AppRadius.card),
-      border: Border.all(color: t.divider),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: AppType.md,
-            fontWeight: AppWeight.semibold,
-            color: t.textPrimary,
+  return B2NoChrome(
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpace.cardPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: AppType.md,
+              fontWeight: AppWeight.semibold,
+              color: context.tokens.textPrimary,
+            ),
           ),
-        ),
-        const SizedBox(height: AppSpace.s2),
-        Text(subtitle, style: TextStyle(fontSize: AppType.micro, color: t.textTertiary)),
-        const SizedBox(height: AppSpace.s12),
-        child,
-      ],
+          const SizedBox(height: AppSpace.s2),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: AppType.micro,
+              color: context.tokens.textTertiary,
+            ),
+          ),
+          const SizedBox(height: AppSpace.s12),
+          child,
+        ],
+      ),
     ),
   );
 }

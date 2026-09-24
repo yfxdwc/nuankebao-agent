@@ -167,6 +167,7 @@
 | `fabSize` | **56** | 80 | FAB |
 | `listRowHeight` | **60** | 80 | 列表行 |
 | `appBarHeight` | **52** | 64 | AppBar |
+| `navBarHeight` | **56** | 80（M3 默认） | 全局底部导航（三 tab） |
 | `controlSm/Md/Lg` | 32 / 34 / 44 | 36/40/52 | 分段控件、chip、输入 |
 | `avatarSm/Md/Lg` | 32 / 44 / 64 | 40/56/96 | 头像 |
 | `tapMin` | **48（不变）** | 48 | **热区下限，见 §3** |

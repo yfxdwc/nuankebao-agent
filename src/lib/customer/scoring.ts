@@ -38,9 +38,9 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { customer, followUpTask, interaction, wellnessRecord } from "@/lib/db/schema";
-import { decryptField } from "@/lib/crypto/field";
+import { customer, followUpTask, interaction } from "@/lib/db/schema";
 import { daysBetween } from "@/lib/follow-up/urgency";
+import { loadRecentWellnessParsed } from "@/lib/customer/wellness-history";
 import {
   buildFollowUpAnalysis,
   type FollowUpAnalysis,
@@ -765,16 +765,10 @@ export async function loadCustomerScoringSnapshot(
   if (!cust) return null;
 
   const [recordRows, interactionRows, taskRows] = await Promise.all([
-    db
-      .select({
-        serviceDate: wellnessRecord.serviceDate,
-        pre: wellnessRecord.preConditionEncrypted,
-        post: wellnessRecord.postConditionEncrypted,
-      })
-      .from(wellnessRecord)
-      .where(eq(wellnessRecord.customerId, customerId))
-      .orderBy(desc(wellnessRecord.serviceDate))
-      .limit(200),
+    // 「最近 200 条」是唯一取样口径, 与 charts.ts 共享同一个 loader。
+    // 顺序 = serviceDate DESC (新→旧), 内部算法 (singleImprovement / scoreEffect)
+    // 自己再按需排序, 不依赖入参顺序。
+    loadRecentWellnessParsed(customerId, 200),
     db
       .select({ type: interaction.type, createdAt: interaction.createdAt })
       .from(interaction)
@@ -803,7 +797,7 @@ export async function loadCustomerScoringSnapshot(
 
   // 关系起点 = min(建档, 最早到店, 最早互动)
   const candidates: number[] = [cust.createdAt.getTime()];
-  for (const r of recordRows) candidates.push(new Date(String(r.serviceDate)).getTime());
+  for (const r of recordRows) candidates.push(r.serviceDate.getTime());
   for (const i of interactionRows) candidates.push(i.createdAt.getTime());
   const relationshipStartAt = new Date(Math.min(...candidates));
 
@@ -813,9 +807,9 @@ export async function loadCustomerScoringSnapshot(
     customerCreatedAt: cust.createdAt,
     analysis,
     records: recordRows.map((r) => ({
-      serviceDate: new Date(String(r.serviceDate)),
-      pre: safeParse(r.pre),
-      post: safeParse(r.post),
+      serviceDate: r.serviceDate,
+      pre: r.pre,
+      post: r.post,
     })),
     interactions: interactionRows.map((r) => ({
       type: r.type,
@@ -841,13 +835,4 @@ export async function loadCustomerScore(
 ): Promise<CustomerScore | null> {
   const snap = await loadCustomerScoringSnapshot(customerId, now, config);
   return snap?.score ?? null;
-}
-
-function safeParse(cipher: string | null): Record<string, unknown> {
-  if (!cipher) return {};
-  try {
-    return JSON.parse(decryptField(cipher)) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
 }

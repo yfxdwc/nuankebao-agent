@@ -840,7 +840,11 @@ class _CustomerTimelineSectionState
   // ── 汇总行 — ⑦ 相对时间「最近一次 今天/昨天/N 天前」 ──
   String _summaryLine(List<WellnessRecord> records) {
     if (records.isEmpty) return '';
-    final last = records.first.serviceDate;
+    // ⑦ 取**最新**一条 (serviceDate 倒序); provider 未必排序, 主动找一下
+    final sorted = [...records]
+      ..sort((a, b) => (DateTime.tryParse(b.serviceDate) ?? b.createdAt)
+          .compareTo(DateTime.tryParse(a.serviceDate) ?? a.createdAt));
+    final last = sorted.first.serviceDate;
     final relLabel = relativeDayLabel(last);
     final lastDisplay = relLabel.isEmpty ? last : relLabel;
 
