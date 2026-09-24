@@ -74,13 +74,34 @@ void main() {
     expect(find.byKey(const ValueKey('photoSlot-empty-4')), findsOneWidget);
   });
 
-  testWidgets('③ 「拍照」「相册」在「部位照片」标题同一行', (tester) async {
+  testWidgets('③ 已上传数量在标题右侧; 标题行的拍照/相册按钮已删除', (tester) async {
+    await _pump(tester, urls: ['https://example.test/1.jpg']);
+
+    // 2026-09-24 主人: 「已上传数量移动到标题右侧」
+    final title = find.text('部位照片');
+    final count = find.textContaining('已上传 1 / 5');
+    expect(title, findsOneWidget);
+    expect(count, findsOneWidget);
+
+    final titleRect = tester.getRect(title);
+    final countRect = tester.getRect(count);
+    expect(countRect.left, greaterThan(titleRect.right),
+        reason: '数量要在标题**右侧**');
+    expect((countRect.center.dy - titleRect.center.dy).abs(), lessThan(2.0),
+        reason: '同一行 (垂直居中对齐)');
+
+    // 主人: 「区块右上角的拍照和相册按键可以删除了」—— 加照片统一走点空槽位
+    expect(find.text('拍照'), findsNothing);
+    expect(find.text('相册'), findsNothing);
+  });
+
+  testWidgets('④ 点空槽位 → 弹「拍照 / 从相册选」选择层', (tester) async {
     await _pump(tester, urls: const []);
 
-    final titleDy = tester.getCenter(find.text('部位照片')).dy;
-    expect((tester.getCenter(find.text('拍照')).dy - titleDy).abs(), lessThan(2.0),
-        reason: '拍照按钮要跟标题同一行');
-    expect((tester.getCenter(find.text('相册')).dy - titleDy).abs(), lessThan(2.0),
-        reason: '相册按钮要跟标题同一行');
+    await tester.tap(find.byKey(const ValueKey('photoSlot-empty-0')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('拍照'), findsOneWidget, reason: '弹层里有拍照');
+    expect(find.textContaining('从相册选'), findsOneWidget, reason: '弹层里有相册 (可多选)');
   });
 }

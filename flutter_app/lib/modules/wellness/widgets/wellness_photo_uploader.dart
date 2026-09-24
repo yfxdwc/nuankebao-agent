@@ -183,37 +183,22 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 标题行 (2026-09-24 主人: 「拍照和相册这两个按键也可以收到与标题
-        //   「部位照片」同一行」) —— 右侧两个紧凑按钮, 不再各占半行 64pt 大按钮
+        // 标题行 (2026-09-24 主人二次拍板): 「既然已经可以直接点缩略图位置选择
+        //   拍照/相册上传, 区块右上角的拍照和相册按键可以删除了。已上传数量移动到
+        //   标题右侧」
+        // 历史: 上一版把「拍照/相册」两个大按钮收到这一行; 现在连它们也删了 ——
+        //   区块右上角的拍照和相册按键可以删除了。已上传数量移动到标题右侧」
+        //   ⇒ 标题行只剩「部位照片 + 已上传 N / max」; 加照片统一走**点槽位**
+        //     (空槽位上有相机图标, 点了弹"拍照 / 从相册选")。
         AppSectionHeader(
           title: '部位照片',
-          subtitle: '已上传 ${_urls.length} / ${widget.maxPhotos}',
           padding: EdgeInsets.zero,
-          action: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _uploading ? null : _pickFromCamera,
-                icon: const Icon(Icons.camera_alt, size: AppSize.iconSm),
-                label: const Text('拍照', style: TextStyle(fontSize: AppTheme.fontSm)),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, AppSize.controlLg),
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-              const SizedBox(width: AppSpace.s8),
-              OutlinedButton.icon(
-                onPressed: _uploading ? null : _pickFromGallery,
-                icon: const Icon(Icons.photo_library, size: AppSize.iconSm),
-                label: const Text('相册', style: TextStyle(fontSize: AppTheme.fontSm)),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, AppSize.controlLg),
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            ],
+          action: Text(
+            '已上传 ${_urls.length} / ${widget.maxPhotos}',
+            style: TextStyle(
+              fontSize: AppTheme.fontSm,
+              color: context.tokens.textSecondary,
+            ),
           ),
         ),
         const SizedBox(height: AppSpace.s12),
