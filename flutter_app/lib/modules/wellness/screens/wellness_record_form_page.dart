@@ -1022,11 +1022,19 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
             runSpacing: AppSpace.s4,
             children: [
               for (final p in quickPhrases)
-                ActionChip(
-                  label: Text(p,
-                      style: const TextStyle(fontSize: AppTheme.fontSm)),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {
+                _PhraseChip(
+                  phrase: p,
+                  // 已在文本里 = 已加 (用 contains 而不是分词比较: 手动打字打进去的
+                  //   也算已加, 这样"同一句不会被写第二遍"更稳)
+                  added: ctrl.text.contains(p),
+                  onAdd: () {
+                    // ⚠ 二次判定: 用户可能刚把这句话**手打**进文本框, 而 chip 的
+                    //   `added` 还是上一次 build 的值 (父级没重建) → 这里再看一眼,
+                    //   否则又会重复追加。
+                    if (ctrl.text.contains(p)) {
+                      setState(() {});
+                      return;
+                    }
                     final cur = ctrl.text.trim();
                     ctrl.text = cur.isEmpty ? p : '$cur · $p';
                     ctrl.selection =
@@ -1381,6 +1389,42 @@ class _ServicePickerSheetState extends State<_ServicePickerSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 常用短语 chip (2026-09-24)
+///
+/// 行为: 点一下 → 追加到文本框; **已在文本里 → 变成「已加」态 (打勾 + 不可点)**。
+///   修的问题: 原来连点同一个短语会重复拼 (`动作到位 · 动作到位 · …`)。
+class _PhraseChip extends StatelessWidget {
+  const _PhraseChip({
+    required this.phrase,
+    required this.added,
+    required this.onAdd,
+  });
+
+  final String phrase;
+  final bool added;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return ActionChip(
+      avatar: added
+          ? Icon(Icons.check, size: AppSize.iconSm, color: t.success)
+          : null,
+      label: Text(
+        phrase,
+        style: TextStyle(
+          fontSize: AppTheme.fontSm,
+          color: added ? t.textTertiary : AppTheme.textPrimary,
+        ),
+      ),
+      visualDensity: VisualDensity.compact,
+      // 已加 → 不可点 (点了也不会重复写; 要改内容直接在文本框里编辑)
+      onPressed: added ? null : onAdd,
     );
   }
 }

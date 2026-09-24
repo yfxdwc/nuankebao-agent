@@ -214,6 +214,62 @@ void main() {
         reason: '编辑绝不能把记录日期改成今天 (时间线/趋势/复购周期全跟着错)');
   });
 
+  testWidgets('③ 常用短语: 同一个短语连点**不会**重复写入', (tester) async {
+    final wellness = _FakeWellnessService();
+    await _pump(
+      tester,
+      form: const WellnessRecordFormPage(customerId: 'c1'),
+      wellness: wellness,
+      followUps: _FakeFollowUpService(),
+    );
+
+    // 第 1 个 TextField = 「操作过程」(服务项目是弹层字段, 不是 TextField)
+    TextField processField() => tester.widget<TextField>(find.byType(TextField).first);
+
+    await tester.tap(find.widgetWithText(ActionChip, '动作到位'));
+    await tester.pumpAndSettle();
+    expect(processField().controller!.text, '动作到位');
+
+    // 连点第二次 → 不再追加; chip 变「已加」态 (不可点)
+    await tester.tap(find.widgetWithText(ActionChip, '动作到位'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(processField().controller!.text, '动作到位',
+        reason: '同一短语不能重复写入 (主人 2026-09-24 报的 bug)');
+    final chip = tester.widget<ActionChip>(
+        find.widgetWithText(ActionChip, '动作到位'));
+    expect(chip.onPressed, isNull, reason: '已加的短语 chip 不可再点');
+
+    // 换一个短语 → 正常追加 (用 ` · ` 分隔)
+    await tester.tap(find.widgetWithText(ActionChip, '加了拔罐'));
+    await tester.pumpAndSettle();
+    expect(processField().controller!.text, '动作到位 · 加了拔罐');
+  });
+
+  testWidgets('③-b 手动把短语打进文本框 → chip 也认「已加」', (tester) async {
+    final wellness = _FakeWellnessService();
+    await _pump(
+      tester,
+      form: const WellnessRecordFormPage(customerId: 'c1'),
+      wellness: wellness,
+      followUps: _FakeFollowUpService(),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField).first);
+    field.controller!.text = '今天动作到位, 客户说舒服';
+    await tester.pumpAndSettle();
+
+    // 手打进去之后 → 再点同一个 chip 不会重复追加 (tap 时二次判定)
+    await tester.tap(find.widgetWithText(ActionChip, '动作到位'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(field.controller!.text, '今天动作到位, 客户说舒服',
+        reason: '手打进去的也算已加 (含子串判定), 不会重复追加');
+
+    // 这次 tap 触发了重建 → chip 应该已经变成「已加」(不可点)
+    final chip = tester.widget<ActionChip>(
+        find.widgetWithText(ActionChip, '动作到位'));
+    expect(chip.onPressed, isNull, reason: '重建后 chip 显示为已加');
+  });
+
   testWidgets('③ 身体部位: 已选置顶 + 未选超 8 个折叠', (tester) async {
     final wellness = _FakeWellnessService(existing: _oldRecord());
     await _pump(
