@@ -7,10 +7,17 @@
 //   - 原则 4: 容器越少内容越强 (原则: 一屏有边框/阴影的元素 ≤ 2)
 //   - 原则 5: 颜色是信号, 不是装饰 (状态色只在有状态时出现)
 //
-// 详情页结构 (P2 主人 2026-09-23 拍):
-//   L0: CustomerInsightHeader (评分环 + 今日待办) — 切 Tab 也可见
+// 详情页结构 (P2 主人 2026-09-23 + 2026-09-24 两次拍板):
+//   L0: CustomerInsightActions (「现在该做」行动卡) — 切 Tab 也可见
 //   TabBar: 记录 / 分析 / 管理
+//   分析 Tab 顶部 (TabBarView 内): CustomerScoreCard (评分环 + 三维度条 + 展开明细)
 //   L0 在 TabBarView **外面** —— "切 Tab 才看见" = "要滚才看见" 的老毛病
+//
+// 2026-09-24 收尾: 评分卡从 L0 搬到分析 Tab (主人拍: 「三个 Tab 都有评分环 = 反 vibe,
+//   评分是参考, 行动才是产出, 应该分析才需要看评分」)。
+//   行动卡**保留在 L0** (CHARTER §1.4 拍板: 行动输出 = 明确的跟进指引必须切 Tab 可见,
+//   不能因为这次诉求把"现在该做"也一起移走 —— 同根 §5「贴告示 ≠ 修复」:
+//   看起来优化了, 实则把既有拍板撤了)。
 // ============================================
 
 import 'package:dio/dio.dart';
@@ -40,7 +47,8 @@ import '../../follow_up/widgets/follow_up_analysis_card.dart';
 import '../widgets/ai_insight_cards.dart';
 import '../widgets/customer_activity_cards.dart';
 import '../widgets/customer_analysis_charts.dart';
-import '../widgets/customer_insight_header.dart';
+import '../widgets/customer_insight_actions.dart';
+import '../widgets/customer_score_card.dart';
 import '../widgets/danger_zone_card.dart';
 import 'add_record_sheet.dart';
 import '../widgets/ownership_card.dart';
@@ -59,15 +67,17 @@ class CustomerDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncCustomer = ref.watch(customerDetailProvider(customerId));
 
-    // P2 (主人 2026-09-23 拍): 单页 11 section 堆叠 → L0 + 3 Tab
+    // P2 (主人 2026-09-23 + 2026-09-24 拍): 单页 11 section 堆叠 → L0 + 3 Tab
     //
     // 为什么用 DefaultTabController 而不是自己管 TabController:
     //   不需要 StatefulWidget / TickerProvider / dispose —— 本页没有
     //   "记住用户选了哪个 Tab" 的需求, 少一份生命周期就少一类 bug。
     //
-    // 为什么 L0 在 TabBarView **外面**:
+    // 为什么 L0 (行动卡) 在 TabBarView **外面**:
     //   CHARTER §1.4 的「行动输出 = 明确的跟进指引」必须**切 Tab 也可见** ——
     //   放进任一 Tab 里就等于"只有切到那个 Tab 才看得到", 又退回"要滚才看见"的老毛病。
+    //   评分卡则在「分析」Tab 内 (主人 2026-09-24 拍: 评分是参考, 不是日常产出,
+    //   三个 Tab 都有评分环 = 反 vibe)。
     return DefaultTabController(
       length: 3,
       child: Scaffold(
@@ -112,11 +122,12 @@ class CustomerDetailPage extends ConsumerWidget {
           error: (e, _) => ErrorState(error: e),
           data: (customer) => Column(
             children: [
-              // L0: 评分环 + 今日待办 (免费层, 不烧 AI 额度; 拿不到数据时自己静默隐藏)
+              // L0: 行动输出卡「现在该做」(切 Tab 可见 —— CHARTER §1.4 拍板)
+              // 评分卡不在这里: 它只放在「分析」Tab (主人 2026-09-24 拍)。
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                     AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, 0),
-                child: CustomerInsightHeader(
+                child: CustomerInsightActions(
                   customerId: customerId,
                   onBuildTask: (action) =>
                       _buildTaskFromAction(context, ref, action),
@@ -178,7 +189,7 @@ class CustomerDetailPage extends ConsumerWidget {
     ]);
   }
 
-  /// **分析 Tab** —— 三大动作之「分析」: 图谱 → 客观指标 → AI 解读
+  /// **分析 Tab** —— 三大动作之「分析」: 评分卡 → 图谱 → 客观指标 → AI 解读
   Widget _buildAnalysisTab(
     BuildContext context,
     WidgetRef ref,
@@ -187,8 +198,13 @@ class CustomerDetailPage extends ConsumerWidget {
     // 雷达图要吃 L0 的评分 (避免重复请求 /insight)
     final insight = ref.watch(customerInsightProvider(customerId)).valueOrNull;
     return _tabScroll(children: [
+      // ★ 评分卡 (2026-09-24 主人拍: 评分只放在分析 Tab, 不再是 L0)
+      //   与 L0 行动卡同源 (都读 customerInsightProvider), 但评分是"参考", 不是"产出",
+      //   销售日常看行动 (切 Tab 可见), 真要看分才进分析 Tab。
+      CustomerScoreCard(customerId: customerId),
+      const SizedBox(height: AppSpace.cardGap),
       // ★ P4 图谱 (主人 2026-09-23 拍): 雷达 / 效果趋势 / 部位热力
-      //   放最上面: 图比文字快 —— "她整体怎样" 一眼就能看出
+      //   放评分卡之后: 图比文字快 —— "她整体怎样" 一眼就能看出
       //
       // ⚠ 不要写成 `if (insight != null) CustomerAnalysisCharts(...)` ——
       //   那会让"洞察还没就绪"时整块图表消失 (趋势/部位只依赖 /charts, 被无关依赖拖累)。

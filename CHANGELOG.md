@@ -2,6 +2,52 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 客户详情页: 评分卡只在「分析」Tab (2026-09-24)
+
+主人 2026-09-24 拍: 「评分卡」只允许出现在「分析」Tab, 三个 Tab 都有 = 反 vibe;
+同时明确「现在该做」行动卡**保留在 L0** (切 Tab 可见) —— 不能因为这次诉求
+顺手把 CHARTER §1.4 拍过的"行动输出 = 明确的跟进指引"也一起移走。
+
+### 诉求 / 背景
+
+- L0 = 「现在该做」行动卡 (CustomerInsightActions, 原 CustomerInsightHeader)。
+  CHARTER §1.4 拍板: 行动输出必须切 Tab 也可见 —— **不要**拆进任一 Tab 里,
+  那样等同于"要滚才看见"的老毛病。
+- 「分析」Tab 顶部 = 评分卡 (CustomerScoreCard, 从原 L0 拆分)。
+  评分是参考, 不是日常产出: 销售日常看行动, 真要看分才进分析 Tab。
+- 「记录」 / 「管理」Tab 顶部**不**出现评分环 / 评分卡。
+
+### 拆法 (落地的文件)
+
+| 文件 | 改动 | 说明 |
+|---|---|---|
+| `flutter_app/lib/modules/customer/widgets/customer_score_card.dart` | **新建** | 评分卡 widget (评分环 + 三维度条 + 可展开明细) |
+| `flutter_app/lib/modules/customer/widgets/customer_insight_actions.dart` | **git mv** | 原 `customer_insight_header.dart` 改名, 类改名 `CustomerInsightHeader → CustomerInsightActions`, 只保留「现在该做」部分 |
+| `flutter_app/lib/modules/customer/screens/customer_detail_page.dart` | 改 | TabBarView 外只挂 `CustomerInsightActions` (L0); `_buildAnalysisTab` children 最前面挂 `CustomerScoreCard` + cardGap |
+| `flutter_app/test/customer_score_card_test.dart` | **新建** | 原 `customer_insight_header_test.dart` 的 ①②③ 三组 + 白字检查 |
+| `flutter_app/test/customer_insight_actions_test.dart` | **git mv** | 原 `customer_insight_header_test.dart` 改名, 保留 ④/⑤/⑤b/⑥ 组 |
+| `flutter_app/test/customer_detail_tabs_test.dart` | **新建** | 页面级 Tab 归属测试 (a 默认「记录」行动可见评分不在, b「分析」评分可见, c「管理」评分不在行动仍在) |
+
+### 验证结果
+
+- `flutter analyze` 0 issue
+- `flutter test` 全绿 340/340 (净 +3, 新增 21 - 拆分移除 18)
+- 评分卡「白字」检查 (白底可见) 通过 —— 走 `AppTokens` 语义色, 不写死
+- `tools/check-ui-tokens.sh --strict` 通过 (含下条护栏修正)
+- **真浏览器 (Flutter web)**: 记录 Tab 无评分卡 / 分析 Tab 顶部出现评分卡 (评分环 + 三维度条) /
+  管理 Tab 无评分卡; 三个 Tab 都能看到「现在该做」行动卡 (L0) ✅
+
+### 护栏修正 (2026-09-24, 本批顺手治本)
+
+`tools/check-ui-tokens.sh` 的 `flutter.cardWidget` 旧正则 `Card\(` 会把**类名**也算进去
+(`RepurchaseCard(` / `CustomerScoreCard(` / `_chartCard(` … 都不是 Material `Card` widget) ——
+旧基线 87 里 86 个是这类误匹配, 真正的 Material `Card(` 只有 1 处。
+收紧为 `\bCard\(` (GNU ERE 词边界) 后 `--update-baseline` 把棘轮拧到真实值 **87 → 1**
+(棘轮只许下降, 本次是下降)。
+
+> 不修的话本批新增的 `CustomerScoreCard` 会把计数从 87 顶到 89 → pre-commit `--strict` 误伤;
+> 修的是**测量口径**, 不是放宽红线 —— 以后新增 Material `Card(` 仍会被 `1` 这道棘轮拦住。
+
 ## [Unreleased] — UI 全面升级 (B0–B4, 2026-09-22~24)
 
 主人 2026-09-22 拍: 「下一波主要针对 UI 升级」。五天 5 批落地, 本条汇总。

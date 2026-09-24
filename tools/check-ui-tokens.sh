@@ -100,6 +100,10 @@ if [ -n "$FLUTTER_ACTIVE" ]; then
   #   flutter.cardWidget: Card( 调用 —— 原则 4 说列表项 / 同质块不应用 Card
   #   flutter.legacyBigWidget: BigButton / BigFab 旧大号组件 (B 档拍板不用的)
   #   两个都进棘轮: 只许下降, 不许上涨
+  #   ⚠ 2026-09-24 修: cardWidget 的旧正则 'Card\(' 把**类名**也算进去
+  #     (RepurchaseCard( / CustomerScoreCard( / _chartCard( … 都不是 Material Card widget) ——
+  #     87 的旧基线里 86 个是这类误匹配。收紧为 '\bCard\(' (GNU ERE 词边界) 只数真正的
+  #     Material `Card(` 构造调用, 基线同步拧到真实值 (棘轮只许下降 —— 本次是**下降**)
   if [ "${#FLUTTER_CARD_WHITELIST[@]}" -gt 0 ] && [ "$FLUTTER_ACTIVE" ]; then
     WL_FILTER=$(printf -- '-not -path %s ' "${FLUTTER_CARD_WHITELIST[@]}")
     # shellcheck disable=SC2086
@@ -108,7 +112,7 @@ if [ -n "$FLUTTER_ACTIVE" ]; then
     FLUTTER_CARD_SCAN="$FLUTTER_ACTIVE"
   fi
   # shellcheck disable=SC2086
-  count "flutter.cardWidget"     'Card\('                       $FLUTTER_CARD_SCAN
+  count "flutter.cardWidget"     '\bCard\('                     $FLUTTER_CARD_SCAN
 
   # flutter.legacyBigWidget: BigButton / BigFab 旧大号组件。
   #   ⚠ 这些组件名常出现在注释里 (「已退役」「不再使用」之类说明) —— 注释不算违规。
