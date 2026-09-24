@@ -2,6 +2,62 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 客户详情页「记录」Tab 14 项改进 + 跟进节奏卡重构 (2026-09-24)
+
+主人 2026-09-24: 「做你列出的全部12条」+ 追加「养生记录查看改底部弹窗, 内容/显示与最新详情页同步」+
+「跟进节奏模块要重构, 结构太散、不紧凑, 建一条跟进任务按键不需要这么大也不需要独占一行」+
+「跟进任务卡片和记录列表卡片之间的间距可以小一些」。
+
+### 记录 Tab 时间线
+
+1. **空态走契约组件** — `AppEmptyState` + 下一步动作 (全部/养生/互动 三种文案), 不再是一行灰字。
+2. **错误态有出口** — 两边都空 → `ErrorState` + 重试 (同时失效两个 provider); 单边出错 → 列表尾部行内错误 + 只重试那一侧。
+3. **骨架加载** — `AppSkeletonList(rows: 4, dense)`, 替换「转圈 + 加载记录中」。
+4. **单边 loading 可见** — 一边已回、另一边仍在加载时, 列表尾部显示「互动/养生记录加载中…」。
+5. **加载更多** — 20 条起步、每次 +20; footer「加载更多（还有 N 条）」; wellness 到达 50 条拉取上限时明确提示「仅加载最近 50 条」(不再是死截断)。
+6. **下次建议日期露出** — 行内「建议 MM-dd 回访」; 逾期「已过 N 天」染 warning 色 (history → action 闭环)。
+7. **相对时间** — 汇总行「最近一次 今天/昨天/N 天前」。
+8. **照片指示** — 有照片的行 meta 显示相机图标 + 张数。
+9. **日期分组头** — 今天 / 昨天 / 本周 / 本月 / 更早 (纯文字, 无装饰)。
+10. **趋势入口** — 汇总行「趋势 ›」切到分析 Tab。
+11. **间距收紧** — 跟进任务卡 ↔ 记录列表卡 10 → 6。
+
+### 互动记录 (新增查看/编辑/删除)
+
+12. **互动行可点** — 不再整行不可点: 弹层查看 + 编辑 (类型 chips + 内容) + 二次确认删除。
+    后端新增 `GET/PATCH/DELETE /api/interactions/[id]`; 查询层补 `getInteractionById / updateInteraction / deleteInteraction`,
+    删除后按剩余互动重算 `customer.last_interaction_at` (跟进紧急度能回退)。PATCH/DELETE **故意不挂会员闸**
+    (修正自己记错的记录不应因会员到期被锁死)。
+13. **会员 402 友好** — 「添加联系记录 / 标记完成」命中 402 时不再裸贴 `DioException(...402)`, 改人话提示 (全局会员提示仍负责说明)。
+
+### 养生记录查看改弹窗
+
+14. **时间线点养生记录 → 底部弹窗** (`DraggableScrollableSheet` 0.5/0.9/0.96, 默认 90% 屏高), 不再整页跳转;
+    详情页 body 抽成 `WellnessRecordDetailBody` **单一真相源** —— 弹窗与详情页永远同一份内容/样式。
+    顺手修隐性 bug: 编辑保存后 by-id provider 不失效, 弹窗/详情页显示旧数据。
+
+### 跟进节奏卡重构
+
+15. 删重复副标题; headline + 趋势合一; 6 指标从 150px 大块压成 **3 列 × 2 行** (窄屏 <360 退化 2 列);
+    复购「预计下次 + 倒计时 + 置信度」合一行; reason 去底色; 卡内有底色容器 **6 → 2**。
+16. 「建一条跟进任务」从全宽大按钮 (`BigActionButton`) 改为**紧凑 tonal 按钮** (内容宽度、右对齐, 视觉 40 / 热区 ≥48),
+    仍只在「该催了 (isDue)」出现, 点击走同一弹层。
+
+### 工程护栏
+
+- **测试库 fail-closed** (`tests/setup.ts`): `DATABASE_URL` 库名不是 `test` / `*_test` 直接抛错。
+  起因: 并发 session 曾用 dev 库跑 `pnpm test:run`, 集成测试的 `TRUNCATE customer, follow_up_task, interaction, wellness_record CASCADE`
+  清空 dev 测试数据 (已从当天 03:01 异地加密备份按原 ID 恢复); 该护栏让「打错库」物理上不可能。
+
+### 验收
+
+- `flutter analyze lib test` 0 issue; `flutter test` **478/478**;
+- `pnpm type-check` 0 error; `pnpm test:run` (→ nuankebao_test) **633/633**;
+- `tools/check-ui-tokens.sh` 硬编码 0 / cardWidget 持平; `tools/check-ui-density.sh` 10 路由全持平。
+
+> ⚠ 提交归属: 并发 session 的 auto-snapshot (`git add -u`) 把本批部分在制品扫进了 `[SNAPSHOT]` 元提交
+> (d3d535c / 5f08f6a / dda5b78 等), 本 entry 记录的是**逻辑改动**; 最终树已核对一致。
+
 ## [Unreleased] — 下次建议日期快捷档位改为 明天/3/7/10 天后 (2026-09-24)
 
 主人 2026-09-24: 「下次建议日期快速选择标签改为：明天、3天后、7天后、10天后」。
