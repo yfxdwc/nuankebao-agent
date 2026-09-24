@@ -650,32 +650,35 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const AppSectionHeader(
+        // 2026-09-24 主人: 「选择日期按键太大, 可以收到标题 (下次建议日期) 同一行」
+        //   → 标题行右侧一个紧凑日期按钮 (44pt), 不再独占一行 48pt 整宽按钮
+        AppSectionHeader(
           title: '下次建议日期',
-          subtitle: '可选 · 到日子会提醒跟进',
+          subtitle: '可选 · 到日子会提醒跟进, 并顺手建一条跟进任务',
           padding: EdgeInsets.zero,
-        ),
-        const SizedBox(height: AppSpace.s8),
-        OutlinedButton.icon(
-          onPressed: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: _nextAdviceDate ?? DateTime.now().add(const Duration(days: 7)),
-              firstDate: DateTime.now(),
-              lastDate: DateTime.now().add(const Duration(days: 365)),
-            );
-            if (picked != null) setState(() => _nextAdviceDate = picked);
-          },
-          icon: const Icon(Icons.calendar_today, size: AppSize.iconLg),
-          label: Text(
-            _nextAdviceDate == null
-                ? '选择日期 (可选)'
-                : '${_nextAdviceDate!.year}-${_nextAdviceDate!.month.toString().padLeft(2, '0')}-${_nextAdviceDate!.day.toString().padLeft(2, '0')}',
-            style: const TextStyle(fontSize: AppTheme.fontMd),
-          ),
-          style: OutlinedButton.styleFrom(
-            // 跟页面其它按钮统一高度 (旧版 64 特立独行, 视觉不齐)
-            minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
+          action: OutlinedButton.icon(
+            onPressed: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate:
+                    _nextAdviceDate ?? DateTime.now().add(const Duration(days: 7)),
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+              );
+              if (picked != null) setState(() => _nextAdviceDate = picked);
+            },
+            icon: const Icon(Icons.calendar_today, size: AppSize.iconSm),
+            label: Text(
+              _nextAdviceDate == null
+                  ? '选择'
+                  : '${_nextAdviceDate!.year}-${_nextAdviceDate!.month.toString().padLeft(2, '0')}-${_nextAdviceDate!.day.toString().padLeft(2, '0')}',
+              style: const TextStyle(fontSize: AppTheme.fontSm),
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, AppSize.controlLg),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10),
+              visualDensity: VisualDensity.compact,
+            ),
           ),
         ),
       ],

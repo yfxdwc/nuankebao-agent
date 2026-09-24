@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_ext.dart';
+import '../../../core/widgets/app_section.dart';
 
 import '../../../core/theme/tokens.g.dart';
 class WellnessPhotoUploader extends StatefulWidget {
@@ -21,6 +23,7 @@ class WellnessPhotoUploader extends StatefulWidget {
   /// 成功上传一张照片后回调 (用量埋点: record_photo_taken)
   final VoidCallback? onPhotoUploaded;
 
+  /// 最多几张 (2026-09-24 主人: 「上传照片最多 5 张, 照片等宽排在同一行」)
   final int maxPhotos;
 
   const WellnessPhotoUploader({
@@ -28,7 +31,7 @@ class WellnessPhotoUploader extends StatefulWidget {
     required this.onChanged,
     this.onPhotoUploaded,
     this.existingUrls = const [],
-    this.maxPhotos = 6,
+    this.maxPhotos = 5,
   });
 
   @override
@@ -112,57 +115,66 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '部位照片',
-          style: TextStyle(
-            fontSize: AppTheme.fontMd,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: AppSpace.s4),
-        Text(
-          '已上传 ${_urls.length} / ${widget.maxPhotos}',
-          style: const TextStyle(
-            fontSize: AppTheme.fontSm,
-            color: AppTheme.textSecondary,
-          ),
-        ),
-        const SizedBox(height: AppSpace.s12),
-
-        // 已上传照片网格
-        if (_urls.isNotEmpty)
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _urls.asMap().entries.map((e) {
-              final i = e.key;
-              final url = e.value;
-              return _photoTile(url, () => _removePhoto(i));
-            }).toList(),
-          ),
-
-        const SizedBox(height: AppSpace.s12),
-
-        // 上传按钮 (大按钮组)
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
+        // 标题行 (2026-09-24 主人: 「拍照和相册这两个按键也可以收到与标题
+        //   「部位照片」同一行」) —— 右侧两个紧凑按钮, 不再各占半行 64pt 大按钮
+        AppSectionHeader(
+          title: '部位照片',
+          subtitle: '已上传 ${_urls.length} / ${widget.maxPhotos}',
+          padding: EdgeInsets.zero,
+          action: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton.icon(
                 onPressed: _uploading ? null : () => _pickImage(ImageSource.camera),
-                icon: const Icon(Icons.camera_alt, size: AppSize.iconXl),
-                label: const Text('拍照', style: TextStyle(fontSize: AppTheme.fontMd)),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 64)),
+                icon: const Icon(Icons.camera_alt, size: AppSize.iconSm),
+                label: const Text('拍照', style: TextStyle(fontSize: AppTheme.fontSm)),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, AppSize.controlLg),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10),
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpace.s12),
-            Expanded(
-              child: OutlinedButton.icon(
+              const SizedBox(width: AppSpace.s8),
+              OutlinedButton.icon(
                 onPressed: _uploading ? null : () => _pickImage(ImageSource.gallery),
-                icon: const Icon(Icons.photo_library, size: AppSize.iconXl),
-                label: const Text('相册', style: TextStyle(fontSize: AppTheme.fontMd)),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 64)),
+                icon: const Icon(Icons.photo_library, size: AppSize.iconSm),
+                label: const Text('相册', style: TextStyle(fontSize: AppTheme.fontSm)),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, AppSize.controlLg),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10),
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
-            ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpace.s12),
+
+        // 照片条: **固定 maxPhotos 个等宽槽位, 永远一行** (2026-09-24 主人:
+        //   「照片等宽排在同一行」)。
+        //   为什么固定槽位数 (而不是按已有张数均分): 张数变化时缩略图不会忽大忽小,
+        //   空槽位也顺带表达了"还能加几张" (原则 1 密度 + 稳定布局)。
+        Row(
+          key: const ValueKey('photoStrip'),
+          children: [
+            for (var i = 0; i < widget.maxPhotos; i++) ...[
+              if (i > 0) const SizedBox(width: AppSpace.s6),
+              Expanded(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: i < _urls.length
+                      ? _photoTile(_urls[i], () => _removePhoto(i))
+                      : Container(
+                          // 空槽位: 浅底提示位 (不可点, 拍照/相册按钮在标题行)
+                          key: ValueKey('photoSlot-empty-$i'),
+                          decoration: BoxDecoration(
+                            color: context.tokens.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(AppRadius.r12),
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ],
         ),
         if (_uploading) ...[
@@ -183,27 +195,23 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
     );
   }
 
+  /// 照片缩略图 —— **填满父槽位** (等宽由外层 Expanded 决定, 不写固定尺寸)
   Widget _photoTile(String url, VoidCallback onRemove) {
     return Stack(
+      fit: StackFit.expand,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.r12),
           child: Image.network(
             url,
-            width: AppSpace.s96,
-            height: AppSpace.s96,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(
-              width: AppSpace.s96,
-              height: AppSpace.s96,
               color: AppTheme.bgWarm,
               child: const Icon(Icons.broken_image, color: AppTheme.textSecondary),
             ),
             loadingBuilder: (_, child, progress) {
               if (progress == null) return child;
               return Container(
-                width: AppSpace.s96,
-                height: AppSpace.s96,
                 color: AppTheme.bgWarm,
                 child: const Center(
                   child: SizedBox(
@@ -217,12 +225,12 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
           ),
         ),
         Positioned(
-          top: AppSpace.s4,
-          right: AppSpace.s4,
+          top: AppSpace.s2,
+          right: AppSpace.s2,
           child: GestureDetector(
             onTap: onRemove,
             child: Container(
-              padding: const EdgeInsets.all(AppSpace.s4),
+              padding: const EdgeInsets.all(AppSpace.s2),
               decoration: const BoxDecoration(
                 color: Colors.black54,
                 shape: BoxShape.circle,
