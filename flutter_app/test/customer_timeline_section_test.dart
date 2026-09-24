@@ -2,13 +2,21 @@
 // CustomerTimelineSection 单测 (2026-09-24 拍板重构)
 //
 // 守护:
-//   ① 默认「全部」→ 养生 + 互动混排 + 倒序
-//   ② 点「养生记录」→ 只剩养生
-//   ③ 点「互动记录」→ 只剩互动
-//   ④ 两个添加按钮存在 (添加养生记录 / 添加联系记录)
-//   ⑤ 养生行副文含改善指标 (「疼痛 8→3 ↓5」)
-//   ⑥ 健壮性: 养生 OK + 互动失败 → 养生行还在 (互不遮蔽)
-//   ⑦ 给「添加联系记录」装假 service, 点按钮 → 走弹层 + create() + invalidate
+//   ① 默认「全部」→ 养生 + 互动混排 + 倒序 + 工具栏显示当前「全部」+「添加记录」按钮
+//   ② 点筛选下拉 + 「养生记录」→ 只剩养生
+//   ③ 点筛选下拉 + 「互动记录」→ 只剩互动
+//   ④ 点添加记录下拉 → 菜单有「添加养生记录」与「添加联系记录」两项
+//   ⑤ 健壮性: 养生 OK + 互动失败 → 养生行还在 (互不遮蔽)
+//   ⑥ 养生行副文含改善指标 (「疼痛 8→3 ↓5」)
+//   ⑦ 选下拉中「添加联系记录」→ 走弹层 + 调 interactionService.create
+//   ⑧ 超过 20 条 → 列表底部显示「共 N 条 · 只显示最近 20 条」
+//
+// ⏵ 2026-09-24 续拍 (本 commit):
+//   「内容选择标签折叠为下拉 + 添加记录收纳到下拉」, 测试改用下拉打开/点选的口径;
+//   按钮文本不再外露, 所以
+//    · ① 不能断言 `find.text('添加养生记录')` —— 它只在菜单打开时才出现
+//    · ②③ 不能 `tap(finder.text('养生记录'))` —— 主页面默认显示「全部」, 「养生记录」
+//      路径只能通过打开筛选下拉 → 点选才会出现
 //
 // 跑: cd flutter_app && flutter test test/customer_timeline_section_test.dart
 // ============================================
@@ -164,16 +172,31 @@ Future<void> _pumpSection(
   });
 }
 
-/// 找到 Filter 胶囊 (ChoiceChip); 用 index 选「全部 / 养生记录 / 互动记录」
-Finder _filterChip(String label) =>
-    find.descendant(
-      of: find.byType(ChoiceChip),
-      matching: find.text(label),
-    );
+/// 锁工具栏上的两个 PopupMenuButton 节点的 key
+const ValueKey<String> kFilterDropdown = ValueKey('timelineFilterDropdown');
+const ValueKey<String> kAddRecordDropdown = ValueKey('timelineAddRecordButton');
+
+/// 打开下拉 + 选 menu item 的合并 helper;
+/// 选完会 await 几帧 pump, 让 menu 关闭 + setState 生效。
+///
+/// PopupMenu 在 Overlay 里渲染, 进入动画约 200ms, 因此第一步用 pumpAndSettle
+/// 等动画结束再点 menu item; 否则 hitTest 会落在 menu 容器外, 命中警告。
+Future<void> _pickFromMenu(
+  WidgetTester tester, {
+  required Finder trigger,
+  required String itemLabel,
+}) async {
+  // 打开菜单 + 等动画过完
+  await tester.tap(trigger, warnIfMissed: false);
+  await tester.pumpAndSettle();
+  // 菜单里点「itemLabel」 —— 用 .last 取最深命中 (菜单 PopupMenuItem 内嵌的那一份)
+  await tester.tap(find.text(itemLabel).last, warnIfMissed: false);
+  await tester.pumpAndSettle();
+}
 
 void main() {
   testWidgets(
-    '① 默认「全部」→ 养生 + 互动混排 + 倒序',
+    '① 默认「全部」→ 养生 + 互动混排 + 倒序 + 工具栏显示当前「全部」+「添加记录」按钮',
     (tester) async {
       // 4 条 (2 养生 + 2 互动), 日期交错
       // 期望倒序:
@@ -193,9 +216,18 @@ void main() {
         ],
       );
 
-      // 两个添加按钮
-      expect(find.text('添加养生记录'), findsOneWidget);
-      expect(find.text('添加联系记录'), findsOneWidget);
+      // ⏵ 2026-09-24: 工具栏断言 —— 筛选下拉显示默认「全部」, 添加记录按钮显示「添加记录」
+      //   (文案不再是「添加养生记录」「添加联系记录」, 因为它们被收进了下拉菜单)
+      expect(find.byKey(kFilterDropdown), findsOneWidget);
+      expect(find.byKey(kAddRecordDropdown), findsOneWidget);
+      expect(
+          find.descendant(
+              of: find.byKey(kFilterDropdown), matching: find.text('全部')),
+          findsOneWidget);
+      expect(
+          find.descendant(
+              of: find.byKey(kAddRecordDropdown), matching: find.text('添加记录')),
+          findsOneWidget);
 
       // 养生摘要
       expect(find.textContaining('共 2 次'), findsOneWidget);
@@ -208,15 +240,14 @@ void main() {
       // 互动行: 默认 type=phone → 「电话」label
       expect(find.text('电话'), findsNWidgets(2));
 
-      // 胶囊存在 (3 个)
-      expect(find.text('全部'), findsOneWidget);
-      expect(find.text('养生记录'), findsWidgets); // 既在胶囊又在「添加养生记录」按钮
-      expect(find.text('互动记录'), findsWidgets);
+      // ⚠ 菜单未打开时「养生记录」「互动记录」不外露 (是下拉菜单项)
+      expect(find.text('养生记录'), findsNothing);
+      expect(find.text('互动记录'), findsNothing);
     },
   );
 
   testWidgets(
-    '② 点「养生记录」胶囊 → 只剩养生 (互动隐藏)',
+    '② 点筛选下拉 +「养生记录」 → 只剩养生 (互动隐藏)',
     (tester) async {
       await _pumpSection(
         tester,
@@ -229,21 +260,25 @@ void main() {
         ],
       );
 
-      // 点「养生记录」胶囊 (过滤为 wellness)
-      await tester.tap(_filterChip('养生记录'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      // ⏵ 2026-09-24: 过滤下拉 → 点选「养生记录」菜单项
+      await _pickFromMenu(tester,
+          trigger: find.byKey(kFilterDropdown), itemLabel: '养生记录');
 
       // 养生行 2 条
       expect(find.text('肩颈经络理疗'), findsNWidgets(2));
       // 互动行 0 条
       expect(find.text('电话'), findsNothing);
       expect(find.text('微信'), findsNothing);
+      // 当前过滤已改为「养生记录」 → 下拉同时显示这个文本
+      expect(
+          find.descendant(
+              of: find.byKey(kFilterDropdown), matching: find.text('养生记录')),
+          findsOneWidget);
     },
   );
 
   testWidgets(
-    '③ 点「互动记录」胶囊 → 只剩互动 (养生隐藏)',
+    '③ 点筛选下拉 +「互动记录」 → 只剩互动 (养生隐藏)',
     (tester) async {
       await _pumpSection(
         tester,
@@ -256,16 +291,20 @@ void main() {
         ],
       );
 
-      // 点「互动记录」胶囊 (过滤为 interaction)
-      await tester.tap(_filterChip('互动记录'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      // 点选「互动记录」
+      await _pickFromMenu(tester,
+          trigger: find.byKey(kFilterDropdown), itemLabel: '互动记录');
 
       // 养生行 0 条
       expect(find.text('肩颈经络理疗'), findsNothing);
       // 互动行 2 条 (phone + wechat)
       expect(find.text('电话'), findsOneWidget);
       expect(find.text('微信'), findsOneWidget);
+      // 当前过滤已改为「互动记录」
+      expect(
+          find.descendant(
+              of: find.byKey(kFilterDropdown), matching: find.text('互动记录')),
+          findsOneWidget);
     },
   );
 
@@ -291,9 +330,9 @@ void main() {
         interactions: const [],
       );
 
-      await tester.tap(_filterChip('互动记录'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      // 点选「互动记录」下拉项
+      await _pickFromMenu(tester,
+          trigger: find.byKey(kFilterDropdown), itemLabel: '互动记录');
 
       expect(find.text('还没记过联系'), findsOneWidget);
     },
@@ -325,7 +364,40 @@ void main() {
   );
 
   testWidgets(
-    '⑥ 点「添加联系记录」→ 走弹层 + 调 interactionService.create',
+    '⑥ 养生行副文含改善指标 (「疼痛 8→3 ↓5」)',
+    (tester) async {
+      await _pumpSection(
+        tester,
+        wellness: [_wellness(id: 'w1', serviceDate: '2026-09-22')],
+        interactions: const [],
+      );
+
+      expect(find.textContaining('疼痛 8→3 ↓5'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    '⑦ 点「添加记录」下拉 → 菜单出现「添加养生记录」与「添加联系记录」两项',
+    (tester) async {
+      await _pumpSection(
+        tester,
+        wellness: const [],
+        interactions: const [],
+      );
+
+      // 点「添加记录」按钮
+      await tester.tap(find.byKey(kAddRecordDropdown));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 菜单内两项 — 「添加养生记录」「添加联系记录」都在
+      expect(find.text('添加养生记录'), findsOneWidget);
+      expect(find.text('添加联系记录'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    '⑧ 选下拉中「添加联系记录」→ 走弹层 + 调 interactionService.create',
     (tester) async {
       final fakeInteraction = _FakeInteractionService(const []);
       await _pumpSection(
@@ -335,12 +407,13 @@ void main() {
         interactionService: fakeInteraction,
       );
 
-      // 点「添加联系记录」按钮
-      await tester.tap(find.text('添加联系记录'));
+      // 打开「添加记录」下拉 → 选「添加联系记录」
+      await _pickFromMenu(tester,
+          trigger: find.byKey(kAddRecordDropdown), itemLabel: '添加联系记录');
       await tester.pumpAndSettle();
 
-      // 弹层标题
-      expect(find.text('添加联系记录'), findsWidgets); // 按钮 + 弹层标题
+      // 弹层标题 (菜单项 + 弹层标题可能同时存在, 用 findsWidgets 接受)
+      expect(find.text('添加联系记录'), findsWidgets);
       // 弹层按钮「保存」 (跟「标记完成」区分)
       expect(find.text('保存'), findsOneWidget);
       // 弹层没有「标记完成」字样 (验证走的不是 completeTask 分支)
@@ -358,7 +431,7 @@ void main() {
   );
 
   testWidgets(
-    '⑦ 超过 20 条 → 列表底部显示「共 N 条 · 只显示最近 20 条」',
+    '⑨ 超过 20 条 → 列表底部显示「共 N 条 · 只显示最近 20 条」',
     (tester) async {
       // 21 条互动 → 截断 + 显示截断 footer
       final many = <Interaction>[

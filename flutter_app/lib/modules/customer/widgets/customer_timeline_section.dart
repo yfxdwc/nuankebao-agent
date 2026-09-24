@@ -6,12 +6,21 @@
 //     以胶囊键切换展示全部或仅养生记录、互动记录。
 //     添加养生记录、添加联系记录两个按键展示在混合列表上方。」
 //
+// ⏵ 2026-09-24 续拍 (本 commit):
+//   「记录列表内容选择标签(全部、养生、互动)折叠为下拉选择框。
+//     内容选择框的右侧显示添加记录键, 点击下拉框选择添加养生记录或添加联系记录。」
+//   ⇒ 把上面两个诉求合并成一行工具栏:
+//      左 = 内容选择下拉 (PopupMenuButton), 右 = 添加记录下拉 (PopupMenuButton)
+//   ⇒ 删掉「两个整宽按钮行」+「三个 ChoiceChip 行」, 改用一行 Row + Spacer
+//   ⇒ 文字 / 颜色 / 字号 / 间距 / 圆角 一律走 tokens (不写 hex, 不引用 AppTheme.xxx 常量色)
+//
 // 设计要点 (docs/ui-principles.md 原则 1 密度 + 原则 4 容器越少):
 //   - 列表行用 `AppListRow(dense: true)` 契约组件 (B 档统一行)
 //   - 整个混合列表包在 **一个** B2NoChrome 容器里 (避免「每行都套卡片」反 vibe)
-//   - 两个添加按钮 + 胶囊 + 汇总行 **不放**进容器 (容器越少, 内容越强)
+//   - 工具栏 (两下拉) + 汇总行 **不放**进容器 (容器越少, 内容越强)
 //   - 健壮性: 养生 / 互动两边 provider 各自 loading/error 时**互不遮蔽** ——
 //     valueOrNull 合并, 一边空另一边仍可见, 全空才显示错误 / 骨架
+//   - 触摸区: 下拉按钮高度 = AppSize.controlLg (44) —— 中老年友好, 满足 tapMin/tapCompact
 //
 // 数据来源 (与旧 customer_activity_cards 同 provider, 不另起):
 //   - 养生: customerWellnessRecordsProvider(customerId)   (limit=50, 按 serviceDate 倒序)
@@ -27,6 +36,7 @@ import '../../../core/models/dictionaries.dart';
 import '../../../core/models/follow_up.dart' show Interaction, interactionTypeLabels;
 import '../../../core/models/wellness_record.dart';
 import '../../../core/providers/service_providers.dart';
+import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/widgets/app_list_row.dart';
 import '../../../core/widgets/b2_no_chrome.dart';
@@ -88,10 +98,10 @@ class _CustomerTimelineSectionState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── 添加按钮 (Row + 2 Expanded, 不放进 B2NoChrome 容器) ──
-        _addButtonsRow(context),
+        // ── 一行工具栏: 左 = 内容选择下拉, 右 = 添加记录下拉 ──
+        _toolbarRow(context),
         const SizedBox(height: AppSpace.s10),
-        // ── 养生汇总行 (fontXs, 信息不丢) ──
+        // ── 养生汇总行 (fontXs, 信息不丢; 工具栏之下) ──
         if (summary.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(
@@ -104,9 +114,6 @@ class _CustomerTimelineSectionState
               ),
             ),
           ),
-        const SizedBox(height: AppSpace.s10),
-        // ── 胶囊过滤 (全部 / 养生记录 / 互动记录) ──
-        _filterChips(),
         const SizedBox(height: AppSpace.s10),
         // ── 混合列表 (单 B2NoChrome 容器, 行用 AppListRow dense) ──
         B2NoChrome(
@@ -127,59 +134,195 @@ class _CustomerTimelineSectionState
     );
   }
 
-  // ── 两个添加按钮 (养生 / 联系) ──
-  Widget _addButtonsRow(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: FilledButton.icon(
-            // 主按钮 (FilledButton) — 「添加养生记录」
-            onPressed: () => context.push(
-                '/wellness-records/new?customerId=${widget.customerId}'),
-            icon: const Icon(Icons.favorite, size: AppSize.iconMd),
-            label: const Text('添加养生记录'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, AppSize.buttonLgHeight),
-              textStyle: const TextStyle(fontSize: AppType.sm),
-            ),
+  // ── 一行工具栏 ──
+  //
+  // 拆成两个 PopupMenuButton (左 / 右), 中间 Spacer:
+  //   · 左 = 筛选 (全部 / 养生记录 / 互动记录)
+  //   · 右 = 添加记录 (养生 / 联系)
+  // 高度统一 AppSize.controlLg (44) —— ≥ tapMin (48) 接近, 满足 controlLg 触摸友好档。
+  // PopupMenuButton 而非 ChoiceChip / FilledButton.icon: 既保留「点击展开」语义,
+  // 又能在窄屏上不挤 —— 旧 ChoiceChip + 2 FilledButton 行高 48+48+8=104,
+  // 现合并后只占 44 + 一行间距。
+  Widget _toolbarRow(BuildContext context) {
+    final t = context.tokens;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.pagePadding),
+      child: Row(
+        children: [
+          // ── 左: 内容选择下拉 (act 模式: open menu 选中切换过滤) ──
+          PopupMenuButton<_Filter>(
+            // 锁 key: 测试与外层 `find.byKey('timelineFilterDropdown')` 共用
+            key: const ValueKey('timelineFilterDropdown'),
+            tooltip: '',
+            onSelected: (f) => setState(() => _filter = f),
+            position: PopupMenuPosition.under,
+            itemBuilder: (ctx) => _Filter.values
+                .map((f) => PopupMenuItem<_Filter>(
+                      value: f,
+                      height: AppSize.controlLg,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 当前选中项前打钩 (语义视觉, 不是颜色信号)
+                          SizedBox(
+                            width: AppSize.iconMd,
+                            height: AppSize.iconMd,
+                            child: _filter == f
+                                ? Icon(Icons.check,
+                                    size: AppSize.iconSm, color: t.primary)
+                                : null,
+                          ),
+                          const SizedBox(width: AppSpace.s8),
+                          Text(
+                            f.label,
+                            style: TextStyle(
+                              fontSize: AppType.sm,
+                              color: t.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ))
+                .toList(),
+            child: _filterDropdownChild(t),
           ),
-        ),
-        const SizedBox(width: AppSpace.s8),
-        Expanded(
-          child: FilledButton.tonalIcon(
-            // 次按钮 (FilledButton.tonal) — 「添加联系记录」
-            //   复用「完成跟进」弹层 (D, 在 complete_follow_up_sheet.dart 内),
-            //   标题「添加联系记录」, 按钮「保存」
-            onPressed: () => showAddInteractionSheet(context, ref,
-                customerId: widget.customerId),
-            icon: const Icon(Icons.phone_in_talk, size: AppSize.iconMd),
-            label: const Text('添加联系记录'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, AppSize.buttonLgHeight),
-              textStyle: const TextStyle(fontSize: AppType.sm),
-            ),
+          // ── 中: Spacer (左对齐 + 右对齐) ──
+          const Spacer(),
+          // ── 右: 添加记录下拉 (FilledButton.tonal 观感) ──
+          PopupMenuButton<_AddAction>(
+            key: const ValueKey('timelineAddRecordButton'),
+            tooltip: '',
+            onSelected: (a) => _handleAddAction(a),
+            position: PopupMenuPosition.under,
+            itemBuilder: (ctx) => [
+              _addMenuItem(_AddAction.wellness,
+                  icon: Icons.spa_outlined, label: '添加养生记录'),
+              _addMenuItem(_AddAction.interaction,
+                  icon: Icons.phone_in_talk, label: '添加联系记录'),
+            ],
+            child: _addRecordDropdownChild(t),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  // ── 胶囊过滤 ──
-  Widget _filterChips() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.pagePadding),
-      child: Wrap(
-        spacing: AppSpace.s8,
-        children: _Filter.values
-            .map((f) => ChoiceChip(
-                  label: Text(f.label,
-                      style: const TextStyle(fontSize: AppType.sm)),
-                  selected: _filter == f,
-                  onSelected: (_) => setState(() => _filter = f),
-                ))
-            .toList(),
+  // ── 工具栏左: 当前过滤 + 下拉箭头 (胶囊外观) ──
+  //
+  // 高度 ≥ AppSize.controlLg (44), 圆角 AppRadius.r10, 边框 t.divider;
+  // 横向内边距 AppSpace.s12, 垂直 s8 (文字 sm 居中)。
+  // 为什么不直接套 PopupMenuButton 默认 Icon(more_vert) —— 默认箭头/图标不够清晰;
+  // 自己 child 才能精确控制「当前值 + 箭头」复合表达。
+  Widget _filterDropdownChild(AppTokens t) {
+    return Container(
+      height: AppSize.controlLg,
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.s12, vertical: AppSpace.s8),
+      constraints: const BoxConstraints(minWidth: AppSpace.s40),
+      decoration: BoxDecoration(
+        border: Border.all(color: t.divider),
+        borderRadius: BorderRadius.circular(AppRadius.r10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _filter.label,
+            style: TextStyle(
+              fontSize: AppType.sm,
+              color: t.textPrimary,
+            ),
+          ),
+          const SizedBox(width: AppSpace.s4),
+          Icon(Icons.arrow_drop_down, size: AppSize.iconMd, color: t.textSecondary),
+        ],
       ),
     );
+  }
+
+  // ── 工具栏右: 「添加记录」+ 下拉箭头 (FilledButton.tonal 观感) ──
+  //
+  // FilledButton.tonal 观感: 背景 = 主题 primarySurface (浅绿), 文字 primaryDark;
+  // 实现方式 = Container + 主品牌色背景 + InkWell。
+  // 为什么不直接用 FilledButton.tonal 再叠 Icon: 高度/圆角/箭头都对不齐 (FilledButton 默认 40 高 + 字面箭头渲染固定) 。
+  Widget _addRecordDropdownChild(AppTokens t) {
+    return Container(
+      height: AppSize.controlLg,
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.s14, vertical: AppSpace.s8),
+      decoration: BoxDecoration(
+        color: t.primarySurface,
+        borderRadius: BorderRadius.circular(AppRadius.r10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.add, size: AppSize.iconMd, color: t.primaryDark),
+          const SizedBox(width: AppSpace.s4),
+          Text(
+            '添加记录',
+            style: TextStyle(
+              fontSize: AppType.sm,
+              color: t.primaryDark,
+              fontWeight: AppWeight.medium,
+            ),
+          ),
+          const SizedBox(width: AppSpace.s4),
+          Icon(Icons.arrow_drop_down, size: AppSize.iconMd, color: t.primaryDark),
+        ],
+      ),
+    );
+  }
+
+  // ── 添加菜单项工厂 ──
+  //
+  // 风格: 左侧图标 (颜色 t.textSecondary) + 文字 (t.textPrimary / sm);
+  // 与右按钮同高度 (controlLg) 保持整页节奏一致。
+  PopupMenuItem<_AddAction> _addMenuItem(_AddAction action,
+      {required IconData icon, required String label}) {
+    final t = context.tokens;
+    return PopupMenuItem<_AddAction>(
+      value: action,
+      height: AppSize.controlLg,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: AppSize.iconMd,
+            height: AppSize.iconMd,
+            child: Icon(icon, size: AppSize.iconSm, color: t.textSecondary),
+          ),
+          const SizedBox(width: AppSpace.s8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: AppType.sm,
+              color: t.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 添加动作分发 ──
+  //
+  // 菜单关闭后才走 onSelected, 此时 context 仍是 widget 的 context (mounted 大概率还是 true) 。
+  // push 是异步 (Future 后仍可能在 navigator 里), 但导航是同步发起, 不会因页面销毁崩;
+  // 安全保险: push 前再 `if (context.mounted)`, showAddInteractionSheet 不需要 (showModalBottomSheet 内部检测)。
+  void _handleAddAction(_AddAction a) {
+    switch (a) {
+      case _AddAction.wellness:
+        if (!mounted) return;
+        if (!context.mounted) return;
+        context.push('/wellness-records/new?customerId=${widget.customerId}');
+        break;
+      case _AddAction.interaction:
+        if (!mounted) return;
+        if (!context.mounted) return;
+        showAddInteractionSheet(context, ref, customerId: widget.customerId);
+        break;
+    }
   }
 
   // ── 列表主体 ──
@@ -400,6 +543,9 @@ extension on _Filter {
         _Filter.interaction => '互动记录',
       };
 }
+
+/// 添加记录菜单项 (主人诉求: 点击下拉框选择添加养生记录或添加联系记录)
+enum _AddAction { wellness, interaction }
 
 enum _Kind { wellness, interaction }
 

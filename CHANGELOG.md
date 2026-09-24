@@ -2,6 +2,54 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 记录页工具栏: 筛选/添加收成下拉 (2026-09-24)
+
+主人 2026-09-24 诉求: 「记录列表内容选择标签(全部、养生、互动)折叠为下拉选择框。
+内容选择框的右侧显示添加记录键, 点击下拉框选择添加养生记录或添加联系记录。」
+
+### 诉求
+
+把客户详情「记录」Tab 顶部两行控件 (① 两个整宽按钮 ② 三个 ChoiceChip 过滤) 合并
+成一行工具栏: `[ 内容选择下拉 ▾ ] ............ [ + 添加记录 ▾ ]`。
+中老年销售员手机端屏幕窄, 两行合并后明显腾出空间给下面的混合列表。
+
+### 做法 (A)
+
+1. **`customer_timeline_section.dart`**:
+   · 删掉 `_addButtonsRow` (两个整宽 FilledButton) + `_filterChips` (三个 ChoiceChip Wrap)
+   · 新建 `_toolbarRow`: 一行 `Row` + `Spacer` + 两个 `PopupMenuButton<T>`
+     - 左 = 筛选下拉 (当前选中 label + `Icons.arrow_drop_down`),
+       外观: `t.divider` 边框 + `AppRadius.r10` 圆角 + 横向 `AppSpace.s12` 内边距
+     - 右 = 添加记录下拉 (`Icons.add` + '添加记录' + `Icons.arrow_drop_down`),
+       外观: FilledButton.tonal 观感 (`t.primarySurface` 背景 + `t.primaryDark` 字)
+   · 两下拉高度均为 `AppSize.controlLg` (44) —— 中老年触摸友好
+   · 颜色/字号/间距/圆角 一律走 `context.tokens` / AppSpace/AppType/AppSize/AppRadius,
+     **不写 hex / 不用 AppTheme.xxx 常量色** (基于 AGENTS §3 该做项 + §5 「贴告示 ≠ 修复」,
+     靠 tokens 维护换肤不失效)
+   · 通过 `ValueKey('timelineFilterDropdown')` / `ValueKey('timelineAddRecordButton')`
+     两个 key 给测试 / 工具桩 锁定入口
+   · 菜单项: 当前选中项前打勾 (`Icons.check` + `t.primary`), 高度同按钮 (controlLg)
+   · 选用 PopupMenuButton 而非 showMenu 直接调: 位置自动按 RenderBox 计算, 不必手算 RelativeRect
+   · 「菜单关闭后才走 onSelected」 + `if (mounted && context.mounted)` 守卫: 防止菜单未关就点进导航/弹层
+
+### 交互变化
+
+| 旧 | 新 |
+| --- | --- |
+| 两个整宽按钮各占 48px 高, 挤满屏宽 | 工具栏一行, 两控件各 44px 高, Spacer 居中 |
+| 三个 ChoiceChip 横排 (Wrap) | 一个 PopupMenuButton, 点开 PopupMenu 选 |
+| 「添加养生记录」「添加联系记录」直接外露 | 收进「添加记录」下拉的菜单 (点击前不可见) |
+| 后端/数据/列表逻辑不变 | 同 (provider 不动) |
+
+### 验证
+
+- `flutter analyze` → 0 issue
+- `flutter test test/customer_timeline_section_test.dart` → **10/10 全绿** (净 +2: 加 5 [⑦ ⑧ ⑨ + [旧] ⑥重排 + ⑤保留] 减 3 [旧 ⑥/⑦ 重含进新测试])
+- `flutter test` 全量 → **387/387 全绿** (基线 385, +2 净)
+- `bash tools/check-ui-tokens.sh --strict` → exit 0 (cardWidget 持平基线 1, 无新增 Card)
+- `tools/verify-flutter-p2p3.mjs` ⑤ 步同步跟进: `tapText("添加记录") → 等菜单 → tapText("^添加养生记录$")` →
+  进入表单 (旧版直接 `tapText("添加养生记录")`, 文本已沉到菜单里)
+
 ## [Unreleased] — 「现在该做」折叠态高亮 (2026-09-24)
 
 主人 2026-09-24 诉求 (本日折叠诉求的续): 「"现在该做"折叠后, 颜色要高亮显示」—— 折叠成一行时卡片要有高亮色, 跟展开态的白卡明显区分, 一眼能看出「这里还有事要做」。

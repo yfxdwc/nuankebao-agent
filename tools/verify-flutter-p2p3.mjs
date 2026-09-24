@@ -252,19 +252,26 @@ try {
   console.log("\n━━━ ⑤ P3: 「沿用上次」预填 ━━━");
   await tapText(page, "^记录 Tab");
   await page.waitForTimeout(3000);
-  // 2026-09-24 记录 Tab 重构: 「+ 添加记录」三选一弹层已删 —— 列表上方改成两个显式按钮:
-  //   「添加养生记录」直接进养生记录表单 (「添加联系记录」走联系弹层)
-  let addBox = await tapText(page, "添加养生记录");
-  if (!addBox) {
-    note("没找到「添加养生记录」→ 向下滚动再试");
+  // ⏵ 2026-09-24 记录 Tab 工具栏重构: 「添加养生记录」「添加联系记录」收进下拉按钮
+  //   「添加记录」, 需要先点「添加记录」开菜单, 再点菜单项「添加养生记录」才到表单
+  let addBtn = await tapText(page, "添加记录");
+  if (!addBtn) {
+    note("没找到「添加记录」按钮 → 向下滚动再试");
     await page.mouse.move(210, 500);
     await page.mouse.wheel(0, 1400);
     await page.waitForTimeout(2000);
-    addBox = await tapText(page, "添加养生记录");
+    addBtn = await tapText(page, "添加记录");
   }
-  if (!addBox) {
-    bad("找不到「添加养生记录」入口");
+  let addBox = null;
+  if (!addBtn) {
+    bad("找不到「添加记录」按钮");
   } else {
+    note(`点「添加记录」@ ${Math.round(addBtn.x)},${Math.round(addBtn.y)}`);
+    // 菜单弹出后, 点菜单项「添加养生记录」 (用 ^...$ 严格匹配, 防误中「添加联系记录」)
+    await page.waitForTimeout(800);
+    addBox = await tapText(page, "^添加养生记录$");
+  }
+  if (addBox) {
     note(`点「添加养生记录」@ ${Math.round(addBox.x)},${Math.round(addBox.y)}`);
     // 重构后不再有「选择记录类型」弹层 → 直达表单, 等久一点
     await page.waitForTimeout(8000);
