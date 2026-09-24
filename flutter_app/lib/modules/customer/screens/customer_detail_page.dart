@@ -18,6 +18,14 @@
 //   行动卡**保留在 L0** (CHARTER §1.4 拍板: 行动输出 = 明确的跟进指引必须切 Tab 可见,
 //   不能因为这次诉求把"现在该做"也一起移走 —— 同根 §5「贴告示 ≠ 修复」:
 //   看起来优化了, 实则把既有拍板撤了)。
+//
+// 2026-09-24 接 P1 闭环反馈: 「建任务」后用户看不到建哪了、不知道去哪看。
+//   修法 = 本页从 ConsumerWidget → ConsumerStatefulWidget + 自管 TabController:
+//   - SnackBar 加「查看任务」action, 点了切回记录 Tab 并把「跟进任务」区滚进视口
+//   - 同时补 invalidate(customerFollowUpTasksProvider) 让列表立刻刷新
+//     (对照 customer_activity_cards.dart::showAddFollowUpSheet, 原本漏了)
+//   自管 TabController 之前用 DefaultTabController, 但 SnackBar action 触发后
+//   要调 animateTo + Scrollable.ensureVisible, 没有 controller 句柄做不到。
 // ============================================
 
 import 'package:dio/dio.dart';
@@ -59,93 +67,131 @@ import '../../../core/widgets/b2_no_chrome.dart';
 // CustomerDetailPage (详情 + 3 Tab)
 // ============================================
 
-class CustomerDetailPage extends ConsumerWidget {
+class CustomerDetailPage extends ConsumerStatefulWidget {
   final String customerId;
   const CustomerDetailPage({super.key, required this.customerId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CustomerDetailPage> createState() => CustomerDetailPageState();
+}
+
+/// 公开 State 类名 (= ConsumerState<CustomerDetailPage>)
+///   · 给 widget test 用: `tester.state<CustomerDetailPageState>(...)` 直接拿 controller
+///   · 也方便外部拿 BuildContext 更细 (e.g. 滚动协调)
+///   · 类名公开是 Flutter 常规习惯 (名字带下划线是 dart-private, 同 library 外不可见)
+class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+  final GlobalKey _followUpKey = GlobalKey();
+
+  /// 本页绑定的客户 ID —— 从 widget 透传, 避免满文件 `widget.customerId` 噪
+  String get customerId => widget.customerId;
+
+  /// 给 widget test 暴露 controller (tester.state<...>().tabController.index = N)
+  TabController get tabController => _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    // ⚠ 不用 DefaultTabController 是有意的 —— SnackBar「查看任务」action 要
+    //   animateTo(0) + Scrollable.ensureVisible, 没有 controller 句柄做不了。
+    //   同步换 StatefulWidget + dispose (本页生命周期跟 route 同生同死, 内存
+    //   leak 风险已退到路由层级, Flutter framework 管)。
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final asyncCustomer = ref.watch(customerDetailProvider(customerId));
 
     // P2 (主人 2026-09-23 + 2026-09-24 拍): 单页 11 section 堆叠 → L0 + 3 Tab
     //
-    // 为什么用 DefaultTabController 而不是自己管 TabController:
-    //   不需要 StatefulWidget / TickerProvider / dispose —— 本页没有
-    //   "记住用户选了哪个 Tab" 的需求, 少一份生命周期就少一类 bug。
+    // 为什么用自管 TabController 而不是 DefaultTabController:
+    //   2026-09-24 P1 闭环诉求: 「建任务」 SnackBar 的「查看任务」action 要
+    //   切回「记录」Tab + 滚动到「跟进任务」区, 这两步都要 controller 句柄:
+    //     · _tabController.animateTo(0)
+    //     · _followUpKey.currentContext → Scrollable.ensureVisible
+    //   既然必须 StatefulWidget, 就一并把 animateTo 拿到手 (后面跟 TabBar/View
+    //   显式绑 controller, 不再用 DefaultTabController.of 兜底)。
     //
     // 为什么 L0 (行动卡) 在 TabBarView **外面**:
     //   CHARTER §1.4 的「行动输出 = 明确的跟进指引」必须**切 Tab 也可见** ——
     //   放进任一 Tab 里就等于"只有切到那个 Tab 才看得到", 又退回"要滚才看见"的老毛病。
     //   评分卡则在「分析」Tab 内 (主人 2026-09-24 拍: 评分是参考, 不是日常产出,
     //   三个 Tab 都有评分环 = 反 vibe)。
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          // 标题 = **当前客户的姓名** (主人 2026-09-24 拍):
-          //   原来固定写「客户详情」—— 但销售经常同时开着好几个客户的详情页 /
-          //   从中转/搜索结果点进来, 顶部不写名字就不知道在谁那里 (得往下滚看一眼 L0)。
-          //   与 body 同一套 `asyncCustomer.maybeWhen`: 还没拿到数据时回落通用文案,
-          //   避免顶部空一块 (与 AppBar.bottom 只在 data 分支出 Tab 同一思路)。
-          //   ⚠ 不写 fontSize / color —— 让 AppBarTheme.titleTextStyle 管样式
-          //   (写死字号会绕过字号档位, 也是护栏 `flutter.fontSize` 盯的项)。
-          title: asyncCustomer.maybeWhen(
-            data: (c) => Text(
-              c.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            orElse: () => const Text('客户详情'),
+    return Scaffold(
+      appBar: AppBar(
+        // 标题 = **当前客户的姓名** (主人 2026-09-24 拍):
+        //   原来固定写「客户详情」—— 但销售经常同时开着好几个客户的详情页 /
+        //   从中转/搜索结果点进来, 顶部不写名字就不知道在谁那里 (得往下滚看一眼 L0)。
+        //   与 body 同一套 `asyncCustomer.maybeWhen`: 还没拿到数据时回落通用文案,
+        //   避免顶部空一块 (与 AppBar.bottom 只在 data 分支出 Tab 同一思路)。
+        //   ⚠ 不写 fontSize / color —— 让 AppBarTheme.titleTextStyle 管样式
+        //   (写死字号会绕过字号档位, 也是护栏 `flutter.fontSize` 盯的项)。
+        title: asyncCustomer.maybeWhen(
+          data: (c) => Text(
+            c.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          toolbarHeight: AppSize.appBarHeight,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.edit, size: AppSize.iconXl),
-              tooltip: '编辑',
-              onPressed: () => context.push('/customers/$customerId/edit'),
-            ),
-          ],
-          // Tab 只在数据就绪后出现 (加载中/出错时没有东西可切, 显示 Tab 反而误导)
-          bottom: asyncCustomer.maybeWhen(
-            data: (_) => const TabBar(
-              tabs: [
-                Tab(text: '记录'),
-                Tab(text: '分析'),
-                Tab(text: '管理'),
-              ],
-            ),
-            orElse: () => null,
-          ),
+          orElse: () => const Text('客户详情'),
         ),
-        body: asyncCustomer.when(
-          loading: () => const LoadingState(),
-          error: (e, _) => ErrorState(error: e),
-          data: (customer) => Column(
-            children: [
-              // L0: 行动输出卡「现在该做」(切 Tab 可见 —— CHARTER §1.4 拍板)
-              // 评分卡不在这里: 它只放在「分析」Tab (主人 2026-09-24 拍)。
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, 0),
-                child: CustomerInsightActions(
-                  customerId: customerId,
-                  onBuildTask: (action) =>
-                      _buildTaskFromAction(context, ref, action),
-                  onClaim: (action) =>
-                      _claimFromAction(context, ref, action),
-                ),
-              ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _buildRecordTab(context, ref, customer),
-                    _buildAnalysisTab(context, ref, customer),
-                    _buildManagementTab(context, ref, customer),
-                  ],
-                ),
-              ),
+        toolbarHeight: AppSize.appBarHeight,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit, size: AppSize.iconXl),
+            tooltip: '编辑',
+            onPressed: () => context.push('/customers/$customerId/edit'),
+          ),
+        ],
+        // Tab 只在数据就绪后出现 (加载中/出错时没有东西可切, 显示 Tab 反而误导)
+        bottom: asyncCustomer.maybeWhen(
+          data: (_) => TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: '记录'),
+              Tab(text: '分析'),
+              Tab(text: '管理'),
             ],
           ),
+          orElse: () => null,
+        ),
+      ),
+      body: asyncCustomer.when(
+        loading: () => const LoadingState(),
+        error: (e, _) => ErrorState(error: e),
+        data: (customer) => Column(
+          children: [
+            // L0: 行动输出卡「现在该做」(切 Tab 可见 —— CHARTER §1.4 拍板)
+            // 评分卡不在这里: 它只放在「分析」Tab (主人 2026-09-24 拍)。
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, 0),
+              child: CustomerInsightActions(
+                customerId: customerId,
+                onBuildTask: (action) =>
+                    _buildTaskFromAction(context, ref, action),
+                onClaim: (action) =>
+                    _claimFromAction(context, ref, action),
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildRecordTab(context, ref, customer),
+                  _buildAnalysisTab(context, ref, customer),
+                  _buildManagementTab(context, ref, customer),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -182,7 +228,9 @@ class CustomerDetailPage extends ConsumerWidget {
       _buildWellnessSection(context, ref, asyncRecords),
       const SizedBox(height: AppSpace.cardGap),
       // 跟进任务 (该客户待办, 可直接勾完成)
-      CustomerFollowUpSection(customerId: customerId),
+      // ★ GlobalKey: 让 SnackBar「查看任务」能拿到对的上
+      //   (切到「记录」Tab 后, Scrollable.ensureVisible 用 key 定位到「跟进任务」区)
+      CustomerFollowUpSection(key: _followUpKey, customerId: customerId),
       const SizedBox(height: AppSpace.cardGap),
       // 互动记录 (电话/微信/到店流水)
       CustomerInteractionSection(customerId: customerId),
@@ -301,6 +349,13 @@ class CustomerDetailPage extends ConsumerWidget {
   /// 为什么这是 P1 的核心: CHARTER §1.4 要求"明确的**可落地**跟进指引"。
   ///   只给一段话术 = 不可勾选/不可追踪; 建了任务才有 dueAt + 状态 + 完成回写,
   ///   完成率还会反哺下一轮评分的「任务健康」因子。
+  ///
+  /// 2026-09-24 P1 闭环反馈修: 原本只 invalidate 洞察, **漏** invalidate
+  /// `customerFollowUpTasksProvider` → 「记录」Tab 的「跟进任务」列表停留旧数据
+  /// (销售以为没建成功, 反复点「建任务」)。对照 `customer_activity_cards.dart`
+  /// 里 `showAddFollowUpSheet` 的做法: 也 invalidate 跟进任务列表。
+  /// SnackBar 同步升级: 加上「查看任务」action, 点了切回记录 Tab 并把
+  /// 「跟进任务」滚进视口 —— 不再让用户「建完了不知道怎么找」。
   Future<void> _buildTaskFromAction(
     BuildContext context,
     WidgetRef ref,
@@ -318,11 +373,20 @@ class CustomerDetailPage extends ConsumerWidget {
           props: {'from': 'insight_action', 'rule': action.id});
       // 任务列表 / 洞察都刷新 (洞察的"任务健康"因子会变)
       ref.invalidate(customerInsightProvider(customerId));
+      // ★ 跟进任务列表同步刷 (之前漏, 详见本函数头注释)
+      ref.invalidate(customerFollowUpTasksProvider(customerId));
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
-          content: Text('已建任务「${action.taskTitle}」',
-              style: const TextStyle(fontSize: AppType.md)),
+          content: Text(
+            '已建任务「${action.taskTitle}」· ${DateFormat('MM-dd').format(dueAt)} 到期',
+            style: const TextStyle(fontSize: AppType.md),
+          ),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: '查看任务',
+            onPressed: _revealFollowUpSection,
+          ),
         ),
       );
     } catch (e) {
@@ -334,6 +398,46 @@ class CustomerDetailPage extends ConsumerWidget {
         ),
       );
     }
+  }
+
+  /// 「查看任务」= 切回「记录」Tab + 把「跟进任务」滚进视口
+  ///
+  /// ⚠ **不要用无界 sleep 猜时间** (同 AGENTS §5「等构建用 sleep N 猜时间」教训):
+  ///   有界轮询 (上限 1s, 50ms 步进), 拿到 context 就收手, 拿不到安静放弃不崩。
+  ///
+  /// 拆成两段:
+  ///   1. 切 Tab: 如果已在 index 0 不动, 否则 animateTo(0) 后等 animation 走完 (至多 1s)
+  ///   2. 滚动: 轮询 `_followUpKey.currentContext` —— TabBarView 懒构建, 刚切过去
+  ///     那一帧记录 Tab 还没构建, 必须等; 用 GlobalKey 绑的是 CustomerFollowUpSection
+  ///     自身, context 就位后 Scrollable.ensureVisible 走最近 Scrollable 祖先
+  ///     (记录 Tab 的 SingleChildScrollView), 滚到目标 0.15 位置。
+  ///
+  /// 拿不到 context 的安全网: TabBarView 已销毁/PageStorage 没建立 → 静默放弃,
+  ///   不抛 (用户至少能看到「已建任务」文案 + 切回了「记录」Tab, 任务也会自刷)。
+  Future<void> _revealFollowUpSection() async {
+    if (_tabController.index != 0) {
+      _tabController.animateTo(0);
+      // 等动画完成 (animateTo 走的 Curve.easeOut, 默认 ~300ms; 留 1s 余裕)
+      for (var i = 0; i < 20; i++) {
+        if (_tabController.index == 0) break;
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    }
+    // 轮询拿到 CustomerFollowUpSection 的 BuildContext
+    for (var i = 0; i < 20; i++) {
+      final ctx = _followUpKey.currentContext;
+      if (ctx != null) {
+        await Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+          alignment: 0.15,
+        );
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    // 拿不到 context → 安静放弃 (不抛), Tab 已切回, 任务列表本身也会自刷
   }
 
   /// 养生记录区: 汇总 + 最近 5 条 + 入口

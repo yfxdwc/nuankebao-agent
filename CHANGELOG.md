@@ -2,6 +2,40 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 建任务后的确认与引导 (2026-09-24)
+
+主人 2026-09-24 反馈: 客户详情页 L0 行动卡点「建任务」后, 除了卡片消失,
+**没有其他任务引导或提示** —— 用户不知道任务建到哪了、何时到期、去哪看。
+
+### 根因 (双线)
+
+1. **任务列表没刷新**: `customer_detail_page.dart::_buildTaskFromAction` 建完任务只
+   `ref.invalidate(customerInsightProvider)`, **漏** `customerFollowUpTasksProvider`
+   → 「记录」Tab 的「跟进任务」列表停留旧数据。对照 `customer_activity_cards.dart`
+   里 `showAddFollowUpSheet` 的标准做法 (两处都 invalidate)。
+2. **没引导入口**: SnackBar 只有 `已建任务「${action.taskTitle}」` —— 没到期日,
+   没「去哪看」按钮。
+
+### 修法
+
+| 文件 | 改动 | 说明 |
+|---|---|---|
+| `flutter_app/lib/modules/customer/screens/customer_detail_page.dart` | ConsumerWidget → ConsumerStatefulWidget | 自管 TabController (否则 SnackBar action 触发后没法调 `animateTo(0)` + `Scrollable.ensureVisible`) |
+| `flutter_app/lib/modules/customer/screens/customer_detail_page.dart` | 加 `GlobalKey _followUpKey` | 绑 `CustomerFollowUpSection` → 给 `Scrollable.ensureVisible` 定位 |
+| `flutter_app/lib/modules/customer/screens/customer_detail_page.dart` | 加 `_revealFollowUpSection()` | 有界轮询 (上限 1s, 50ms 步进) 拿 context; 不要用无界 sleep 猜时间 (同 AGENTS §5「等构建用 sleep N 猜时间」反模式) |
+| `flutter_app/lib/modules/customer/screens/customer_detail_page.dart` | `_buildTaskFromAction` 加 `invalidate(customerFollowUpTasksProvider)` | 跟进任务列表同步刷 |
+| `flutter_app/lib/modules/customer/screens/customer_detail_page.dart` | SnackBar 加 `duration: 6s` + `SnackBarAction(label: '查看任务', onPressed: _revealFollowUpSection)` | 文案补「到期日」; action 切 Tab + 滚到跟进任务区 |
+| `flutter_app/test/customer_detail_tabs_test.dart` | 加 ⑦a/⑦b/⑦c 三例 | SnackBar 文案 + 切 Tab + 验 create 被调用 |
+
+### 验证结果
+
+- `flutter analyze` 0 issue (lib/ + test/)
+- `flutter test test/customer_detail_tabs_test.dart` 6/6 全绿
+  (含 ⑦a SnackBar 文案 / ⑦b 切回记录 Tab / ⑦c `followUpService.create` 被调用)
+- `tools/check-ui-tokens.sh --strict` exit 0 (无新增硬编码色/字/间距, 不加 Card)
+- 同步跑 `customer_insight_actions_test.dart` + `customer_score_card_test.dart` +
+  `customer_detail_title_test.dart` 全绿 27/27
+
 ## [Unreleased] — 客户详情页: 评分卡只在「分析」Tab (2026-09-24)
 
 主人 2026-09-24 拍: 「评分卡」只允许出现在「分析」Tab, 三个 Tab 都有 = 反 vibe;

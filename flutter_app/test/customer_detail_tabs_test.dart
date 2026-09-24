@@ -40,8 +40,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuankebao/core/models/customer.dart';
 import 'package:nuankebao/core/models/customer_insight.dart';
+import 'package:nuankebao/core/models/follow_up.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/providers/settings_provider.dart';
+import 'package:nuankebao/core/services/api.dart';
 import 'package:nuankebao/core/theme/app_theme.dart';
 import 'package:nuankebao/core/theme/tokens.g.dart';
 import 'package:nuankebao/modules/customer/screens/customer_detail_page.dart';
@@ -124,6 +126,39 @@ class _AlwaysFailAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
+// ---------- 假 FollowUpService: 记 create 调用 + list 返回空 ----------
+//
+// 为什么 override `followUpServiceProvider` 而不是只 inject Dio:
+//   要验证「建任务」调用了 `followUpServiceProvider.create()`, 需要让 fake 服务
+//   **记录** 调用参数。其他方法 (list/complete/cancel) 走假实现返回空 list
+//   或仅继原型, 都是为了不让 dio 503 拖崩 CustomerFollowUpSection
+//   (section 在加载中/error 都会渲染占位, key 仍在树上, 不影响 ensureVisible 验证)。
+class _FakeFollowUpService extends FollowUpService {
+  _FakeFollowUpService() : super(Dio()); // never used, 所有请求都在下面 override
+
+  final List<Map<String, dynamic>> createCalls = [];
+  int listCalls = 0;
+
+  @override
+  Future<FollowUpTask> create(Map<String, dynamic> data) async {
+    createCalls.add(Map<String, dynamic>.from(data));
+    return FollowUpTask(
+      id: 'fake-task-${createCalls.length}',
+      customerId: data['customerId'] as String,
+      dueAt: DateTime.tryParse(data['dueAt'] as String? ?? '') ?? DateTime(2026, 9, 23),
+      reason: data['reason'] as String? ?? '',
+      status: 'pending',
+      createdAt: DateTime(2026, 9, 22),
+    );
+  }
+
+  @override
+  Future<List<FollowUpTask>> list({String? customerId, String status = 'pending'}) async {
+    listCalls++;
+    return const [];
+  }
+}
+
 // ---------- pump helper ----------
 
 Future<void> _pumpPage(WidgetTester tester) async {
@@ -154,6 +189,37 @@ Future<void> _pumpPage(WidgetTester tester) async {
   });
 }
 
+/// 泵 详情页 + 注入假 FollowUpService (用于 ⑦ 验证建任务路径)
+Future<void> _pumpPageWithFakeFollowUp(
+  WidgetTester tester, {
+  required _FakeFollowUpService fake,
+}) async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  final dio = Dio(BaseOptions(baseUrl: 'http://test.local/api'))
+    ..httpClientAdapter = _AlwaysFailAdapter();
+  await tester.pumpWidget(ProviderScope(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      dioProvider.overrideWithValue(dio),
+      followUpServiceProvider.overrideWithValue(fake),
+      customerDetailProvider('798')
+          .overrideWith((ref) async => _customer()),
+      customerInsightProvider('798')
+          .overrideWith((ref) async => _insightWithActions()),
+    ],
+    child: MaterialApp(
+      theme: AppTheme.light(AppThemes.sage),
+      home: const CustomerDetailPage(customerId: '798'),
+    ),
+  ));
+  await tester.runAsync(() async {
+    await tester.pump();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await tester.pump();
+  });
+}
+
 // ---------- 切 Tab helper ----------
 
 /// 切 Tab (0=记录 / 1=分析 / 2=管理) 通过 controller 直接调 index。
@@ -161,10 +227,15 @@ Future<void> _pumpPage(WidgetTester tester) async {
 /// ⚠ TabBar 内部手势检测在 fake_async + runAsync 组合下不容易触发;
 ///   animateTo 也靠帧推进, 在 widget test 中经常无法完成动画。
 ///   直接 .index = N + pump 是最可靠的跳页方式。
+///
+/// 2026-09-24: 详情页改为 ConsumerStatefulWidget + 自管 TabController,
+///   `DefaultTabController.of(ctx)` 不可用 —— 改为拿 State 句柄
+///   (`tester.state<CustomerDetailPageState>(find.byType(CustomerDetailPage))`)
+///   调 `tabController.index`。
 Future<void> _tapTab(WidgetTester tester, int index) async {
-  final BuildContext ctx = tester.element(find.byType(TabBar));
-  final controller = DefaultTabController.of(ctx);
-  controller.index = index;
+  final state =
+      tester.state<CustomerDetailPageState>(find.byType(CustomerDetailPage));
+  state.tabController.index = index;
   // PageView 需要一些帧重建子页 + 懒加载 build 新 Tab
   for (var i = 0; i < 5; i++) {
     await tester.pump();
@@ -251,4 +322,121 @@ void main() {
       expect(find.text('建任务'), findsOneWidget);
     },
   );
+
+  // ============================================
+  // ⑦ 建任务后的确认与引导 (2026-09-24 P1 闭环反馈)
+  //
+  // 主人原话: 「建任务后除了卡片消失, 没有其他任务引导或提示。
+  //   用户不知道任务建到哪了、何时到期、去哪看。」
+  //
+  // 守什么:
+  //   ⑦a 建任务成功后 SnackBar 出现, 文案含「已建任务」+「到期」+「查看任务」action
+  //       (同根: 「该做的事」没明示下一步 = 用户发呆重复点「建任务」)
+  //   ⑦b 点「查看任务」 → 切回记录 Tab (tabController.index == 0)
+  //       (验证 _revealFollowUpSection 路径 + GlobalKey + Scrollable.ensureVisible 不拋)
+  //   ⑦c followUpServiceProvider.create 被调用 (路径不止走到 UI, 真到了 service 层)
+  //
+  // 仍遵守本文件约定: 不用 pumpAndSettle (indeterminate 动画会永不返回),
+  //   改用 pump + pump(Duration) 推进; SnackBar/动画/scroll 用有界重试。
+  // ============================================
+  group('⑦ 建任务后的确认与引导 (P1 闭环反馈)', () {
+    testWidgets(
+      '⑦a 建任务成功 → SnackBar 文案含「已建任务」+「到期」+「查看任务」action',
+      (tester) async {
+        final fake = _FakeFollowUpService();
+        await _pumpPageWithFakeFollowUp(tester, fake: fake);
+
+        // 点 L0 「建任务」 (行动卡一直可见, CHARTER §1.4 拍板)
+        await tester.tap(find.text('建任务'));
+        // 给 SnackBar / Future 几个帧推进 (建任务本身走 dio, SnackBar 需要动画到位)
+        for (var i = 0; i < 8; i++) {
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+
+        // ⚠ 锁 SnackBar 内的文本 (不动行动卡里那个「已建任务」状态小字):
+        //   行动卡建成功后也会出「已建任务」三字, 与 SnackBar 文案同名,
+        //   不用 descendant 锁会被凑成 2 个 text 报 too many。
+        final snackBarText = find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.byType(Text),
+        );
+        expect(snackBarText, findsWidgets,
+            reason: 'SnackBar 至少一个 Text');
+        final allSnackTexts = snackBarText
+            .evaluate()
+            .map((e) => (e.widget as Text).data ?? '')
+            .join(' | ');
+        expect(allSnackTexts, contains('已建任务'),
+            reason: 'SnackBar 应明确告知已建任务');
+        expect(allSnackTexts, contains('到期'),
+            reason: 'SnackBar 应告知到期日 (修复诉求: 用户不知「何时到期」)');
+        expect(allSnackTexts, contains('约下次到店'),
+            reason: 'SnackBar 应显示任务标题');
+        expect(allSnackTexts, contains('09-23'),
+            reason: 'SnackBar 应显示到期日 (本任务 taskDueAt=2026-09-23)');
+        // action: SnackBarAction 渲染为 TextButton, label 为「查看任务」
+        expect(find.widgetWithText(TextButton, '查看任务'), findsOneWidget,
+            reason: '修复诉求: 提供「去哪看」入口');
+      },
+    );
+
+    testWidgets(
+      '⑦b 点「查看任务」 → 切回记录 Tab (tabController.index == 0)',
+      (tester) async {
+        final fake = _FakeFollowUpService();
+        await _pumpPageWithFakeFollowUp(tester, fake: fake);
+
+        // 先手动切到「分析」Tab (默认在 0, 需要跳走才能验证「切回」)
+        await _tapTab(tester, 1);
+        final before = tester
+            .state<CustomerDetailPageState>(find.byType(CustomerDetailPage));
+        expect(before.tabController.index, 1,
+            reason: '预条件: 已在分析 Tab 才能验证「切回记录」');
+
+        // 点 L0 「建任务」 —— L0 切 Tab 可见 (CHARTER §1.4)
+        await tester.tap(find.text('建任务'));
+        for (var i = 0; i < 8; i++) {
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+
+        // 点「查看任务」action —— 原本用户「在分析 Tab 点建任务, 回到记录看新任务」
+        await tester.tap(find.widgetWithText(TextButton, '查看任务'));
+        // 让 animateTo + Scrollable.ensureVisible + Future.delayed 走完
+        for (var i = 0; i < 20; i++) {
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+
+        final after = tester
+            .state<CustomerDetailPageState>(find.byType(CustomerDetailPage));
+        expect(after.tabController.index, 0,
+            reason: '点「查看任务」 → 切回记录 Tab (验证 _revealFollowUpSection)');
+      },
+    );
+
+    testWidgets(
+      '⑦c followUpServiceProvider.create 被调用 + customerId/reason/dueAt 都对',
+      (tester) async {
+        final fake = _FakeFollowUpService();
+        await _pumpPageWithFakeFollowUp(tester, fake: fake);
+
+        await tester.tap(find.text('建任务'));
+        for (var i = 0; i < 8; i++) {
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+
+        expect(fake.createCalls, hasLength(1),
+            reason: '「建任务」应走 followUpServiceProvider.create (闭环要点)');
+        final call = fake.createCalls.single;
+        expect(call['customerId'], '798');
+        expect(call['reason'], '约下次到店',
+            reason: '传 action.taskTitle 作为任务原因');
+        expect(call['dueAt'], isNotNull,
+            reason: '传 action.taskDueAt 转 UTC ISO 字符串');
+      },
+    );
+  });
 }
