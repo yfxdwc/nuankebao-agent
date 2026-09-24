@@ -378,8 +378,10 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
+          // ⚠ 2026-09-24: UTC → local, 跟 _tile 文案同口径,
+          //   CST 早晨 00:00-08:00 拿 UTC 直接出年月日的「-1 天」坑。
           content: Text(
-            '已建任务「${action.taskTitle}」· ${DateFormat('MM-dd').format(dueAt)} 到期',
+            '已建任务「${action.taskTitle}」· ${DateFormat('MM-dd').format(dueAt.toLocal())} 到期',
             style: const TextStyle(fontSize: AppType.md),
           ),
           duration: const Duration(seconds: 6),

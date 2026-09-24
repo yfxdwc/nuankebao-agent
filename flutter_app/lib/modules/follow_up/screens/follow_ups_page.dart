@@ -50,10 +50,11 @@ class FollowUpsPage extends ConsumerWidget {
   static const _groups = ['逾期', '今天', '明天', '本周', '更远'];
 
   String _groupOf(DateTime dueAt) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final due = DateTime(dueAt.year, dueAt.month, dueAt.day);
-    final diff = due.difference(today).inDays;
+    // 2026-09-24 用户反馈修: 旧实现自己 `DateTime(d.year, m, d)` 没 `.toLocal()`,
+    //   API 回 UTC 的 dueAt 在 CST 早晨会被错排到「逾期」 (跨日)。
+    //   改走 `followUpDaysUntilDue`: 与 `customer_activity_cards._tile` 同口径,
+    //   都按本地日期比, 都与后端 `analysis.ts::daysBetween > 0` 同语义。
+    final diff = followUpDaysUntilDue(dueAt);
     if (diff < 0) return '逾期';
     if (diff == 0) return '今天';
     if (diff == 1) return '明天';

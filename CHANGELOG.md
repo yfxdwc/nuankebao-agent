@@ -2,6 +2,42 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 任务"当天到期"不再是已过期 (2026-09-24)
+
+主人 2026-09-24 反馈: 行动卡点「建任务」后, 任务**创建时**就被标成「已过期」,
+但语义上"今天的待办"应该是「今天到期」。
+
+### 根因 (双线)
+
+1. **时间戳比较 vs 日期比较**:
+   `customer_activity_cards.dart::_tile` 旧逻辑 `t.dueAt.isBefore(DateTime.now())`
+   按毫秒比 → 行动建时 `taskDueAt=now.toISOString()` (当下时刻), 凭据返回列表后
+   再拉一次 `dueAt.isBefore(now)` = **比的是"建单那一秒"和"列表那一秒"**, 任何
+   一秒后就判"已过期", 即使日期都是同一天。
+2. **UTC 未转本地**: API 返的是 UTC ISO (`follow_up.g.dart` 用 `DateTime.parse(json['dueAt'])`),
+   之前直接用 `.year/.month/.day` 拿 UTC 那一天的年月日 → CST (UTC+8) 本地 00:00-08:00
+   看到的 UTC 还是「昨天」, 本来"今天到期"的任务会被判成"逾期」。
+3. **后端口径不一致**: 后端 `analysis.ts` / `urgency.ts` 用 `daysBetween` 按**日期**
+   比 (`d > 0 = 已逾期`), Flutter 端却按时间戳比 —— 两边口径分叉, 详情页"已过期"
+   而任务列表「今天」会同时出现。
+
+### 修法
+
+| 文件 | 改动 | 说明 |
+|---|---|---|
+| `flutter_app/lib/core/models/follow_up.dart` | 加 3 个顶层帮助函数 | `followUpDueDay` / `followUpDaysUntilDue` / `isFollowUpOverdue` —— 统一日期口径 + `.toLocal()` 防跨日坑 |
+| `flutter_app/lib/modules/customer/widgets/customer_activity_cards.dart` `_tile` | 用 `isFollowUpOverdue` + 新文案 | 逾期 → `MM-dd · 已过期` / 今天 → `今天到期` / 明天 → `明天到期` / 其他 → `MM-dd 到期` |
+| `flutter_app/lib/modules/follow_up/screens/follow_ups_page.dart` `_groupOf` | 用 `followUpDaysUntilDue` | 跟进待办页分组与客户详情同口径 (同根: 同一任务在详情页「今天」列表页「逾期」) |
+| `flutter_app/lib/modules/customer/screens/customer_detail_page.dart` `_buildTaskFromAction` | SnackBar 日期 `.toLocal()` | 跨日文案与 _tile 一致 |
+| `flutter_app/test/follow_up_due_test.dart` | **新建** | 纯函数单测 (今天不逾期 / 昨天逾期 / 跨日边界 / UTC 转本地) |
+| `flutter_app/test/customer_follow_up_section_test.dart` | **新建** | widget 测试 (真主题 + 假 FollowUpService): 逾期 / 今天 / 明天 / 更远 / 同表双分支 5 例 |
+
+### 验证结果
+
+- `flutter analyze` 0 issue (lib/ + test/)
+- `flutter test test/follow_up_due_test.dart test/customer_follow_up_section_test.dart test/customer_detail_tabs_test.dart` 全绿
+- `tools/check-ui-tokens.sh --strict` exit 0 (无新增硬编码色/字/间距, 不加 Card)
+
 ## [Unreleased] — 建任务后的确认与引导 (2026-09-24)
 
 主人 2026-09-24 反馈: 客户详情页 L0 行动卡点「建任务」后, 除了卡片消失,

@@ -247,7 +247,18 @@ class _CustomerFollowUpSectionState
   }
 
   Widget _tile(FollowUpTask t, DateFormat fmt) {
-    final overdue = t.dueAt.isBefore(DateTime.now());
+    // 2026-09-24 用户反馈修: 旧逻辑 `t.dueAt.isBefore(DateTime.now())` 按时间戳比,
+    //   建完下一秒就误判"已过期"。改走日期口径 (`isFollowUpOverdue` = 与后端
+    //   `urgency.ts::daysBetween > 0` 同口径), 今天 / 明天 / 更远 文案分开。
+    final overdue = isFollowUpOverdue(t.dueAt);
+    final daysUntil = followUpDaysUntilDue(t.dueAt);
+    final dueLabel = overdue
+        ? '${fmt.format(t.dueAt.toLocal())} · 已过期'
+        : daysUntil == 0
+            ? '今天到期'
+            : daysUntil == 1
+                ? '明天到期'
+                : '${fmt.format(t.dueAt.toLocal())} 到期';
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpace.s8),
       padding: const EdgeInsets.all(AppSpace.s12),
@@ -275,7 +286,7 @@ class _CustomerFollowUpSectionState
                 ),
                 const SizedBox(height: AppSpace.s4),
                 Text(
-                  '${fmt.format(t.dueAt)} ${overdue ? '· 已过期' : '到期'}',
+                  dueLabel,
                   style: TextStyle(
                     fontSize: AppTheme.fontXs,
                     color: overdue ? AppTheme.danger : AppTheme.textSecondary,
