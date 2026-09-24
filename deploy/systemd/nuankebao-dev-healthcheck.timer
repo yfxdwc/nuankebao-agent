@@ -1,0 +1,11 @@
+[Unit]
+Description=暖客宝 dev 健康检查 (每 2 分钟)
+
+[Timer]
+# dev 进程卡死后, 2 分钟内必须被发现并救活
+OnCalendar=*:0/2
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=default.target

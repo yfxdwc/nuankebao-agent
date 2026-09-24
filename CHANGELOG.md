@@ -2,6 +2,70 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — dev 3003 健康守护 (2026-09-24)
+
+主人 2026-09-24 提问: 「/app-preview 又挂了吗, 没有系统守护吗」
+
+### 背景
+
+- dev 的 Next.js (3003, `nuankebao-nextjs.service`) 因 `next dev` 内存涨到 1.5G 卡死:
+  进程**还活着但 HTTP 不响应**; `systemctl ... Restart=always` 只在进程**退出**时生效,
+  救不了「进程活着但卡死」的状态 → `/app-preview` / `/login` / `/admin` 全部 500 或挂死.
+- 生产栈**已有**守护: `deploy/prod-healthcheck.sh` + `nuankebao-prod-healthcheck.{service,timer}`
+  (每 5 分钟查 `127.0.0.1:3004/api/health`). dev 3003 没有 → 本任务补同款.
+
+### 做法
+
+新增三件套 (与 prod 同模板, 但冷编译窗口更长 + 加冷却保护):
+
+| 文件 | 角色 |
+|---|---|
+| `deploy/dev-healthcheck.sh` | curl 探活 + 冷却判定 + restart + 3 次复检 |
+| `deploy/systemd/nuankebao-dev-healthcheck.service` | oneshot, `run-with-log.sh` 包日志 |
+| `deploy/systemd/nuankebao-dev-healthcheck.timer` | **每 2 分钟** (`OnCalendar=*:0/2`, `Persistent=true`) |
+
+关键决定:
+- **频率 2 分钟** (vs prod 5 分钟): dev 卡死后必须更短窗口发现 (主人提「又挂了」= 反应不够快);
+  prod 是 docker container, restart 几秒就好, 容忍 5 分钟.
+- **冷却 5 分钟** (`DEV_HEALTH_COOLDOWN_SECONDS=300`): 读
+  `systemctl --user show -p ActiveEnterTimestamp --value nuankebao-nextjs.service`,
+  距上次进入 active < 300s → 写 `[SKIP]` 后 exit 0, **不重启**.
+  防 systemd `RestartSec=30` 自动救活 + 我们 2 分钟再 restart 叠加 → 服务永远在冷编译里出不来.
+- **冷编译等待**: restart 后最多 3 次 × sleep 15s + curl -m 15 = 45s 总窗口
+  (next dev 首次 `/login` 触发 webpack 冷编译实测 10-30s).
+- **只动 dev**: `systemctl --user restart nuankebao-nextjs.service`, 绝不碰 prod 容器.
+- **日志**: `~/nuankebao-databackups/logs/dev-healthcheck.log` (跟 prod 同根目录, 不同子文件).
+
+### 与 prod-healthcheck 分工
+
+| 维度 | dev (本任务) | prod (2026-09-19 P3) |
+|---|---|---|
+| 触发频率 | 每 2 分钟 | 每 5 分钟 |
+| 探活 URL | `127.0.0.1:3003/login` | `127.0.0.1:3004/api/health` |
+| 重启目标 | `nuankebao-nextjs.service` (host) | `nuankebao-prod-web` (docker) |
+| 冷却保护 | ✅ 5 分钟 | ❌ |
+| 冷启动等待 | 3 × 15s (next dev 冷编译) | 1 × 10s (docker restart) |
+
+两套独立 unit, 互不影响; 一个挂另一个照常跑.
+
+### 验证结果
+
+- `bash -n deploy/dev-healthcheck.sh` exit 0
+- `systemctl --user enable --now nuankebao-dev-healthcheck.timer` → timer 出现
+  在 `list-timers nuankebao-*` 输出
+- 健康路径: `systemctl --user start nuankebao-dev-healthcheck.service` 静默 (exit 0)
+- 失败路径: `DEV_WEB_PORT=3999 DEV_HEALTH_COOLDOWN_SECONDS=0 bash deploy/dev-healthcheck.sh`
+  → 看到 `[WARN]` + 真 restart `nuankebao-nextjs.service` + `[OK]`
+- 冷却路径: 服务刚 restart 后 5 分钟内再跑 → 看到 `[SKIP]` + **不**restart
+- `deploy/install-systemd.sh` 已把新 unit 加入渲染循环 (`for svc` + `for tmr` + `enable --now`),
+  头部注释从 "13 个 unit" 更新为 "14 个 unit"
+
+### 相关文件
+
+- 新增: `deploy/dev-healthcheck.sh` + `deploy/systemd/nuankebao-dev-healthcheck.{service,timer}`
+- 改: `deploy/install-systemd.sh` (渲染循环 + enable 段 + 头部注释)
+- 改: `deploy/README.md` §11 (新章节 "健康守护", 含 dev/prod 对照表 + 排错 + 验收)
+
 ## [Unreleased] — 修「标记完成」400 契约错位 (2026-09-24)
 
 主人 2026-09-24 反馈: 客户详情「跟进任务」点「标记完成」报错。后端日志实证

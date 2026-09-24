@@ -2,11 +2,13 @@
 # ============================================================
 # 暖客宝 备份 systemd user services 安装脚本 (免 sudo)
 #
-# 装什么 (13 个 unit):
+# 装什么 (14 个 unit):
 #   dev:
 #     ~/.config/systemd/user/nuankebao-backup.service           + .timer (每日 03:00)
 #     ~/.config/systemd/user/nuankebao-code-snapshot.service    + .timer (每日 04:00)
 #     ~/.config/systemd/user/nuankebao-restore-verify.service   + .timer (每月第一周日 04:00)
+#     ~/.config/systemd/user/nuankebao-dev-healthcheck.service  + .timer (每 2 分钟, 2026-09-24)
+#       —— next dev 卡死后主动 restart (systemd Restart=always 救不了"进程活着但卡死")
 #   prod (tc Docker 隔离栈, 2026-09-19 P3):
 #     ~/.config/systemd/user/nuankebao-prod-backup.service      + .timer (每日 03:30)
 #     ~/.config/systemd/user/nuankebao-prod-healthcheck.service + .timer (每 5 分钟)
@@ -99,6 +101,7 @@ mkdir -p "$USER_SVC_DIR"
 
 for svc in nuankebao-backup.service nuankebao-code-snapshot.service nuankebao-restore-verify.service \
            nuankebao-prod-backup.service nuankebao-prod-healthcheck.service \
+           nuankebao-dev-healthcheck.service \
            nuankebao-flutter-web-watch.service            nuankebao-followup-tasks.service \
            nuankebao-usage-retention.service; do
     # 用 awk 处理 OFFSITE_DIR 空时删整行 + 路径占位符替换
@@ -124,6 +127,7 @@ done
 echo "==> 复制 timer (timer 无路径占位符, 直接 cp)"
 for tmr in nuankebao-backup.timer nuankebao-code-snapshot.timer nuankebao-restore-verify.timer \
            nuankebao-prod-backup.timer nuankebao-prod-healthcheck.timer \
+           nuankebao-dev-healthcheck.timer \
            nuankebao-followup-tasks.timer nuankebao-usage-retention.timer; do
     cp "$SRC_DIR/$tmr" "$USER_SVC_DIR/"
 done
@@ -141,6 +145,9 @@ systemctl --user enable nuankebao-restore-verify.timer
 # prod (P3): 备份 03:30 + 健康检查每 5 分钟
 systemctl --user enable --now nuankebao-prod-backup.timer
 systemctl --user enable --now nuankebao-prod-healthcheck.timer
+# dev 健康检查 (2026-09-24, 主人提问「/app-preview 又挂了吗, 没有系统守护吗」后补):
+# next dev 卡死后 systemd Restart=always 救不了, 主动 curl 探测 + restart.
+systemctl --user enable --now nuankebao-dev-healthcheck.timer
 # 预览自动重建守护 (常驻; 2026-09-20)
 systemctl --user enable --now nuankebao-flutter-web-watch.service
 # 跟进任务生成 (每日 07:00; 不 --now: 装的时候跑一次没意义, 且会立刻建任务)

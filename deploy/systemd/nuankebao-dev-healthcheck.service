@@ -1,0 +1,15 @@
+[Unit]
+Description=暖客宝 dev 健康检查 (127.0.0.1:3003 /login, 失败重启 nextjs)
+Documentation=file://__PROJECT_DIR__/deploy/README.md
+
+[Service]
+Type=oneshot
+WorkingDirectory=__PROJECT_DIR__
+Environment="PATH=__USER_LOCAL_BIN__:/usr/local/bin:/usr/bin:/bin"
+Environment="DEV_WEB_PORT=3003"
+Environment="DEV_HEALTH_COOLDOWN_SECONDS=300"
+# 2026-09-19: 用 run-with-log.sh 包装 (日志同时进 journal + 文件, 避免 StandardOutput=append 的目录启动依赖)
+ExecStart=__PROJECT_DIR__/deploy/run-with-log.sh __DATABACKUPS_DIR__/logs/dev-healthcheck.log __PROJECT_DIR__/deploy/dev-healthcheck.sh
+SuccessExitStatus=0
+NoNewPrivileges=yes
+PrivateTmp=yes

@@ -260,6 +260,85 @@ cat /home/tooyan/nuankebao-databackups/backup-health/restore-verify.json | jq
 
 ---
 
+## §11. 健康守护 (dev + prod)
+
+> **设计动机**: `systemctl ... Restart=always` 只在**进程退出**时生效;
+> Next.js / Docker 容器**进程还活着但 HTTP 假死** (next dev 涨到 1.5G 卡住 /
+> 容器内进程死锁) 时, systemd 不会救。
+> 本节两个 timer 通过**主动 curl 探测**发现"端口在但不响应", 触发 restart 兜底。
+
+### §11.1 两套守护对照
+
+| 维度 | dev (`nuankebao-dev-healthcheck`) | prod (`nuankebao-prod-healthcheck`) |
+|---|---|---|
+| **何时装** | 2026-09-24 (本任务) | 2026-09-19 P3 |
+| **触发频率** | **每 2 分钟** | 每 5 分钟 |
+| **探活 URL** | `http://127.0.0.1:3003/login` | `http://127.0.0.1:3004/api/health` |
+| **重启目标** | `nuankebao-nextjs.service` (host 进程) | `nuankebao-prod-web` (docker container) |
+| **冷启动等待** | 3 × 15s (next dev 冷编译 10-30s) | 1 × 10s (docker restart 几秒) |
+| **冷却保护** | ✅ 5 分钟 (防 flapping) | ❌ (prod 容器 restart 快, 不需要) |
+| **日志路径** | `~/nuankebao-databackups/logs/dev-healthcheck.log` | `~/nuankebao-databackups/prod/logs/healthcheck.log` |
+| **影响范围** | host dev (3003) | prod 容器 (3004) |
+
+### §11.2 行为细节 (dev)
+
+- **健康** → 静默 exit 0 (不写日志, 免刷屏)
+- **冷却期内** (距 `nuankebao-nextjs.service` 上次进入 active < 300s) → 写一行 `[SKIP]` 后静默退出
+  - 防 systemd `RestartSec=30` 自动救活 + 我们 2 分钟再 restart 叠加 → 服务永远在冷编译里出不来
+- **不健康** → `systemctl --user restart nuankebao-nextjs.service` → 最多 3 次复检 (每次 sleep 15s)
+  - 成功 → `[OK]` 日志
+  - 失败 → `[FATAL]` 日志 + exit 1 (journal 可见)
+
+### §11.3 日常运维
+
+```bash
+# 立刻跑一次 (验证脚本逻辑)
+systemctl --user start nuankebao-dev-healthcheck.service
+
+# 看 timer 状态 + 下次触发
+systemctl --user list-timers 'nuankebao-dev-healthcheck*'
+
+# 看 journal (主通道, 含 stderr)
+journalctl --user -u nuankebao-dev-healthcheck -f
+
+# 看持久化日志 (含 [WARN] / [OK] / [FATAL] / [SKIP] / [RETRY] 标签)
+tail -f ~/nuankebao-databackups/logs/dev-healthcheck.log
+
+# 临时禁用 (排错时, 不要直接 disable timer — 会丢 enable 状态)
+systemctl --user stop nuankebao-dev-healthcheck.timer
+
+# 重新启用
+systemctl --user start nuankebao-dev-healthcheck.timer
+
+# 完全卸掉 (罕见; 重装回 enable --now 即可)
+systemctl --user disable --now nuankebao-dev-healthcheck.timer
+rm ~/.config/systemd/user/nuankebao-dev-healthcheck.{service,timer}
+```
+
+### §11.4 排错速查
+
+| 症状 | 根因 | 修复 |
+|---|---|---|
+| 日志全是 `[SKIP]`, 永不 restart | cooldown 误判 / 服务一直在重启 | 看 `systemctl --user status nuankebao-nextjs` 是否有 `Active: activating` 循环; 或临时 `DEV_HEALTH_COOLDOWN_SECONDS=0 bash deploy/dev-healthcheck.sh` 强测 |
+| `[FATAL] 重启后仍不健康` | next dev 编译卡死 / 端口被占 / 数据库挂了 | `journalctl --user -u nuankebao-nextjs -n 200` + `ss -lntp \| grep 3003` + `curl -v localhost:3003/login` |
+| `[OK]` 频繁出现 (几分钟一次) | next dev 真在周期性卡死 | 看 next 日志 (`/tmp/nuankebao-nextjs.log`); 排查代码 / 临时加 `DEV_HEALTH_COOLDOWN_SECONDS=1800` (30 分钟) 减压 |
+| timer 触发但 service 不跑 | unit 文件未渲染 (占位符还在) | 检查 `~/.config/systemd/user/nuankebao-dev-healthcheck.service` 没有 `__PROJECT_DIR__` 字面量; 重跑 `bash deploy/install-systemd.sh` |
+
+### §11.5 验收清单 (新装 / 改 / 排错后)
+
+- [ ] `bash -n deploy/dev-healthcheck.sh` exit 0
+- [ ] `bash deploy/install-systemd.sh` 全跑成功, 看到 `nuankebao-dev-healthcheck.timer` 在 list-timers 输出
+- [ ] `systemctl --user list-timers 'nuankebao-dev-healthcheck*'` 看到 NEXT/LEFT 列
+- [ ] `systemctl --user start nuankebao-dev-healthcheck.service` 静默 (健康路径)
+- [ ] `DEV_WEB_PORT=3999 DEV_HEALTH_COOLDOWN_SECONDS=0 bash deploy/dev-healthcheck.sh` → 真重启一次, 之后 3003 恢复 200
+      (⚠ 探活 URL 指向空端口 3999 → 日志会走到 `[FATAL]` 而不是 `[OK]` —— 这是脚本按预期工作:
+      它坚持用同一个 URL 复检; 要验 `[OK]` 分支就临时停 nextjs 再让脚本对真 3003 跑)
+- [ ] 服务刚 restart 后 5 分钟内再跑脚本 → 看到 `[SKIP]` 且**不**restart
+- [ ] `journalctl --user -u nuankebao-dev-healthcheck --since "1 hour ago"` 干净 (没有 `[FATAL]`)
+- [ ] `~/nuankebao-databackups/logs/dev-healthcheck.log` 权限 600, 目录 700 (chmod 与 prod 一致)
+
+---
+
 ## 附录 A: 设计原则 (dev-domain-backup §2)
 
 1. **3-2-1 副本** — 至少 3 份 + 2 介质 + 1 离机
