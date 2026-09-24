@@ -196,6 +196,17 @@ describe("queries/interaction", () => {
     );
     expect(missing).toBeNull();
 
+    // 审计断言: update() 触发了 interaction_audit 触发器
+    // ⚠ AGENTS §5: audit_log.record_id 跨表不唯一, 必须带 table_name='interaction'
+    const updateAudits = await db.execute<{ operation: string }>(sql`
+      SELECT operation FROM audit_log
+      WHERE table_name = 'interaction' AND record_id = ${BigInt(i.id)}::bigint
+        AND operation = 'UPDATE'
+    `);
+    const updateRows = updateAudits as unknown as Array<{ operation: string }>;
+    expect(updateRows.length).toBeGreaterThan(0);
+    expect(updateRows[0].operation).toBe("UPDATE");
+
     await cleanup(c.id);
   });
 
@@ -260,6 +271,28 @@ describe("queries/interaction", () => {
       .from(customer)
       .where(eq(customer.id, BigInt(c.id)));
     expect(rowAfterAllDelete.lastInteractionAt).toBeNull();
+
+    // 审计断言: deleteInteraction() 两条都触发了 interaction_audit 触发器
+    // ⚠ AGENTS §5: audit_log.record_id 跨表不唯一, 必须带 table_name='interaction'
+    //   否则会静默拿到别的表同 id 的记录, 看似绿其实验错事
+    const deleteAudits = await db.execute<{ operation: string; record_id: string }>(sql`
+      SELECT operation, record_id::text
+      FROM audit_log
+      WHERE table_name = 'interaction'
+        AND record_id IN (${BigInt(iEarly.id)}::bigint, ${BigInt(iLate.id)}::bigint)
+        AND operation = 'DELETE'
+      ORDER BY id
+    `);
+    const deleteRows = deleteAudits as unknown as Array<{
+      operation: string;
+      record_id: string;
+    }>;
+    // iLate 被删两次, 触发器只会写一次 DELETE (第二次 no-op), iEarly 一次 DELETE → 共 2 条
+    expect(deleteRows.length).toBe(2);
+    expect(deleteRows.every((r) => r.operation === "DELETE")).toBe(true);
+    const deletedIds = new Set(deleteRows.map((r) => r.record_id));
+    expect(deletedIds.has(iEarly.id.toString())).toBe(true);
+    expect(deletedIds.has(iLate.id.toString())).toBe(true);
 
     await cleanup(c.id);
   });

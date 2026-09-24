@@ -235,8 +235,11 @@ class _InteractionSheetState extends State<_InteractionSheet> {
         );
       } else {
         // 部分成功: 任务确实完成了 (不可逆), 但互动没记上 —— 明确告知, 不让用户以为全好
+        // 2026-09-26: interactionError 可能是 dio 抓出来的 500 / network 原始文
+        // (「DioException (... 500)...」 人读不慬) —— 人话化一下, 让用户知道是哪里挂了
+        final human = _humanizeInteractionError(interactionError ?? '未知错误');
         messenger.showSnackBar(
-          SnackBar(content: Text('任务已完成, 但互动记录失败: $interactionError')),
+          SnackBar(content: Text('任务已完成, 但互动记录未保存: $human')),
         );
       }
       return;
@@ -287,6 +290,36 @@ class _InteractionSheetState extends State<_InteractionSheet> {
       return e.response?.statusCode == 402;
     }
     return false;
+  }
+
+  /// 部分成功分支 (任务已完成 + 互动未保存) 的友好文案
+  ///
+  /// 2026-09-26: reviewer 报原本「$interactionError」裸贴 dio 原始文, 用户看不慬。
+  /// 修法: 让人话代替 dio stack:
+  ///   - 会员 (402): 交由 会员提示 (上方另一分支处理), 本函数不重复
+  ///   - 网络/服务器: 取 status code + 接限友好前缀
+  ///   - 其他: 保留原文, 但裁车长度, 避免 SnackBar 被 push 出屏
+  String _humanizeInteractionError(String raw) {
+    // 优先从 dio 异常里抢 statusCode (原串里有 "...502..." 也能挑出来)
+    final codeMatch = RegExp(r'\b(\d{3})\b').firstMatch(raw);
+    final code = codeMatch?.group(1);
+    switch (code) {
+      case '500':
+      case '502':
+      case '503':
+        return '服务器暂不可用 ($code), 联系记录稍后补';
+      case '408':
+      case '504':
+        return '请求超时, 联系记录稍后补';
+      case '429':
+        return '请求太频繁, 联系记录稍后补';
+      case '401':
+      case '403':
+        return '身份过期, 联系记录稍后补';
+    }
+    // 默认: 保留原文但裁到 60 字 + 友好前缀, 避免 SnackBar 过长被裁
+    final trimmed = raw.length > 60 ? '${raw.substring(0, 60)}…' : raw;
+    return '稍后补 ($trimmed)';
   }
 
   @override

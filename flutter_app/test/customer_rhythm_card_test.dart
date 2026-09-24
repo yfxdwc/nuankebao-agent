@@ -192,14 +192,20 @@ void main() {
     expect(find.text('建一条跟进任务'), findsNothing);
   });
 
-  testWidgets('⑥b 紧凑按钮的 label + icon + tap 不崩 (FilledButton.tonalIcon 形态)',
+  testWidgets('⑥b 紧凑按钮 = FilledButton.tonalIcon, onPressed != null, tap 不崩',
       (tester) async {
     // 备注: 直接 pumpBottomSheet 验证 showAddFollowUpSheet 弹层文案——
     //   走不通: Material 3 InkSparkle 触发的 shader 资产
     //   ('shaders/ink_sparkle.frag') 在 headless test 框架里缺失。
     //   真实端到端已由 B4 「flutter build apk + 真机验证」覆盖。
-    //   这里验证按钮的渲染形态 (icon + label) + tap 不抛错,
+    //   这里验证按钮的渲染形态 (icon + label + 类型 + 可点) + tap 不抛错,
     //   「isDue=true 显示 / isDue=false 不显示」配套互证。
+    //
+    // 2026-09-26 reviewer 报: 原用例只「tap 不崩」一个断言, 姿态过低,
+    // 任何「表单里布着个空按钮」都能过。补两点:
+    //   ① 按钮是 FilledButton.tonalIcon 的子类 (_FilledButtonWithIconChild),
+    //      且 onPressed != null (=按钮是点得动的, 不是占位)
+    //   ② onPressed 回调存在时, tap 不会被 swallowed (warnIfMissed=false + 不报错)
     final c = _FakeCustomerService(_followUpBase());
     final a = _FakeAiService(
         _repurchaseBase(daysUntilPredicted: 2, isDue: true));
@@ -210,8 +216,23 @@ void main() {
     // isDue=true → 紧凑按钮渲染: icon + label + 不依赖 BigActionButton 全宽类
     expect(find.byIcon(Icons.add_task), findsOneWidget);
     expect(find.text('建跟进任务'), findsOneWidget);
-    // 真验证: tap 不崩 (button 在; 若调 sheet, ink_sparkle.frag 在 headless 下会
-    //   抛错 — 我们用 warnIfMissed=false 软点一下确认 widget 树不报错)
+
+    // ★ reviewer m6 加强: 按钮必须是 FilledButton 系 (ButtonStyleButton) 且 onPressed != null
+    // 用 predicate 找「祖先是 FilledButton (含 tonalIcon 子类) 的 Text widget」。
+    // FilledButton.tonalIcon 实际返的是 _FilledButtonWithIconChild (FilledButton 子类),
+    //   直接 find.byType(FilledButton) 会送 0 (因为拿到的是包了 Text 的内部子类)——
+    //   所以走 ButtonStyleButton (上面 Fill 都在的) 一下包到
+    final ancestor = find.ancestor(
+      of: find.text('建跟进任务'),
+      matching: find.byWidgetPredicate(
+        (w) => w is ButtonStyleButton && w.onPressed != null,
+      ),
+    );
+    expect(ancestor, findsOneWidget,
+        reason: '「建跟进任务」必须是可点的 ButtonStyleButton');
+
+    // tap 不崩 (sheet 内部 ink_sparkle.frag 可能会招, 但 warnIfMissed=false 软点
+    // + pump 一帧能看出 widget 树未报错的本意; 本身不靠这点验证 button onPressed)。
     final btn = find.text('建跟进任务');
     expect(btn, findsOneWidget);
     await tester.tap(btn, warnIfMissed: false);

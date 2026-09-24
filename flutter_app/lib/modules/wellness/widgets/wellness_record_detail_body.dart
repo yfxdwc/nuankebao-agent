@@ -196,7 +196,12 @@ class WellnessRecordDetailBody extends ConsumerWidget {
                         width: AppSpace.s100,
                         height: AppSpace.s100,
                         color: AppTheme.bgWarm,
-                        child: const Icon(Icons.broken_image),
+                        child: const Icon(
+                          Icons.broken_image,
+                          // AGENTS §5「白字」教训: 主题外子 widget 也要显式写 color,
+                          // 不写 = null → 真机 / CanvasKit 兑底色不同 (一个白一个黑)
+                          color: AppColors.textTertiary,
+                        ),
                       ),
                     ),
                   );

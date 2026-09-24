@@ -71,7 +71,6 @@ class _WellnessRecordDetailSheet extends ConsumerWidget {
               title: '养生详情',
               actions: <Widget>[
                 TextButton(
-                  key: const ValueKey('wellnessSheetEditBtn'),
                   onPressed: () {
                     Navigator.of(ctx).pop();
                     context.push('/wellness-records/$recordId/edit');

@@ -14,24 +14,15 @@ process.env.DATABASE_URL = process.env.DATABASE_URL || "postgres://test:test@loc
 // 把 dev 的客户/互动/养生/跟进清空 (已从当天 03:01 备份恢复)。
 //
 // 治本口径 (AGENTS §5「贴告示 ≠ 修复」): 让"打错库"物理上不可能 ——
-// 库名不是 test 或 *_test 就直接抛错, 测试进程起不来, 轮不到 TRUNCATE 执行。
+// 库名不是 test 或匹配 `[a-z][a-z0-9_]*_test` 就直接抛错, 测试进程起不来,
+// 轮不到 TRUNCATE 执行。
+//
+// 2026-09-26 reviewer 拍: 收紧 `endsWith('_test')` → 显式正则 (防 「prod_test」/「_test」 绕过),
+// 抽成纯函数 assertTestDatabase(url) 供 setup.ts / 外部 / 单测复用 (见 tests/setup-guard.ts)
 // ============================================
-{
-  const url = process.env.DATABASE_URL || "";
-  let dbName = "";
-  try {
-    dbName = new URL(url).pathname.replace(/^\//, "");
-  } catch {
-    dbName = "";
-  }
-  if (!(dbName === "test" || dbName.endsWith("_test"))) {
-    throw new Error(
-      `[tests/setup] 拒绝对非测试库运行: "${dbName || url}"。\n` +
-        "集成测试会 TRUNCATE 业务表, 绝不能指向 dev/prod。\n" +
-        "正确用法: DATABASE_URL=postgres://nuankebao:<pwd>@localhost:5432/nuankebao_test pnpm test:run (见 README §测试)"
-    );
-  }
-}
+import { assertTestDatabase } from "./setup-guard";
+assertTestDatabase(process.env.DATABASE_URL || "");
+
 process.env.AUTH_SECRET = "test-secret-32chars-123456789012345";
 process.env.PGCRYPTO_KEY = "0".repeat(64); // 32 bytes hex, 测试用
 process.env.MINIMAX_API_KEY = ""; // 强制走 mock

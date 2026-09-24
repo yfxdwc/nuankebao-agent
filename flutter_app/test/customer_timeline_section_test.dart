@@ -52,6 +52,17 @@ class _FakeWellnessService extends WellnessRecordService {
   }) async {
     return _records;
   }
+
+  /// 补 getById: 时间线行点开底部弹层时, wellnessRecordByIdProvider 会调它
+  /// (2026-09-26 补: 原 fake 只返 list → 弹层走 dio 抛错, sheet header 能
+  /// 验但 body/错误态全验不了, reviewer 说「passes by accident」)。
+  @override
+  Future<WellnessRecord> getById(String id) async {
+    return _records.firstWhere(
+      (r) => r.id == id,
+      orElse: () => throw Exception('mock 404: $id'),
+    );
+  }
 }
 
 class _FakeInteractionService extends InteractionService {
@@ -882,24 +893,48 @@ void main() {
   // ============================================
 
   testWidgets(
-    '13/14 点养生记录行 → 打开「养生详情」底部弹层',
+    '13/14 点养生记录行 → 打开「养生详情」底部弹层 (body 出现真实字段内容)',
     (tester) async {
+      // 2026-09-26 reviewer: 原用例只验「养生详情」 header, 没验 body/错误态, 属 passes by accident
+      // 修法: _FakeWellnessService 已加 getById, 弹层能拿到真 record;
+      //       断言里加 body 的真实字段 (服务名 / 部位 / 评分)。
       await _pumpSection(
         tester,
-        wellness: [_wellness(id: 'w1', serviceDate: '2026-09-22')],
+        wellness: [
+          _wellness(
+            id: 'w1',
+            serviceDate: '2026-09-22',
+            serviceItemId: '2',
+            bodyPartIds: const ['1'],
+            pre: const {'pain_level': 8, 'sleep_quality': 3, 'mood': 4},
+            post: const {'pain_level': 3, 'sleep_quality': 7, 'mood': 8},
+          ),
+        ],
         interactions: const [],
       );
 
       // 点养生行 (AppListRow onTap → showWellnessRecordDetailSheet)
-      //   弹层由 wellnessRecordByIdProvider 拉取, 假 service 不在 widget test 注入,
-      //   会走真 service.getById → dio 抛错 → ErrorState
       await tester.tap(find.text('肩颈经络理疗'));
       await tester.pumpAndSettle();
 
-      // 弹层进入画面 + 标题可见
+      // 弹层头部 + 编辑入口 (原断言保留)
       expect(find.text('养生详情'), findsOneWidget);
-      // 「编辑」入口在
       expect(find.text('编辑'), findsOneWidget);
+
+      // —— 补 body 真实字段 (reviewer 要求) ——
+      // 服务名出现在 body 头部 (二次出现: list 行 + body 头)
+      expect(find.text('肩颈经络理疗'), findsNWidgets(2));
+      // 部位 = 肩颈 (字典里有, badge 应显示)
+      expect(find.text('肩颈'), findsOneWidget);
+      // 理疗前/后状态行 (用 statRow, 不验数值; 验标位标住)
+      expect(find.text('理疗前状态'), findsOneWidget);
+      expect(find.text('理疗后效果'), findsOneWidget);
+      // 「疼痛」label 在前/后两处出现
+      expect(find.text('疼痛'), findsNWidgets(2));
+      // 评分 8: pre pain=8 + post mood=8 = 2 处; 3: pre sleep=3 + post pain=3 = 2 处
+      //   (不能用 findsOneWidget —— 会漏 post 的同值, 看似「sheet 报错」实则验错事)
+      expect(find.text('8'), findsNWidgets(2));
+      expect(find.text('3'), findsNWidgets(2));
     },
   );
 

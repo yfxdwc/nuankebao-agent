@@ -97,6 +97,8 @@ Future<void> _pumpSheet(
   required WellnessRecordService ws,
 }) async {
   await tester.binding.setSurfaceSize(const Size(800, 1200));
+  // AGENTS §5「靠放大表达重要」反向案例: setSurfaceSize 必须复位, 否则污染后续测试
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
