@@ -2,6 +2,53 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 去掉「添加记录」里重复的跟进任务入口 (2026-09-24)
+
+主人 2026-09-24 提问: 「添加记录弹窗中的跟进任务, 与跟进任务卡片中的新建跟进任务是不是功能重复了?」
+核实 = 重复, 且「添加记录」里那份是弱化版。
+
+### 重复证据 (两个入口对比)
+
+| 维度 | `add_record_sheet.dart::_showFollowUpDialog` (弱) | `customer_activity_cards.dart::showAddFollowUpSheet` (优) |
+|---|---|---|
+| 弹层形态 | 居中 `AlertDialog` (老风格) | 底部弹层 (`showModalBottomSheet`) |
+| 快捷日期 | ✗ 只有 `showDatePicker`, 默认 3 天硬编码 | ✓ 5 个 chip: 明天 / 2 / 3 / 7 / 14 天 |
+| AI 建议 | ✗ 无 | ✓ 弹层内可点「采纳 AI 建议」 (原因 + 日期) |
+| 列表刷新 | ✗ 建完**不** invalidate `pendingFollowUpsProvider` → 任务卡**当场看不到** | ✓ `invalidate` 跟进任务列表 + usage 列表 |
+| 埋点 | ✗ 无 `usage.track` | ✓ `usage.track('follow_up_create')` |
+| 被调用方 | 仅 `add_record_sheet.dart` (一处) | 3 处: 客户详情「跟进任务」卡 + AI 卡片 2 处 (`ai_insight_cards.dart`) |
+
+### 删法
+
+`flutter_app/lib/modules/customer/screens/add_record_sheet.dart`:
+
+1. 删「跟进任务」`_recordButton(...)` 整块 → 弹窗从 3 选 1 变 2 选 1
+2. 删 `_showFollowUpDialog(...)` 整个方法 (只被上面那块引用, 全仓 0 引用)
+3. 删 `enum RecordType { wellness, interaction, followUp }` (只声明, 全仓 0 引用)
+4. 文件头注释从「3 选 1」→「2 选 1」+ 写明删除理由 (避免下次又有人「顺手补回来」)
+5. 未引入新 import; `service_providers.dart` 保留 (仍被 `interactionServiceProvider` 用)
+
+未触碰:
+
+- `customer_activity_cards.dart::showAddFollowUpSheet` 本体 (它是正确的入口, **不动**)
+- 后端 `POST /api/follow-ups` + Flutter `followUpService` (仍被详情页 + 全局跟进入口用)
+- AGENTS §9 preview 冻结 9 路径 (本次只在 customer 模块)
+
+### 唯一跟进入口
+
+1. **客户详情** → 「跟进任务」卡 → 「新建跟进任务」按钮 → `showAddFollowUpSheet`
+   (有 AI 建议时弹层里会显示「采纳建议」)
+2. **客户详情** → AI 洞察卡片 (建议型 / 待跟进型) → 点建议 → 也走 `showAddFollowUpSheet`
+
+任何「跟进任务」操作都收口到 `customer_activity_cards.dart::showAddFollowUpSheet`,
+三处调用方都拿到同一份埋点 + invalidate 行为。
+
+### 验证结果
+
+- `flutter analyze` 0 issue (lib + test, 待跑)
+- `flutter test` 全量 → 待跑, 应仍为 **369/369 全绿** (本次无新增/删除测试)
+- `tools/check-ui-tokens.sh --strict` → 待跑, 应 exit 0 (未引入新硬编码色/字/间距)
+
 ## [Unreleased] — 完成跟进 = 记一次跟进 (方式 + 内容) (2026-09-24)
 
 主人 2026-09-24 反馈: 客户详情「跟进任务」点「标记完成」, 任务**直接消失**,

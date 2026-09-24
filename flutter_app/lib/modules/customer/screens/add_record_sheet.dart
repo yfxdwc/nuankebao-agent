@@ -1,8 +1,18 @@
 // ============================================
 // + 添加记录 弹窗 (Plan F2 极简版)
-// 3 选 1: 养生记录 / 联系记录 / 跟进任务
+// 2 选 1: 养生记录 / 联系记录
 // 中老年: 大按钮 80pt 高, 大字
 // 强绑 customer (customerId 必传)
+//
+// 跟进任务入口 (2026-09-24 删除):
+//   原 3 选 1 含「跟进任务」, 但与
+//   `customer_activity_cards.dart::showAddFollowUpSheet` 功能重复,
+//   且老实现更弱: ① 居中 AlertDialog 老风格 ② 只有日期选择器
+//   (无快捷 chip) ③ 默认 3 天硬编码 ④ 建完不 invalidate 跟进任务列表
+//   ⑤ 无 usage.track 埋点。
+//   唯一跟进入口 = 客户详情「跟进任务」卡的「新建跟进任务」 +
+//   AI 卡片复用 showAddFollowUpSheet (二者都走快捷 chip + AI 建议 +
+//   track + invalidate, 见 customer_activity_cards.dart:showAddFollowUpSheet)。
 // ============================================
 
 import 'package:flutter/material.dart';
@@ -13,7 +23,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/service_providers.dart';
 
 import '../../../core/theme/tokens.g.dart';
-enum RecordType { wellness, interaction, followUp }
 
 /// 显示底部弹窗 (从客户详情"+"按钮调用)
 Future<void> showAddRecordSheet(BuildContext context, {required String customerId}) {
@@ -64,7 +73,7 @@ class _AddRecordSheet extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpace.s8),
 
-            // 3 选 1 大按钮 (每个 80pt 高)
+            // 2 选 1 大按钮 (每个 80pt 高)
             _recordButton(
               context,
               icon: Icons.favorite,
@@ -87,19 +96,6 @@ class _AddRecordSheet extends ConsumerWidget {
               onTap: () {
                 Navigator.of(context).pop();
                 _showInteractionDialog(context, ref, customerId);
-              },
-            ),
-            const SizedBox(height: AppSpace.s12),
-
-            _recordButton(
-              context,
-              icon: Icons.notifications_active,
-              iconColor: AppTheme.franchisee,
-              title: '跟进任务',
-              hint: '截止时间 + 内容',
-              onTap: () {
-                Navigator.of(context).pop();
-                _showFollowUpDialog(context, ref, customerId);
               },
             ),
           ],
@@ -214,81 +210,6 @@ class _AddRecordSheet extends ConsumerWidget {
             child: const Text('保存', style: TextStyle(fontSize: AppTheme.fontMd)),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showFollowUpDialog(BuildContext context, WidgetRef ref, String customerId) {
-    final reasonCtrl = TextEditingController();
-    DateTime dueAt = DateTime.now().add(const Duration(days: 3));
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
-          title: const Text('跟进任务'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: reasonCtrl,
-                style: const TextStyle(fontSize: AppTheme.fontMd),
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: '跟进内容',
-                  hintText: '如: 提醒复购',
-                ),
-              ),
-              const SizedBox(height: AppSpace.s16),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final picked = await showDatePicker(
-                    context: ctx,
-                    initialDate: dueAt,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (picked != null) setSt(() => dueAt = picked);
-                },
-                icon: const Icon(Icons.calendar_today, size: AppSize.iconLg),
-                label: Text(
-                  '${dueAt.year}-${dueAt.month.toString().padLeft(2, '0')}-${dueAt.day.toString().padLeft(2, '0')}',
-                  style: const TextStyle(fontSize: AppTheme.fontMd),
-                ),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (reasonCtrl.text.trim().isEmpty) return;
-                try {
-                  await ref.read(followUpServiceProvider).create({
-                    'customerId': customerId,
-                    'reason': reasonCtrl.text.trim(),
-                    'dueAt': dueAt.toIso8601String(),
-                  });
-                  if (!ctx.mounted) return;
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已添加跟进任务')),
-                  );
-                } catch (e) {
-                  if (!ctx.mounted) return;
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(content: Text('保存失败: $e')),
-                  );
-                }
-              },
-              child: const Text('保存', style: TextStyle(fontSize: AppTheme.fontMd)),
-            ),
-          ],
-        ),
       ),
     );
   }
