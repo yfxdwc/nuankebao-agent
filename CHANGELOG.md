@@ -2,6 +2,37 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 「现在该做」卡片滚动折叠 (2026-09-24)
+
+主人 2026-09-24 诉求: 「优化『现在该做』卡片：随页面上滑折叠到最少一行，补折叠状态时卡片右上角出现图标 (向下展开)」。
+
+### 改动 (A–B)
+
+1. **`customer_insight_actions.dart`** (`_ActionsBody`) 新增:
+   · `final bool collapsed` (默认 false) + `final VoidCallback? onToggleCollapsed` 两个可选参数
+   · 折叠态只渲染 `_CollapsedHeader`: 「现在该做 (N)」一行 + (可选) 「共 N 条」 + 右侧 `IconButton(Icons.expand_more, tooltip: 展开)`
+   · 折叠动画 `AnimatedSize(duration: 180ms, curve: Curves.easeOut, alignment: topCenter)` —— 不要生硬跳变
+   · **折叠只在「有行动」时生效**: 无行动时折叠 = 跟「节奏正常」一致, **不**出图标 (没东西可展开 → 出图标 = 误导, 同根 §5「贴告示 ≠ 修复」)
+
+2. **`customer_detail_page.dart`** State 加 `bool _actionsCollapsed = false`, body 的 Column 外面包 `NotificationListener<ScrollNotification>`:
+   · **轴向过滤**: `metrics.axis != Axis.vertical` 直接 return false —— TabBarView 是横向 PageView, 过滤掉「切 Tab」伪触发
+   · **双阈值防抖**: `pixels > 24` 才折叠; `pixels <= 0` 才展开 —— 轻微抖动 / 回弹不反复跳变
+   · **手动展开** = `IconButton.onPressed` 回调 → setState 强制回展开, 不依赖滚动位置归零 (销售的「怎么折叠的回不去了」不是好的体验)
+   · 不阻断 notification (`return false`), 未来引入 NestedScrollView 不冲突
+
+### 决策要点
+
+- **NotificationListener 而不是每 Tab 装 controller**: 三个 Tab 各自滚 (本就用 `primary: false` 隔离滚动位置), 给三个 Tab 装 controller = 三处监听 + 协调谁主导; 子树冒泡的 `ScrollNotification` 一处收口, 零侵入 + 顺带覆盖未来 Tab 增删。
+- **折叠态抽 `_CollapsedHeader`**: 切换时是单一子节点, 类型稳定 → Flutter 复用 Element, 动画更顺滑; 测试也能直接 `find.byIcon(Icons.expand_more)`。
+- **`IconButton` 自带 48×48 触摸区**: 中老年手指友好, 不用自包 SizedBox 调触摸区 —— `MaterialTapTargetSize.padded` 默认就是 `AppSize.tapMin`。
+
+### 验证
+
+- `flutter analyze` (lib/) → 0 issue
+- `flutter test` → **384/384** 全绿 (基线 378; +6: `customer_insight_actions_test.dart` 加折叠 4 例 + `customer_detail_tabs_test.dart` 加滚动驱动 2 例)
+- `bash tools/check-ui-tokens.sh --strict` → exit 0 (cardWidget = 1, 持平)
+- 未新增 `Card(` (B4 护栏棘轮), 未新增硬编码色/字号/间距
+
 ## [Unreleased] — 客户详情记录页: 时间线混合列表 (2026-09-24)
 
 主人 2026-09-24 诉求: 「客户详情.记录页中。跟进任务卡片置顶，新建跟进任务按键移动到卡片右上角（不独占一行）。

@@ -95,6 +95,8 @@ Widget host(
   CustomerInsight data, {
   Future<void> Function(ActionItem)? onBuild,
   Future<void> Function(ActionItem)? onClaim,
+  bool collapsed = false,
+  VoidCallback? onToggleCollapsed,
 }) {
   final tokens = AppThemes.resolve(null);
   return ProviderScope(
@@ -108,6 +110,8 @@ Widget host(
           customerId: "1",
           onBuildTask: onBuild ?? (_) async {},
           onClaim: onClaim ?? (_) async {},
+          collapsed: collapsed,
+          onToggleCollapsed: onToggleCollapsed,
         ),
       ),
     ),
@@ -119,8 +123,16 @@ Future<void> pump(
   CustomerInsight data, {
   Future<void> Function(ActionItem)? onBuild,
   Future<void> Function(ActionItem)? onClaim,
+  bool collapsed = false,
+  VoidCallback? onToggleCollapsed,
 }) async {
-  await tester.pumpWidget(host(data, onBuild: onBuild, onClaim: onClaim));
+  await tester.pumpWidget(host(
+    data,
+    onBuild: onBuild,
+    onClaim: onClaim,
+    collapsed: collapsed,
+    onToggleCollapsed: onToggleCollapsed,
+  ));
   await tester.pumpAndSettle();
 }
 
@@ -247,6 +259,95 @@ void main() {
       expect(find.text("建任务"), findsOneWidget);
       expect(find.widgetWithText(TextButton, "认领"), findsNothing);
     });
+  });
+
+  // ============================================
+  // ⑧ 折叠态 (2026-09-24 主人诉求)
+  //
+  // 主人原话: 「随页面上滑折叠到最少一行, 补折叠状态时卡片右上角出现
+  //   图标 (向下展开)」。
+  //
+  // 守什么:
+  //   · collapsed == true + 有行动 → 只显示一行 header, 行动行不可见, 右上角
+  //     出现 Icons.expand_more (中老年手指友好, IconButton 自带 48×48 触摸区)
+  //   · 点 expand_more → 回调被调 (详情页负责把状态收回展开)
+  //   · collapsed == false → 现有展开态不受影响
+  //   · collapsed == true + **无**行动 → 「节奏正常」可见, **不**出图标
+  //     (没东西可展开, 出图标 = 贴告示 ≠ 修复, 同根 §5)
+  //
+  // 页面上滑驱动折叠 = 详情页 (页面级测试) 的职责 —— 本文件只守 widget 级
+  // 「传入 collapsed 后渲染对不对」。
+  // ============================================
+  group("⑧ 折叠态 (2026-09-24 主人诉求)", () {
+    testWidgets(
+      'collapsed=true + 有行动 → 行动行不可见, 「现在该做」可见, expand_more 可见',
+      (tester) async {
+        await pump(tester, insight(actions: [action()]), collapsed: true);
+
+        // 「现在该做 (1)」标题保留 (折叠只是把行动行收起来, 标题还在)
+        expect(find.textContaining('现在该做'), findsOneWidget);
+
+        // 行动行**不可见** —— 折叠到一行的核心
+        expect(find.text('约下次到店'), findsNothing,
+            reason: '折叠态不该渲染行动行标题');
+        expect(find.text('建任务'), findsNothing,
+            reason: '折叠态不该渲染行动行按钮');
+        expect(find.textContaining('已经 32 天没到店'), findsNothing,
+            reason: '折叠态不该渲染行动行 why');
+
+        // 右上角展开图标出现
+        expect(find.byIcon(Icons.expand_more), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      '点 expand_more → onToggleCollapsed 被调',
+      (tester) async {
+        var toggled = 0;
+        await pump(
+          tester,
+          insight(actions: [action()]),
+          collapsed: true,
+          onToggleCollapsed: () => toggled++,
+        );
+
+        await tester.tap(find.byIcon(Icons.expand_more));
+        await tester.pumpAndSettle();
+
+        expect(toggled, 1, reason: '点 expand_more 应触发详情页回调一次');
+      },
+    );
+
+    testWidgets(
+      'collapsed=false → 行动可见, 无 expand_more (回归保护)',
+      (tester) async {
+        await pump(tester, insight(actions: [action()]), collapsed: false);
+
+        expect(find.text('约下次到店'), findsWidgets,
+            reason: '展开态必须渲染行动行');
+        expect(find.text('建任务'), findsOneWidget,
+            reason: '展开态必须渲染行动行按钮');
+        expect(find.byIcon(Icons.expand_more), findsNothing,
+            reason: '展开态**不**该出现展开图标');
+      },
+    );
+
+    testWidgets(
+      'collapsed=true + 无行动 → 「节奏正常」可见, 无展开图标',
+      (tester) async {
+        await pump(tester, insight(actions: []), collapsed: true);
+
+        // 「节奏正常」仍是单行
+        expect(find.textContaining('节奏正常'), findsOneWidget);
+
+        // ⚠ 没东西可展开 → **不**出图标 (同根 §5「贴告示 ≠ 修复」:
+        //   出图标让人以为能点开看什么, 结果啥也没有)
+        expect(find.byIcon(Icons.expand_more), findsNothing,
+            reason: '无行动时折叠态不该出现展开图标 (没东西可展开)');
+        // 顺带回归: 「建任务」按钮不该出现 (空行动 = 节奏正常)
+        expect(find.text('建任务'), findsNothing);
+      },
+    );
   });
 
   group("⑥ 静默降级", () {

@@ -89,6 +89,15 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
   /// 给 widget test 暴露 controller (tester.state<...>().tabController.index = N)
   TabController get tabController => _tabController;
 
+  /// 行动卡折叠状态: 详情页 body 上滑越过阈值 → true, 回顶 → false
+  ///
+  /// 由 `NotificationListener<ScrollNotification>` 一处统一收口 (B 节注释):
+  ///   三个 Tab 的滚动容器各自独立 (互不共享 PrimaryScrollController), 没法
+  ///   简单地在每个 TabBarView 子节点上挂 ScrollController; 改走
+  ///   「子树冒泡的 ScrollNotification」一处监听, 轴向过滤掉横向 PageView 的
+  ///   滚动, 状态靠 setState 推进 (变了才刷, 避免每帧 rebuild)。
+  bool _actionsCollapsed = false;
+
   @override
   void initState() {
     super.initState();
@@ -103,6 +112,32 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// 行动卡折叠状态的滚动收口 (NotificationListener 回调)。
+  ///
+  /// 为什么 `bool` 返回: `false` 让 notification 继续向上冒泡, 不阻断父级
+  /// (例如 Scaffold 的 AppBar 嵌套滚动、NestedScrollView 等) 的处理。
+  /// 只读 + 不阻断 = 纯观察者, 不会跟未来引入的滚动机制冲突。
+  bool _onScrollForCollapse(ScrollNotification notification) {
+    // 过滤横向: TabBarView (横向 PageView) 自身也会冒泡 ScrollUpdateNotification,
+    // 不挡会把"切 Tab"误判成"页面上滑"。metrics.axis 是 notification 携带的
+    // 真实轴, 直接读最稳 (不依赖子节点类型)。
+    if (notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    // 双阈值: > 24 才折叠 (容忍轻微抖动); <= 0 才展开 (回顶才回)
+    // 当前 pixels < 0 在正常滚动里不该出现 (overscroll 阶段), 但保留等于 0 的判定
+    // 让"刚好回到顶"也能展开。
+    final pixels = notification.metrics.pixels;
+    final shouldCollapse = pixels > AppSpace.s24; // 24pt
+    final shouldExpand = pixels <= 0;
+    if (shouldCollapse && !_actionsCollapsed) {
+      setState(() => _actionsCollapsed = true);
+    } else if (shouldExpand && _actionsCollapsed) {
+      setState(() => _actionsCollapsed = false);
+    }
+    return false;
   }
 
   @override
@@ -165,32 +200,62 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
       body: asyncCustomer.when(
         loading: () => const LoadingState(),
         error: (e, _) => ErrorState(error: e),
-        data: (customer) => Column(
-          children: [
-            // L0: 行动输出卡「现在该做」(切 Tab 可见 —— CHARTER §1.4 拍板)
-            // 评分卡不在这里: 它只放在「分析」Tab (主人 2026-09-24 拍)。
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, 0),
-              child: CustomerInsightActions(
-                customerId: customerId,
-                onBuildTask: (action) =>
-                    _buildTaskFromAction(context, ref, action),
-                onClaim: (action) =>
-                    _claimFromAction(context, ref, action),
+        data: (customer) => NotificationListener<ScrollNotification>(
+          // 一处监听纵向滚动 → 推进行动卡折叠状态。
+          //
+          // 为什么用 NotificationListener 而不是给每个 Tab 装 ScrollController:
+          //   三个 Tab 各自有 SingleChildScrollView, 滚动容器**互相独立**
+          //   (主用 `_tabScroll` 的 `primary: false`, 本页注释解释过 ——
+          //   默认共享 PrimaryScrollController 会让切 Tab 时滚动位置串掉)。
+          //   给三个 Tab 都装 controller = 三处监听 + 还得协调谁主导; 不如
+          //   收口子树冒泡上来的 ScrollNotification, 零侵入 + 顺带覆盖
+          //   后续 Tab 增删。
+          //
+          // 为什么阈值 24 / 回顶才展开 (双阈值防抖):
+          //   · 上滑阈值 24: 容忍少量「差点就滚」的轻微滚动, 不至于一碰就折叠,
+          //     视觉跳。
+          //   · 回到 <= 0 才展开: 同样容忍小范围来回弹; 不要求像素级归零。
+          //   两边都有阈值 = 防抖 (轻微回弹不会反复折叠 → 展开 → 折叠 → 展开)。
+          //
+          // 为什么过滤横向 axis: TabBarView 是横向 PageView, 子树也会冒泡
+          // ScrollUpdateNotification, 不过滤会把「用户左右滑切 Tab」误判为
+          // 「页面上滑」。
+          onNotification: _onScrollForCollapse,
+          child: Column(
+            children: [
+              // L0: 行动输出卡「现在该做」(切 Tab 可见 —— CHARTER §1.4 拍板)
+              // 评分卡不在这里: 它只放在「分析」Tab (主人 2026-09-24 拍)。
+              // 折叠态由本页状态推进: 上滑越过 24px → 折叠; 回顶 → 展开。
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, 0),
+                child: CustomerInsightActions(
+                  customerId: customerId,
+                  onBuildTask: (action) =>
+                      _buildTaskFromAction(context, ref, action),
+                  onClaim: (action) =>
+                      _claimFromAction(context, ref, action),
+                  collapsed: _actionsCollapsed,
+                  onToggleCollapsed: () {
+                    // 手动点展开图标 → 强制回到展开态 (不管当前滚动位置)
+                    if (_actionsCollapsed) {
+                      setState(() => _actionsCollapsed = false);
+                    }
+                  },
+                ),
               ),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildRecordTab(context, ref, customer),
-                  _buildAnalysisTab(context, ref, customer),
-                  _buildManagementTab(context, ref, customer),
-                ],
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildRecordTab(context, ref, customer),
+                    _buildAnalysisTab(context, ref, customer),
+                    _buildManagementTab(context, ref, customer),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

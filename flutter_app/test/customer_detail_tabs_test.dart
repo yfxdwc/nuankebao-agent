@@ -439,4 +439,89 @@ void main() {
       },
     );
   });
+
+  // ============================================
+  // ⑧ 上滑折叠行动卡 (2026-09-24 主人诉求)
+  //
+  // 主人原话: 「随页面上滑折叠到最少一行, 补折叠状态时卡片右上角出现图标
+  //   (向下展开)」。
+  //
+  // 守什么 (页面级):
+  //   · 默认状态 = 展开 → 不出 expand_more
+  //   · 记录 Tab 纵向滚动越过阈值 24 → 出现 expand_more (action 区折叠)
+  //   · 滚回顶部 → expand_more 消失 (恢复展开)
+  //
+  // 测试机制: 默认 Tab 是「记录」, 它的滚动容器是 SingleChildScrollView;
+  //   NotificationListener 在 body 外层, 收子树冒泡上来的 ScrollNotification,
+  //   过滤 axis != vertical (TabBarView 横向 PageView 不会误触发)。
+  //   用 tester.fling 在 SingleChildScrollView 上 fling 100pt 即可越过 24pt 阈值。
+  //
+  // ⚠ 抩展点: 页面 pump 后默认在记录 Tab (index 0), TabBarView 当前子页就是
+  //   _buildRecordTab → _tabScroll → SingleChildScrollView, 可直接定位。
+  // ============================================
+  group('⑧ 上滑折叠行动卡 (滚动驱动, 2026-09-24)', () {
+    testWidgets(
+      '上滑越过阈值 → 行动卡折叠 (expand_more 出现); 滚回顶部 → 恢复展开',
+      (tester) async {
+        await _pumpPage(tester);
+
+        // 预条件: 默认展开态, 折叠图标**不**可见
+        expect(find.byIcon(Icons.expand_more), findsNothing,
+            reason: '默认 (顶在顶部) 应该是展开态, 不出折叠图标');
+
+        // 定位记录 Tab 的滚动容器 (是 SingleChildScrollView;
+        // TabBarView 本身也是 Scrollable 但轴向 horizontal, fling 纵向偏移它不会动)
+        final recordScrollable = find.descendant(
+          of: find.byType(CustomerDetailPage),
+          matching: find.byType(SingleChildScrollView),
+        );
+        expect(recordScrollable, findsWidgets,
+            reason: '记录 Tab 应至少有 1 个 SingleChildScrollView (TAB 懒加载, 可能在当前页看到几个)');
+
+        // fling 200pt 向上 → 越过 24pt 阈值 → 触发折叠
+        await tester.fling(recordScrollable.first, const Offset(0, -200), 800);
+        await tester.pumpAndSettle();
+
+        // 折叠图标应出现 (L0 行动卡已折叠到一行 + 右上角 expand_more)
+        expect(find.byIcon(Icons.expand_more), findsOneWidget,
+            reason: '上滑越过 24pt 阈值 → 行动卡折叠 → 右下角出现 expand_more');
+        // 同时行动行**不可见**
+        expect(find.text('约下次到店'), findsNothing,
+            reason: '折叠态不该渲染行动行');
+
+        // 反向: fling 向下足够多 → 滚回顶部 → 恢复展开
+        await tester.fling(recordScrollable.first, const Offset(0, 1000), 800);
+        await tester.pumpAndSettle();
+
+        expect(find.byIcon(Icons.expand_more), findsNothing,
+            reason: '滚回顶部 (pixels <= 0) → 行动卡恢复展开 → 图标消失');
+        expect(find.text('约下次到店'), findsWidgets,
+            reason: '展开态应渲染行动行');
+      },
+    );
+
+    testWidgets(
+      '点 expand_more → 强制回到展开态 (不管当前滚动位置)',
+      (tester) async {
+        await _pumpPage(tester);
+
+        // 先上滑触发折叠
+        final recordScrollable = find.descendant(
+          of: find.byType(CustomerDetailPage),
+          matching: find.byType(SingleChildScrollView),
+        );
+        await tester.fling(recordScrollable.first, const Offset(0, -200), 800);
+        await tester.pumpAndSettle();
+        expect(find.byIcon(Icons.expand_more), findsOneWidget,
+            reason: '预条件: 已上滑, 折叠图标在');
+
+        // 点折叠图标 → 手动切回展开 (详情页不要求滚动位置归零)
+        await tester.tap(find.byIcon(Icons.expand_more));
+        await tester.pumpAndSettle();
+
+        expect(find.byIcon(Icons.expand_more), findsNothing,
+            reason: '点折叠图标 → onToggleCollapsed 被调 → 详情页强制回展开');
+      },
+    );
+  });
 }
