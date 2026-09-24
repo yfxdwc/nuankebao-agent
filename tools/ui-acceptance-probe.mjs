@@ -87,7 +87,9 @@ if (!loggedIn) {
   const ok = code === 200 && /\/admin/.test(probe.url());
   await probe.close();
   if (ok) {
-    console.warn(`⚠ 登录失败, 但 /admin 匿名可读 (DEV_SKIP_AUTH=1) → 继续采集`);
+    // ⚠ 走 stderr: JSON=1 时 stdout 必须是**纯 JSON** —— 否则
+    //   check-ui-density.sh 会拿这一行去 JSON.parse → SyntaxError (2026-09-24 踩过)
+    console.error(`⚠ 登录失败, 但 /admin 匿名可读 (DEV_SKIP_AUTH=1) → 继续采集`);
   } else {
     console.error(`✗ 登录失败 (${IDENT}) 且 /admin 匿名不可读 (HTTP ${code}) —— 指标不可信`);
     await browser.close();

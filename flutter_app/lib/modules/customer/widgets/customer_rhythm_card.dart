@@ -1,5 +1,5 @@
 // ============================================
-// 客户详情页 — 「跟进节奏」卡 (2026-09-25 新)
+// 客户详情页 — 「跟进节奏」卡 (2026-09-25 新; 2026-09-26 重构紧凑版)
 // ============================================
 // 把旧的「FollowUpAnalysisCard」+「RepurchaseCard」合并成一张卡:
 //   · 跟进分析 (后端 GET /customers/:id/follow-up-analysis; 客观指标免费)
@@ -35,7 +35,6 @@ import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/widgets/b2_no_chrome.dart';
 import '../../customer/widgets/customer_activity_cards.dart' show showAddFollowUpSheet;
-import '../../customer/widgets/ai_insight_cards.dart' show BigActionButton;
 
 /// 「跟进节奏」卡 —— 跟进分析 (免费) + 复购预测 (自动加载) 合并卡
 class CustomerRhythmCard extends ConsumerStatefulWidget {
@@ -156,33 +155,25 @@ class _CustomerRhythmCardState extends ConsumerState<CustomerRhythmCard> {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpace.s4),
-            const Text(
-              '客观记录: 联系频次 / 到店节奏 / 复购预测',
-              style: TextStyle(
-                fontSize: AppType.micro,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppSpace.s12),
 
             // ── 跟进分析段 ──
+            const SizedBox(height: AppSpace.s10),
             _buildFollowUpSection(),
-            const SizedBox(height: AppSpace.s14),
 
-            // ── 分隔 ──
+            // ── 分隔 (hairline 一条) ──
+            const SizedBox(height: AppSpace.s12),
             Container(
               height: AppSize.borderHairline,
               color: t.divider,
             ),
-            const SizedBox(height: AppSpace.s14),
+            const SizedBox(height: AppSpace.s10),
 
             // ── 复购预测段 ──
             _buildRepurchaseSection(),
 
             // ── 卡底: 会员提示 (跟旧 FollowUpAnalysisCard 同口径) ──
             if (_followUp != null && !_followUp!.aiTipAvailable) ...[
-              const SizedBox(height: AppSpace.s12),
+              const SizedBox(height: AppSpace.s10),
               const _MemberLockHint(),
             ],
           ],
@@ -286,7 +277,7 @@ class _CustomerRhythmCardState extends ConsumerState<CustomerRhythmCard> {
 }
 
 // ============================================
-// 跟进分析段: headline + 趋势 + 6 指标
+// 跟进分析段: headline + 趋势 (同行紧凑) + 6 指标 (3×2 网格)
 // ============================================
 
 class _FollowUpBody extends StatelessWidget {
@@ -302,32 +293,77 @@ class _FollowUpBody extends StatelessWidget {
             ? t.primary
             : t.textSecondary;
 
+    // 6 个指标 (去重: 不再单独列「距上次到店」「平均复购周期」 ——
+    //   已经在下方复购段里有「上次到店 / 复购间隔」,
+    //   同口径重复两次 = 视觉噪音)
+    final tiles = <Widget>[
+      _MetricTile(
+        label: '近 30 天联系',
+        value: '${data.contactLast30} 次',
+        sub: '近 90 天 ${data.contactLast90} 次',
+      ),
+      _MetricTile(
+        label: '联系间隔',
+        value: data.avgContactIntervalDays == null
+            ? '—'
+            : '${data.avgContactIntervalDays} 天',
+        sub: data.avgContactIntervalDays == null ? '联系还太少' : '平均一次',
+      ),
+      _MetricTile(
+        label: '到店次数',
+        value: '${data.visitCount} 次',
+        sub: data.avgVisitIntervalDays == null
+            ? '暂无规律'
+            : '每 ${data.avgVisitIntervalDays} 天一次',
+      ),
+      _MetricTile(
+        label: '复购间隔',
+        value: data.medianRepurchaseIntervalDays == null
+            ? '—'
+            : '${data.medianRepurchaseIntervalDays} 天',
+        sub: '历史中位数',
+      ),
+      _MetricTile(
+        label: '上次到店',
+        value: data.daysSinceLastVisit == null
+            ? '—'
+            : '${data.daysSinceLastVisit} 天前',
+        sub: data.lastVisitAt == null
+            ? '还没到过店'
+            : DateFormat('yyyy-MM-dd').format(data.lastVisitAt!.toLocal()),
+      ),
+      _MetricTile(
+        label: '待办跟进',
+        value: '${data.pendingTasks} 条',
+        sub: data.overdueTasks > 0
+            ? '逾期 ${data.overdueTasks} 条'
+            : '没有逾期',
+        danger: data.overdueTasks > 0,
+      ),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 一句话总结 (免费层)
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(AppSpace.s8),
-          decoration: BoxDecoration(
-            color: t.surfaceSubtle,
-            borderRadius: BorderRadius.circular(AppRadius.r10),
-          ),
-          child: Text(
-            data.headline,
-            style: const TextStyle(
-              fontSize: AppType.sm,
-              fontWeight: AppWeight.semibold,
-              color: AppColors.textPrimary,
+        // 一句话总结 + 趋势 (同行紧凑, 删掉原来的 surfaceSubtle 容器)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                data.headline,
+                style: const TextStyle(
+                  fontSize: AppType.sm,
+                  fontWeight: AppWeight.semibold,
+                  color: AppColors.textPrimary,
+                  height: 1.4,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ),
-        const SizedBox(height: AppSpace.s8),
-
-        // 趋势 (颜色 + 图标 + 文字三编码)
-        if (data.trend != 'unknown')
-          Row(
-            children: [
+            if (data.trend != 'unknown') ...[
+              const SizedBox(width: AppSpace.s8),
               Icon(
                 data.isColder
                     ? Icons.trending_down
@@ -337,7 +373,7 @@ class _FollowUpBody extends StatelessWidget {
                 size: AppSize.iconMd,
                 color: trendColor,
               ),
-              const SizedBox(width: AppSpace.s6),
+              const SizedBox(width: AppSpace.s4),
               Text(
                 data.trendText,
                 style: TextStyle(
@@ -347,60 +383,38 @@ class _FollowUpBody extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        const SizedBox(height: AppSpace.s8),
-
-        // 6 个指标 (去重: 不再单独列「距上次到店」「平均复购周期」 ——
-        //   已经在下方复购段里有「上次到店 / 复购间隔」,
-        //   同口径重复两次 = 视觉噪音)
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _Metric(
-              label: '近 30 天联系',
-              value: '${data.contactLast30} 次',
-              sub: '近 90 天 ${data.contactLast90} 次',
-            ),
-            _Metric(
-              label: '联系间隔',
-              value: data.avgContactIntervalDays == null
-                  ? '—'
-                  : '${data.avgContactIntervalDays} 天',
-              sub: data.avgContactIntervalDays == null ? '联系还太少' : '平均一次',
-            ),
-            _Metric(
-              label: '到店次数',
-              value: '${data.visitCount} 次',
-              sub: data.avgVisitIntervalDays == null
-                  ? '暂无规律'
-                  : '每 ${data.avgVisitIntervalDays} 天一次',
-            ),
-            _Metric(
-              label: '复购间隔',
-              value: data.medianRepurchaseIntervalDays == null
-                  ? '—'
-                  : '${data.medianRepurchaseIntervalDays} 天',
-              sub: '历史中位数',
-            ),
-            _Metric(
-              label: '上次到店',
-              value: data.daysSinceLastVisit == null
-                  ? '—'
-                  : '${data.daysSinceLastVisit} 天前',
-              sub: data.lastVisitAt == null
-                  ? '还没到过店'
-                  : DateFormat('yyyy-MM-dd').format(data.lastVisitAt!.toLocal()),
-            ),
-            _Metric(
-              label: '待办跟进',
-              value: '${data.pendingTasks} 条',
-              sub: data.overdueTasks > 0
-                  ? '逾期 ${data.overdueTasks} 条'
-                  : '没有逾期',
-              danger: data.overdueTasks > 0,
-            ),
           ],
+        ),
+
+        // 6 个指标 (3×2 紧凑网格; 窄屏 <360 退化为 2 列)
+        const SizedBox(height: AppSpace.s8),
+        LayoutBuilder(
+          builder: (ctx, c) {
+            final cols = c.maxWidth >= 360 ? 3 : 2;
+            final rows = <Widget>[];
+            for (var i = 0; i < tiles.length; i += cols) {
+              final rowTiles = tiles.sublist(i, (i + cols).clamp(0, tiles.length));
+              rows.add(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var j = 0; j < rowTiles.length; j++) ...[
+                      if (j > 0) const SizedBox(width: AppSpace.s8),
+                      Expanded(child: rowTiles[j]),
+                    ],
+                  ],
+                ),
+              );
+              if (i + cols < tiles.length) {
+                rows.add(const SizedBox(height: AppSpace.s8));
+              }
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: rows,
+            );
+          },
         ),
       ],
     );
@@ -408,7 +422,7 @@ class _FollowUpBody extends StatelessWidget {
 }
 
 // ============================================
-// 复购预测段: 预计下次 + 置信度 + reason + 大动作按钮 (isDue)
+// 复购预测段: 日期 + 还有/已过 N 天 + 置信度 chip (一行 Wrap) + reason 小字 + 建任务按钮 (isDue, 紧凑)
 // ============================================
 // 用 ConsumerWidget —— showAddFollowUpSheet 要 (ctx, ref), ref 在 StatelessWidget
 // 里拿不到 (需要 ConsumerWidget.build 的 ref 参数).
@@ -426,51 +440,34 @@ class _RepurchaseBody extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 预计下次 (高亮: 该催了)
+        // 「预计下次」+ 「还有/已过 N 天」+ 置信度 chip ——
+        // 同一行 Wrap, 防溢出; 日期 / 天数 走 token 色 (isDue=danger, 否则 primary/secondary)
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: AppSpace.s8,
+          runSpacing: AppSpace.s6,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpace.s12,
-                vertical: AppSpace.s8,
-              ),
-              decoration: BoxDecoration(
-                color: data.isDue
-                    ? t.danger.withOpacity(0.08)
-                    : t.primary.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(AppRadius.r10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '预计下次',
-                    style: TextStyle(
-                      fontSize: AppType.micro,
-                      color: AppColors.textSecondary,
-                    ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '预计下次',
+                  style: TextStyle(
+                    fontSize: AppType.micro,
+                    color: AppColors.textSecondary,
                   ),
-                  const SizedBox(height: AppSpace.s2),
-                  Text(
-                    data.predictedNextVisit ?? '—',
-                    style: TextStyle(
-                      fontSize: AppType.md,
-                      fontWeight: AppWeight.bold,
-                      color: data.isDue ? t.danger : t.primary,
-                    ),
+                ),
+                const SizedBox(width: AppSpace.s6),
+                Text(
+                  data.predictedNextVisit ?? '—',
+                  style: TextStyle(
+                    fontSize: AppType.md,
+                    fontWeight: AppWeight.bold,
+                    color: data.isDue ? t.danger : t.primary,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-        const SizedBox(height: AppSpace.s10),
-
-        // 「还有 N 天 / 已过 N 天」 + 置信度 chip
-        Row(
-          children: [
             if (data.daysUntilPredicted != null)
               Text(
                 data.daysUntilPredicted! < 0
@@ -479,45 +476,56 @@ class _RepurchaseBody extends ConsumerWidget {
                 style: TextStyle(
                   fontSize: AppType.sm,
                   fontWeight: AppWeight.semibold,
-                  color: data.isDue ? t.danger : t.textSecondary,
+                  color: data.isDue ? t.danger : AppColors.textSecondary,
                 ),
               ),
-            const SizedBox(width: AppSpace.s8),
             _ConfidenceChip(confidence: data.confidence),
           ],
         ),
 
-        // reason 小字
+        // reason: 普通小字 (去掉原 surfaceSubtle 容器)
         if (data.reason.isNotEmpty) ...[
-          const SizedBox(height: AppSpace.s10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpace.s10),
-            decoration: BoxDecoration(
-              color: t.surfaceSubtle,
-              borderRadius: BorderRadius.circular(AppRadius.r8),
+          const SizedBox(height: AppSpace.s6),
+          Text(
+            data.reason,
+            style: const TextStyle(
+              fontSize: AppType.xs,
+              color: AppColors.textSecondary,
+              height: 1.4,
             ),
-            child: Text(
-              data.reason,
-              style: const TextStyle(
-                fontSize: AppType.xs,
-                color: AppColors.textPrimary,
-                height: 1.5,
-              ),
-            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
 
-        // 该催了 → 建任务 (大动作按钮)
+        // 该催了 → 建任务 (紧凑按钮, 内容宽度, 右对齐)
         if (data.isDue) ...[
-          const SizedBox(height: AppSpace.s12),
-          BigActionButton(
-            icon: Icons.add_task,
-            label: '建一条跟进任务',
-            onTap: () => showAddFollowUpSheet(
-              context,
-              ref,
-              customerId: customerId,
+          const SizedBox(height: AppSpace.s8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.tonalIcon(
+              onPressed: () => showAddFollowUpSheet(
+                context,
+                ref,
+                customerId: customerId,
+              ),
+              icon: const Icon(Icons.add_task, size: 18),
+              label: const Text(
+                '建跟进任务',
+                style: TextStyle(
+                  fontSize: AppType.sm,
+                  fontWeight: AppWeight.semibold,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, AppSize.buttonMinHeight),
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.padded,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.s12,
+                  vertical: AppSpace.s4,
+                ),
+              ),
             ),
           ),
         ],
@@ -560,16 +568,19 @@ class _ConfidenceChip extends StatelessWidget {
 }
 
 // ============================================
-// 小指标块 (label / 大字 value / 小字 sub)
+// 小指标块 (label / 大字 value / 小字 sub) ——
+//
+// 紧凑网格里的格子, 不再有固定 width: 父 Expanded 决定宽度,
+// 行内/行间间距由父 Row (s8) 控制。
 // ============================================
 
-class _Metric extends StatelessWidget {
+class _MetricTile extends StatelessWidget {
   final String label;
   final String value;
   final String sub;
   final bool danger;
 
-  const _Metric({
+  const _MetricTile({
     required this.label,
     required this.value,
     required this.sub,
@@ -579,36 +590,38 @@ class _Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    return SizedBox(
-      width: 150,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: AppType.micro,
-              color: AppColors.textSecondary,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: AppType.micro,
+            color: AppColors.textSecondary,
           ),
-          const SizedBox(height: AppSpace.s2),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: AppType.lg,
-              fontWeight: AppWeight.bold,
-              color: danger ? t.danger : AppColors.textPrimary,
-            ),
+        ),
+        const SizedBox(height: AppSpace.s2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: AppType.md,
+            fontWeight: AppWeight.bold,
+            color: danger ? t.danger : AppColors.textPrimary,
+            height: 1.2,
           ),
-          Text(
-            sub,
-            style: TextStyle(
-              fontSize: AppType.xs,
-              color: danger ? t.danger : t.textSecondary,
-            ),
+        ),
+        const SizedBox(height: AppSpace.s2),
+        Text(
+          sub,
+          style: TextStyle(
+            fontSize: AppType.xs,
+            color: danger ? t.danger : AppColors.textSecondary,
           ),
-        ],
-      ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 }
@@ -625,7 +638,7 @@ class _MemberLockHint extends StatelessWidget {
     final t = context.tokens;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpace.s10),
+      padding: const EdgeInsets.all(AppSpace.s8),
       decoration: BoxDecoration(
         color: t.warningSurface,
         borderRadius: BorderRadius.circular(AppRadius.r10),

@@ -1,13 +1,16 @@
 // ============================================
-// 「跟进节奏」卡 widget 测试 (P1, 2026-09-25 新)
+// 「跟进节奏」卡 widget 测试 (P1, 2026-09-25 新; 2026-09-26 紧凑版改造)
 // ============================================
 // 守护的东西:
-//   ① 标题「跟进节奏」 + 副标题「客观记录: 联系频次 / 到店节奏 / 复购预测」
+//   ① 标题「跟进节奏」(副标题「客观记录: ...」已删, 不再断言)
 //   ② headline (一句话总结) 渲染
 //   ③ 6 指标: 「近 30 天联系 / 联系间隔 / 到店次数 / 复购间隔 / 上次到店 / 待办跟进」
 //   ④ 「上次到店」**只出现一次** (去重证据: 不再像旧卡那样和复购段里重复)
-//   ⑤ 复购预测段: 「预计下次」日期 tile + 置信度 chip + reason 小字
-//   ⑥ isDue 时: 「建一条跟进任务」按钮在
+//   ⑤ 复购预测段: 「预计下次」+「还有/已过 N 天」+ 置信度 chip + reason 小字
+//      (合并一行 Wrap; 日期不再有底色容器)
+//   ⑥ isDue 时: 「建跟进任务」按钮在 (紧凑 FilledButton.tonalIcon, 内容宽度, 右对齐)
+//   ⑥b 点击按钮 → showAddFollowUpSheet 弹层渲染「新建跟进任务」
+//   ⑥c isDue=false → 大动作按钮**不**渲染
 //   ⑦ 预测抛错 → 「复购预测暂时算不出来」+ 跟进段照常显示 (静默降级)
 //   ⑧ 点刷新 → 两个 service 各被再调一次 (复购预测埋点也走)
 //   ⑨ aiTipAvailable=false → 卡底锁文案在
@@ -110,6 +113,7 @@ Future<Widget> _host(
   Widget child, {
   required _FakeCustomerService customerService,
   required _FakeAiService aiService,
+  double cardWidth = 600,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
@@ -124,7 +128,7 @@ Future<Widget> _host(
       home: Scaffold(
         body: SingleChildScrollView(
           child: SizedBox(
-            width: 600,
+            width: cardWidth,
             child: CustomerRhythmCard(customerId: '798'),
           ),
         ),
@@ -136,7 +140,7 @@ Future<Widget> _host(
 Widget _card() => const CustomerRhythmCard(customerId: '798');
 
 void main() {
-  testWidgets('① 标题 + 副标题 + 副标题 + 6 指标 + 「上次到店」只出现一次',
+  testWidgets('① 标题 + headline + 6 指标 + 「上次到店」只出现一次',
       (tester) async {
     final c = _FakeCustomerService(_followUpBase());
     final a = _FakeAiService(_repurchaseBase());
@@ -144,18 +148,16 @@ void main() {
         customerService: c, aiService: a));
     await tester.pumpAndSettle();
 
-    // 标题 + 副标题
+    // 标题在 (副标题「客观记录: ...」已删, 不再断言)
     expect(find.text('跟进节奏'), findsOneWidget);
-    expect(
-      find.text('客观记录: 联系频次 / 到店节奏 / 复购预测'),
-      findsOneWidget,
-    );
-    // 一句话总结
+    // 一句话总结 (跟趋势同行, 紧凑)
     expect(
       find.text('近 30 天联系 4 次, 节奏稳定偏热, 1 条任务逾期 5 天'),
       findsOneWidget,
     );
-    // 6 指标
+    // 趋势 (图标 + 文字) 也渲染
+    expect(find.text('近 30 天联系变频繁'), findsOneWidget);
+    // 6 指标 (label)
     expect(find.text('近 30 天联系'), findsOneWidget);
     expect(find.text('联系间隔'), findsOneWidget);
     expect(find.text('到店次数'), findsOneWidget);
@@ -170,7 +172,7 @@ void main() {
     expect(find.text('平均复购周期'), findsNothing);
   });
 
-  testWidgets('⑤⑥ 复购预测段 (isDue=true): 预计下次 + 置信度 + reason + 大动作按钮',
+  testWidgets('⑤⑥ 复购预测段 (isDue=true): 预计下次 + 还有 N 天 + 置信度 + reason + 紧凑按钮',
       (tester) async {
     final c = _FakeCustomerService(_followUpBase());
     final a = _FakeAiService(
@@ -184,11 +186,34 @@ void main() {
     expect(find.textContaining('还有 2 天'), findsOneWidget);
     expect(find.text('数据充分'), findsOneWidget); // confidence=high
     expect(find.text('按 30 天平均复购周期推算'), findsOneWidget);
-    // isDue=true → 大动作按钮在
-    expect(find.text('建一条跟进任务'), findsOneWidget);
+    // isDue=true → 紧凑按钮在 (label 改成「建跟进任务」, 不再有 surfaceSubtle 容器包裹)
+    expect(find.text('建跟进任务'), findsOneWidget);
+    // ★ 旧文案不再出现 (确保确实换了)
+    expect(find.text('建一条跟进任务'), findsNothing);
   });
 
-  testWidgets('⑤⑥b 复购预测段 (isDue=false): 大动作按钮**不**在',
+  testWidgets('⑥b 点紧凑按钮 → 弹层 (showAddFollowUpSheet) 走通',
+      (tester) async {
+    final c = _FakeCustomerService(_followUpBase());
+    final a = _FakeAiService(
+        _repurchaseBase(daysUntilPredicted: 2, isDue: true));
+    await tester.pumpWidget(await _host(_card(),
+        customerService: c, aiService: a));
+    await tester.pumpAndSettle();
+
+    // 点「建跟进任务」按钮
+    final btn = find.text('建跟进任务');
+    expect(btn, findsOneWidget);
+    await tester.tap(btn);
+    // 弹层会出, 用 pump 不 settle (避免 sheet 内部动画 pumpAndSettle 死循环)
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // showAddFollowUpSheet 弹层文案 (建任务页头) ——
+    expect(find.text('新建跟进任务'), findsOneWidget);
+  });
+
+  testWidgets('⑥c 复购预测段 (isDue=false): 紧凑按钮**不**在',
       (tester) async {
     final c = _FakeCustomerService(_followUpBase());
     // daysUntilPredicted=14 → isDue=false (判定: <=7)
@@ -200,7 +225,8 @@ void main() {
 
     expect(find.text('预计下次'), findsOneWidget);
     expect(find.textContaining('还有 14 天'), findsOneWidget);
-    // isDue=false → 大动作按钮不渲染
+    // isDue=false → 紧凑按钮不渲染
+    expect(find.text('建跟进任务'), findsNothing);
     expect(find.text('建一条跟进任务'), findsNothing);
   });
 
@@ -284,5 +310,22 @@ void main() {
     // 不应该看到 DioException / stack trace
     expect(find.textContaining('DioException'), findsNothing);
     expect(find.textContaining('stack'), findsNothing);
+  });
+
+  testWidgets('窄屏 (<360) → 6 指标自动退化为 2 列 (3 行)', (tester) async {
+    final c = _FakeCustomerService(_followUpBase());
+    final a = _FakeAiService(_repurchaseBase());
+    // 300 < 360 → 应走 2 列路径
+    await tester.pumpWidget(await _host(_card(),
+        customerService: c, aiService: a, cardWidth: 300));
+    await tester.pumpAndSettle();
+
+    // 数据完整性: 6 个 label 全在
+    expect(find.text('近 30 天联系'), findsOneWidget);
+    expect(find.text('联系间隔'), findsOneWidget);
+    expect(find.text('到店次数'), findsOneWidget);
+    expect(find.text('复购间隔'), findsOneWidget);
+    expect(find.text('上次到店'), findsOneWidget);
+    expect(find.text('待办跟进'), findsOneWidget);
   });
 }
