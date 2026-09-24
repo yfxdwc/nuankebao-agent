@@ -16,6 +16,11 @@ class RatingSlider extends StatelessWidget {
   final String Function(int)? valueFormatter; // 数字 → 显示文本
   final ValueChanged<int> onChanged;
 
+  /// 强调色 (数值徽章底 + 滑轨 / 滑块) —— 默认品牌主色 [AppTheme.primary]。
+  /// 「理疗前 / 后」对比场景: 前 = 中性色 (已成过去), 后 = 主色 (这次结果);
+  /// 差值语义交给旁边的 delta 徽章, 不靠滑块颜色重复表达。
+  final Color? accent;
+
   const RatingSlider({
     super.key,
     required this.label,
@@ -25,11 +30,13 @@ class RatingSlider extends StatelessWidget {
     this.max = 10,
     this.divisions,
     this.valueFormatter,
+    this.accent,
   });
 
   @override
   Widget build(BuildContext context) {
     final displayValue = valueFormatter != null ? valueFormatter!(value) : '$value';
+    final accent = this.accent ?? AppTheme.primary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -47,7 +54,7 @@ class RatingSlider extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s6),
               decoration: BoxDecoration(
-                color: AppTheme.primary,
+                color: accent,
                 borderRadius: BorderRadius.circular(AppRadius.r16),
               ),
               child: Text(
@@ -67,9 +74,9 @@ class RatingSlider extends StatelessWidget {
             trackHeight: 8,
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 16),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 28),
-            activeTrackColor: AppTheme.primary,
-            inactiveTrackColor: AppTheme.primaryLight,
-            thumbColor: AppTheme.primary,
+            activeTrackColor: accent,
+            inactiveTrackColor: accent.withOpacity(0.22),
+            thumbColor: accent,
           ),
           child: Slider(
             min: min.toDouble(),
@@ -89,12 +96,14 @@ class FiveRatingSlider extends StatelessWidget {
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
+  final Color? accent;
 
   const FiveRatingSlider({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.accent,
   });
 
   @override
@@ -106,6 +115,7 @@ class FiveRatingSlider extends StatelessWidget {
       max: 5,
       valueFormatter: (v) => '$v/5',
       onChanged: onChanged,
+      accent: accent,
     );
   }
 }
@@ -116,11 +126,14 @@ class PainSlider extends StatelessWidget {
   final int value;
   final ValueChanged<int> onChanged;
 
+  final Color? accent;
+
   const PainSlider({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.accent,
   });
 
   @override
@@ -130,6 +143,7 @@ class PainSlider extends StatelessWidget {
       value: value,
       min: 1,
       max: 10,
+      accent: accent,
       valueFormatter: (v) {
         if (v <= 3) return '$v 不痛';
         if (v <= 6) return '$v 有点痛';

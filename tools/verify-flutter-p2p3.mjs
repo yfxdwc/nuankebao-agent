@@ -291,7 +291,7 @@ try {
     for (let i = 0; i < 25; i++) {
       await page.waitForTimeout(1000);
       const t = await text(page);
-      if (t.includes('服务项目') || t.includes('理疗前状态')) break;
+      if (t.includes('服务项目') || t.includes('理疗前 → 后')) break;
     }
     await page.screenshot({ path: `${OUT}/05-record-form.png` });
     const formText = await text(page);
@@ -308,8 +308,9 @@ try {
     } else {
       bad(`表单未按预期打开: ${formText.replace(/\n/g, " | ").slice(0, 900)}`);
     }
-    if (formText.includes("理疗前状态") && formText.includes("理疗后效果")) {
-      ok("表单「理疗前/后」两段都在");
+    // 2026-09-24 UI 优化: 前后两段合并成一张「理疗前 → 后」对比卡 (带差值徽章)
+    if (formText.includes("理疗前 → 后") && /改善|持平|变差/.test(formText)) {
+      ok("表单「理疗前 → 后」对比卡在 (含差值徽章)");
     }
   }
 

@@ -304,9 +304,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   const SizedBox(height: AppSpace.s20),
                   _buildBodyPartSelector(),
                   const SizedBox(height: AppSpace.s20),
-                  _buildConditionSection('理疗前状态'),
-                  const SizedBox(height: AppSpace.s20),
-                  _buildConditionSection('理疗后效果', isPost: true),
+                  _buildConditionCompare(),
                   const SizedBox(height: AppSpace.s20),
                   _buildTextField('操作过程', _processCtrl, hint: '可记录理疗手法、特殊处理等'),
                   const SizedBox(height: AppSpace.s20),
@@ -348,20 +346,11 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
   Widget _buildBodyPartSelector() {    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '身体部位 (可多选)',
-          style: TextStyle(
-            fontSize: AppTheme.fontMd,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: AppSpace.s4),
-        Text(
-          '已选 ${_bodyPartIds.length} 个',
-          style: const TextStyle(
-            fontSize: AppTheme.fontSm,
-            color: AppTheme.textSecondary,
-          ),
+        // 标题 + 「已选 N 个」合并成一个区块头 (旧版是标题下面再挂一行小字)
+        AppSectionHeader(
+          title: '身体部位 (可多选)',
+          subtitle: '已选 ${_bodyPartIds.length} 个',
+          padding: EdgeInsets.zero,
         ),
         const SizedBox(height: AppSpace.s12),
         Wrap(
@@ -404,12 +393,9 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '服务项目 (单选) *',
-          style: TextStyle(
-            fontSize: AppTheme.fontMd,
-            fontWeight: FontWeight.w600,
-          ),
+        const AppSectionHeader(
+          title: '服务项目 (单选) *',
+          padding: EdgeInsets.zero,
         ),
         const SizedBox(height: AppSpace.s8),
         DropdownButtonFormField<String>(
@@ -443,65 +429,105 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     );
   }
 
-  Widget _buildConditionSection(String title, {bool isPost = false}) {
-    // B2: 旧 B2NoChrome(margin: zero) → AppSection (无边框/无阴影) + 内层 padding
-    // 标题用户已写 Text → 内层用 Section-style Container
-    return Padding(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          AppSectionHeader(title: title),
-          const SizedBox(height: AppSpace.s8),
-          Container(
-            padding: const EdgeInsets.all(AppSpace.s16),
-            decoration: BoxDecoration(
-              color: context.tokens.surfaceSunken,
-              borderRadius: BorderRadius.circular(AppRadius.card),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                PainSlider(
-                  label: '疼痛程度',
-                  value: isPost ? _postPainLevel : _prePainLevel,
-                  onChanged: (v) => setState(() {
-                    if (isPost) {
-                      _postPainLevel = v;
-                    } else {
-                      _prePainLevel = v;
-                    }
-                  }),
-                ),
-                const SizedBox(height: AppSpace.s16),
-                FiveRatingSlider(
-                  label: '睡眠质量',
-                  value: isPost ? _postSleep : _preSleep,
-                  onChanged: (v) => setState(() {
-                    if (isPost) {
-                      _postSleep = v;
-                    } else {
-                      _preSleep = v;
-                    }
-                  }),
-                ),
-                const SizedBox(height: AppSpace.s16),
-                FiveRatingSlider(
-                  label: '情绪',
-                  value: isPost ? _postMood : _preMood,
-                  onChanged: (v) => setState(() {
-                    if (isPost) {
-                      _postMood = v;
-                    } else {
-                      _preMood = v;
-                    }
-                  }),
-                ),
-              ],
-            ),
+  // ────────────────────────────────────────────────────────────
+  // 理疗前 → 后 对比卡 (2026-09-24 UI 优化, 主人: 「整个页面都需要优化 ui,
+  //   特别是理疗前状态卡片和理疗后效果卡片」)
+  //
+  // 为什么前 / 后**合并成一张卡** (旧版 = 两块一模一样的灰卡, 各堆 3 个滑块):
+  //   · 前 / 后本来就是同一维度的两次测量 —— 分开放 = 逼销售心算差值;
+  //   · 差值 (↓5 改善) 才是这条记录对「分析 / 图谱」的价值
+  //     (跟客户详情记录行 `疼痛 10→9 ↓1` 同口径);
+  //   · 合并后高度 ≈ 旧版一半, 三项前后对比一屏看完 (ui-principles 原则 4 容器越少)。
+  // 配色: 前 = 中性灰 (已成过去), 后 = 品牌主色 (这次结果); 「改善 / 变差」的信号
+  //   交给差值徽章, 不靠滑块颜色重复表达 (原则 5 颜色是信号, 不是装饰)。
+  // ────────────────────────────────────────────────────────────
+  Widget _buildConditionCompare() {
+    final t = context.tokens;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const AppSectionHeader(
+          title: '理疗前 → 后',
+          subtitle: '拖动滑块记录这次调理前后的状态, 差值自动算',
+          padding: EdgeInsets.zero,
+        ),
+        const SizedBox(height: AppSpace.s8),
+        Container(
+          padding: const EdgeInsets.all(AppSpace.s16),
+          decoration: BoxDecoration(
+            color: t.surfaceCard,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: t.divider),
           ),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ① 疼痛程度 (1-10, 越低越好)
+              _MetricCompare(
+                name: '疼痛程度',
+                delta: _DeltaBadge(
+                  pre: _prePainLevel,
+                  post: _postPainLevel,
+                  lowerIsBetter: true,
+                ),
+                pre: PainSlider(
+                  label: '前',
+                  value: _prePainLevel,
+                  accent: t.textSecondary,
+                  onChanged: (v) => setState(() => _prePainLevel = v),
+                ),
+                post: PainSlider(
+                  label: '后',
+                  value: _postPainLevel,
+                  onChanged: (v) => setState(() => _postPainLevel = v),
+                ),
+              ),
+              const Divider(height: AppSpace.s20),
+              // ② 睡眠质量 (1-5, 越高越好)
+              _MetricCompare(
+                name: '睡眠质量',
+                delta: _DeltaBadge(
+                  pre: _preSleep,
+                  post: _postSleep,
+                  lowerIsBetter: false,
+                ),
+                pre: FiveRatingSlider(
+                  label: '前',
+                  value: _preSleep,
+                  accent: t.textSecondary,
+                  onChanged: (v) => setState(() => _preSleep = v),
+                ),
+                post: FiveRatingSlider(
+                  label: '后',
+                  value: _postSleep,
+                  onChanged: (v) => setState(() => _postSleep = v),
+                ),
+              ),
+              const Divider(height: AppSpace.s20),
+              // ③ 情绪 (1-5, 越高越好)
+              _MetricCompare(
+                name: '情绪',
+                delta: _DeltaBadge(
+                  pre: _preMood,
+                  post: _postMood,
+                  lowerIsBetter: false,
+                ),
+                pre: FiveRatingSlider(
+                  label: '前',
+                  value: _preMood,
+                  accent: t.textSecondary,
+                  onChanged: (v) => setState(() => _preMood = v),
+                ),
+                post: FiveRatingSlider(
+                  label: '后',
+                  value: _postMood,
+                  onChanged: (v) => setState(() => _postMood = v),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -509,13 +535,7 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: AppTheme.fontMd,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        AppSectionHeader(title: label, padding: EdgeInsets.zero),
         const SizedBox(height: AppSpace.s8),
         TextField(
           controller: ctrl,
@@ -535,12 +555,10 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '下次建议日期',
-          style: TextStyle(
-            fontSize: AppTheme.fontMd,
-            fontWeight: FontWeight.w600,
-          ),
+        const AppSectionHeader(
+          title: '下次建议日期',
+          subtitle: '可选 · 到日子会提醒跟进',
+          padding: EdgeInsets.zero,
         ),
         const SizedBox(height: AppSpace.s8),
         OutlinedButton.icon(
@@ -561,13 +579,114 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
             style: const TextStyle(fontSize: AppTheme.fontMd),
           ),
           style: OutlinedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 64),
+            // 跟页面其它按钮统一高度 (旧版 64 特立独行, 视觉不齐)
+            minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
           ),
         ),
       ],
     );
   }
 }
+/// 一项指标的「前 → 后」对比块 (指标名 + 差值徽章 + 两个滑块)
+class _MetricCompare extends StatelessWidget {
+  const _MetricCompare({
+    required this.name,
+    required this.delta,
+    required this.pre,
+    required this.post,
+  });
+
+  final String name;
+  final Widget delta;
+  final Widget pre;
+  final Widget post;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                style: TextStyle(
+                  fontSize: AppType.md,
+                  fontWeight: AppWeight.semibold,
+                  color: t.textPrimary,
+                ),
+              ),
+            ),
+            delta,
+          ],
+        ),
+        const SizedBox(height: AppSpace.s8),
+        pre,
+        const SizedBox(height: AppSpace.s6),
+        post,
+      ],
+    );
+  }
+}
+
+/// 「前 → 后」差值徽章: `↓5 改善` / `↑2 变差` / `持平`
+///
+/// 颜色是信号 (ui-principles 原则 5): 改善 = success, 变差 = warning, 持平 = 中性。
+/// [lowerIsBetter]: 疼痛 (越低越好) = true; 睡眠 / 情绪 (越高越好) = false。
+class _DeltaBadge extends StatelessWidget {
+  const _DeltaBadge({
+    required this.pre,
+    required this.post,
+    required this.lowerIsBetter,
+  });
+
+  final int pre;
+  final int post;
+  final bool lowerIsBetter;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final raw = post - pre;
+    final improved = raw != 0 && (lowerIsBetter ? raw < 0 : raw > 0);
+
+    final Color bg;
+    final Color fg;
+    if (raw == 0) {
+      bg = t.surfaceSubtle;
+      fg = t.textTertiary;
+    } else if (improved) {
+      bg = t.successSurface;
+      fg = t.success;
+    } else {
+      bg = t.warningSurface;
+      fg = t.warning;
+    }
+    final text = raw == 0
+        ? '持平'
+        : '${raw < 0 ? '↓' : '↑'}${raw.abs()} ${improved ? '改善' : '变差'}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.s8, vertical: AppSpace.s2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.r8),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: AppType.xs,
+          fontWeight: AppWeight.semibold,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
 /// 「已按上次填好」提示条 (P3 记录提速)
 ///
 /// 为什么必须有这条: 自动预填是"静默"的 —— 不提示的话销售不知道已经填好了,

@@ -111,6 +111,10 @@ Future<void> pump(WidgetTester tester,
 }
 
 /// 读某个滑块当前值 —— 表单用 Slider, 通过 value 断言
+///
+/// ⚠ 2026-09-24 顺序变了 (「理疗前 → 后」合并成一张对比卡, 按指标分组):
+///   0 = 疼痛·前 | 1 = 疼痛·后 | 2 = 睡眠·前 | 3 = 睡眠·后 | 4 = 情绪·前 | 5 = 情绪·后
+///   (旧版是两块卡: 0/1/2 = 前 疼痛/睡眠/情绪, 3/4/5 = 后 疼痛/睡眠/情绪)
 List<double> sliderValues(WidgetTester tester) =>
     tester.widgetList<Slider>(find.byType(Slider)).map((s) => s.value).toList();
 
@@ -124,17 +128,18 @@ void main() {
       expect(vals.length, 6, reason: "理疗前/后 × 疼痛/睡眠/情绪 = 6 个滑块");
 
       // pre: pain=3 sleep=4 mood=5  ← 来自上次的 post
+      //   (新顺序: 前/后按指标相邻 → 前 = 偶数下标 0/2/4)
       expect(vals[0], 3, reason: "prePain 应 = 上次 postPain");
-      expect(vals[1], 4, reason: "preSleep 应 = 上次 postSleep");
-      expect(vals[2], 5, reason: "preMood 应 = 上次 postMood");
+      expect(vals[2], 4, reason: "preSleep 应 = 上次 postSleep");
+      expect(vals[4], 5, reason: "preMood 应 = 上次 postMood");
     });
 
     testWidgets("本次的「后」默认 = 「前」→ 改善量 0 (不虚报效果)", (tester) async {
       await pump(tester, records: [lastRecord()]);
       final vals = sliderValues(tester);
-      expect(vals[3], vals[0], reason: "postPain 默认 = prePain");
-      expect(vals[4], vals[1], reason: "postSleep 默认 = preSleep");
-      expect(vals[5], vals[2], reason: "postMood 默认 = preMood");
+      expect(vals[1], vals[0], reason: "postPain 默认 = prePain");
+      expect(vals[3], vals[2], reason: "postSleep 默认 = preSleep");
+      expect(vals[5], vals[4], reason: "postMood 默认 = preMood");
     });
 
     testWidgets("没有历史记录 → 保留出厂默认 (5/3/3 · 3/3/3)", (tester) async {
@@ -155,8 +160,8 @@ void main() {
       );
       final vals = sliderValues(tester);
       expect(vals[0], 2, reason: "有 pain → 用上次的");
-      expect(vals[1], 3, reason: "没 sleep → 保留默认 3");
-      expect(vals[2], 3, reason: "没 mood → 保留默认 3");
+      expect(vals[2], 3, reason: "没 sleep → 保留默认 3");
+      expect(vals[4], 3, reason: "没 mood → 保留默认 3");
     });
   });
 
