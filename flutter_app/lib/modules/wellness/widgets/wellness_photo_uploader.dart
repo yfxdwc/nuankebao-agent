@@ -48,7 +48,8 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
     _urls = List.from(widget.existingUrls);
   }
 
-  Future<void> _pickImage(ImageSource source) async {
+  /// 还能再加吗 (满了给提示)
+  bool _canAddMore() {
     if (_urls.length >= widget.maxPhotos) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -58,41 +59,108 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
           ),
         ),
       );
-      return;
+      return false;
     }
+    return true;
+  }
 
+  /// 拍照 (单张)
+  Future<void> _pickFromCamera() async {
+    if (!_canAddMore()) return;
     final picker = ImagePicker();
     try {
       final picked = await picker.pickImage(
-        source: source,
+        source: ImageSource.camera,
         imageQuality: 80,
         maxWidth: 1920,
       );
       if (picked == null) return;
-
-      setState(() => _uploading = true);
-      // 上传
-      final bytes = await picked.readAsBytes();
-      final base64Data = base64Encode(bytes);
-      final url = await _uploadPhoto(base64Data);
-      setState(() {
-        _urls.add(url);
-        _uploading = false;
-      });
-      widget.onChanged(_urls);
-      widget.onPhotoUploaded?.call();
+      await _uploadAll([picked]);
     } catch (e) {
-      setState(() => _uploading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '上传失败: $e',
-            style: const TextStyle(fontSize: AppTheme.fontMd),
-          ),
-        ),
-      );
+      _toast('上传失败: $e');
     }
+  }
+
+  /// 相册 (2026-09-24: 支持**多选**, 一次最多补到 5 张)
+  Future<void> _pickFromGallery() async {
+    if (!_canAddMore()) return;
+    final picker = ImagePicker();
+    try {
+      final picked =
+          await picker.pickMultiImage(imageQuality: 80, maxWidth: 1920);
+      if (picked.isEmpty) return;
+      await _uploadAll(picked);
+    } catch (e) {
+      _toast('上传失败: $e');
+    }
+  }
+
+  /// 点空槽位 → 让用户选 拍照 / 相册 (2026-09-24: 空槽不再只是占位)
+  Future<void> _chooseSource() async {
+    if (!_canAddMore()) return;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('拍照', style: TextStyle(fontSize: AppTheme.fontMd)),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('从相册选 (可多选)',
+                  style: TextStyle(fontSize: AppTheme.fontMd)),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+    if (source == ImageSource.camera) {
+      await _pickFromCamera();
+    } else {
+      await _pickFromGallery();
+    }
+  }
+
+  /// 逐张上传 (超过上限的张数直接丢弃并告知)
+  Future<void> _uploadAll(List<XFile> files) async {
+    final remaining = widget.maxPhotos - _urls.length;
+    final batch = files.take(remaining).toList();
+    if (batch.isEmpty) return;
+    setState(() => _uploading = true);
+    var failed = 0;
+    for (final f in batch) {
+      try {
+        final url = await _uploadPhoto(base64Encode(await f.readAsBytes()));
+        if (!mounted) return;
+        setState(() => _urls.add(url));
+        widget.onPhotoUploaded?.call();
+      } catch (_) {
+        failed++;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _uploading = false);
+    widget.onChanged(_urls);
+    if (files.length > batch.length) {
+      _toast('最多 ${widget.maxPhotos} 张, 多出的 ${files.length - batch.length} 张没上传');
+    }
+    if (failed > 0) _toast('$failed 张上传失败, 可再试一次');
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: const TextStyle(fontSize: AppTheme.fontMd)),
+      ),
+    );
   }
 
   Future<String> _uploadPhoto(String base64Data) async {
@@ -125,7 +193,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
             mainAxisSize: MainAxisSize.min,
             children: [
               OutlinedButton.icon(
-                onPressed: _uploading ? null : () => _pickImage(ImageSource.camera),
+                onPressed: _uploading ? null : _pickFromCamera,
                 icon: const Icon(Icons.camera_alt, size: AppSize.iconSm),
                 label: const Text('拍照', style: TextStyle(fontSize: AppTheme.fontSm)),
                 style: OutlinedButton.styleFrom(
@@ -136,7 +204,7 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
               ),
               const SizedBox(width: AppSpace.s8),
               OutlinedButton.icon(
-                onPressed: _uploading ? null : () => _pickImage(ImageSource.gallery),
+                onPressed: _uploading ? null : _pickFromGallery,
                 icon: const Icon(Icons.photo_library, size: AppSize.iconSm),
                 label: const Text('相册', style: TextStyle(fontSize: AppTheme.fontSm)),
                 style: OutlinedButton.styleFrom(
@@ -164,12 +232,22 @@ class _WellnessPhotoUploaderState extends State<WellnessPhotoUploader> {
                   aspectRatio: 1,
                   child: i < _urls.length
                       ? _photoTile(_urls[i], () => _removePhoto(i))
-                      : Container(
-                          // 空槽位: 浅底提示位 (不可点, 拍照/相册按钮在标题行)
+                      : InkWell(
+                          // 空槽位 (2026-09-24): 点它直接加照片 (拍照/相册二选一),
+                          //   不再只是占位
                           key: ValueKey('photoSlot-empty-$i'),
-                          decoration: BoxDecoration(
-                            color: context.tokens.surfaceSubtle,
-                            borderRadius: BorderRadius.circular(AppRadius.r12),
+                          onTap: _uploading ? null : _chooseSource,
+                          borderRadius: BorderRadius.circular(AppRadius.r12),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: context.tokens.surfaceSubtle,
+                              borderRadius: BorderRadius.circular(AppRadius.r12),
+                            ),
+                            child: Icon(
+                              Icons.add_a_photo_outlined,
+                              size: AppSize.iconLg,
+                              color: context.tokens.textTertiary,
+                            ),
                           ),
                         ),
                 ),

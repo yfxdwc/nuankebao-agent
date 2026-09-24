@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nuankebao/core/models/dictionaries.dart';
 import 'package:nuankebao/core/models/wellness_record.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
@@ -101,6 +102,8 @@ Widget host({
 
 Future<void> pump(WidgetTester tester,
     {required List<WellnessRecord> records, Dictionaries? dict}) async {
+  // 草稿功能会读 shared_preferences → 测试里给个空 mock (否则平台通道可能挂起)
+  SharedPreferences.setMockInitialValues({});
   // ⚠ 表单是 ListView (懒构建): 默认 800px 视口只建得出前 3 个滑块,
   //   后面 3 个在屏外 → find.byType(Slider) 找不到。
   //   把视口调高, 让 6 个滑块全部构建 (测的是数据映射, 不是滚动行为)。

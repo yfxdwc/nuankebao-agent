@@ -20,6 +20,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/widgets/app_empty.dart';
@@ -93,6 +94,8 @@ void main() {
     final dio = Dio(BaseOptions(baseUrl: 'http://test.local/api'))
       ..httpClientAdapter = _FailingAdapter();
 
+    // 草稿功能会读 shared_preferences → 空 mock (否则 2s 超时 timer 悬挂)
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(ProviderScope(
       overrides: [dioProvider.overrideWithValue(dio)],
       child: const MaterialApp(home: WellnessRecordFormPage(customerId: '1')),
@@ -130,6 +133,8 @@ void main() {
     final dio = Dio(BaseOptions(baseUrl: 'http://test.local/api'))
       ..httpClientAdapter = adapter;
 
+    // 草稿功能会读 shared_preferences → 空 mock (否则 2s 超时 timer 悬挂)
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(ProviderScope(
       overrides: [dioProvider.overrideWithValue(dio)],
       child: const MaterialApp(home: WellnessRecordFormPage(customerId: '1')),

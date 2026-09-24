@@ -16,6 +16,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:nuankebao/core/models/dictionaries.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
@@ -61,6 +62,8 @@ Dictionaries _dict({required bool withDefault}) => Dictionaries(
     );
 
 Future<void> _pumpForm(WidgetTester tester, Dictionaries dict) async {
+  // 草稿功能会读 shared_preferences → 测试里给个空 mock (否则平台通道挂起)
+  SharedPreferences.setMockInitialValues({});
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local/api'))
     ..httpClientAdapter = _FakeDictAdapter(dict.toJson());
 
@@ -72,16 +75,19 @@ Future<void> _pumpForm(WidgetTester tester, Dictionaries dict) async {
 }
 
 /// 下拉框当前选中值 (DropdownButtonFormField 内部就是一个 DropdownButton)
-String? _selectedService(WidgetTester tester) => tester
-    .widget<DropdownButton<String>>(find.byType(DropdownButton<String>))
-    .value;
+/// 当前选中的服务项目名 (2026-09-24: 下拉框 → 弹层+搜索; 选中值显示在 field 里)
+String? _selectedServiceName(WidgetTester tester) {
+  final t = tester.widget<Text>(
+      find.byKey(const ValueKey('serviceItemName')));
+  return (t.data ?? '').isEmpty ? null : t.data;
+}
 
 void main() {
-  testWidgets('服务项目置顶 (在身体部位上面) + 用下拉框', (tester) async {
+  testWidgets('服务项目置顶 (在身体部位上面) + 用选择弹层', (tester) async {
     await _pumpForm(tester, _dict(withDefault: true));
 
-    // 下拉框 (不再是 ChoiceChip)
-    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+    // 选择字段 (不再是 ChoiceChip / 不是下拉框: 2026-09-24 改弹层+搜索)
+    expect(find.byKey(const ValueKey('serviceItemField')), findsOneWidget);
     expect(find.byType(ChoiceChip), findsNothing);
 
     // 置顶: 服务项目 label 在 身体部位 label 上面
@@ -93,25 +99,26 @@ void main() {
   testWidgets('默认选中「碧波庭-脉动负压提拉按摩」', (tester) async {
     await _pumpForm(tester, _dict(withDefault: true));
 
-    expect(_selectedService(tester), '9');
-    expect(find.text(_defaultServiceName), findsOneWidget);
+    expect(_selectedServiceName(tester), _defaultServiceName);
   });
 
   testWidgets('字典里没有该项目 → 不硬编码, 显示 hint 待用户选', (tester) async {
     await _pumpForm(tester, _dict(withDefault: false));
 
-    expect(_selectedService(tester), isNull);
+    expect(_selectedServiceName(tester), isNull);
     expect(find.text('请选择服务项目'), findsOneWidget);
   });
 
-  testWidgets('默认项可改: 打开下拉选「拔罐」', (tester) async {
+  testWidgets('默认项可改: 打开选择弹层选「拔罐」', (tester) async {
     await _pumpForm(tester, _dict(withDefault: true));
 
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.tap(find.byKey(const ValueKey('serviceItemField')));
     await tester.pumpAndSettle();
+    expect(find.byType(ListTile), findsNWidgets(3),
+        reason: '弹层里应有 3 个服务项目 (含默认项)');
     await tester.tap(find.text('拔罐').last);
     await tester.pumpAndSettle();
 
-    expect(_selectedService(tester), '2');
+    expect(_selectedServiceName(tester), '拔罐');
   });
 }

@@ -21,6 +21,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:nuankebao/core/models/dictionaries.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
@@ -57,6 +58,12 @@ Dictionaries _dict() => const Dictionaries(
     );
 
 Future<void> _pumpForm(WidgetTester tester) async {
+  // 草稿功能会读 shared_preferences → 测试里给个空 mock (否则平台通道挂起)
+  SharedPreferences.setMockInitialValues({});
+  // ⚠ 视口调高: 表单现在更长 (记录日期 + 快捷 chips + 短语 chips + 吸底保存栏),
+  //   默认 800×600 时滑块会落到屏外 → drag 点不到 (2026-09-24 踩)
+  await tester.binding.setSurfaceSize(const Size(900, 2400));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local/api'))
     ..httpClientAdapter = _FakeDictAdapter(_dict().toJson());
 

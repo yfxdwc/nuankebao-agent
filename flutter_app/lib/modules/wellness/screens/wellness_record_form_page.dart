@@ -5,9 +5,13 @@
 // 中老年大字 + 大按钮
 // ============================================
 
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/models/dictionaries.dart';
 import '../../../core/models/follow_up.dart' show FollowUpTask;
@@ -23,6 +27,13 @@ import '../widgets/rating_slider.dart';
 import '../widgets/wellness_photo_uploader.dart';
 
 import '../../../core/theme/tokens.g.dart';
+/// YYYY-MM-DD (后端 serviceDate / nextAdviceDate 的口径)
+String _fmtDay(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
 /// 「下次建议日期」→ 顺手建一条跟进任务 (2026-09-24, 主人问: 「选了下次建议日期,
 ///   保存后是否应该自动创建跟进任务?」→ 是)
 ///
@@ -96,6 +107,22 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
   DateTime? _nextAdviceDate;
   List<String> _photoUrls = [];
 
+  /// 记录日期 (2026-09-24 修 + 补):
+  ///   · **修 bug**: 原 `_submit` 永远发 `serviceDate = 今天` —— 编辑老记录会把它
+  ///     挪到今天 (时间线 / 趋势 / 复购周期全跟着错)。现在编辑载入原日期。
+  ///   · **补录**: 记录日期可选 (默认今天, 可往前选), 补昨天的单不再做不到。
+  DateTime _serviceDate = DateTime.now();
+
+  /// 有未保存的改动 → 离开时确认 (2026-09-24, 长表单填一半被打断 = 全丢)
+  bool _dirty = false;
+
+  /// 草稿: 已恢复过 / 自动暂存计时器 (弱网 / 被电话打断都不丢)
+  bool _draftRestored = false;
+  Timer? _draftTimer;
+
+  /// 身体部位是否展开 (未选超 8 个时折叠, 2026-09-24)
+  bool _partsExpanded = false;
+
   bool _loading = false;
   String? _effectiveCustomerId;
 
@@ -119,8 +146,8 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
       _loadExisting();
     } else {
       _effectiveCustomerId = widget.customerId;
-      // 新建 → 尝试沿用上次 (拿不到就静默回落原来的写死默认值)
-      _loadLastRecord();
+      // 新建 → 先试**未保存草稿** (用户自己填过的优先), 没有草稿再沿用上次
+      _initCreateForm();
     }
   }
 
@@ -198,7 +225,9 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
 
   /// 「清空重填」—— 不想沿用上次时用 (回到出厂默认)
   void _resetToDefaults() {
+    _clearDraft();
     setState(() {
+      _dirty = false;
       _bodyPartIds.clear();
       _serviceItemId = _dict == null ? null : _defaultServiceItemIdOf(_dict!);
       _prePainLevel = 5;
@@ -217,6 +246,8 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     if (!mounted) return;
     setState(() {
       _effectiveCustomerId = r.customerId;
+      // 修 bug: 编辑必须保留原记录日期 (原来 _submit 一律发今天 → 会把老记录挪到今天)
+      _serviceDate = DateTime.tryParse(r.serviceDate) ?? DateTime.now();
       _bodyPartIds.addAll(r.bodyPartIds);
       _serviceItemId = r.serviceItemId;
       _processCtrl.text = r.processNote ?? '';
@@ -235,6 +266,12 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
 
   @override
   void dispose() {
+    // 离开前落一次草稿 (有未保存改动时; 弱网/被电话打断都不丢内容)
+    _draftTimer?.cancel();
+    if (_dirty && widget.recordId == null) {
+      // fire-and-forget: dispose 不能 await
+      _saveDraft();
+    }
     _processCtrl.dispose();
     _feedbackCtrl.dispose();
     super.dispose();
@@ -282,6 +319,43 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     }
   }
 
+  /// 这一客户在这天是否已经记过 (同日重复录入提醒用)
+  Future<bool> _hasRecordOn(DateTime day) async {
+    final cid = _effectiveCustomerId;
+    if (cid == null) return false;
+    try {
+      final list = await ref
+          .read(wellnessRecordServiceProvider)
+          .list(customerId: cid, limit: 20);
+      return list.any((r) => r.serviceDate == _fmtDay(day));
+    } catch (_) {
+      // 查不到就不拦 (宁可少一次提醒, 不能因为查询失败挡住保存)
+      return false;
+    }
+  }
+
+  Future<bool?> _confirmDuplicate(DateTime day) => showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('这一天已经记过一次'),
+          content: Text(
+            '${_fmtDay(day)} 已经有一条养生记录了, 再存一条会出现重复。\n'
+            '如果确实做了两次, 可以继续保存。',
+            style: const TextStyle(fontSize: AppTheme.fontMd, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('继续保存', style: TextStyle(fontSize: AppTheme.fontMd)),
+            ),
+          ],
+        ),
+      );
+
   Future<void> _submit() async {
     if (_serviceItemId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -294,9 +368,19 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     }
     setState(() => _loading = true);
 
+    // 新建: 同一天已有记录 → 先问一句 (2026-09-24, 防重复录入)
+    if (widget.recordId == null && await _hasRecordOn(_serviceDate)) {
+      if (!mounted) return;
+      final go = await _confirmDuplicate(_serviceDate);
+      if (go != true) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+    }
+
     final data = <String, dynamic>{
       'customerId': _effectiveCustomerId,
-      'serviceDate': DateTime.now().toIso8601String().split('T').first,
+      'serviceDate': _fmtDay(_serviceDate),
       'serviceItemId': _serviceItemId,
       'bodyPartIds': _bodyPartIds.toList(),
       // ⚠ `scale: 10` = 睡眠/情绪的新量程声明 (2026-09-24 起 1-10)。
@@ -332,6 +416,8 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
         await _createAdviceTaskIfNeeded();
       }
       if (!mounted) return;
+      _dirty = false; // 已保存 → 离开不再确认
+      await _clearDraft();
       ref.invalidate(customerWellnessRecordsProvider(_effectiveCustomerId!));
       context.pop();
     } catch (e) {
@@ -347,13 +433,217 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     }
   }
 
+  /// 记录日期区块 (2026-09-24: 补录 + 默认今天)
+  Widget _buildServiceDate() {
+    final isToday = _sameDay(_serviceDate, DateTime.now());
+    return AppSectionHeader(
+      title: '记录日期',
+      subtitle: '默认今天; 补录以前的单子可以改',
+      padding: EdgeInsets.zero,
+      action: OutlinedButton.icon(
+        onPressed: () async {
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: _serviceDate,
+            firstDate: DateTime.now().subtract(const Duration(days: 730)),
+            lastDate: DateTime.now().add(const Duration(days: 1)),
+          );
+          if (picked != null) {
+            setState(() => _serviceDate = picked);
+            _markDirty();
+          }
+        },
+        icon: const Icon(Icons.event, size: AppSize.iconSm),
+        label: Text(
+          isToday ? '今天' : _fmtDay(_serviceDate),
+          style: const TextStyle(fontSize: AppTheme.fontSm),
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, AppSize.controlLg),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10),
+          visualDensity: VisualDensity.compact,
+        ),
+      ),
+    );
+  }
+
+  /// 标记「有未保存改动」并排一次草稿自动暂存
+  void _markDirty() {
+    if (!_dirty) setState(() => _dirty = true);
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 600), _saveDraft);
+  }
+
+  Future<SharedPreferences?> _prefsOrNull() async {
+    // 测试环境 / 平台不支持 → 静默关掉草稿 (绝不能因为草稿把表单打不开)
+    try {
+      // ⚠ 2s 超时: 平台通道不可用 (测试 / 某些 web 场景) 时 getInstance 可能
+      //   既不返回也不抛 → 不能让它卡住"沿用上次/草稿恢复"整条初始化链。
+      return await SharedPreferences.getInstance()
+          .timeout(const Duration(seconds: 2));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String get _draftKey =>
+      'wellness_draft_${_effectiveCustomerId ?? widget.customerId ?? 'x'}';
+
+  Future<void> _saveDraft() async {
+    final prefs = await _prefsOrNull();
+    if (prefs == null) return;
+    try {
+      await prefs.setString(
+        _draftKey,
+        jsonEncode({
+          'savedAt': DateTime.now().toIso8601String(),
+          'serviceDate': _fmtDay(_serviceDate),
+          'serviceItemId': _serviceItemId,
+          'bodyPartIds': _bodyPartIds.toList(),
+          'pre': [_prePainLevel, _preSleep, _preMood],
+          'post': [_postPainLevel, _postSleep, _postMood],
+          'processNote': _processCtrl.text,
+          'customerFeedback': _feedbackCtrl.text,
+          'nextAdviceDate': _nextAdviceDate == null ? null : _fmtDay(_nextAdviceDate!),
+          'photoUrls': _photoUrls,
+        }),
+      );
+    } catch (_) {}
+  }
+
+  /// 恢复草稿 (超过 7 天视为陈旧, 直接清掉不恢复)
+  Future<bool> _restoreDraft() async {
+    final prefs = await _prefsOrNull();
+    if (prefs == null) return false;
+    final raw = prefs.getString(_draftKey);
+    if (raw == null) return false;
+    try {
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      final savedAt = DateTime.tryParse('${m['savedAt']}');
+      if (savedAt == null ||
+          DateTime.now().difference(savedAt).inDays > 7) {
+        await prefs.remove(_draftKey);
+        return false;
+      }
+      final pre = (m['pre'] as List?)?.cast<num>() ?? const [];
+      final post = (m['post'] as List?)?.cast<num>() ?? const [];
+      final advice = m['nextAdviceDate'] == null
+          ? null
+          : DateTime.tryParse('${m['nextAdviceDate']}');
+      final serviceDay = DateTime.tryParse('${m['serviceDate']}');
+      setState(() {
+        if (serviceDay != null) _serviceDate = serviceDay;
+        _serviceItemId = m['serviceItemId'] as String? ?? _serviceItemId;
+        _bodyPartIds
+          ..clear()
+          ..addAll(((m['bodyPartIds'] as List?) ?? const []).cast<String>());
+        if (pre.length == 3) {
+          _prePainLevel = pre[0].toInt();
+          _preSleep = pre[1].toInt();
+          _preMood = pre[2].toInt();
+        }
+        if (post.length == 3) {
+          _postPainLevel = post[0].toInt();
+          _postSleep = post[1].toInt();
+          _postMood = post[2].toInt();
+        }
+        _processCtrl.text = m['processNote'] as String? ?? '';
+        _feedbackCtrl.text = m['customerFeedback'] as String? ?? '';
+        _nextAdviceDate = advice;
+        _photoUrls = ((m['photoUrls'] as List?) ?? const []).cast<String>();
+        _draftRestored = true;
+        _dirty = true; // 草稿 = 用户自己填的未保存内容 → 离开仍要确认
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    _draftTimer?.cancel();
+    final prefs = await _prefsOrNull();
+    if (prefs == null) return;
+    try {
+      await prefs.remove(_draftKey);
+    } catch (_) {}
+  }
+
+  Future<void> _initCreateForm() async {
+    final restored = await _restoreDraft();
+    if (!restored) _loadLastRecord();
+  }
+
+  /// 离开确认 (有未保存改动时) —— 草稿已自动暂存, 所以文案是"提醒"而非"要丢了"
+  Future<void> _confirmLeave() async {
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('有没保存的内容'),
+        content: const Text(
+          '已经自动暂存成草稿, 下次进来能接着填。\n要现在离开吗?',
+          style: TextStyle(fontSize: AppTheme.fontMd, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('继续填写', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('离开', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+        ],
+      ),
+    );
+    if (leave == true && mounted) {
+      setState(() => _dirty = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.pop();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      // 有未保存改动 → 拦一次, 让用户确认 (填一半被打断不再静默丢)
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmLeave();
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Text(widget.recordId == null ? '添加养生记录' : '编辑养生记录'),
         toolbarHeight: AppSize.appBarHeight,
       ),
+      // 保存吸底 (2026-09-24): 表单很长 (含 6 滑块 + 照片条), 不再让用户滑到底才能保存
+      bottomNavigationBar: _dict == null
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpace.s16, AppSpace.s8, AppSpace.s16, AppSpace.s12),
+                child: FilledButton.icon(
+                  onPressed: _loading ? null : _submit,
+                  icon: _loading
+                      ? const SizedBox(
+                          width: AppSize.iconLg,
+                          height: AppSize.iconLg,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check, size: AppSize.iconLg),
+                  label: Text(widget.recordId == null ? '保存' : '保存修改'),
+                  style: FilledButton.styleFrom(
+                    minimumSize:
+                        const Size(double.infinity, AppSize.buttonLgHeight),
+                  ),
+                ),
+              ),
+            ),
       body: _dict == null
           ? (_dictError != null
               // 字典加载失败 → 错误态, 给重试按钮 (原则 8: 必须告诉下一步做什么)
@@ -377,22 +667,52 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                 children: [
                   // P3 提速: 沿用上次时给一条明确提示
                   //   —— 不提示的话销售不知道已经填好了, 反而会把每个字段重看一遍
-                  if (_prefilledFromLast && _prefilledFromDate != null)
+                  // 草稿恢复提示 (2026-09-24): 用户自己填到一半的 → 优先于「沿用上次」
+                  if (_draftRestored) ...[
                     _PrefillBanner(
-                      date: _prefilledFromDate!,
+                      title: '已恢复上次没保存的内容',
+                      subtitle: '接着填就行; 不想用就「清空重填」',
+                      date: null,
                       onReset: _resetToDefaults,
                     ),
-                  if (_prefilledFromLast && _prefilledFromDate != null)
                     const SizedBox(height: AppSpace.s16),
+                  ] else if (_prefilledFromLast && _prefilledFromDate != null) ...[
+                    _PrefillBanner(
+                      title: '已按 ${_prefilledFromDate!} 那次填好',
+                      subtitle: '没变化可直接保存; 有变化只改对应项',
+                      date: _prefilledFromDate,
+                      onReset: _resetToDefaults,
+                    ),
+                    const SizedBox(height: AppSpace.s16),
+                  ],
+                  // 记录日期 (2026-09-24: 补录 + 修编辑改日期的 bug)
+                  _buildServiceDate(),
+                  const SizedBox(height: AppSpace.s20),
                   _buildServiceSelector(),
                   const SizedBox(height: AppSpace.s20),
                   _buildBodyPartSelector(),
                   const SizedBox(height: AppSpace.s20),
                   _buildConditionCompare(),
                   const SizedBox(height: AppSpace.s20),
-                  _buildTextField('操作过程', _processCtrl, hint: '可记录理疗手法、特殊处理等'),
+                  _buildTextField('操作过程', _processCtrl,
+                      hint: '可记录理疗手法、特殊处理等',
+                      quickPhrases: const [
+                        '动作到位',
+                        '力度偏轻',
+                        '加了拔罐',
+                        '重点做肩颈',
+                        '客户中途要求加重',
+                      ]),
                   const SizedBox(height: AppSpace.s20),
-                  _buildTextField('客户反馈', _feedbackCtrl, hint: '客户说的原话'),
+                  _buildTextField('客户反馈', _feedbackCtrl,
+                      hint: '客户说的原话',
+                      quickPhrases: const [
+                        '说疼痛减轻',
+                        '觉得轻松了',
+                        '睡眠改善',
+                        '想约下次',
+                        '说没感觉',
+                      ]),
                   const SizedBox(height: AppSpace.s20),
                   _buildDatePicker(),
                   const SizedBox(height: AppSpace.s20),
@@ -402,32 +722,26 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                     onPhotoUploaded: () =>
                         ref.read(usageServiceProvider).track('record_photo_taken'),
                   ),
-                  const SizedBox(height: AppSpace.s32),
-                  FilledButton.icon(
-                    onPressed: _loading ? null : _submit,
-                    icon: _loading
-                        ? const SizedBox(
-                            width: AppSize.iconLg,
-                            height: AppSize.iconLg,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.check, size: AppSize.iconLg),
-                    label: Text(widget.recordId == null ? '保存' : '保存修改'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
-                    ),
-                  ),
                   const SizedBox(height: AppSpace.s24),
                 ],
               ),
             ),
+      ),
     );
   }
 
-  Widget _buildBodyPartSelector() {    return Column(
+  Widget _buildBodyPartSelector() {
+    // 2026-09-24: **已选置顶** + 未选超 8 个折叠
+    //   (部位字典大了以后, 已选的被冲散在列表里要一个个找)
+    final selected = _dict!.bodyParts
+        .where((p) => _bodyPartIds.contains(p.id))
+        .toList();
+    final rest =
+        _dict!.bodyParts.where((p) => !_bodyPartIds.contains(p.id)).toList();
+    final shownRest = _partsExpanded ? rest : rest.take(8).toList();
+    final hiddenCount = rest.length - shownRest.length;
+
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 标题 + 「已选 N 个」合并成一个区块头 (旧版是标题下面再挂一行小字)
@@ -440,39 +754,67 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _dict!.bodyParts.map((bp) {
-            final selected = _bodyPartIds.contains(bp.id);
-            return FilterChip(
-              label: Text(
-                bp.name,
-                style: TextStyle(
-                  fontSize: AppTheme.fontSm,
-                  color: selected ? Colors.white : AppTheme.textPrimary,
-                ),
+          children: [
+            for (final bp in [...selected, ...shownRest])
+              _bodyPartChip(bp),
+            if (hiddenCount > 0)
+              ActionChip(
+                label: Text('还有 $hiddenCount 个',
+                    style: const TextStyle(fontSize: AppTheme.fontSm)),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() => _partsExpanded = true),
               ),
-              selected: selected,
-              onSelected: (v) => setState(() {
-                if (v) {
-                  _bodyPartIds.add(bp.id);
-                } else {
-                  _bodyPartIds.remove(bp.id);
-                }
-              }),
-              selectedColor: AppTheme.primary,
-              checkmarkColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s8),
-            );
-          }).toList(),
+            if (_partsExpanded && rest.isNotEmpty)
+              ActionChip(
+                label: const Text('收起',
+                    style: TextStyle(fontSize: AppTheme.fontSm)),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() => _partsExpanded = false),
+              ),
+          ],
         ),
       ],
     );
   }
 
+  Widget _bodyPartChip(BodyPart bp) {
+    final selected = _bodyPartIds.contains(bp.id);
+    return FilterChip(
+      label: Text(
+        bp.name,
+        style: TextStyle(
+          fontSize: AppTheme.fontSm,
+          color: selected ? Colors.white : AppTheme.textPrimary,
+        ),
+      ),
+      selected: selected,
+      onSelected: (v) {
+        setState(() {
+          if (v) {
+            _bodyPartIds.add(bp.id);
+          } else {
+            _bodyPartIds.remove(bp.id);
+          }
+        });
+        _markDirty();
+      },
+      selectedColor: AppTheme.primary,
+      checkmarkColor: Colors.white,
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.s12, vertical: AppSpace.s8),
+    );
+  }
+
   Widget _buildServiceSelector() {
     final items = _dict!.serviceItems;
-    // 防御: 编辑历史记录时, 若其服务项目已被字典删除, Dropdown 会断言崩 → 降级为未选
-    final value =
-        items.any((s) => s.id == _serviceItemId) ? _serviceItemId : null;
+    // 防御: 编辑历史记录时, 若其服务项目已被字典删除 → 显示空 (不崩)
+    ServiceItem? selected;
+    for (final it in items) {
+      if (it.id == _serviceItemId) {
+        selected = it;
+        break;
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -482,52 +824,55 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
           padding: EdgeInsets.zero,
         ),
         const SizedBox(height: AppSpace.s8),
-        DropdownButtonFormField<String>(
-          value: value,
-          isExpanded: true,
-          itemHeight: 56,
-          decoration: const InputDecoration(hintText: '请选择服务项目'),
-          icon: const Icon(Icons.arrow_drop_down,
-              size: AppSize.iconXl, color: AppTheme.primary),
-          dropdownColor: AppTheme.bgCard,
-          style: const TextStyle(
-            fontSize: AppTheme.fontMd,
-            color: AppTheme.textPrimary,
-          ),
-          items: items
-              .map((s) => DropdownMenuItem<String>(
-                    value: s.id,
-                    child: Text(
-                      s.name,
-                      style: const TextStyle(
-                        fontSize: AppTheme.fontMd,
-                        color: AppTheme.textPrimary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+        // 2026-09-24: DropdownButtonFormField → **底部弹层 + 搜索**
+        //   (项目一多, 下拉菜单又长又难找; 弹层还能直接搜)
+        InkWell(
+          key: const ValueKey('serviceItemField'),
+          onTap: _pickServiceItem,
+          borderRadius: BorderRadius.circular(AppRadius.r10),
+          child: InputDecorator(
+            decoration: const InputDecoration(hintText: '请选择服务项目'),
+            isEmpty: selected == null,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    selected?.name ?? '',
+                    key: const ValueKey('serviceItemName'),
+                    style: const TextStyle(
+                      fontSize: AppTheme.fontMd,
+                      color: AppTheme.textPrimary,
                     ),
-                  ))
-              .toList(),
-          onChanged: (v) => setState(() => _serviceItemId = v),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(Icons.arrow_drop_down,
+                    size: AppSize.iconXl, color: AppTheme.primary),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 
-  // ────────────────────────────────────────────────────────────
-  // 理疗前 → 后 对比卡 (2026-09-24 UI 优化, 主人: 「整个页面都需要优化 ui,
-  //   特别是理疗前状态卡片和理疗后效果卡片」)
-  //
-  // 为什么前 / 后**合并成一张卡** (旧版 = 两块一模一样的灰卡, 各堆 3 个滑块):
-  //   · 前 / 后本来就是同一维度的两次测量 —— 分开放 = 逼销售心算差值;
-  //   · 差值 (↓5 改善) 才是这条记录对「分析 / 图谱」的价值
-  //     (跟客户详情记录行 `疼痛 10→9 ↓1` 同口径);
-  //   · 合并后高度 ≈ 旧版一半, 三项前后对比一屏看完 (ui-principles 原则 4 容器越少)。
-  // 配色: 前 = 中性灰 (已成过去), 后 = 品牌主色 (这次结果); 「改善 / 变差」的信号
-  //   交给差值徽章, 不靠滑块颜色重复表达 (原则 5 颜色是信号, 不是装饰)。
-  // 紧凑 (2026-09-24 主人: 「文字、进度条、数字整合到一行」): 每个滑块用
-  //   `compact: true` → 一行 = 前/后 + 滑轨 + 数字; 三项指标共 3 行标题 + 6 行滑块,
-  //   比旧版 (每滑块两行 + 大号数值徽章) 省掉一半高度 (原则 1 密度)。
-  // ────────────────────────────────────────────────────────────
+  Future<void> _pickServiceItem() async {
+    final items = _dict?.serviceItems ?? const <ServiceItem>[];
+    if (items.isEmpty) return;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) =>
+          _ServicePickerSheet(items: items, current: _serviceItemId),
+    );
+    if (picked != null && picked != _serviceItemId) {
+      setState(() => _serviceItemId = picked);
+      _markDirty();
+    }
+  }
+
   Widget _buildConditionCompare() {
     final t = context.tokens;
     return Column(
@@ -564,13 +909,19 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   value: _prePainLevel,
                   accent: t.textSecondary,
                   compact: true,
-                  onChanged: (v) => setState(() => _prePainLevel = v),
+                  onChanged: (v) {
+                    setState(() => _prePainLevel = v);
+                    _markDirty();
+                  },
                 ),
                 post: PainSlider(
                   label: '后',
                   value: _postPainLevel,
                   compact: true,
-                  onChanged: (v) => setState(() => _postPainLevel = v),
+                  onChanged: (v) {
+                    setState(() => _postPainLevel = v);
+                    _markDirty();
+                  },
                 ),
               ),
               const Divider(height: AppSpace.s16),
@@ -587,13 +938,19 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   value: _preSleep,
                   accent: t.textSecondary,
                   compact: true,
-                  onChanged: (v) => setState(() => _preSleep = v),
+                  onChanged: (v) {
+                    setState(() => _preSleep = v);
+                    _markDirty();
+                  },
                 ),
                 post: TenRatingSlider(
                   label: '后',
                   value: _postSleep,
                   compact: true,
-                  onChanged: (v) => setState(() => _postSleep = v),
+                  onChanged: (v) {
+                    setState(() => _postSleep = v);
+                    _markDirty();
+                  },
                 ),
               ),
               const Divider(height: AppSpace.s16),
@@ -610,13 +967,19 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   value: _preMood,
                   accent: t.textSecondary,
                   compact: true,
-                  onChanged: (v) => setState(() => _preMood = v),
+                  onChanged: (v) {
+                    setState(() => _preMood = v);
+                    _markDirty();
+                  },
                 ),
                 post: TenRatingSlider(
                   label: '后',
                   value: _postMood,
                   compact: true,
-                  onChanged: (v) => setState(() => _postMood = v),
+                  onChanged: (v) {
+                    setState(() => _postMood = v);
+                    _markDirty();
+                  },
                 ),
               ),
             ],
@@ -626,7 +989,16 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController ctrl, {String? hint}) {
+  /// 文本区块 = 标题 + 输入框 + **常用短语 chips** (2026-09-24)
+  ///
+  /// 为什么加短语: 中年用户打字慢, 这两栏是全页最慢的一段 —— 点一下抵打 7-8 个字。
+  /// 短语只**追加**不清空 (保留自由输入), 用「 · 」分隔, 点了可继续改。
+  Widget _buildTextField(
+    String label,
+    TextEditingController ctrl, {
+    String? hint,
+    List<String> quickPhrases = const [],
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -637,11 +1009,35 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
           style: const TextStyle(fontSize: AppTheme.fontMd),
           maxLines: 3,
           minLines: 2,
+          onChanged: (_) => _markDirty(),
           decoration: InputDecoration(
             hintText: hint,
             contentPadding: const EdgeInsets.all(AppSpace.s16),
           ),
         ),
+        if (quickPhrases.isNotEmpty) ...[
+          const SizedBox(height: AppSpace.s6),
+          Wrap(
+            spacing: AppSpace.s8,
+            runSpacing: AppSpace.s4,
+            children: [
+              for (final p in quickPhrases)
+                ActionChip(
+                  label: Text(p,
+                      style: const TextStyle(fontSize: AppTheme.fontSm)),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    final cur = ctrl.text.trim();
+                    ctrl.text = cur.isEmpty ? p : '$cur · $p';
+                    ctrl.selection =
+                        TextSelection.collapsed(offset: ctrl.text.length);
+                    _markDirty();
+                    setState(() {});
+                  },
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -656,7 +1052,10 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
           title: '下次建议日期',
           subtitle: '可选 · 到日子会提醒跟进, 并顺手建一条跟进任务',
           padding: EdgeInsets.zero,
-          action: OutlinedButton.icon(
+          action: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton.icon(
             onPressed: () async {
               final picked = await showDatePicker(
                 context: context,
@@ -665,7 +1064,10 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 365)),
               );
-              if (picked != null) setState(() => _nextAdviceDate = picked);
+              if (picked != null) {
+                setState(() => _nextAdviceDate = picked);
+                _markDirty();
+              }
             },
             icon: const Icon(Icons.calendar_today, size: AppSize.iconSm),
             label: Text(
@@ -674,12 +1076,49 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   : '${_nextAdviceDate!.year}-${_nextAdviceDate!.month.toString().padLeft(2, '0')}-${_nextAdviceDate!.day.toString().padLeft(2, '0')}',
               style: const TextStyle(fontSize: AppTheme.fontSm),
             ),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, AppSize.controlLg),
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10),
-              visualDensity: VisualDensity.compact,
-            ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, AppSize.controlLg),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              // 清除按钮 (2026-09-24): 选了日期后能置空 (原来只能改不能清)
+              if (_nextAdviceDate != null) ...[
+                const SizedBox(width: AppSpace.s2),
+                IconButton(
+                  onPressed: () {
+                    setState(() => _nextAdviceDate = null);
+                    _markDirty();
+                  },
+                  icon: const Icon(Icons.close, size: AppSize.iconSm),
+                  tooltip: '清除日期',
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(AppSpace.s4),
+                ),
+              ],
+            ],
           ),
+        ),
+        const SizedBox(height: AppSpace.s8),
+        // 快捷档位 (2026-09-24): 实际业务里 80% 是 7/14/30 天后, 比开日期选择器快 3 步
+        Wrap(
+          spacing: AppSpace.s8,
+          runSpacing: AppSpace.s4,
+          children: [
+            for (final d in const [7, 14, 30])
+              ChoiceChip(
+                label: Text('$d 天后',
+                    style: const TextStyle(fontSize: AppTheme.fontSm)),
+                selected: _nextAdviceDate != null &&
+                    _sameDay(_nextAdviceDate!,
+                        DateTime.now().add(Duration(days: d))),
+                onSelected: (_) {
+                  setState(() => _nextAdviceDate =
+                      DateTime.now().add(Duration(days: d)));
+                  _markDirty();
+                },
+              ),
+          ],
         ),
       ],
     );
@@ -790,9 +1229,22 @@ class _DeltaBadge extends StatelessWidget {
 /// 为什么必须有这条: 自动预填是"静默"的 —— 不提示的话销售不知道已经填好了,
 ///   反而会把每个字段再检查一遍, 提速效果归零。提示 + 「清空重填」两者缺一不可。
 class _PrefillBanner extends StatelessWidget {
-  const _PrefillBanner({required this.date, required this.onReset});
+  const _PrefillBanner({
+    required this.title,
+    required this.subtitle,
+    required this.onReset,
+    this.date,
+  });
 
-  final String date;
+  /// 主文案 (例: 「已按 2026-09-12 那次填好」/「已恢复上次没保存的内容」)
+  final String title;
+
+  /// 副文案
+  final String subtitle;
+
+  /// 兼容旧调用方 (有日期时拼进 title; 现在 title 由调用方给全)
+  final String? date;
+
   final VoidCallback onReset;
 
   @override
@@ -815,7 +1267,7 @@ class _PrefillBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '已按 $date 那次填好',
+                  title,
                   style: TextStyle(
                     fontSize: AppType.sm,
                     fontWeight: AppWeight.semibold,
@@ -824,7 +1276,7 @@ class _PrefillBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpace.s2),
                 Text(
-                  '没变化可直接保存; 有变化只改对应项',
+                  subtitle,
                   style: TextStyle(fontSize: AppType.xs, color: t.textSecondary),
                 ),
               ],
@@ -840,6 +1292,94 @@ class _PrefillBanner extends StatelessWidget {
             child: const Text('清空重填'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 服务项目选择弹层 (2026-09-24): 搜索框 + 列表
+///
+/// 为什么从 `DropdownButtonFormField` 换成弹层:
+///   下拉菜单高度受限、不能搜索、项目多了要滑很久; 弹层能占 60% 屏高 + 直接搜。
+class _ServicePickerSheet extends StatefulWidget {
+  const _ServicePickerSheet({required this.items, this.current});
+
+  final List<ServiceItem> items;
+  final String? current;
+
+  @override
+  State<_ServicePickerSheet> createState() => _ServicePickerSheetState();
+}
+
+class _ServicePickerSheetState extends State<_ServicePickerSheet> {
+  final _searchCtrl = TextEditingController();
+  String _q = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final q = _q.toLowerCase();
+    final list = q.isEmpty
+        ? widget.items
+        : widget.items
+            .where((s) => s.name.toLowerCase().contains(q))
+            .toList();
+
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpace.s16, 0, AppSpace.s16, AppSpace.s8),
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                style: const TextStyle(fontSize: AppTheme.fontMd),
+                decoration: const InputDecoration(
+                  hintText: '搜索服务项目',
+                  prefixIcon: Icon(Icons.search),
+                ),
+                onChanged: (v) => setState(() => _q = v.trim()),
+              ),
+            ),
+            Expanded(
+              child: list.isEmpty
+                  ? Center(
+                      child: Text(
+                        '没有匹配的服务项目',
+                        style: TextStyle(
+                            fontSize: AppTheme.fontMd,
+                            color: t.textSecondary),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: list.length,
+                      itemBuilder: (ctx, i) {
+                        final s = list[i];
+                        final isCurrent = s.id == widget.current;
+                        return ListTile(
+                          title: Text(s.name,
+                              style: const TextStyle(fontSize: AppTheme.fontMd)),
+                          trailing: isCurrent
+                              ? Icon(Icons.check, color: t.primary)
+                              : null,
+                          onTap: () => Navigator.pop(ctx, s.id),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
