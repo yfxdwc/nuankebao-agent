@@ -97,6 +97,34 @@ void main() {
         reason: '睡眠/情绪未变 = 持平');
   });
 
+  testWidgets('④ 紧凑: 标签 / 滑轨 / 数字 在同一行 + 卡片不再虚高', (tester) async {
+    await _pumpForm(tester);
+
+    final painPreSlider = find.byType(Slider).first;
+    final sliderDy = tester.getCenter(painPreSlider).dy;
+
+    // 「前」标签与滑轨**同一行** (垂直中心对齐; 旧版标签在上、滑轨在下 → 差 ~20px)
+    expect((tester.getCenter(find.text('前').first).dy - sliderDy).abs(),
+        lessThan(2.0),
+        reason: '「前」标签要和滑轨同一行 (主人: 文字+进度条+数字整合到一行)');
+
+    // 数字也在同一行, 且在滑轨**右侧**
+    final valueText = find.text('5 有点痛'); // 疼痛·前 = 5 (PainSlider 的描述后缀)
+    expect(valueText, findsOneWidget);
+    expect((tester.getCenter(valueText).dy - sliderDy).abs(), lessThan(2.0),
+        reason: '数字要和滑轨同一行');
+    expect(tester.getCenter(valueText).dx,
+        greaterThan(tester.getCenter(painPreSlider).dx),
+        reason: '数字在滑轨右侧');
+
+    // 卡片高度: 紧凑后 3 指标 × 3 行 ≈ 390; 旧两行式 ≈ 640 —— 取 460 做棘轮,
+    //   回退成两行式必挂
+    final cardH =
+        tester.getSize(find.byKey(const ValueKey('conditionCompareCard'))).height;
+    expect(cardH, lessThan(460),
+        reason: '对比卡不该回到"每项 4 行"的虚高 (实测 $cardH)');
+  });
+
   testWidgets('③ 拖「后」疼痛滑块到最大 → 徽章实时变「↑5 变差」', (tester) async {
     await _pumpForm(tester);
 

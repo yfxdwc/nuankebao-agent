@@ -440,6 +440,9 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
   //   · 合并后高度 ≈ 旧版一半, 三项前后对比一屏看完 (ui-principles 原则 4 容器越少)。
   // 配色: 前 = 中性灰 (已成过去), 后 = 品牌主色 (这次结果); 「改善 / 变差」的信号
   //   交给差值徽章, 不靠滑块颜色重复表达 (原则 5 颜色是信号, 不是装饰)。
+  // 紧凑 (2026-09-24 主人: 「文字、进度条、数字整合到一行」): 每个滑块用
+  //   `compact: true` → 一行 = 前/后 + 滑轨 + 数字; 三项指标共 3 行标题 + 6 行滑块,
+  //   比旧版 (每滑块两行 + 大号数值徽章) 省掉一半高度 (原则 1 密度)。
   // ────────────────────────────────────────────────────────────
   Widget _buildConditionCompare() {
     final t = context.tokens;
@@ -448,11 +451,13 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
       children: [
         const AppSectionHeader(
           title: '理疗前 → 后',
-          subtitle: '拖动滑块记录这次调理前后的状态, 差值自动算',
+          subtitle: '每项前后各一行; 差值自动算',
           padding: EdgeInsets.zero,
         ),
         const SizedBox(height: AppSpace.s8),
         Container(
+          // 测试契约 key (对比卡高度断言用: 紧凑一行式 vs 旧两行式)
+          key: const ValueKey('conditionCompareCard'),
           padding: const EdgeInsets.all(AppSpace.s16),
           decoration: BoxDecoration(
             color: t.surfaceCard,
@@ -474,15 +479,17 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   label: '前',
                   value: _prePainLevel,
                   accent: t.textSecondary,
+                  compact: true,
                   onChanged: (v) => setState(() => _prePainLevel = v),
                 ),
                 post: PainSlider(
                   label: '后',
                   value: _postPainLevel,
+                  compact: true,
                   onChanged: (v) => setState(() => _postPainLevel = v),
                 ),
               ),
-              const Divider(height: AppSpace.s20),
+              const Divider(height: AppSpace.s16),
               // ② 睡眠质量 (1-5, 越高越好)
               _MetricCompare(
                 name: '睡眠质量',
@@ -495,15 +502,17 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   label: '前',
                   value: _preSleep,
                   accent: t.textSecondary,
+                  compact: true,
                   onChanged: (v) => setState(() => _preSleep = v),
                 ),
                 post: FiveRatingSlider(
                   label: '后',
                   value: _postSleep,
+                  compact: true,
                   onChanged: (v) => setState(() => _postSleep = v),
                 ),
               ),
-              const Divider(height: AppSpace.s20),
+              const Divider(height: AppSpace.s16),
               // ③ 情绪 (1-5, 越高越好)
               _MetricCompare(
                 name: '情绪',
@@ -516,11 +525,13 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   label: '前',
                   value: _preMood,
                   accent: t.textSecondary,
+                  compact: true,
                   onChanged: (v) => setState(() => _preMood = v),
                 ),
                 post: FiveRatingSlider(
                   label: '后',
                   value: _postMood,
+                  compact: true,
                   onChanged: (v) => setState(() => _postMood = v),
                 ),
               ),
@@ -622,9 +633,9 @@ class _MetricCompare extends StatelessWidget {
             delta,
           ],
         ),
-        const SizedBox(height: AppSpace.s8),
-        pre,
         const SizedBox(height: AppSpace.s6),
+        pre,
+        const SizedBox(height: AppSpace.s2),
         post,
       ],
     );

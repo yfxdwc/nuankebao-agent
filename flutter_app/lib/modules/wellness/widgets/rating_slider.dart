@@ -21,6 +21,11 @@ class RatingSlider extends StatelessWidget {
   /// 差值语义交给旁边的 delta 徽章, 不靠滑块颜色重复表达。
   final Color? accent;
 
+  /// 紧凑模式 (2026-09-24, 主人: 「文字、进度条、数字整合到一行」):
+  ///   一行 = 标签 (前/后) + 滑轨 + 数字; 用于「理疗前 → 后」对比卡 (6 个滑块叠着摆)。
+  ///   false (默认) = 原来的两行式 (标题行 + 大号数值徽章 + 第二行滑轨), 其它调用方不受影响。
+  final bool compact;
+
   const RatingSlider({
     super.key,
     required this.label,
@@ -31,12 +36,72 @@ class RatingSlider extends StatelessWidget {
     this.divisions,
     this.valueFormatter,
     this.accent,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final displayValue = valueFormatter != null ? valueFormatter!(value) : '$value';
     final accent = this.accent ?? AppTheme.primary;
+
+    if (compact) {
+      // 一行式: [标签] [滑轨 flex] [数字] —— 滑轨缩到 40pt 高 (拇指 24 / 轨道 6),
+      //   仍保留 ≥40pt 的触摸带 (整条滑轨可点可拖, 不是只有拇指能抓)。
+      return Row(
+        children: [
+          SizedBox(
+            width: AppSpace.s20,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: AppTheme.fontSm,
+                fontWeight: FontWeight.w600,
+                color: accent,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpace.s4),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 6,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                activeTrackColor: accent,
+                inactiveTrackColor: accent.withOpacity(0.22),
+                thumbColor: accent,
+              ),
+              child: Slider(
+                min: min.toDouble(),
+                max: max.toDouble(),
+                divisions: divisions ?? (max - min),
+                value: value.toDouble(),
+                onChanged: (v) => onChanged(v.round()),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpace.s6),
+          SizedBox(
+            // 固定宽度 = 6 行滑块**对齐** (数字长短不同会让滑轨宽度抖动);
+            // 走令牌而非字面量 (护栏 flutter.spacing 不许新硬编码)
+            width: AppSpace.s64,
+            child: Text(
+              displayValue,
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTheme.fontSm,
+                fontWeight: FontWeight.w600,
+                color: accent,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -97,6 +162,7 @@ class FiveRatingSlider extends StatelessWidget {
   final int value;
   final ValueChanged<int> onChanged;
   final Color? accent;
+  final bool compact;
 
   const FiveRatingSlider({
     super.key,
@@ -104,6 +170,7 @@ class FiveRatingSlider extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.accent,
+    this.compact = false,
   });
 
   @override
@@ -116,6 +183,7 @@ class FiveRatingSlider extends StatelessWidget {
       valueFormatter: (v) => '$v/5',
       onChanged: onChanged,
       accent: accent,
+      compact: compact,
     );
   }
 }
@@ -127,6 +195,7 @@ class PainSlider extends StatelessWidget {
   final ValueChanged<int> onChanged;
 
   final Color? accent;
+  final bool compact;
 
   const PainSlider({
     super.key,
@@ -134,6 +203,7 @@ class PainSlider extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.accent,
+    this.compact = false,
   });
 
   @override
@@ -144,6 +214,7 @@ class PainSlider extends StatelessWidget {
       min: 1,
       max: 10,
       accent: accent,
+      compact: compact,
       valueFormatter: (v) {
         if (v <= 3) return '$v 不痛';
         if (v <= 6) return '$v 有点痛';
