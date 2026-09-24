@@ -95,42 +95,91 @@ class _CustomerTimelineSectionState
       maxRows: _maxRows,
     );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // ── 一行工具栏: 左 = 内容选择下拉, 右 = 添加记录下拉 ──
-        _toolbarRow(context),
-        const SizedBox(height: AppSpace.s10),
-        // ── 养生汇总行 (fontXs, 信息不丢; 工具栏之下) ──
-        if (summary.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpace.pagePadding),
-            child: Text(
+    // 2026-09-24 主人诉求 (第二版):
+    //   ① 「筛选和添加键与列表要整体卡片化」—— 之前工具栏/汇总在卡片外, 视觉隔离
+    //   ② 「记录列表表头不要随列表上滑而隐藏」—— 表头必须固定, 只有列表滚
+    //   ⇒ 结构 = **一张卡片**: 固定表头 (工具栏 + 汇总 + 分隔线) + 内部可滚列表。
+    final list = _timelineList(
+        dict: dict,
+        timeline: timeline,
+        totalWellness: wellness.length,
+        totalInteractions: interactions.length,
+        bothLoading: asyncWellness.isLoading && asyncInteractions.isLoading,
+        firstError: asyncWellness.hasError
+            ? asyncWellness.error.toString()
+            : (asyncInteractions.hasError
+                ? asyncInteractions.error.toString()
+                : null));
+
+    // ── 固定表头 (不随列表滚动): 筛选下拉 + 添加记录 + 养生汇总 ──
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.cardPadding,
+        AppSpace.s12,
+        AppSpace.cardPadding,
+        AppSpace.s10,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _toolbarRow(context),
+          if (summary.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.s6),
+            Text(
               summary,
               style: const TextStyle(
                 fontSize: AppType.xs,
                 color: AppColors.textTertiary,
               ),
             ),
-          ),
-        const SizedBox(height: AppSpace.s10),
-        // ── 混合列表 (单 B2NoChrome 容器, 行用 AppListRow dense) ──
-        B2NoChrome(
-          margin: const EdgeInsets.only(bottom: AppSpace.s12),
-          child: _timelineList(
-              dict: dict,
-              timeline: timeline,
-              totalWellness: wellness.length,
-              totalInteractions: interactions.length,
-              bothLoading: asyncWellness.isLoading && asyncInteractions.isLoading,
-              firstError: asyncWellness.hasError
-                  ? asyncWellness.error.toString()
-                  : (asyncInteractions.hasError
-                      ? asyncInteractions.error.toString()
-                      : null)),
-        ),
-      ],
+          ],
+        ],
+      ),
+    );
+
+    return B2NoChrome(
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
+      child: LayoutBuilder(
+        builder: (ctx, constraints) {
+          // 空间不足时的**退化策略** (2026-09-24, 防 RenderFlex overflow):
+          //   L0 行动卡 + 跟进任务卡都是固定 chrome, 一旦它们把小屏/大字号的
+          //   剩余高度吃到 < 表头 (~90) + 几行列表, 固定表头就撑破卡片 →
+          //   黄黑条纹 / release 下悄悄裁掉。
+          //   ⇒ 低于阈值时把表头**并入滚动** (表头不再钉住, 但内容都能看到、
+          //     不溢出错版); 正常空间仍是"固定表头 + 卡内滚动列表"。
+          //   阈值 240 ≈ 表头 ~90 + dense 行 52 × 2.5 —— 够放表头和两行才值得钉。
+          const pinnedMinHeight = 240.0;
+          if (constraints.maxHeight < pinnedMinHeight) {
+            return SingleChildScrollView(
+              primary: false,
+              padding: const EdgeInsets.only(bottom: AppSpace.s8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  header,
+                  const Divider(height: 1),
+                  list,
+                ],
+              ),
+            );
+          }
+          return Column(
+            children: [
+              header,
+              const Divider(height: 1),
+              // ── 唯一可滚区域: 混合列表 (行用 AppListRow dense) ──
+              //   Expanded 吃掉卡片剩余高度 → 列表在卡片内滚, 表头永远钉住
+              Expanded(
+                child: SingleChildScrollView(
+                  primary: false,
+                  padding: const EdgeInsets.only(bottom: AppSpace.s8),
+                  child: list,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -145,65 +194,65 @@ class _CustomerTimelineSectionState
   // 现合并后只占 44 + 一行间距。
   Widget _toolbarRow(BuildContext context) {
     final t = context.tokens;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.pagePadding),
-      child: Row(
-        children: [
-          // ── 左: 内容选择下拉 (act 模式: open menu 选中切换过滤) ──
-          PopupMenuButton<_Filter>(
-            // 锁 key: 测试与外层 `find.byKey('timelineFilterDropdown')` 共用
-            key: const ValueKey('timelineFilterDropdown'),
-            tooltip: '',
-            onSelected: (f) => setState(() => _filter = f),
-            position: PopupMenuPosition.under,
-            itemBuilder: (ctx) => _Filter.values
-                .map((f) => PopupMenuItem<_Filter>(
-                      value: f,
-                      height: AppSize.controlLg,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // 当前选中项前打钩 (语义视觉, 不是颜色信号)
-                          SizedBox(
-                            width: AppSize.iconMd,
-                            height: AppSize.iconMd,
-                            child: _filter == f
-                                ? Icon(Icons.check,
-                                    size: AppSize.iconSm, color: t.primary)
-                                : null,
+    // ⚠ 不再自带横向 padding —— 本行现在在卡片表头的 Padding 里,
+    //   再自己加一层会跟卡片内边距叠加 (旧版正是这样, 工具栏比列表多缩进 16px,
+    //   视觉上"隔离"; 主人 2026-09-24 指出要整体卡片化)。
+    return Row(
+      children: [
+        // ── 左: 内容选择下拉 (act 模式: open menu 选中切换过滤) ──
+        PopupMenuButton<_Filter>(
+          // 锁 key: 测试与外层 `find.byKey('timelineFilterDropdown')` 共用
+          key: const ValueKey('timelineFilterDropdown'),
+          tooltip: '',
+          onSelected: (f) => setState(() => _filter = f),
+          position: PopupMenuPosition.under,
+          itemBuilder: (ctx) => _Filter.values
+              .map((f) => PopupMenuItem<_Filter>(
+                    value: f,
+                    height: AppSize.controlLg,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 当前选中项前打钩 (语义视觉, 不是颜色信号)
+                        SizedBox(
+                          width: AppSize.iconMd,
+                          height: AppSize.iconMd,
+                          child: _filter == f
+                              ? Icon(Icons.check,
+                                  size: AppSize.iconSm, color: t.primary)
+                              : null,
+                        ),
+                        const SizedBox(width: AppSpace.s8),
+                        Text(
+                          f.label,
+                          style: TextStyle(
+                            fontSize: AppType.sm,
+                            color: t.textPrimary,
                           ),
-                          const SizedBox(width: AppSpace.s8),
-                          Text(
-                            f.label,
-                            style: TextStyle(
-                              fontSize: AppType.sm,
-                              color: t.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ))
-                .toList(),
-            child: _filterDropdownChild(t),
-          ),
-          // ── 中: Spacer (左对齐 + 右对齐) ──
-          const Spacer(),
-          // ── 右: 添加记录下拉 (FilledButton.tonal 观感) ──
-          PopupMenuButton<_AddAction>(
-            key: const ValueKey('timelineAddRecordButton'),
-            tooltip: '',
-            onSelected: (a) => _handleAddAction(a),
-            position: PopupMenuPosition.under,
-            itemBuilder: (ctx) => [
-              _addMenuItem(_AddAction.wellness,
-                  icon: Icons.spa_outlined, label: '添加养生记录'),
-              _addMenuItem(_AddAction.interaction,
-                  icon: Icons.phone_in_talk, label: '添加联系记录'),
-            ],
-            child: _addRecordDropdownChild(t),
-          ),
-        ],
-      ),
+                        ),
+                      ],
+                    ),
+                  ))
+              .toList(),
+          child: _filterDropdownChild(t),
+        ),
+        // ── 中: Spacer (左对齐 + 右对齐) ──
+        const Spacer(),
+        // ── 右: 添加记录下拉 (FilledButton.tonal 观感) ──
+        PopupMenuButton<_AddAction>(
+          key: const ValueKey('timelineAddRecordButton'),
+          tooltip: '',
+          onSelected: (a) => _handleAddAction(a),
+          position: PopupMenuPosition.under,
+          itemBuilder: (ctx) => [
+            _addMenuItem(_AddAction.wellness,
+                icon: Icons.spa_outlined, label: '添加养生记录'),
+            _addMenuItem(_AddAction.interaction,
+                icon: Icons.phone_in_talk, label: '添加联系记录'),
+          ],
+          child: _addRecordDropdownChild(t),
+        ),
+      ],
     );
   }
 
@@ -538,7 +587,7 @@ enum _Filter { all, wellness, interaction }
 
 extension on _Filter {
   String get label => switch (this) {
-        _Filter.all => '全部',
+        _Filter.all => '全部记录',
         _Filter.wellness => '养生记录',
         _Filter.interaction => '互动记录',
       };

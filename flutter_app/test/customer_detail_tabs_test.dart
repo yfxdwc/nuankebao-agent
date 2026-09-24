@@ -41,6 +41,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuankebao/core/models/customer.dart';
 import 'package:nuankebao/core/models/customer_insight.dart';
 import 'package:nuankebao/core/models/follow_up.dart';
+import 'package:nuankebao/core/models/wellness_record.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/providers/settings_provider.dart';
 import 'package:nuankebao/core/services/api.dart';
@@ -104,6 +105,40 @@ CustomerInsight _insightWithActions() => CustomerInsight(
       actions: const [_action],
       topActions: const [_action],
     );
+
+// ---------- 假养生/互动 service: 让记录卡内部列表**可滚** ----------
+//
+// 2026-09-24 记录卡改成「固定表头 + 卡内可滚列表」后, 页面级折叠测试 (⑧⑨)
+//   必须让**卡内那个**列表真的能滚 —— 否则 fling 不产生 ScrollNotification,
+//   折叠状态机永远不触发 (之前记录 Tab 有外层 SingleChildScrollView, 空数据
+//   也能靠"卡片 + 空列表"撑出可滚高度; 现在不行了)。
+//   ⇒ 给 12 条养生记录 (dense 行 52px → 超出卡片可视区), 保证可滚。
+class _FakeWellnessService extends WellnessRecordService {
+  _FakeWellnessService(this.rows) : super(Dio());
+  final List<WellnessRecord> rows;
+  @override
+  Future<List<WellnessRecord>> list({String? customerId, int limit = 50}) async =>
+      rows;
+}
+
+class _FakeInteractionService extends InteractionService {
+  _FakeInteractionService(this.rows) : super(Dio());
+  final List<Interaction> rows;
+  @override
+  Future<List<Interaction>> list({String? customerId}) async => rows;
+}
+
+List<WellnessRecord> _timelineWellnessRows() => [
+      for (var i = 0; i < 12; i++)
+        WellnessRecord(
+          id: 'w$i',
+          customerId: '798',
+          serviceDate:
+              '2026-09-${(24 - i).clamp(1, 24).toString().padLeft(2, '0')}',
+          serviceItemId: 'svc-1',
+          createdAt: DateTime(2026, 9, 24).subtract(Duration(days: i)),
+        ),
+    ];
 
 // ---------- 假 Dio: 所有请求立刻 503 ----------
 
@@ -175,6 +210,10 @@ Future<void> _pumpPage(WidgetTester tester) async {
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
       dioProvider.overrideWithValue(dio),
+      wellnessRecordServiceProvider
+          .overrideWithValue(_FakeWellnessService(_timelineWellnessRows())),
+      interactionServiceProvider
+          .overrideWithValue(_FakeInteractionService(const [])),
       customerDetailProvider('798')
           .overrideWith((ref) async => _customer()),
       customerInsightProvider('798')
@@ -209,6 +248,10 @@ Future<void> _pumpPageWithFakeFollowUp(
       sharedPreferencesProvider.overrideWithValue(prefs),
       dioProvider.overrideWithValue(dio),
       followUpServiceProvider.overrideWithValue(fake),
+      wellnessRecordServiceProvider
+          .overrideWithValue(_FakeWellnessService(_timelineWellnessRows())),
+      interactionServiceProvider
+          .overrideWithValue(_FakeInteractionService(const [])),
       customerDetailProvider('798')
           .overrideWith((ref) async => _customer()),
       customerInsightProvider('798')

@@ -2,7 +2,7 @@
 // CustomerTimelineSection 单测 (2026-09-24 拍板重构)
 //
 // 守护:
-//   ① 默认「全部」→ 养生 + 互动混排 + 倒序 + 工具栏显示当前「全部」+「添加记录」按钮
+//   ① 默认「全部记录」→ 养生 + 互动混排 + 倒序 + 工具栏显示当前「全部」+「添加记录」按钮
 //   ② 点筛选下拉 + 「养生记录」→ 只剩养生
 //   ③ 点筛选下拉 + 「互动记录」→ 只剩互动
 //   ④ 点添加记录下拉 → 菜单有「添加养生记录」与「添加联系记录」两项
@@ -15,7 +15,7 @@
 //   「内容选择标签折叠为下拉 + 添加记录收纳到下拉」, 测试改用下拉打开/点选的口径;
 //   按钮文本不再外露, 所以
 //    · ① 不能断言 `find.text('添加养生记录')` —— 它只在菜单打开时才出现
-//    · ②③ 不能 `tap(finder.text('养生记录'))` —— 主页面默认显示「全部」, 「养生记录」
+//    · ②③ 不能 `tap(finder.text('养生记录'))` —— 主页面默认显示「全部记录」, 「养生记录」
 //      路径只能通过打开筛选下拉 → 点选才会出现
 //
 // 跑: cd flutter_app && flutter test test/customer_timeline_section_test.dart
@@ -157,9 +157,10 @@ Future<void> _pumpSection(
       child: MaterialApp(
         theme: AppTheme.light(AppThemes.sage),
         home: Scaffold(
-          body: SingleChildScrollView(
-            child: CustomerTimelineSection(customerId: '798'),
-          ),
+          // 2026-09-24 卡片化后: section 内部是「固定表头 + Expanded(可滚列表)」,
+          //   需要**有界高度** —— Scaffold body 直接给 (不再套 SingleChildScrollView,
+          //   否则 Expanded 在无界约束下会报错)。
+          body: CustomerTimelineSection(customerId: '798'),
         ),
       ),
     ),
@@ -196,7 +197,7 @@ Future<void> _pickFromMenu(
 
 void main() {
   testWidgets(
-    '① 默认「全部」→ 养生 + 互动混排 + 倒序 + 工具栏显示当前「全部」+「添加记录」按钮',
+    '① 默认「全部记录」→ 养生 + 互动混排 + 倒序 + 工具栏显示当前「全部」+「添加记录」按钮',
     (tester) async {
       // 4 条 (2 养生 + 2 互动), 日期交错
       // 期望倒序:
@@ -216,13 +217,13 @@ void main() {
         ],
       );
 
-      // ⏵ 2026-09-24: 工具栏断言 —— 筛选下拉显示默认「全部」, 添加记录按钮显示「添加记录」
+      // ⏵ 2026-09-24: 工具栏断言 —— 筛选下拉显示默认「全部记录」, 添加记录按钮显示「添加记录」
       //   (文案不再是「添加养生记录」「添加联系记录」, 因为它们被收进了下拉菜单)
       expect(find.byKey(kFilterDropdown), findsOneWidget);
       expect(find.byKey(kAddRecordDropdown), findsOneWidget);
       expect(
           find.descendant(
-              of: find.byKey(kFilterDropdown), matching: find.text('全部')),
+              of: find.byKey(kFilterDropdown), matching: find.text('全部记录')),
           findsOneWidget);
       expect(
           find.descendant(
@@ -309,7 +310,7 @@ void main() {
   );
 
   testWidgets(
-    '④ 空态: 默认「全部」无数据 → 显示「还没有记录」',
+    '④ 空态: 默认「全部记录」无数据 → 显示「还没有记录」',
     (tester) async {
       await _pumpSection(
         tester,

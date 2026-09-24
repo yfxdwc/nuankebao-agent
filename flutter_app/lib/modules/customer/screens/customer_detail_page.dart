@@ -330,18 +330,18 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
             },
           ),
         ),
-        // ★ 时间线混合列表 (养生 + 互动) —— **唯一**可滚的部分;
-        //   Expanded 让它占满剩余空间, SingleChildScrollView 滚动只发生在
-        //   它内部, 不波及上面的固定跟进卡。
-        //   不用 _tabScroll (那个一整 children 都滚动), 自己写最小滚动单元。
+        // ★ 记录卡 (2026-09-24 第三版, 主人诉求): 「筛选/添加键与列表整体卡片化」
+        //   + 「表头不要随列表上滑而隐藏」—— 表头 + 列表现在在**同一张卡**里
+        //   (CustomerTimelineSection 内部: 固定表头 + 可滚列表)。
+        //   ⇒ 这里只给横向 pagePadding + 顶部 cardGap, 垂直方向交给 Expanded 撑满;
+        //     **不再**套外层 SingleChildScrollView (否则整张卡会一起滚走, 表头就没了)。
         Expanded(
-          child: SingleChildScrollView(
-            primary: false,
+          child: Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpace.pagePadding,
               AppSpace.cardGap,
               AppSpace.pagePadding,
-              AppSpace.s48,
+              0,
             ),
             child: CustomerTimelineSection(customerId: customerId),
           ),

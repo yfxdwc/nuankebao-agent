@@ -273,8 +273,15 @@ try {
   }
   if (addBox) {
     note(`点「添加养生记录」@ ${Math.round(addBox.x)},${Math.round(addBox.y)}`);
-    // 重构后不再有「选择记录类型」弹层 → 直达表单, 等久一点
-    await page.waitForTimeout(8000);
+    // 重构后不再有「选择记录类型」弹层 → 直达表单。
+    // ⚠ dev 模式下首访该路由要 webpack 冷编译 + 字典加载, 固定 8s **不够**
+    //   (2026-09-24 实测: 8s 时只渲染出 AppBar 标题「添加养生记录」→ 假失败);
+    //   改有界轮询 (最多 25s), 见到表单字段就收手 (同 §5「别用 sleep 猜时间」)。
+    for (let i = 0; i < 25; i++) {
+      await page.waitForTimeout(1000);
+      const t = await text(page);
+      if (t.includes('服务项目') || t.includes('理疗前状态')) break;
+    }
     await page.screenshot({ path: `${OUT}/05-record-form.png` });
     const formText = await text(page);
 
