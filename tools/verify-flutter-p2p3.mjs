@@ -252,25 +252,21 @@ try {
   console.log("\n━━━ ⑤ P3: 「沿用上次」预填 ━━━");
   await tapText(page, "^记录 Tab");
   await page.waitForTimeout(3000);
-  // 「+ 添加记录」可能在下方, 先滚动
-  let addBox = await tapText(page, "添加记录");
+  // 2026-09-24 记录 Tab 重构: 「+ 添加记录」三选一弹层已删 —— 列表上方改成两个显式按钮:
+  //   「添加养生记录」直接进养生记录表单 (「添加联系记录」走联系弹层)
+  let addBox = await tapText(page, "添加养生记录");
   if (!addBox) {
-    note("没找到「添加记录」→ 向下滚动再试");
+    note("没找到「添加养生记录」→ 向下滚动再试");
     await page.mouse.move(210, 500);
     await page.mouse.wheel(0, 1400);
     await page.waitForTimeout(2000);
-    addBox = await tapText(page, "添加记录");
+    addBox = await tapText(page, "添加养生记录");
   }
   if (!addBox) {
-    bad("找不到「添加记录」入口");
+    bad("找不到「添加养生记录」入口");
   } else {
-    note(`点「添加记录」@ ${Math.round(addBox.x)},${Math.round(addBox.y)}`);
-    await page.waitForTimeout(4500);
-    await page.screenshot({ path: `${OUT}/04-add-sheet.png` });
-    console.log("  弹层文本:", (await text(page)).replace(/\n/g, " | ").slice(0, 300));
-
-    const sheet = await tapText(page, "^养生记录");
-    note(`选「养生记录」@ ${sheet ? "ok" : "未找到"}`);
+    note(`点「添加养生记录」@ ${Math.round(addBox.x)},${Math.round(addBox.y)}`);
+    // 重构后不再有「选择记录类型」弹层 → 直达表单, 等久一点
     await page.waitForTimeout(8000);
     await page.screenshot({ path: `${OUT}/05-record-form.png` });
     const formText = await text(page);

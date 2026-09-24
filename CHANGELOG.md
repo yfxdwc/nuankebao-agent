@@ -2,6 +2,58 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 客户详情记录页: 时间线混合列表 (2026-09-24)
+
+主人 2026-09-24 诉求: 「客户详情.记录页中。跟进任务卡片置顶，新建跟进任务按键移动到卡片右上角（不独占一行）。
+养生记录和互动记录混合列表展示（养生记录条目优化得更紧凑），以胶囊键切换展示全部或仅养生记录、互动记录。
+添加养生记录、添加联系记录两个按键展示在混合列表上方。添加联系记录复用"完成跟进"的底部弹窗。」
+
+### 新结构 (记录 Tab 自上而下)
+
+1. **跟进任务卡片置顶** —— `CustomerFollowUpSection`:
+   · header 右上角加紧凑「+ 新建」按钮 (`TextButton.icon(icon: add, label: 新建)`, `VisualDensity.compact`), 不换行不独占行
+   · 删底部独占一行的 `BigActionButton('新建跟进任务')` (旧实现同时与混合列表上方的「两个添加按钮」重复)
+   · 「N 条待办」计数保留
+
+2. **两个添加按钮** —— 混合列表上方, **不** 放进容器:
+   · `添加养生记录` (FilledButton 主) → `context.push('/wellness-records/new?customerId=...')`
+   · `添加联系记录` (FilledButton.tonal 次) → 走新 `showAddInteractionSheet` (D)
+   · 高度 `AppSize.buttonLgHeight`; 字号 `AppType.sm`
+
+3. **养生汇总保留** —— 「共 N 次 · 最近 X · 平均 Y 天一次」一行小字 (fontXs/textTertiary), 放在按钮下方 (信息不丢)
+
+4. **胶囊过滤** —— `ChoiceChip` 单选: 全部 / 养生记录 / 互动记录, 默认「全部」
+
+5. **混合列表** —— 按时间倒序, 养生 + 互动混排:
+   · 行用契约组件 `AppListRow(dense: true)` (`core/widgets/app_list_row.dart`)
+   · 养生行: leading=spa 图标 / title=服务项目名 (字典缺失回落「养生记录」) /
+     subtitle=`MM-dd · 部位(≤2) · 疼痛 8→3 ↓5` / onTap → `/wellness-records/<id>`
+   · 互动行: leading=类型图标 (phone/wechat/visit/holiday_greeting/other) / title=类型标签 / subtitle=`MM-dd · 内容` / 无详情页 → onTap = null
+   · 最多取混合后 **20** 条; 超出时列表底部一行小字「共 N 条 · 只显示最近 20 条」
+   · **健壮性**: 两边 provider 任一 loading/error **不能**把另一边的数据藏掉 (`valueOrNull` 合并, 全空才显示骨架/错误)
+
+### 关键决定
+
+- **共享弹层 widget** (`complete_follow_up_sheet.dart::_InteractionSheet`): 完成跟进 / 添加联系记录共用同一份 UI, 用 `completeTask: bool` + 可空 `task` 切分支, 避免「修一份漏一份」同根 bug
+- **健壮性合并**: `valueOrNull` 把两边 `AsyncValue` 拆开, 互不拖垮; 错误文案「加载失败: $error」只在两边都空时显示, 不藏数据
+- **dense 行高 52**: 养生 + 互动混合同质列表 → `AppListRow(dense: true)` (`52 = AppSize.buttonLgHeight + AppSpace.s4`), 跟其它 section 视觉一致
+- **净化契约组件**: 跟其它 section 一样, 整块混合列表包在**单个** `B2NoChrome` 容器, 按钮 / chips / 汇总在该容器**外面** (原则 4「容器越少内容越强」)
+
+### 删了哪些旧件
+
+- `flutter_app/lib/modules/customer/widgets/record_tile.dart` (RecordTile widget 已被 AppListRow 替换, 纯函数搬到 `record_format.dart`)
+- `flutter_app/lib/modules/customer/screens/add_record_sheet.dart` (2 按钮取代, 全仓 0 引用)
+- `customer_detail_page.dart` 里: `_buildWellnessSection` / `_showAllRecords` / `_recordSummary` / `_showAddInteractionSheet` / `_buildEmptyHint`
+- `customer_activity_cards.dart` 里: `CustomerInteractionSection` + `_CustomerInteractionSectionState` (记录页不再用, 全仓 0 引用)
+- `flutter_app/test/record_tile_test.dart` (4 个 widget 渲染用例 → 删; 纯函数搬到 `record_format_test.dart` + 5 个 `metricDeltaSummary` 新增用例)
+
+### 验证
+
+- `flutter analyze` → 0 issue
+- `flutter test` → **378/378** 全绿 (基线 369; +9: timeline 8 + record_format 净 +1)
+- `bash tools/check-ui-tokens.sh --strict` → exit 0 (cardWidget = 1, 持平)
+- `tools/check-ui-density.sh` → 不适用 (web admin 路由, 本次只动 Flutter 端)
+
 ## [Unreleased] — 去掉「添加记录」里重复的跟进任务入口 (2026-09-24)
 
 主人 2026-09-24 提问: 「添加记录弹窗中的跟进任务, 与跟进任务卡片中的新建跟进任务是不是功能重复了?」

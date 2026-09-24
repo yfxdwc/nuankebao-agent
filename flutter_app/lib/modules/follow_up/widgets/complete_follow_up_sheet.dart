@@ -1,25 +1,25 @@
 // ============================================
-// 「标记完成」弹层 (主人 2026-09-24 拍板)
+// 「标记完成」弹层 + 「添加联系记录」弹层 (2026-09-24 拍板)
 //
-// 主人诉求: 跟进任务点「标记完成」后, 应该让用户选择「跟进的方式」(电话/微信/到店…)
-//   + 可在弹层里备注「聊了什么」, 而不是直接消除任务。
+// 主人诉求 (2026-09-24 客户详情「记录」Tab 重构):
+//   ① 「标记完成」跟进任务后, 应该让用户选择「跟进的方式」(电话/微信/到店…) +
+//     可在弹层里备注「聊了什么」, 而不是直接消除任务。
+//   ② 客户详情「记录」Tab 「添加联系记录」按钮**复用**完成跟进的弹层, 但只
+//     调 `interactionService.create`, 不 complete 任务, 不 track。
 //
-// 为什么独立成 widget 而不是塞进 customer_activity_cards / follow_ups_page:
-//   两处调用方 (客户详情「跟进任务」区 + 全局「跟进待办」页) 共用同一份交互:
-//   · PATCH /api/follow-ups/:id (action=complete, notes?: 备注)
-//   · POST /api/interactions (customerId, type, summary)
-//   · track('follow_up_done') + invalidate 两个 provider + SnackBar 反馈
-//   抽出来后: 调用方只 await Future<bool>, 自身再按返回值决定 invalidate 自己独有的
-//   provider (e.g. follow_ups_page 的 pendingFollowUpsProvider —— 不在本文件内 import,
-//   避免 widget→screen 反向依赖)。
-//
-// 三件事顺序 (交互完整后才算业务完成):
+// 三件事顺序 (仅「标记完成」走, 1 失败 → 弹层**不**关闭, 留在原地可重试;
+//                1 成功 + 2 失败 → 弹层关闭, SnackBar 明确说「任务已完成, 但互动记录失败: …」):
 //   1. followUpService.complete(id, notes: 备注) —— 任务收尾
 //   2. interactionService.create({customerId, type, summary?}) —— 记一条联系
-//   3. usageService.track('follow_up_done') —— 用量埋点 (一致收口, 原来两个调用方各自 track → 会双报)
-//   1 失败 → 弹层**不**关闭, 留在原地可重试;
-//   1 成功 + 2 失败 → 弹层关闭, SnackBar 明确说「任务已完成, 但互动记录失败: …」(不撒谎)
-//   取消 / 全部成功 → 弹层关闭, SnackBar「已标记完成 · 已记一条${type}互动」。
+//   3. usageService.track('follow_up_done') —— 用量埋点 (一致收口, 原来两调用方各自 track → 会双报)
+//
+// 为什么不是独立页面:
+//   「从客户详情直接建一条跟进 / 记一条联系」是高频入口 → 就地弹层, 不动路由。
+//
+// 为什么两个入口共用一份 widget:
+//   弹层 UI / 行为差异仅 4 个开关: 标题文案 / 提交按钮文案 / 是否 complete 任务 / 是否 track。
+//   抽一个私有 `_InteractionSheet` + `task` 可空 → 一份实现服务两种入口, 避免
+//   「修完成跟进的 bug 时忘了同步修添加联系」(同根 §5「并发 session commit」: 一份源码 + 两处复制 → 一改一漏)。
 // ============================================
 
 import 'package:flutter/material.dart';
@@ -32,7 +32,7 @@ import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.g.dart';
 
-/// 弹出「完成跟进」弹层, 一次动作 = 三件事 (complete + create interaction + track)。
+/// 「完成跟进」弹层入口 —— 弹出底 sheet, 一次动作 = 三件事 (complete + create interaction + track)。
 ///
 /// 返回:
 ///   `true`  业务完成 (含"任务完成 + 互动失败"的**部分成功**, 见上文说明)
@@ -51,29 +51,88 @@ Future<bool?> showCompleteFollowUpSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (ctx) => _CompleteFollowUpSheet(
+    builder: (ctx) => _InteractionSheet(
       task: task,
       customerName: customerName,
       ref: ref,
+      title: customerName == null ? '完成跟进' : '完成跟进 · 「$customerName」',
+      submitLabel: '标记完成',
+      completeTask: true,
     ),
   );
 }
 
-class _CompleteFollowUpSheet extends StatefulWidget {
-  final FollowUpTask task;
+/// 「添加联系记录」弹层入口 (2026-09-24 拍: 复用完成跟进的弹层)。
+///
+/// 标题「添加联系记录」, 按钮「保存」, 只 `interactionService.create`,
+/// 不 complete 任务、不 track。
+///
+/// 调用方 (客户详情「记录」Tab `_addButtonsRow`) 拿到 `true` 后应自行 invalidate
+/// `interactionsForCustomerProvider(customerId)` —— 本弹层已经做了。
+Future<bool?> showAddInteractionSheet(
+  BuildContext context,
+  WidgetRef ref, {
+  required String customerId,
+  String? customerName,
+}) {
+  return showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => _InteractionSheet(
+      // task 为 null → 走「不 complete 任务」分支
+      task: null,
+      customerId: customerId,
+      customerName: customerName,
+      ref: ref,
+      title: customerName == null ? '添加联系记录' : '添加联系记录 · 「$customerName」',
+      submitLabel: '保存',
+      completeTask: false,
+    ),
+  );
+}
+
+// ============================================
+// 私有 widget: 「添加联系记录 / 完成跟进」共用一份 UI
+// ============================================
+
+class _InteractionSheet extends StatefulWidget {
+  /// 完成跟进时: 必填, 弹层需要 complete 这个任务。
+  /// 添加联系记录时: 传 null, 跳过 complete 路径。
+  final FollowUpTask? task;
+
+  /// 「添加联系记录」分支用 (task 为 null 时): 直接传 customerId。
+  /// 「完成跟进」分支 (task 非 null): 此字段被忽略, 用 `task.customerId`。
+  final String? customerId;
+
   final String? customerName;
   final WidgetRef ref;
-  const _CompleteFollowUpSheet({
+
+  /// 弹层大标题 (有 customerName 时拼上「· 「xxx」」由调用方控制)
+  final String title;
+
+  /// 主按钮文案 (「标记完成」 / 「保存」)
+  final String submitLabel;
+
+  /// true=「完成跟进」模式 (complete + track + invalidate 两个 provider);
+  /// false=「添加联系记录」模式 (只 create interaction + invalidate 一个 provider)
+  final bool completeTask;
+
+  const _InteractionSheet({
     required this.task,
-    required this.customerName,
     required this.ref,
+    required this.title,
+    required this.submitLabel,
+    required this.completeTask,
+    this.customerId,
+    this.customerName,
   });
 
   @override
-  State<_CompleteFollowUpSheet> createState() => _CompleteFollowUpSheetState();
+  State<_InteractionSheet> createState() => _InteractionSheetState();
 }
 
-class _CompleteFollowUpSheetState extends State<_CompleteFollowUpSheet> {
+class _InteractionSheetState extends State<_InteractionSheet> {
   /// 选中的跟进方式 (默认「电话」)
   String _selectedType = 'phone';
 
@@ -83,13 +142,20 @@ class _CompleteFollowUpSheetState extends State<_CompleteFollowUpSheet> {
   /// 提交中 —— 防止重复点 / 双报
   bool _saving = false;
 
+  /// 真正要操作的客户 ID (归一化: task 优先 → 显式 customerId 兜底)
+  String get _customerId => widget.task?.customerId ?? widget.customerId!;
+
+  /// 副标题行内容 (有 task 时显示任务 reason; 无则不显示 ——
+  ///   「添加联系记录」是临时自由记录, 没绑定具体任务)
+  String? get _reason => widget.task?.reason;
+
   @override
   void dispose() {
     _summaryCtrl.dispose();
     super.dispose();
   }
 
-  /// 「标记完成」按钮回调 —— 一次动作三件事 (顺序见文件头注释)
+  /// 「标记完成」/「保存」按钮回调 —— 根据 `completeTask` 走两条路径
   Future<void> _onSubmit(StateSetter setSheetState) async {
     if (_saving) return;
     setSheetState(() => _saving = true);
@@ -100,59 +166,87 @@ class _CompleteFollowUpSheetState extends State<_CompleteFollowUpSheet> {
     final summary = _summaryCtrl.text.trim();
     final hasNotes = summary.isNotEmpty;
 
-    // 1. 跟进任务标完成 (notes 透传 — 完成备注跟 Interaction 后口同步)
-    try {
-      await widget.ref.read(followUpServiceProvider).complete(
-            widget.task.id,
-            notes: hasNotes ? summary : null,
+    // =============== 「完成跟进」分支 (complete + interaction + track) ===============
+    if (widget.completeTask) {
+      final task = widget.task!;
+      // 1. 跟进任务标完成 (notes 透传 — 完成备注跟 Interaction 后口同步)
+      try {
+        await widget.ref.read(followUpServiceProvider).complete(
+              task.id,
+              notes: hasNotes ? summary : null,
+            );
+      } catch (e) {
+        // 1 失败 → 留在弹层里, 不关弹层, 留 saving=false 让用户重试
+        if (mounted) {
+          setSheetState(() => _saving = false);
+          messenger.showSnackBar(
+            SnackBar(content: Text('标记完成失败: $e')),
           );
-    } catch (e) {
-      // 1 失败 → 留在弹层里, 不关弹层, 留 saving=false 让用户重试
-      if (mounted) {
-        setSheetState(() => _saving = false);
+        }
+        return;
+      }
+
+      // 2. 记一条互动 (可能失败)
+      String? interactionError;
+      try {
+        await widget.ref.read(interactionServiceProvider).create({
+          'customerId': _customerId,
+          'type': _selectedType,
+          if (hasNotes) 'summary': summary,
+        });
+      } catch (e) {
+        interactionError = e.toString();
+      }
+
+      // 3. 用量埋点 (1 成功后就 track —— follow_up_done 跟 Interaction 后口成败解耦,
+      //    因为 task 本身确实完成了; 部分成功用 SnackBar 文案区分, 不动埋点)
+      widget.ref.read(usageServiceProvider).track(
+            'follow_up_done',
+            entityType: UsageEntityType.followUp,
+            entityId: task.id,
+          );
+
+      // 4. 失效两个 provider (弹层内就 commit, 调用方拿 true 后再 invalidate 自己独有的)
+      widget.ref.invalidate(customerFollowUpTasksProvider(_customerId));
+      widget.ref.invalidate(interactionsForCustomerProvider(_customerId));
+
+      // 5. 关弹层 + 反馈
+      Navigator.pop(context, true);
+      final typeLabel = interactionTypeLabels[_selectedType] ?? _selectedType;
+      if (interactionError == null) {
         messenger.showSnackBar(
-          SnackBar(content: Text('标记完成失败: $e')),
+          SnackBar(content: Text('已标记完成 · 已记一条${typeLabel}互动')),
+        );
+      } else {
+        // 部分成功: 任务确实完成了 (不可逆), 但互动没记上 —— 明确告知, 不让用户以为全好
+        messenger.showSnackBar(
+          SnackBar(content: Text('任务已完成, 但互动记录失败: $interactionError')),
         );
       }
       return;
     }
 
-    // 2. 记一条互动 (可能失败)
-    String? interactionError;
+    // =============== 「添加联系记录」分支 (只 create interaction) ===============
     try {
       await widget.ref.read(interactionServiceProvider).create({
-        'customerId': widget.task.customerId,
+        'customerId': _customerId,
         'type': _selectedType,
         if (hasNotes) 'summary': summary,
       });
+      // 失效一个 provider (本弹层就 commit)
+      widget.ref.invalidate(interactionsForCustomerProvider(_customerId));
+      Navigator.pop(context, true);
+      final typeLabel = interactionTypeLabels[_selectedType] ?? _selectedType;
+      messenger.showSnackBar(
+        SnackBar(content: Text('已记一条${typeLabel}互动')),
+      );
     } catch (e) {
-      interactionError = e.toString();
-    }
-
-    // 3. 用量埋点 (1 成功后就 track —— follow_up_done 跟 Interaction 后口成败解耦,
-    //    因为 task 本身确实完成了; 部分成功用 SnackBar 文案区分, 不动埋点)
-    widget.ref.read(usageServiceProvider).track(
-          'follow_up_done',
-          entityType: UsageEntityType.followUp,
-          entityId: widget.task.id,
+      if (mounted) {
+        setSheetState(() => _saving = false);
+        messenger.showSnackBar(
+          SnackBar(content: Text('保存失败: $e')),
         );
-
-    // 4. 失效两个 provider (弹层内就 commit, 调用方拿 true 后再 invalidate 自己独有的)
-    widget.ref.invalidate(customerFollowUpTasksProvider(widget.task.customerId));
-    widget.ref.invalidate(interactionsForCustomerProvider(widget.task.customerId));
-
-    // 5. 关弹层 + 反馈
-    Navigator.pop(context, true);
-    final typeLabel = interactionTypeLabels[_selectedType] ?? _selectedType;
-    if (interactionError == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('已标记完成 · 已记一条${typeLabel}互动')),
-      );
-    } else {
-      // 部分成功: 任务确实完成了 (不可逆), 但互动没记上 —— 明确告知, 不让用户以为全好
-      messenger.showSnackBar(
-        SnackBar(content: Text('任务已完成, 但互动记录失败: $interactionError')),
-      );
+      }
     }
   }
 
@@ -171,9 +265,7 @@ class _CompleteFollowUpSheetState extends State<_CompleteFollowUpSheet> {
           children: [
             // 标题 + 客户名 (有就显示, 没有就只标题 —— 同 B 档「不堆叠」原则)
             Text(
-              widget.customerName == null
-                  ? '完成跟进'
-                  : '完成跟进 · 「${widget.customerName}」',
+              widget.title,
               style: const TextStyle(
                 fontSize: AppTheme.fontLg,
                 fontWeight: FontWeight.w600,
@@ -181,17 +273,20 @@ class _CompleteFollowUpSheetState extends State<_CompleteFollowUpSheet> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            // 副标题 = 任务 reason (context, 让用户知道完成的是哪条)
-            const SizedBox(height: AppSpace.s6),
-            Text(
-              widget.task.reason,
-              style: const TextStyle(
-                fontSize: AppTheme.fontSm,
-                color: AppTheme.textSecondary,
+            // 「完成跟进」分支: 副标题 = 任务 reason (让用户知道完成的是哪条)
+            // 「添加联系记录」分支: _reason = null, 不画
+            if (_reason != null) ...[
+              const SizedBox(height: AppSpace.s6),
+              Text(
+                _reason!,
+                style: const TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.textSecondary,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            ],
             const SizedBox(height: AppSpace.s16),
             // 跟进方式 (5 个 ChoiceChip, 默认「电话」)
             const Text(
@@ -233,7 +328,7 @@ class _CompleteFollowUpSheetState extends State<_CompleteFollowUpSheet> {
               ),
             ),
             const SizedBox(height: AppSpace.s20),
-            // 取消 + 标记完成 双按钮 (取消 = TextButton, 主操作 = FilledButton)
+            // 取消 + 主操作 双按钮 (取消 = TextButton, 主操作 = FilledButton)
             Row(
               children: [
                 Expanded(
@@ -266,7 +361,7 @@ class _CompleteFollowUpSheetState extends State<_CompleteFollowUpSheet> {
                             ),
                           )
                         : const Icon(Icons.check, size: AppSize.iconLg),
-                    label: Text(_saving ? '保存中...' : '标记完成'),
+                    label: Text(_saving ? '保存中...' : widget.submitLabel),
                     style: FilledButton.styleFrom(
                       minimumSize:
                           const Size(0, AppSize.buttonLgHeight),

@@ -38,10 +38,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/customer_insight.dart';
 import '../../../core/models/customer_ownership.dart';
-import '../../../core/models/follow_up.dart' show interactionTypeLabels;
 import '../../../core/models/franchisee.dart';
 import '../../../core/models/placement_request.dart';
-import '../../../core/models/wellness_record.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
@@ -52,16 +50,16 @@ import '../../../core/widgets/franchise_chip.dart';
 import '../../../core/widgets/placement_target_sheet.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../screens/profile_sheets.dart' show showAvatarPickerSheet;
+import '../../follow_up/widgets/complete_follow_up_sheet.dart' show showAddInteractionSheet;
 import '../../follow_up/widgets/follow_up_analysis_card.dart';
 import '../widgets/ai_insight_cards.dart';
 import '../widgets/customer_activity_cards.dart';
 import '../widgets/customer_analysis_charts.dart';
 import '../widgets/customer_insight_actions.dart';
 import '../widgets/customer_score_card.dart';
+import '../widgets/customer_timeline_section.dart';
 import '../widgets/danger_zone_card.dart';
-import 'add_record_sheet.dart';
 import '../widgets/ownership_card.dart';
-import '../widgets/record_tile.dart';
 import '../../../core/widgets/b2_no_chrome.dart';
 
 // ============================================
@@ -217,24 +215,28 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
         ),
       );
 
-  /// **记录 Tab** —— 三大动作之「记录」: 养生记录 + 跟进任务 + 互动流水
+  /// **记录 Tab** —— 三大动作之「记录」(2026-09-24 重构):
+  ///   · 跟进任务置顶 (header 右上角「新建」)
+  ///   · 时间线混合列表 (养生 + 互动; 胶囊过滤; 上方两个添加按钮)
+  ///
+  /// 旧结构 (养生 → 跟进 → 互动 三大块) 已拆:
+  ///   · 养生 + 互动 合并 → `customer_timeline_section.dart::CustomerTimelineSection`
+  ///     (同质列表 AppListRow + 胶囊过滤 + 20 条截断 + 健壮性合并)
+  ///   · 跟进任务 保留在独立 section, 走 `CustomerFollowUpSection`
+  ///   · 旧的 `_buildWellnessSection` / `_showAllRecords` / `_recordSummary` /
+  ///     `CustomerInteractionSection` / `_showAddInteractionSheet` 全删
   Widget _buildRecordTab(
     BuildContext context,
     WidgetRef ref,
     Customer customer,
   ) {
-    final asyncRecords = ref.watch(customerWellnessRecordsProvider(customerId));
     return _tabScroll(children: [
-      // 养生记录 (含汇总: 共 N 次 / 最近到店)
-      _buildWellnessSection(context, ref, asyncRecords),
-      const SizedBox(height: AppSpace.cardGap),
-      // 跟进任务 (该客户待办, 可直接勾完成)
-      // ★ GlobalKey: 让 SnackBar「查看任务」能拿到对的上
-      //   (切到「记录」Tab 后, Scrollable.ensureVisible 用 key 定位到「跟进任务」区)
+      // 跟进任务 (该客户待办, header 右上角「新建」; ★ 让 SnackBar「查看任务」
+      //   能拿到对的上 —— 切到「记录」Tab 后 Scrollable.ensureVisible 用 key 定位)
       CustomerFollowUpSection(key: _followUpKey, customerId: customerId),
       const SizedBox(height: AppSpace.cardGap),
-      // 互动记录 (电话/微信/到店流水)
-      CustomerInteractionSection(customerId: customerId),
+      // 时间线混合列表 (养生 + 互动; 两个添加按钮 + 胶囊过滤)
+      CustomerTimelineSection(customerId: customerId),
     ]);
   }
 
@@ -443,180 +445,11 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     // 拿不到 context → 安静放弃 (不抛), Tab 已切回, 任务列表本身也会自刷
   }
 
-  /// 养生记录区: 汇总 + 最近 5 条 + 入口
-  Widget _buildWellnessSection(
-    BuildContext context,
-    WidgetRef ref,
-    AsyncValue<List<WellnessRecord>> asyncRecords,
-  ) {
-    return B2NoChrome(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.cardPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.favorite, size: AppSize.iconLg, color: AppTheme.accent),
-                const SizedBox(width: AppSpace.s8),
-                const Expanded(
-                  child: Text('养生记录',
-                      style: TextStyle(
-                          fontSize: AppTheme.fontMd,
-                          fontWeight: FontWeight.w700)),
-                ),
-                asyncRecords.maybeWhen(
-                  data: (records) {
-                    if (records.isEmpty) return const SizedBox.shrink();
-                    // Flexible: 窄屏/大字体下让文案省略, 不撑破 Row (中老年常放大系统字号)
-                    return Flexible(
-                      child: Text(
-                        _recordSummary(records),
-                        style: const TextStyle(
-                            fontSize: AppTheme.fontXs,
-                            color: AppTheme.textSecondary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                      ),
-                    );
-                  },
-                  orElse: () => const SizedBox.shrink(),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.s12),
-            asyncRecords.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(AppSpace.s8),
-                child: LoadingState(),
-              ),
-              error: (e, _) => Text('加载失败: $e',
-                  style: const TextStyle(color: AppTheme.danger)),
-              data: (records) {
-                if (records.isEmpty) {
-                  return _buildEmptyHint('还没有记录', '点下面的「添加记录」开始');
-                }
-                // 字典可能还没加载完 —— 为 null 时卡片回落显示「养生记录」而不是白屏
-                final dict = ref
-                    .watch(dictionariesProvider)
-                    .maybeWhen(data: (d) => d, orElse: () => null);
-                return Column(
-                  children: [
-                    ...records.take(5).map((r) => RecordTile(
-                          record: r,
-                          dict: dict,
-                          onTap: () => context.push('/wellness-records/${r.id}'),
-                        )),
-                    if (records.length > 5)
-                      TextButton.icon(
-                        onPressed: () => _showAllRecords(context, ref, records),
-                        icon: const Icon(Icons.expand_more, size: AppSize.iconMd),
-                        label: Text('查看全部 ${records.length} 条',
-                            style: const TextStyle(fontSize: AppTheme.fontSm)),
-                      ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: AppSpace.s8),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () =>
-                        showAddRecordSheet(context, customerId: customerId),
-                    icon: const Icon(Icons.add_circle_outline, size: AppSize.iconLg),
-                    label: const Text('+ 添加记录'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(0, AppSize.buttonLgHeight),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 全部记录 (底部弹层; 列表长了不把详情页撑爆)
-  void _showAllRecords(
-    BuildContext context,
-    WidgetRef ref,
-    List<WellnessRecord> records,
-  ) {
-    // ⚠ 2026-09-23 修: 这里原来读的是 `r.bodyParts` / `r.serviceItem` ——
-    //   `WellnessRecord` 上**根本没有这两个字段** (只有 bodyPartIds / serviceItemId)。
-    //   因为列表声明是 List<dynamic>, 编译期不报错, **运行时必抛 NoSuchMethodError**。
-    //   而且 "查看全部" 按钮只在 >5 条时才出现 —— 客户测试数据都是 3 条，
-    //   所以一直没人碰到。类型收紧成 List<WellnessRecord> 后立即暴露。
-    final dict = ref
-        .watch(dictionariesProvider)
-        .maybeWhen(data: (d) => d, orElse: () => null);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        maxChildSize: 0.95,
-        builder: (_, controller) => ListView.builder(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(
-              AppSpace.pagePadding, 0, AppSpace.pagePadding, AppSpace.s24),
-          itemCount: records.length,
-          itemBuilder: (ctx, i) {
-            final r = records[i];
-            return RecordTile(
-              record: r,
-              dict: dict,
-              onTap: () {
-                Navigator.pop(ctx);
-                context.push('/wellness-records/${r.id}');
-              },
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  /// 记录汇总行: 「共 N 次 · 最近 X · 平均 Y 天一次」
-  ///
-  /// 「平均 Y 天一次」与 P1 洞察 / `follow-up-analysis` 的复购周期**同口径**
-  /// (相邻两次到店天数的均值) —— 三处显示同一个数, 销售才不会觉得"两个地方说的不一样"。
-  /// 不足 2 次算不出间隔 → 只显示前两段 (宁可少一条信息, 不编)。
-  String _recordSummary(List<WellnessRecord> records) {
-    if (records.isEmpty) return '';
-    final last = records.first.serviceDate;
-    final parts = <String>['共 ${records.length} 次', '最近 $last'];
-
-    if (records.length >= 2) {
-      // records 按 serviceDate 倒序 (后端 orderBy desc) → 排序后算相邻差
-      final days = records
-          .map((r) => DateTime.tryParse(r.serviceDate))
-          .whereType<DateTime>()
-          .toList()
-        ..sort();
-      if (days.length >= 2) {
-        var sum = 0;
-        var n = 0;
-        for (var i = 1; i < days.length; i++) {
-          final d = days[i].difference(days[i - 1]).inDays;
-          if (d >= 0) {
-            sum += d;
-            n++;
-          }
-        }
-        if (n > 0) parts.add('平均 ${(sum / n).round()} 天一次');
-      }
-    }
-    return parts.join(' · ');
-  }
+  // ────────────────────────────────────────────────────────────
+  // 旧的 `_buildWellnessSection` / `_showAllRecords` / `_recordSummary`
+  // 已在 2026-09-24 记录 Tab 重构中删除 —— 养生记录已迁移到
+  // `customer_timeline_section.dart::CustomerTimelineSection` (与互动记录混合列表)。
+  // ────────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context, WidgetRef ref, Customer c) {
     final type = c.customerType;
@@ -727,7 +560,8 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
                     icon: Icons.edit_note,
                     label: '记一次互动',
                     compact: true,
-                    onTap: () => _showAddInteractionSheet(context, ref, c.id),
+                    onTap: () => showAddInteractionSheet(context, ref,
+                        customerId: c.id, customerName: c.name),
                   ),
                 ),
               ],
@@ -911,99 +745,13 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     }
   }
 
-  /// 记一次互动 (电话/微信/到店/节日问候/其他 + 备注)
-  void _showAddInteractionSheet(
-    BuildContext context, WidgetRef ref, String customerId) {
-    // 互动类型标签 = `interactionTypeLabels` (跟 complete_follow_up_sheet 共用一张表,
-    // 增删类型必须**同步**改后端 Zod schema —— 详见 follow_up.dart 该常量上方注释)。
-    var selected = 'phone';
-    final summaryCtrl = TextEditingController();
-    var saving = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: AppSpace.s16,
-            right: AppSpace.s16,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('记一次互动',
-                  style: TextStyle(
-                      fontSize: AppTheme.fontLg, fontWeight: FontWeight.w600)),
-              const SizedBox(height: AppSpace.s12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: interactionTypeLabels.entries
-                    .map((e) => ChoiceChip(
-                          label: Text(e.value,
-                              style: const TextStyle(fontSize: AppTheme.fontSm)),
-                          selected: selected == e.key,
-                          onSelected: (_) =>
-                              setSheetState(() => selected = e.key),
-                        ))
-                    .toList(),
-              ),
-              const SizedBox(height: AppSpace.s12),
-              TextField(
-                controller: summaryCtrl,
-                maxLines: 3,
-                style: const TextStyle(fontSize: AppTheme.fontMd),
-                decoration: const InputDecoration(
-                    labelText: '聊了什么 (可选)', hintText: '例: 说腰疼好多了, 约下周三'),
-              ),
-              const SizedBox(height: AppSpace.s12),
-              FilledButton.icon(
-                onPressed: saving
-                    ? null
-                    : () async {
-                        setSheetState(() => saving = true);
-                        try {
-                          await ref
-                              .read(interactionServiceProvider)
-                              .create({
-                            'customerId': customerId,
-                            'type': selected,
-                            if (summaryCtrl.text.isNotEmpty)
-                              'summary': summaryCtrl.text,
-                          });
-                          if (ctx.mounted) {
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              const SnackBar(content: Text('已记录')),
-                            );
-                          }
-                          ref.invalidate(interactionsForCustomerProvider(customerId));
-                        } catch (e) {
-                          setSheetState(() => saving = false);
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(content: Text('保存失败: $e')),
-                            );
-                          }
-                        }
-                      },
-                icon: const Icon(Icons.check, size: AppSize.iconLg),
-                label: Text(saving ? '保存中...' : '保存'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
-                ),
-              ),
-              const SizedBox(height: AppSpace.s8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // ──────────────────────────────────────────────────────
+  // 旧的 `_showAddInteractionSheet` 已于 2026-09-24 删除。
+  //   管理 Tab 「记一次互动」按钮 → 直接调 `showAddInteractionSheet`
+  //   (从 `complete_follow_up_sheet.dart` 导出, 跟「标记完成」共用一份 widget,
+  //   标题「添加联系记录」, 按钮「保存」)。
+  //   「记录」Tab 同样调它, 入口在混合列表上的两个添加按钮里。
+  // ──────────────────────────────────────────────────────
 
   /// 客户类型卡 (普通 ↔ 种子 一键切换; 加盟类型由关系决定不可切)
   /// app 身份卡 (ADR-0016, 主人 2026-09-22 拍):
@@ -1288,23 +1036,6 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
           fontSize: AppTheme.fontMd,
           fontWeight: FontWeight.w600,
           color: AppTheme.textPrimary,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyHint(String title, String hint) {
-    return Padding(
-      padding: const EdgeInsets.all(AppSpace.s24),
-      child: Center(
-        child: Column(
-          children: [
-            const Icon(Icons.history, size: AppSize.fabSize, color: AppTheme.textSecondary),
-            const SizedBox(height: AppSpace.s8),
-            Text(title, style: const TextStyle(fontSize: AppTheme.fontMd)),
-            const SizedBox(height: AppSpace.s4),
-            Text(hint, style: const TextStyle(fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
-          ],
         ),
       ),
     );

@@ -1,23 +1,21 @@
 // ============================================
-// 养生记录卡片 单测 (记录页完善, 主人 2026-09-23)
-// ============================================
+// 养生记录纯函数 单测 (2026-09-24 迁移自 record_tile_test)
+//
+// 来源: 原 `test/record_tile_test.dart`, 纯函数部分 (serviceItemName / bodyPartNames
+//   / MetricDelta / metricDeltas) 搬到本文件; RecordTile widget 渲染用例删除
+//   (新行组件 AppListRow 由 `customer_timeline_section_test.dart` 覆盖)。
+//
 // 守护的东西:
 //   ① 字典翻译: serviceItemId/bodyPartIds → 名字; 查不到**不显示 #id** (宁可回落笼统文案)
 //   ② 改善判定: 疼痛"降"是好事、睡眠"升"是好事 —— 方向相反最容易写反
 //   ③ 只显示**前后都填了**的指标 (只填一半算改善 = 编数据)
-//   ④ 卡片真渲染出项目名/部位/改善/反馈, 且**不是零高**
-//      (P4 踩过: widget test 全绿但真机零高 —— 所以必须断言 getSize)
-//
-// ⚠ 必须带真主题 AppTheme.light(tokens) —— 不带主题走 Flutter 默认样式,
-//   白字/零高这类真机 bug 永远测不出来 (AGENTS §5 已沉过坑)。
+//   ④ metricDeltaSummary: 行副文里那段「疼痛 8→3 ↓5」字串压得对
+// ============================================
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuankebao/core/models/dictionaries.dart';
 import 'package:nuankebao/core/models/wellness_record.dart';
-import 'package:nuankebao/core/theme/app_theme.dart';
-import 'package:nuankebao/core/theme/tokens.g.dart';
-import 'package:nuankebao/modules/customer/widgets/record_tile.dart';
+import 'package:nuankebao/modules/customer/widgets/record_format.dart';
 
 // ── fixtures ──
 
@@ -52,14 +50,6 @@ WellnessRecord _rec({
       customerFeedback: feedback,
       createdAt: DateTime(2026, 9, 22),
     );
-
-Future<void> _pump(WidgetTester tester, Widget child) async {
-  await tester.pumpWidget(MaterialApp(
-    theme: AppTheme.light(AppThemes.sage),
-    home: Scaffold(body: SingleChildScrollView(child: child)),
-  ));
-  await tester.pumpAndSettle();
-}
 
 void main() {
   // ── ① 字典翻译 ──
@@ -170,51 +160,41 @@ void main() {
     });
   });
 
-  // ── ④ 真渲染 (带真主题 + 断言高度) ──
-  group("RecordTile 渲染", () {
-    testWidgets("画出了项目名 / 部位 / 改善 / 反馈", (tester) async {
-      await _pump(tester, RecordTile(record: _rec(), dict: _dict));
-
-      expect(find.text('肩颈经络理疗'), findsOneWidget); // 项目名 (不再是"养生记录")
-      expect(find.text('肩颈'), findsWidgets); // 部位
-      expect(find.text('疼痛 8 → 4'), findsOneWidget); // 前 → 后
-      expect(find.text('↓4'), findsOneWidget); // 改善量
-      expect(find.textContaining('挺舒服的'), findsOneWidget); // 反馈
+  // ── ④ metricDeltaSummary (时间线副文) ──
+  group("metricDeltaSummary", () {
+    test("改善 (疼痛降) → '疼痛 8→3 ↓5'", () {
+      final r = _rec(pre: {'pain_level': 8}, post: {'pain_level': 3});
+      expect(metricDeltaSummary(r), '疼痛 8→3 ↓5');
     });
 
-    testWidgets("⚠ 高度不是 0 (P4 踩过: 单测绿但真机零高)", (tester) async {
-      await _pump(tester, RecordTile(record: _rec(), dict: _dict));
-      final size = tester.getSize(find.byType(RecordTile));
-      expect(size.height, greaterThan(80),
-          reason: '整块塌成 0 高的话 UI 在真机上完全看不见');
-      expect(size.width, greaterThan(0));
-    });
-
-    testWidgets("字典缺失 → 回落「养生记录」, 不显示 #id", (tester) async {
-      await _pump(tester, RecordTile(record: _rec(), dict: null));
-
-      expect(find.text('养生记录'), findsOneWidget);
-      expect(find.textContaining('#2'), findsNothing);
-      // 指标对比不需要字典, 仍要正常显示
-      expect(find.text('疼痛 8 → 4'), findsOneWidget);
-    });
-
-    testWidgets("没填反馈 → 不画反馈行 (不显示空白)", (tester) async {
-      await _pump(tester,
-          RecordTile(record: _rec(feedback: null), dict: _dict));
-      expect(find.textContaining('反馈'), findsNothing);
-    });
-
-    testWidgets("疼痛变差时用警告色, 但数字照常显示", (tester) async {
-      await _pump(
-        tester,
-        RecordTile(
-          record: _rec(pre: {'pain_level': 4}, post: {'pain_level': 8}),
-          dict: _dict,
-        ),
+    test("改善 (睡眠升) → '睡眠 5→7 ↑2'", () {
+      final r = _rec(
+        pre: {'sleep_quality': 5},
+        post: {'sleep_quality': 7},
       );
-      expect(find.text('疼痛 4 → 8'), findsOneWidget);
-      expect(find.text('↑4'), findsOneWidget);
+      expect(metricDeltaSummary(r), '睡眠 5→7 ↑2');
+    });
+
+    test("变差 (疼痛升) → '疼痛 4→8 ↑4'", () {
+      final r = _rec(pre: {'pain_level': 4}, post: {'pain_level': 8});
+      expect(metricDeltaSummary(r), '疼痛 4→8 ↑4');
+    });
+
+    test("持平 → 无箭头 '疼痛 8→8'", () {
+      final r = _rec(pre: {'pain_level': 8}, post: {'pain_level': 8});
+      expect(metricDeltaSummary(r), '疼痛 8→8');
+    });
+
+    test("多条 → ' · ' 拼接 (疼痛 + 睡眠)", () {
+      final r = _rec(
+        pre: {'pain_level': 8, 'sleep_quality': 5},
+        post: {'pain_level': 4, 'sleep_quality': 7},
+      );
+      expect(metricDeltaSummary(r), '疼痛 8→4 ↓4 · 睡眠 5→7 ↑2');
+    });
+
+    test("无指标 → 空串 (副文不带 '疼痛:无' 这类空字段)", () {
+      expect(metricDeltaSummary(_rec(pre: {}, post: {})), '');
     });
   });
 }

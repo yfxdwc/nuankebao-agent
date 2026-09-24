@@ -1,8 +1,20 @@
 // ============================================
-// 客户详情页 — 跟进任务 / 互动记录 区 (主人 2026-09-18 拍: 详情页内容要"或更多")
+// 客户详情页 — 跟进任务 区 (2026-09-24 拍「记录 Tab 重构」)
 //
-// 跟进任务: 该客户待办 (dueAt 最近的在上); 可直接「完成」(PATCH /follow-ups/:id)
-// 互动记录: 最近联系流水 (电话/微信/到店/节日问候) + 「记一次互动」入口
+// 本文件**只**保留「跟进任务」区: 互动的展示/记录已迁移到 `customer_timeline_section.dart`
+// (混合列表 + 胶囊过滤); 旧 `CustomerInteractionSection` 已删除。
+//
+// 跟进任务区变化 (2026-09-24):
+//   · header 右上角加紧凑「+ 新建」按钮 (不换行不溢出), 沿用原 `showAddFollowUpSheet`
+//   · 底部「新建跟进任务」BigActionButton 已删 (原独占一行, 反 vibe;
+//     同时跟「两个添加按钮在混合列表上方」重复 —— 删其一)
+//   · 「N 条待办」计数保留
+//
+// 「标记完成」 → 弹出新弹层 (主人 2026-09-24 拍: 选跟进方式 + 记内容)。
+//   弹层自己管 saving 转圈 → 本 widget 回归 ConsumerWidget,
+//   去掉没用的状态和 setState。 (为什么这么改: 2026-09-24 反馈
+//   「点击跟进后只看到任务没了」—— 一闪而过的 spinner 不解决"不知道怎么跟进的"问题,
+//   弹层才对。)
 // ============================================
 
 import 'package:flutter/material.dart';
@@ -13,17 +25,16 @@ import '../../../core/models/follow_up.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import 'ai_insight_cards.dart' show BigActionButton;
-import '../../follow_up/widgets/complete_follow_up_sheet.dart';
-
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/widgets/b2_no_chrome.dart';
+import '../../follow_up/widgets/complete_follow_up_sheet.dart';
+
 // ============================================
 // 建跟进任务 弹层 (客户详情页 / AI 跟进卡共用)
 //
 // 为什么不是独立页面:
 //   `modules/follow_up/screens/` 还是空的 (没有 /follow-ups/new 路由),
-//   而“从客户详情直接建一条跟进”是最高频入口 → 就地弹层, 不动路由/不动别的模块
+//   而"从客户详情直接建一条跟进"是最高频入口 → 就地弹层, 不动路由/不动别的模块
 // ============================================
 Future<void> showAddFollowUpSheet(
   BuildContext context,
@@ -152,12 +163,6 @@ class CustomerFollowUpSection extends ConsumerWidget {
     final fmt = DateFormat('MM-dd');
     final async = ref.watch(customerFollowUpTasksProvider(customerId));
 
-    // 「标记完成」 → 弹出新弹层 (主人 2026-09-24 拍: 选跟进方式 + 记内容)。
-    // 原来这里是 ConsumerStatefulWidget + `_completingId` 局部 spinner,
-    // 现在改走弹层 → 弹层自己管 saving 转圈 → 本 widget 回归 ConsumerWidget,
-    // 去掉没用的状态和 setState。 (为什么这么改: 2026-09-24 反馈
-    // 「点击跟进后只看到任务没了」—— 一闪而过的 spinner 不解决"不知道怎么跟进的"问题,
-    // 弹层才对。)
     return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
@@ -165,9 +170,15 @@ class CustomerFollowUpSection extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // header: 标题 + 「N 条待办」计数 + 右上角紧凑「新建」按钮 (2026-09-24 拍)
+            //   原底部 BigActionButton 已删; 此处一行内同时容纳:
+            //   · 标题 (固定左)
+            //   · 「N 条待办」(Flexible, 窄屏省略, 中老年放大字号不撑破 Row)
+            //   · 「+ 新建」按钮 (固定右, TextButton.icon 风格, **不换行不独占行**)
             Row(
               children: [
-                const Icon(Icons.task_alt, size: AppSize.iconLg, color: AppTheme.primary),
+                const Icon(Icons.task_alt,
+                    size: AppSize.iconLg, color: AppTheme.primary),
                 const SizedBox(width: AppSpace.s8),
                 const Expanded(
                   child: Text('跟进任务',
@@ -185,6 +196,23 @@ class CustomerFollowUpSection extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis),
                   ),
                   orElse: () => const SizedBox.shrink(),
+                ),
+                const SizedBox(width: AppSpace.s8),
+                TextButton.icon(
+                  // 「+ 新建」紧凑按钮 (header 行右侧, 不换行不溢出)
+                  //   visualDensity: compact 缩 padding 让按钮更紧, 避免中老年字号下被挤到下一行
+                  onPressed: () => showAddFollowUpSheet(context, ref,
+                      customerId: customerId),
+                  icon: const Icon(Icons.add, size: AppSize.iconMd),
+                  label: const Text('新建',
+                      style: TextStyle(fontSize: AppTheme.fontSm)),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpace.s8, vertical: AppSpace.s4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
               ],
             ),
@@ -205,14 +233,6 @@ class CustomerFollowUpSection extends ConsumerWidget {
                       children: tasks
                           .map((t) => _tile(context, ref, t, fmt))
                           .toList()),
-            ),
-            const SizedBox(height: AppSpace.s8),
-            BigActionButton(
-              icon: Icons.add_task,
-              label: '新建跟进任务',
-              compact: true,
-              onTap: () => showAddFollowUpSheet(context, ref,
-                  customerId: customerId),
             ),
           ],
         ),
@@ -292,131 +312,10 @@ class CustomerFollowUpSection extends ConsumerWidget {
 }
 
 // ============================================
-// 互动记录 (该客户)
-// ============================================
-
-class CustomerInteractionSection extends ConsumerStatefulWidget {
-  final String customerId;
-  const CustomerInteractionSection({super.key, required this.customerId});
-
-  @override
-  ConsumerState<CustomerInteractionSection> createState() =>
-      _CustomerInteractionSectionState();
-}
-
-class _CustomerInteractionSectionState
-    extends ConsumerState<CustomerInteractionSection> {
-  static const _typeLabel = {
-    'phone': '电话',
-    'wechat': '微信',
-    'visit': '到店',
-    'holiday_greeting': '节日问候',
-    'other': '其他',
-  };
-
-  static const _typeIcon = {
-    'phone': Icons.phone,
-    'wechat': Icons.chat,
-    'visit': Icons.storefront,
-    'holiday_greeting': Icons.card_giftcard,
-    'other': Icons.more_horiz,
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final fmt = DateFormat('yyyy-MM-dd');
-    final async = ref.watch(interactionsForCustomerProvider(widget.customerId));
-    final items = async.valueOrNull ?? const <Interaction>[];
-
-    return B2NoChrome(
-      margin: const EdgeInsets.only(bottom: AppSpace.s12),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.forum_outlined, size: AppSize.iconLg, color: AppTheme.accent),
-                const SizedBox(width: AppSpace.s8),
-                const Expanded(
-                  child: Text('互动记录',
-                      style: TextStyle(
-                          fontSize: AppTheme.fontMd,
-                          fontWeight: FontWeight.w700)),
-                ),
-                if (items.isNotEmpty)
-                  Flexible(
-                    child: Text('共 ${items.length} 次',
-                        style: const TextStyle(
-                            fontSize: AppTheme.fontXs,
-                            color: AppTheme.textSecondary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.s12),
-            async.when(
-              loading: () => const _SectionLoading('加载互动记录...'),
-              error: (e, _) => _SectionError(
-                message: '$e',
-                onRetry: () => ref
-                    .invalidate(interactionsForCustomerProvider(widget.customerId)),
-              ),
-              data: (items) => items.isEmpty
-                  ? const Text('还没记过联系',
-                      style: TextStyle(
-                          fontSize: AppTheme.fontSm,
-                          color: AppTheme.textSecondary))
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: items
-                          .take(5)
-                          .map((i) => Padding(
-                                padding: const EdgeInsets.only(bottom: AppSpace.s8),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(_typeIcon[i.type] ?? Icons.more_horiz,
-                                        size: AppSize.iconMd, color: AppTheme.textSecondary),
-                                    const SizedBox(width: AppSpace.s8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            '${_typeLabel[i.type] ?? i.type} · ${fmt.format(i.createdAt)}',
-                                            style: const TextStyle(
-                                                fontSize: AppTheme.fontSm,
-                                                fontWeight: FontWeight.w600),
-                                          ),
-                                          if (i.summary != null &&
-                                              i.summary!.isNotEmpty)
-                                            Text(i.summary!,
-                                                style: const TextStyle(
-                                                    fontSize: AppTheme.fontXs,
-                                                    color: AppTheme
-                                                        .textSecondary)),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ))
-                          .toList(),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================
 // 小块 (加载 / 错误)
+//
+// 跟进任务还在用, 保留; 旧的互动 section 跟随整体删除后, 这两个 helper 仍被
+// CustomerFollowUpSection 引用 —— 不删。
 // ============================================
 
 class _SectionLoading extends StatelessWidget {
@@ -449,8 +348,11 @@ class _SectionError extends StatelessWidget {
               style: const TextStyle(
                   fontSize: AppTheme.fontSm, color: AppTheme.danger)),
           const SizedBox(height: AppSpace.s8),
-          BigActionButton(
-              icon: Icons.refresh, label: '重试', compact: true, onTap: onRetry),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.refresh, size: AppSize.iconMd),
+            label: const Text('重试', style: TextStyle(fontSize: AppTheme.fontSm)),
+            onPressed: onRetry,
+          ),
         ],
       );
 }
