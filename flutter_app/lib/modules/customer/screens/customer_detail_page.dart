@@ -81,7 +81,6 @@ class CustomerDetailPage extends ConsumerStatefulWidget {
 class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  final GlobalKey _followUpKey = GlobalKey();
 
   /// 本页绑定的客户 ID —— 从 widget 透传, 避免满文件 `widget.customerId` 噪
   String get customerId => widget.customerId;
@@ -96,6 +95,10 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
   ///   简单地在每个 TabBarView 子节点上挂 ScrollController; 改走
   ///   「子树冒泡的 ScrollNotification」一处监听, 轴向过滤掉横向 PageView 的
   ///   滚动, 状态靠 setState 推进 (变了才刷, 避免每帧 rebuild)。
+  ///
+  /// 2026-09-24 拓展: L0「现在该做」卡 + 记录 Tab 顶部的「跟进任务」卡
+  ///   **共用这一个折叠状态** (主人诉求: 「跟进任务卡随上滑收起, 但不能
+  ///   全部不见了」—— 同一把折叠机的两个消费者, 同时收 / 同时展)。
   bool _actionsCollapsed = false;
 
   @override
@@ -148,11 +151,11 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     //
     // 为什么用自管 TabController 而不是 DefaultTabController:
     //   2026-09-24 P1 闭环诉求: 「建任务」 SnackBar 的「查看任务」action 要
-    //   切回「记录」Tab + 滚动到「跟进任务」区, 这两步都要 controller 句柄:
-    //     · _tabController.animateTo(0)
-    //     · _followUpKey.currentContext → Scrollable.ensureVisible
-    //   既然必须 StatefulWidget, 就一并把 animateTo 拿到手 (后面跟 TabBar/View
-    //   显式绑 controller, 不再用 DefaultTabController.of 兜底)。
+    //   切回「记录」Tab。早期还要 Scrollable.ensureVisible 滚跟进任务进视口
+    //   —— 但 2026-09-24 跟随进任务卡固定后, 那段逻辑也不要了 (_revealFollowUpSection
+    //   只负责切 Tab + 收回折叠)。不再需要 _followUpKey GlobalKey 字段。
+    //   既然必须 StatefulWidget (为了 animateTo), 就一并把 animateTo 拿到手
+    //   (后面跟 TabBar/View 显式绑 controller, 不再用 DefaultTabController.of 兜底)。
     //
     // 为什么 L0 (行动卡) 在 TabBarView **外面**:
     //   CHARTER §1.4 的「行动输出 = 明确的跟进指引」必须**切 Tab 也可见** ——
@@ -280,14 +283,24 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
         ),
       );
 
-  /// **记录 Tab** —— 三大动作之「记录」(2026-09-24 重构):
-  ///   · 跟进任务置顶 (header 右上角「新建」)
-  ///   · 时间线混合列表 (养生 + 互动; 胶囊过滤; 上方两个添加按钮)
+  /// **记录 Tab** —— 三大动作之「记录」(2026-09-24 重构 + 接 P1 折叠诉求):
+  ///   · 跟进任务**固定** (不再随滚动消失) —— 跟 L0「现在该做」共用折叠状态
+  ///   · 时间线混合列表可滚 (养生 + 互动; 胶囊过滤; 上方两个添加按钮)
+  ///
+  /// 2026-09-24 重构 (本 commit): 跟进任务从「滚动内容里」挪到「Tab 顶部固定」。
+  ///   主人诉求: 「跟进任务卡也像现在该做一样随上滑收起, 但不能随上滑全部不见了」。
+  ///   修法 = 固定卡 + 共用 `_actionsCollapsed` (同把折叠机的两个消费者):
+  ///     · 详情页 body 用 `Column` 套 [固定跟进卡, 可滚时间线]
+  ///     · 跟进卡传 `collapsed: _actionsCollapsed` + `onToggleCollapsed: () => setState(() => _actionsCollapsed = false)`
+  ///     · 时间线包进 `Expanded` + 单一 `SingleChildScrollView`, 滚动只影响时间线,
+  ///       跟进卡永远在视口里 → "全部不见了" 的根因消失
+  ///   注: 这里**不**包 `_tabScroll` (那个 helper 一包整个 children 都是滚动内容),
+  ///     改成手写 Column + Expanded, 因为我们要的是「混合结构: 固定卡 + 可滚」。
   ///
   /// 旧结构 (养生 → 跟进 → 互动 三大块) 已拆:
   ///   · 养生 + 互动 合并 → `customer_timeline_section.dart::CustomerTimelineSection`
   ///     (同质列表 AppListRow + 胶囊过滤 + 20 条截断 + 健壮性合并)
-  ///   · 跟进任务 保留在独立 section, 走 `CustomerFollowUpSection`
+  ///   · 跟进任务 保留在独立 section, 走 `CustomerFollowUpSection` (现固定在 Tab 顶部)
   ///   · 旧的 `_buildWellnessSection` / `_showAllRecords` / `_recordSummary` /
   ///     `CustomerInteractionSection` / `_showAddInteractionSheet` 全删
   Widget _buildRecordTab(
@@ -295,14 +308,46 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     WidgetRef ref,
     Customer customer,
   ) {
-    return _tabScroll(children: [
-      // 跟进任务 (该客户待办, header 右上角「新建」; ★ 让 SnackBar「查看任务」
-      //   能拿到对的上 —— 切到「记录」Tab 后 Scrollable.ensureVisible 用 key 定位)
-      CustomerFollowUpSection(key: _followUpKey, customerId: customerId),
-      const SizedBox(height: AppSpace.cardGap),
-      // 时间线混合列表 (养生 + 互动; 两个添加按钮 + 胶囊过滤)
-      CustomerTimelineSection(customerId: customerId),
-    ]);
+    return Column(
+      children: [
+        // ★ 固定跟进卡 (跟 L0 共用 _actionsCollapsed; 折叠图标也在卡内,
+        //   点了回调切回 false)。Padding 是横向 pagePadding (跟 L0 左侧对齐),
+        //   上方 s12 (跟 L0 间留呼吸), 下方 0 (时间线自身有 padding)。
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.pagePadding,
+            AppSpace.s12,
+            AppSpace.pagePadding,
+            0,
+          ),
+          child: CustomerFollowUpSection(
+            customerId: customerId,
+            collapsed: _actionsCollapsed,
+            onToggleCollapsed: () {
+              if (_actionsCollapsed) {
+                setState(() => _actionsCollapsed = false);
+              }
+            },
+          ),
+        ),
+        // ★ 时间线混合列表 (养生 + 互动) —— **唯一**可滚的部分;
+        //   Expanded 让它占满剩余空间, SingleChildScrollView 滚动只发生在
+        //   它内部, 不波及上面的固定跟进卡。
+        //   不用 _tabScroll (那个一整 children 都滚动), 自己写最小滚动单元。
+        Expanded(
+          child: SingleChildScrollView(
+            primary: false,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.pagePadding,
+              AppSpace.cardGap,
+              AppSpace.pagePadding,
+              AppSpace.s48,
+            ),
+            child: CustomerTimelineSection(customerId: customerId),
+          ),
+        ),
+      ],
+    );
   }
 
   /// **分析 Tab** —— 三大动作之「分析」: 评分卡 → 图谱 → 客观指标 → AI 解读
@@ -470,20 +515,18 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     }
   }
 
-  /// 「查看任务」= 切回「记录」Tab + 把「跟进任务」滚进视口
+  /// 「查看任务」= 切回「记录」Tab + 把「跟进任务」**展回** (2026-09-24 简化)
   ///
-  /// ⚠ **不要用无界 sleep 猜时间** (同 AGENTS §5「等构建用 sleep N 猜时间」教训):
-  ///   有界轮询 (上限 1s, 50ms 步进), 拿到 context 就收手, 拿不到安静放弃不崩。
+  /// 变更点 (vs 旧实现): 跟进任务卡**不再**放在滚动区里 (固定在 Tab 顶部) → 旧
+  ///   「Scrollable.ensureVisible 把它滚进视口」整段逻辑不需要了 —— 卡永远是
+  ///   可见的, 切回 Tab 就够, 顺带把折叠状态收回 (因为任务列表**刚刚被新建**,
+  ///   销售第一时间要看的是任务详情, 不是折叠态的一行 header)。
   ///
-  /// 拆成两段:
-  ///   1. 切 Tab: 如果已在 index 0 不动, 否则 animateTo(0) 后等 animation 走完 (至多 1s)
-  ///   2. 滚动: 轮询 `_followUpKey.currentContext` —— TabBarView 懒构建, 刚切过去
-  ///     那一帧记录 Tab 还没构建, 必须等; 用 GlobalKey 绑的是 CustomerFollowUpSection
-  ///     自身, context 就位后 Scrollable.ensureVisible 走最近 Scrollable 祖先
-  ///     (记录 Tab 的 SingleChildScrollView), 滚到目标 0.15 位置。
+  /// 有界等待 animateTo (同根 §5「不要用无界 sleep 猜时间」): 上限 1s, 50ms 步进,
+  ///   拿到 index==0 就收手。
   ///
-  /// 拿不到 context 的安全网: TabBarView 已销毁/PageStorage 没建立 → 静默放弃,
-  ///   不抛 (用户至少能看到「已建任务」文案 + 切回了「记录」Tab, 任务也会自刷)。
+  /// ⚠ 不再需要 _followUpKey / Scrollable.ensureVisible: 卡已固定, 它的可见性
+  ///   与滚动位置无关。GlobalKey 字段已于本 commit 删除 (全仓 0 引用, 见 git log)。
   Future<void> _revealFollowUpSection() async {
     if (_tabController.index != 0) {
       _tabController.animateTo(0);
@@ -493,21 +536,12 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
     }
-    // 轮询拿到 CustomerFollowUpSection 的 BuildContext
-    for (var i = 0; i < 20; i++) {
-      final ctx = _followUpKey.currentContext;
-      if (ctx != null) {
-        await Scrollable.ensureVisible(
-          ctx,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-          alignment: 0.15,
-        );
-        return;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+    // 卡是固定可见的, 但折叠态只有一行 header 看不到新建的任务 ——
+    // 顺手把折叠状态收回, 销售立刻看到完整列表。设了状态才 setState
+    // (避免无谓 rebuild)。
+    if (_actionsCollapsed) {
+      setState(() => _actionsCollapsed = false);
     }
-    // 拿不到 context → 安静放弃 (不抛), Tab 已切回, 任务列表本身也会自刷
   }
 
   // ────────────────────────────────────────────────────────────

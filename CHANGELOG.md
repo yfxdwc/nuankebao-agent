@@ -2,6 +2,31 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 跟进任务卡固定 + 随滚动收起 (2026-09-24)
+
+主人 2026-09-24: 「'跟进任务'卡片也像'现在该做'卡片一样随上滑收起，但不需要高亮显示。
+不能随上滑全部不见了」—— 之前它在记录 Tab 的**滚动内容**里, 上滑就整张滞走。
+
+### 做法
+
+- 记录 Tab 改成「**固定跟进卡 + 可滚时间线**」: `Column[CustomerFollowUpSection, Expanded(时间线滚动)]`
+  —— 卡片不再随滚动消失, 上滑只收起成一行 header (不会再"全部不见了"),
+  时间线 (`CustomerTimelineSection`) 在 `Expanded + SingleChildScrollView` 里独立滚。
+- 折叠状态与 L0「现在该做」**共用页面的 `_actionsCollapsed`** (同一把折叠机的两个消费者):
+  上滑越过 24px 同时收起, 回顶同时展开; 卡内 `Icons.expand_more` (tooltip「展开」) 可手动展开。
+- **不上高亮色**: 折叠态保持白卡 (`surfaceCard` + divider) —— 与「现在该做」的 warning
+  琥珀色刻意区分 (那张是"还有待办没处理"的**警示**; 这张只是"收起任务列表"的收纳动作,
+  上警示色反而误导)。
+- `_revealFollowUpSection` (建任务后「查看任务」) 简化: 卡已固定可见 → 只需切 Tab + 收回折叠;
+  删掉不再需要的 `_followUpKey` GlobalKey 与 `Scrollable.ensureVisible` 轮询。
+
+### 验证
+
+- 测试: 跟进卡折叠组 (折叠渲染 / 白卡不上高亮 + 反向断言 / 图标回调 / 无任务不出图标)
+  + 页面级 ⑨ (上滑后卡片仍在树上 + 任务行收起 + 滚回顶部恢复)
+- `flutter analyze` 0 issue; `flutter test` 全量 **393/393** 全绿;
+  `tools/check-ui-tokens.sh --strict` 通过 (无新增硬编码, cardWidget 棘轮持平)
+
 ## [Unreleased] — 记录页工具栏: 筛选/添加收成下拉 (2026-09-24)
 
 主人 2026-09-24 诉求: 「记录列表内容选择标签(全部、养生、互动)折叠为下拉选择框。

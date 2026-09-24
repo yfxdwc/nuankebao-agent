@@ -15,6 +15,12 @@
 //   去掉没用的状态和 setState。 (为什么这么改: 2026-09-24 反馈
 //   「点击跟进后只看到任务没了」—— 一闪而过的 spinner 不解决"不知道怎么跟进的"问题,
 //   弹层才对。)
+//
+// 2026-09-24 接 P1 / 折叠诉求 (本 commit): 跟进任务卡**不再**放在记录 Tab
+//   滚动区里 —— 跟 L0「现在该做」一样, 在详情页 body 外层固定可见;
+//   上滑随页面折叠成 header 一行 (有任务时右边出 expand_more 展开图标),
+//   任务 tile 收起; 卡片保持白卡 (跟「现在该做」的警示琥珀**刻意**区分,
+//   详见类注释)。
 // ============================================
 
 import 'package:flutter/material.dart';
@@ -152,89 +158,129 @@ Future<void> showAddFollowUpSheet(
 
 // ============================================
 // 跟进任务 (该客户)
+//
+// 2026-09-24 接 P1 / 折叠诉求: 跟进任务卡**不再**放在记录 Tab 的滚动区里 ——
+//   跟 L0「现在该做」一样, 在详情页 body 外层固定可见; 上滑随页面折叠成
+//   header 一行 (有任务时右边出 expand_more 展开图标), 任务 tile 收起;
+//   卡片保持白卡 (跟「现在该做」的警示琥珀**刻意**区分)。
+//
+// 折叠态细节 (照搬 L0 模式, 详见 customer_insight_actions.dart 注释):
+//   · `collapsed == true` + 有任务 → 只渲染 header 一行 + 右侧 expand_more
+//   · `collapsed == true` + 无任务 → 只渲染 header (没东西可展开, 不出图标,
+//     跟展开态的「没有待办跟进」一致 —— 同根 §5「贴告示 ≠ 修复」)
+//   · `collapsed == false` → 完整展开 (header + tiles / 空态文案)
+//   · 切换用 AnimatedSize (~180ms easeOut, alignment 顶部) 平滑过渡
+//
+// **不上任何警示/高亮色** (主人 2026-09-24 原话: 「不需要高亮显示」):
+//   折叠 = 收起任务 tile, 不是「还有待办被收起的告警信号」。L0 行动卡用
+//   warning 琥珀是因为它折叠了**还有待办没处理**; 跟进卡折叠 = 收起任务列表
+//   的视觉收纳动作, 没有"还有什么没处理"的语义, 用警示色反而把「正常收纳」
+//   错位成「还有事要做」, 销售会被吓着每次展开都确认一下。维持 surfaceCard
+//   (白) + 细灰顶边, 跟展开态**视觉一致**, 切换时只有"卡片高度变化"的
+//   物理感, 没有"色块跳动"的信号冲击。
 // ============================================
 
 class CustomerFollowUpSection extends ConsumerWidget {
   final String customerId;
-  const CustomerFollowUpSection({super.key, required this.customerId});
+
+  /// 是否折叠到一行 header (详情页根据页面上滑状态传入, 本组件不感知 scroll)
+  ///
+  /// 默认 false —— 独立 widget 测试 / AI 跟进卡复用时不传也保持展开态, 不引入
+  /// 「没人传 collapsed 却被吞成折叠态」的隐式 bug。
+  final bool collapsed;
+
+  /// 折叠态下, 点 header 上的 expand_more 图标 → 详情页收到回调后切回展开
+  ///
+  /// (图标只在「确实有任务可展开」时才出, 不是每种状态都收回调。)
+  final VoidCallback? onToggleCollapsed;
+
+  /// 测试锁定 key —— 详情页「不能随上滑全部不见了」验收断言通过 key 抓卡
+  /// (`find.byKey(CustomerFollowUpSection.cardKey)` findsOneWidget)。
+  /// 改这个 key 之前必先全仓 grep: 这是页面级测试 + 内部测试共用的契约。
+  static const cardKey = ValueKey('followUpCard');
+
+  const CustomerFollowUpSection({
+    super.key,
+    required this.customerId,
+    this.collapsed = false,
+    this.onToggleCollapsed,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fmt = DateFormat('MM-dd');
     final async = ref.watch(customerFollowUpTasksProvider(customerId));
 
+    // 折叠态只在「有任务可展开」时生效 —— collapsed 是详情页的滚动状态机
+    // (上滑越过 24pt → true; 回顶 → false), 但光它自己不够:
+    //   · collapsed=true + tasks=[] → 不折叠 (跟展开态「没有待办跟进」一致;
+    //     出图标 = 误导, 同根 §5「贴告示 ≠ 修复」)
+    //   · collapsed=false → 不管任务多少都不折叠
+    // tasksForCollapse 是只读的快照 (从 async.maybeWhen 解出来), 下方
+    // async.when 还会再读一次拿真正的 tasks (tile 渲染用)。
+    final tasksForCollapse = async.maybeWhen<List<FollowUpTask>>(
+      data: (t) => t,
+      orElse: () => const <FollowUpTask>[],
+    );
+    final isCollapsed = collapsed && tasksForCollapse.isNotEmpty;
+
     return B2NoChrome(
+      key: cardKey,
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // header: 标题 + 「N 条待办」计数 + 右上角紧凑「新建」按钮 (2026-09-24 拍)
-            //   原底部 BigActionButton 已删; 此处一行内同时容纳:
-            //   · 标题 (固定左)
-            //   · 「N 条待办」(Flexible, 窄屏省略, 中老年放大字号不撑破 Row)
-            //   · 「+ 新建」按钮 (固定右, TextButton.icon 风格, **不换行不独占行**)
-            Row(
-              children: [
-                const Icon(Icons.task_alt,
-                    size: AppSize.iconLg, color: AppTheme.primary),
-                const SizedBox(width: AppSpace.s8),
-                const Expanded(
-                  child: Text('跟进任务',
-                      style: TextStyle(
-                          fontSize: AppTheme.fontMd,
-                          fontWeight: FontWeight.w700)),
-                ),
-                async.maybeWhen(
-                  data: (tasks) => Flexible(
-                    child: Text('${tasks.length} 条待办',
-                        style: const TextStyle(
-                            fontSize: AppTheme.fontXs,
-                            color: AppTheme.textSecondary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+      child: Container(
+        // 细顶边: 卡片底仍是 surfaceCard (白, B2NoChrome 默认), 这里只加
+        // 1px divider 顶边让卡片有"实体"的视觉重量 —— 不画全 border, 因为
+        // 滚动时固定卡的四边紧贴 tab / AppBar, 画全 border 会跟屏幕边缘
+        // 双线 (AppBar 也有底边)。
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: AppColors.divider, width: 0.5),
+          ),
+        ),
+        child: AnimatedSize(
+          // ~180ms easeOut, alignment 顶部 → 折叠时任务列表从顶部收起来
+          // (而不是从底部 / 中央), 跟 L0「现在该做」卡的折叠动画同手感
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: isCollapsed
+              ? _FollowUpCollapsedHeader(
+                  taskCount: tasksForCollapse.length,
+                  onToggleCollapsed: onToggleCollapsed,
+                  customerId: customerId,
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(AppSpace.s16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _FollowUpHeader(
+                        customerId: customerId,
+                        taskCount: tasksForCollapse.length,
+                      ),
+                      const SizedBox(height: AppSpace.s12),
+                      async.when(
+                        loading: () =>
+                            const _SectionLoading('加载跟进任务...'),
+                        error: (e, _) => _SectionError(
+                          message: '$e',
+                          onRetry: () => ref.invalidate(
+                              customerFollowUpTasksProvider(customerId)),
+                        ),
+                        data: (tasks) => tasks.isEmpty
+                            ? const Text('没有待办跟进',
+                                style: TextStyle(
+                                    fontSize: AppTheme.fontSm,
+                                    color: AppTheme.textSecondary))
+                            : Column(
+                                children: tasks
+                                    .map((t) => _tile(context, ref, t, fmt))
+                                    .toList(),
+                              ),
+                      ),
+                    ],
                   ),
-                  orElse: () => const SizedBox.shrink(),
                 ),
-                const SizedBox(width: AppSpace.s8),
-                TextButton.icon(
-                  // 「+ 新建」紧凑按钮 (header 行右侧, 不换行不溢出)
-                  //   visualDensity: compact 缩 padding 让按钮更紧, 避免中老年字号下被挤到下一行
-                  onPressed: () => showAddFollowUpSheet(context, ref,
-                      customerId: customerId),
-                  icon: const Icon(Icons.add, size: AppSize.iconMd),
-                  label: const Text('新建',
-                      style: TextStyle(fontSize: AppTheme.fontSm)),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpace.s8, vertical: AppSpace.s4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.s12),
-            async.when(
-              loading: () => const _SectionLoading('加载跟进任务...'),
-              error: (e, _) => _SectionError(
-                message: '$e',
-                onRetry: () => ref
-                    .invalidate(customerFollowUpTasksProvider(customerId)),
-              ),
-              data: (tasks) => tasks.isEmpty
-                  ? const Text('没有待办跟进',
-                      style: TextStyle(
-                          fontSize: AppTheme.fontSm,
-                          color: AppTheme.textSecondary))
-                  : Column(
-                      children: tasks
-                          .map((t) => _tile(context, ref, t, fmt))
-                          .toList()),
-            ),
-          ],
         ),
       ),
     );
@@ -312,6 +358,169 @@ class CustomerFollowUpSection extends ConsumerWidget {
 }
 
 // ============================================
+// 跟进任务卡 header (展开态复用)
+//
+// 抽出 header 让折叠态 / 展开态共用同一行, 切换时不重建 Row, 动画更顺滑;
+// 也避免"展开态的 header 长这样、折叠态又长那样"的双源真相。
+//
+// 「+ 新建」按钮在**两种状态**都显示 —— 主人诉求只说"右侧 expand_more",
+// 没说要藏「+ 新建」。理由:
+//   · 折叠态仍要让销售能"在记录 Tab 顶部快速建任务" —— 把按钮塞进展开态
+//     = 用户必须先展开 → 多一次交互, 反 vibe
+//   · 视觉重量一行 header 也容得下「+ 新建」 + expand_more 两个按钮
+//     (L0「现在该做」一张卡就放下了清单 + 折叠图标, 本卡更轻量)
+// ============================================
+
+class _FollowUpHeader extends ConsumerWidget {
+  const _FollowUpHeader({
+    required this.customerId,
+    required this.taskCount,
+  });
+
+  final String customerId;
+  final int taskCount;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Row(
+      // header: 标题 + 「N 条待办」计数 + 右上角紧凑「新建」按钮 (2026-09-24 拍)
+      //   原底部 BigActionButton 已删; 此处一行内同时容纳:
+      //   · 标题 (固定左)
+      //   · 「N 条待办」(Flexible, 窄屏省略, 中老年放大字号不撑破 Row)
+      //   · 「+ 新建」按钮 (固定右, TextButton.icon 风格, **不换行不独占行**)
+      children: [
+        const Icon(Icons.task_alt,
+            size: AppSize.iconLg, color: AppTheme.primary),
+        const SizedBox(width: AppSpace.s8),
+        const Expanded(
+          child: Text('跟进任务',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: AppTheme.fontMd, fontWeight: FontWeight.w700)),
+        ),
+        Flexible(
+          child: Text('$taskCount 条待办',
+              style: const TextStyle(
+                  fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ),
+        const SizedBox(width: AppSpace.s8),
+        TextButton.icon(
+          // 「+ 新建」紧凑按钮 (header 行右侧, 不换行不溢出)
+          //   visualDensity: compact 缩 padding 让按钮更紧, 避免中老年字号下被挤到下一行
+          onPressed: () => showAddFollowUpSheet(context, ref,
+              customerId: customerId),
+          icon: const Icon(Icons.add, size: AppSize.iconMd),
+          label: const Text('新建',
+              style: TextStyle(fontSize: AppTheme.fontSm)),
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.s8, vertical: AppSpace.s4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================
+// 折叠态 header (单行 + 右上角展开图标)
+//
+// 单独抽 widget 而不是塞回 CustomerFollowUpSection 里, 是为了:
+//   1. AnimatedSize 切换时, 折叠态是**单一子节点**, 类型稳定 → Flutter 复用
+//      Element, 切换动画更顺滑 (不用重建整棵 Column)
+//   2. widget test 锁定图标更直接 (`find.byIcon(Icons.expand_more)` 就行,
+//      不用 descendant 兜底)
+//
+// 触摸区 ≥ AppSize.tapMin (48pt): IconButton 默认 MaterialTapTargetSize.padded
+// 是 48×48, 中老年手指友好 —— 同 AGENTS §1「移动优先, 移动端重度使用」。
+//
+// **不上任何警示/高亮色** (主人 2026-09-24 原话「不需要高亮显示」):
+//   折叠 = 收起任务列表的视觉动作, 不是「还有事没处理」。前景色用 textPrimary /
+//   textSecondary (跟展开态一致), 切换时只有高度变化的物理感, 没有色块跳动。
+// ============================================
+
+class _FollowUpCollapsedHeader extends ConsumerWidget {
+  const _FollowUpCollapsedHeader({
+    required this.taskCount,
+    required this.onToggleCollapsed,
+    required this.customerId,
+  });
+
+  final int taskCount;
+  final VoidCallback? onToggleCollapsed;
+  final String customerId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.s16,
+        AppSpace.s10,
+        AppSpace.s4, // 右侧少留 padding, IconButton 视觉贴边
+        AppSpace.s10,
+      ),
+      child: Row(
+        children: [
+          // 图标 —— 跟展开态 header 保持一致 (task_alt), 卡片"还是那张卡"
+          // 视觉提示, 不要换成别的图标 (换了会让用户以为是另外的东西)
+          const Icon(Icons.task_alt,
+              size: AppSize.iconLg, color: AppTheme.primary),
+          const SizedBox(width: AppSpace.s8),
+          Expanded(
+            child: Text('跟进任务',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: AppTheme.fontMd,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary)),
+          ),
+          // 「N 条待办」计数 —— 折叠态保留, 单行信息没成本, 销售一眼看到量
+          Flexible(
+            child: Text('$taskCount 条待办',
+                style: const TextStyle(
+                    fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: AppSpace.s4),
+          // 「+ 新建」按钮 —— 折叠态也要能建任务 (避免展开→建→折叠 多一跳)
+          TextButton.icon(
+            onPressed: () => showAddFollowUpSheet(context, ref,
+                customerId: customerId),
+            icon: const Icon(Icons.add, size: AppSize.iconMd),
+            label: const Text('新建',
+                style: TextStyle(fontSize: AppTheme.fontSm)),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.s8, vertical: AppSpace.s4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          // 展开图标 —— IconButton 自带 tooltip「展开」 + 48×48 触摸区。
+          // 跟 L0「现在该做」同模式, 默认灰 (跟展开态 header 一致)。
+          IconButton(
+            icon: const Icon(Icons.expand_more, size: AppSize.iconMd),
+            tooltip: '展开',
+            // 折叠态唯一可见的"展开"入口 —— 即便外部传了 null 也不该可点
+            // (避免点了没反应; 同 L0 防御性处理)
+            onPressed: onToggleCollapsed,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================
 // 小块 (加载 / 错误)
 //
 // 跟进任务还在用, 保留; 旧的互动 section 跟随整体删除后, 这两个 helper 仍被
@@ -342,9 +551,20 @@ class _SectionError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
+        // ⚠ mainAxisSize.min: 卡片被外部 Padding + Column 包裹, 这里只该占
+        //   自己内容的空间 —— 不写 min 会让 Column 默认 mainAxisSize.max,
+        //   在父级高度不够时 (e.g. 小视口测试 / L0 卡 + 跟进卡 + TabBar 撑满)
+        //   触发 "RenderFlex overflowed" 渲染异常 (2026-09-24 详情页验收复现)。
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ⚠ maxLines: 2 + ellipsis —— dio 错误信息能塞超长 (HTTP 错误 +
+          //   request 详情)。原来不限行 → 在小视口测试里详情页整个 Column
+          //   溢出 (错误占了两行 TabBarView 装不下)。限 2 行 + 「点重试」
+          //   按钮能复用, 完整错误在该按钮的 onPressed 里发新请求拿新结果。
           Text('加载失败: $message',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: AppTheme.fontSm, color: AppTheme.danger)),
           const SizedBox(height: AppSpace.s8),

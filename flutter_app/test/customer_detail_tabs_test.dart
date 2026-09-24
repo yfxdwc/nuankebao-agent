@@ -47,6 +47,7 @@ import 'package:nuankebao/core/services/api.dart';
 import 'package:nuankebao/core/theme/app_theme.dart';
 import 'package:nuankebao/core/theme/tokens.g.dart';
 import 'package:nuankebao/modules/customer/screens/customer_detail_page.dart';
+import 'package:nuankebao/modules/customer/widgets/customer_activity_cards.dart';
 import 'package:nuankebao/modules/customer/widgets/customer_insight_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -139,6 +140,10 @@ class _FakeFollowUpService extends FollowUpService {
   final List<Map<String, dynamic>> createCalls = [];
   int listCalls = 0;
 
+  /// ⑨ 测试用: list() 返回这个列表 (默认空)。让 _FakeFollowUpService 复用
+  /// 在「跟进卡固定 + 上滑折叠」测试里, 提供 1-2 条假任务模拟真实列表。
+  List<FollowUpTask> listResult = const [];
+
   @override
   Future<FollowUpTask> create(Map<String, dynamic> data) async {
     createCalls.add(Map<String, dynamic>.from(data));
@@ -155,7 +160,7 @@ class _FakeFollowUpService extends FollowUpService {
   @override
   Future<List<FollowUpTask>> list({String? customerId, String status = 'pending'}) async {
     listCalls++;
-    return const [];
+    return listResult;
   }
 }
 
@@ -188,6 +193,7 @@ Future<void> _pumpPage(WidgetTester tester) async {
     await tester.pump();
   });
 }
+
 
 /// 泵 详情页 + 注入假 FollowUpService (用于 ⑦ 验证建任务路径)
 Future<void> _pumpPageWithFakeFollowUp(
@@ -521,6 +527,108 @@ void main() {
 
         expect(find.byIcon(Icons.expand_more), findsNothing,
             reason: '点折叠图标 → onToggleCollapsed 被调 → 详情页强制回展开');
+      },
+    );
+  });
+  // ============================================
+  // ⑨ 跟进任务卡固定 + 上滑折叠 (2026-09-24 主人诉求)
+  //
+  // 主人原话: 「『跟进任务』卡片也像『现在该做』卡片一样随上滑收起,
+  //   但不能随上滑全部不见了。」
+  //
+  // 验证什么 (页面级):
+  //   ① 给假 service 1-2 条任务 → 详情页渲染
+  //   ② 上滑 (fling) → 折叠状态推进:
+  //     - 跟进卡**仍然**在树上 (`find.byKey(CustomerFollowUpSection.cardKey)` findsOneWidget)
+  //     - 任务 tile 收起 (具体 reason 不可见)
+  //     - **关键**: 这条断言守「不能随上滑全部不见了」—— 卡片整体不消失,
+  //       折叠后只剩 header 一行, 但卡片实体还在视口里
+  //   ③ 滚回顶部 → 恢复展开 (reason 重新可见)
+  //
+  // 测试机制: 详情页 body 外包 NotificationListener<ScrollNotification>, 收子树
+  //   冒泡的纵向滚动; pixels > 24 → setState(_actionsCollapsed = true);
+  //   pixels <= 0 → setState(_actionsCollapsed = false)。本测试借 fling
+  //   让 SingleChildScrollView (时间线) 滚, 触发 NotificationListener 折叠。
+  //
+  // 上一版 (改动前): 跟进任务卡在 _tabScroll 里, 上滑整张卡滚出视口 → 违反
+  //   主人诉求。本测试**就是这条诉求的回归断言**, 改回旧布局会失败。
+  // ============================================
+  group('⑨ 跟进任务卡固定 + 上滑折叠 (2026-09-24 主人诉求)', () {
+    testWidgets(
+      '跟进卡不能随上滑全部不见了 + 任务行收起 + 滚回顶部恢复',
+      (tester) async {
+        // 1-2 条假任务: 装到 _FakeFollowUpService 注入详情页
+        final fake = _FakeFollowUpService();
+        // 复用 fake.listResult (现有 _FakeFollowUpService 自带字段),
+        // 让 list() 返回 2 条假任务 —— 模拟有真实任务的客户,
+        // 验证「上滑折叠 + 卡片固定可见」+ 「滚回顶部恢复」整条路径。
+        fake.listResult = [
+          FollowUpTask(
+            id: 'pinned-1',
+            customerId: '798',
+            dueAt: DateTime(2026, 9, 25, 9, 0),
+            reason: '问腰疼好点没',
+            status: 'pending',
+            createdAt: DateTime(2026, 9, 24),
+          ),
+          FollowUpTask(
+            id: 'pinned-2',
+            customerId: '798',
+            dueAt: DateTime(2026, 9, 23, 9, 0),
+            reason: '回访上次理疗效果',
+            status: 'pending',
+            createdAt: DateTime(2026, 9, 22),
+          ),
+        ];
+
+        await _pumpPageWithFakeFollowUp(tester, fake: fake);
+
+        // 预条件: 展开态, 卡片在树上 + 任务 tile 可见
+        final cardFinder = find.byKey(CustomerFollowUpSection.cardKey);
+        expect(cardFinder, findsOneWidget,
+            reason: '预条件: 跟进卡挂 CustomerFollowUpSection.cardKey, '
+                '详情页初次渲染就应可见');
+        expect(find.textContaining('问腰疼好点没'), findsOneWidget,
+            reason: '预条件: 任务 tile (展开态) 可见');
+        // 展开态**不**该出现 expand_more 图标
+        expect(find.descendant(of: cardFinder, matching: find.byIcon(Icons.expand_more)), findsNothing,
+            reason: '展开态不渲染折叠图标');
+
+        // fling 记录 Tab 的滚动容器 → 越过 24pt 阈值 → 触发折叠
+        final recordScrollable = find.descendant(
+          of: find.byType(CustomerDetailPage),
+          matching: find.byType(SingleChildScrollView),
+        );
+        expect(recordScrollable, findsWidgets,
+            reason: '记录 Tab 至少有 1 个 SingleChildScrollView (时间线那个)');
+        await tester.fling(recordScrollable.first, const Offset(0, -300), 800);
+        await tester.pumpAndSettle();
+
+        // ⭐ 关键断言: 跟进卡**仍然**在 widget tree 上, 视觉上不被滚走
+        //    (旧的滚动布局会让整张卡滚出视口, find 找不到 → 这条会失败)
+        expect(cardFinder, findsOneWidget,
+            reason: '★ 主人诉求「不能随上滑全部不见了」: 跟进卡必须仍挂载, '
+                'fixed 卡的实现承诺');
+        // 任务 tile 收起: reason / 完成按钮 不可见 (折叠态只渲染一行 header)
+        expect(find.textContaining('问腰疼好点没'), findsNothing,
+            reason: '折叠态收起任务 tile → reason 不可见');
+        expect(find.textContaining('回访上次理疗效果'), findsNothing);
+        expect(find.byIcon(Icons.check_circle_outline), findsNothing,
+            reason: '折叠态收起任务 tile → 完成按钮不可见');
+        // 折叠态 header 上应该有 expand_more 图标
+        expect(find.descendant(of: cardFinder, matching: find.byIcon(Icons.expand_more)), findsOneWidget,
+            reason: '折叠态出 expand_more (有任务可展开)');
+
+        // 反向: 滚回顶部 → 恢复展开
+        await tester.fling(recordScrollable.first, const Offset(0, 1500), 800);
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('问腰疼好点没'), findsOneWidget,
+            reason: '滚回顶部 → 恢复展开 → 任务 tile 重新可见');
+        expect(find.descendant(of: cardFinder, matching: find.byIcon(Icons.expand_more)), findsNothing,
+            reason: '恢复展开 → 折叠图标消失');
+        expect(cardFinder, findsOneWidget,
+            reason: '展开态跟进卡仍在树上 (本来就是固定的)');
       },
     );
   });

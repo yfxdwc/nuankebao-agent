@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuankebao/core/models/follow_up.dart';
+import 'package:nuankebao/core/widgets/b2_no_chrome.dart';
 import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/services/api.dart';
 import 'package:nuankebao/core/theme/app_theme.dart' show AppTheme;
@@ -233,4 +234,205 @@ void main() {
       expect(find.textContaining('今天一条'), findsOneWidget);
     },
   );
+
+  // ============================================
+  // ⑨ 折叠态 (2026-09-24 主人诉求: 「跟进任务」卡随上滑收起, 但不上高亮色)
+  //
+  // 主人原话: 「『跟进任务』卡片也像『现在该做』卡片一样随上滑收起,
+  //   但不需要高亮显示。」
+  //
+  // 守什么 (widget 级):
+  //   · collapsed=true + 有任务 → 只渲染一行 header + 右侧 expand_more
+  //     (理由 / 完成按钮 全部不渲染); 「+ 新建」按钮**仍**可见 (折叠态
+  //     也能快速建任务, 不必先展开)
+  //   · 卡片底色 == tokens.surfaceCard (白) —— **明确不上**任何警示色
+  //     (跟 L0「现在该做」的 warning 琥珀**刻意**区分; 主人原话
+  //     「不需要高亮显示」)。反向断言 isNot(warningSurface) +
+  //     isNot(primaryLight) 防有人手滑照抄 L0 警示色
+  //   · 点 expand_more → 回调被调 (详情页收到后切回展开)
+  //   · collapsed=true + 无任务 → 「没有待办跟进」可见, **不**出图标
+  //     (没东西可展开, 出图标 = 误导, 同根 §5「贴告示 ≠ 修复」)
+  //
+  // 页面级「上滑后跟进卡仍在树上 + 任务行收起 + 滚回顶部恢复」是
+  // customer_detail_tabs_test.dart 的事, 本文件只守 widget 级渲染。
+  // ============================================
+  group("⑨ 折叠态 (2026-09-24 主人诉求, 跟 L0 共用折叠机)", () {
+    testWidgets(
+      'collapsed=true + 有任务 → 只渲染一行 header (含「+ 新建」 + expand_more), 任务 reason 不可见',
+      (tester) async {
+        final fake = _FakeFollowUpService([
+          FollowUpTask(
+            id: 't1',
+            customerId: 'c1',
+            dueAt: _local(2026, 9, 25, 9, 0),
+            reason: '折叠后这条 reason 不可见',
+            status: 'pending',
+            createdAt: _local(2026, 9, 24, 10, 0),
+          ),
+        ]);
+        await tester.pumpWidget(_wrap(
+          child: CustomerFollowUpSection(
+            customerId: 'c1',
+            collapsed: true,
+            onToggleCollapsed: () {},
+          ),
+          fake: fake,
+        ));
+        await _pumpUntilSettled(tester);
+
+        // header 一行保留
+        expect(find.text('跟进任务'), findsOneWidget);
+        // 折叠态下「+ 新建」按钮**仍**可见 (避免用户必须先展开→建→折叠)
+        expect(find.text('新建'), findsOneWidget,
+            reason: '折叠态也要让销售能快速建任务, 「+ 新建」按钮保留');
+        // 右上角展开图标出现
+        expect(find.byIcon(Icons.expand_more), findsOneWidget,
+            reason: 'collapsed=true + 有任务 → 右侧出 expand_more');
+
+        // 任务 tile 全部收起: reason / 完成按钮 不可见
+        expect(find.textContaining('折叠后这条 reason 不可见'), findsNothing,
+            reason: '折叠态不该渲染任务 reason');
+        expect(find.byIcon(Icons.check_circle_outline), findsNothing,
+            reason: '折叠态不该渲染「标记完成」按钮');
+        // 「今天/明天/已过期」/「到期」这些 task 副文也不该出现
+        expect(find.textContaining('到期'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'collapsed=true + 有任务 → 卡片底色是 surfaceCard (白); 反向断言不是警示色',
+      (tester) async {
+        final fake = _FakeFollowUpService([
+          FollowUpTask(
+            id: 't1',
+            customerId: 'c1',
+            dueAt: _local(2026, 9, 25, 9, 0),
+            reason: '回归测试',
+            status: 'pending',
+            createdAt: _local(2026, 9, 24, 10, 0),
+          ),
+        ]);
+        await tester.pumpWidget(_wrap(
+          child: CustomerFollowUpSection(
+            customerId: 'c1',
+            collapsed: true,
+            onToggleCollapsed: () {},
+          ),
+          fake: fake,
+        ));
+        await _pumpUntilSettled(tester);
+
+        final tokens = AppThemes.resolve(null);
+
+        // ⚠ 锁卡片 = CustomerFollowUpSection.cardKey (跟详情页页面级测试共用,
+        //   「不能随上滑全部不见了」验收就靠它)
+        final cardFinder =
+            find.byKey(CustomerFollowUpSection.cardKey);
+        expect(cardFinder, findsOneWidget,
+            reason: '卡片必须挂 followUpCard key (详情页验收契约)');
+
+        // B2NoChrome 的 BoxDecoration: 折叠态仍是 surfaceCard (白)
+        final b2 = tester.widget<B2NoChrome>(cardFinder);
+        final b2Deco = b2.color ?? tokens.surfaceCard;
+        // B2NoChrome 默认 color 是 context.tokens.surfaceCard, 不挂
+        // BoxDecoration; 折叠态**不上**警示/高亮色。
+        // 反向断言: 折叠态底色**不能**是警示色 (主人明确否过),
+        // 也不能是品牌绿 (语义错位, 同 L0 「现在该做」折叠态的警示语义反向)。
+        expect(b2Deco, isNot(tokens.warningSurface),
+            reason: '折叠态不能用 warningSurface (主人原话「不需要高亮显示」)');
+        expect(b2Deco, isNot(tokens.warning),
+            reason: '折叠态不能用 warning (深琥珀)');
+        expect(b2Deco, isNot(tokens.primaryLight),
+            reason: '折叠态不能用品牌绿 (语义错位: 不是正向完成态)');
+
+        // 顺带兜底正向断言: 折叠态底色**应该**就是 surfaceCard (白)
+        expect(b2Deco, tokens.surfaceCard,
+            reason: '折叠态卡片底色 = surfaceCard (白), 跟展开态视觉一致');
+      },
+    );
+
+    testWidgets(
+      '点 expand_more → onToggleCollapsed 回调被调',
+      (tester) async {
+        var toggled = 0;
+        final fake = _FakeFollowUpService([
+          FollowUpTask(
+            id: 't1',
+            customerId: 'c1',
+            dueAt: _local(2026, 9, 25, 9, 0),
+            reason: '点击展开',
+            status: 'pending',
+            createdAt: _local(2026, 9, 24, 10, 0),
+          ),
+        ]);
+        await tester.pumpWidget(_wrap(
+          child: CustomerFollowUpSection(
+            customerId: 'c1',
+            collapsed: true,
+            onToggleCollapsed: () => toggled++,
+          ),
+          fake: fake,
+        ));
+        await _pumpUntilSettled(tester);
+
+        await tester.tap(find.byIcon(Icons.expand_more));
+        await tester.pumpAndSettle();
+
+        expect(toggled, 1,
+            reason: '点 expand_more → onToggleCollapsed 应被详情页拿到 (本测试用计数器验证)');
+      },
+    );
+
+    testWidgets(
+      'collapsed=true + 无任务 → 「没有待办跟进」可见, 无 expand_more 图标',
+      (tester) async {
+        final fake = _FakeFollowUpService([]);
+        await tester.pumpWidget(_wrap(
+          child: CustomerFollowUpSection(
+            customerId: 'c1',
+            collapsed: true,
+            onToggleCollapsed: () {},
+          ),
+          fake: fake,
+        ));
+        await _pumpUntilSettled(tester);
+
+        // 「没有待办跟进」仍可见 (跟展开态空态一致)
+        expect(find.text('没有待办跟进'), findsOneWidget);
+
+        // ⚠ 没东西可展开 → **不**出图标 (同根 §5「贴告示 ≠ 修复」:
+        //   出图标让人以为能点开看什么, 结果啥也没有)
+        expect(find.byIcon(Icons.expand_more), findsNothing,
+            reason: '无任务时折叠态不该出现展开图标 (没东西可展开)');
+        // 顺带兜底: 「+ 新建」按钮仍可见 (折叠态空态也能建任务)
+        expect(find.text('新建'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'collapsed=false → 现有展开态渲染不受影响 (回归保护)',
+      (tester) async {
+        final fake = _FakeFollowUpService([
+          FollowUpTask(
+            id: 't1',
+            customerId: 'c1',
+            dueAt: _local(2026, 9, 25, 9, 0),
+            reason: '展开态 reason 必须可见',
+            status: 'pending',
+            createdAt: _local(2026, 9, 24, 10, 0),
+          ),
+        ]);
+        await tester.pumpWidget(_wrap(
+          child: const CustomerFollowUpSection(customerId: 'c1'),
+          fake: fake,
+        ));
+        await _pumpUntilSettled(tester);
+
+        // 展开态: 任务 reason 可见, **不**出 expand_more (没人传 collapsed)
+        expect(find.textContaining('展开态 reason 必须可见'), findsOneWidget);
+        expect(find.byIcon(Icons.expand_more), findsNothing,
+            reason: '展开态**不**该出现展开图标');
+      },
+    );
+  });
 }
