@@ -191,9 +191,14 @@ function num(v: unknown): number | null {
  * 单次记录的"改善程度" ∈ [-1, 1] (正 = 变好)
  *
  * 三个指标加权 (疼痛权重最高 —— 它是养生行业最核心的诉求):
- *   pain_level     0-10   → (pre - post) / 10      权重 0.5
- *   sleep_quality  1-5    → (post - pre) / 4       权重 0.3
- *   mood           1-5    → (post - pre) / 4       权重 0.2
+ *   pain_level     0-10   → (pre - post) / 10                    权重 0.5
+ *   sleep_quality  1-10   → (post - pre) / (量程 - 1)            权重 0.3
+ *   mood           1-10   → (post - pre) / (量程 - 1)            权重 0.2
+ *
+ * ⚠ 量程声明 (2026-09-24 主人拍: 「睡眠质量和情绪也都用 10 分制, 默认都是 5」):
+ *   表单在 `preCondition.scale` / `postCondition.scale` 里写 10。
+ *   **历史记录没有这个键** → 仍按 1-5 解释 (跨度 4) —— 老记录的分数不会被
+ *   静默改写 (否则同一条老数据的分会凭空掉一截)。
  *
  * 缺哪项就把哪项的权重剔掉再归一化 —— 所以"只记了疼痛"也能算, 不会被当成 0。
  * 一项都没有 → null (这条记录对健康分无贡献, 不拉低也不拉高)。
@@ -212,17 +217,22 @@ export function singleImprovement(
     parts.push({ v: (prePain - postPain) / 10, w: W.pain });
   }
 
+  // 睡眠 / 情绪量程: 记录声明了 scale (新记录 = 10) → 跨度 = scale - 1;
+  //   没声明 (2026-09-24 之前的历史记录) → 1-5, 跨度 4。
+  const declaredScale = num(r.pre.scale) ?? num(r.post.scale);
+  const sleepMoodSpan =
+    declaredScale !== null && declaredScale >= 2 ? declaredScale - 1 : 4;
+
   const preSleep = num(r.pre.sleep_quality);
   const postSleep = num(r.post.sleep_quality);
   if (preSleep !== null && postSleep !== null) {
-    // 睡眠/情绪量程 1-5 → 跨度 4
-    parts.push({ v: (postSleep - preSleep) / 4, w: W.sleep });
+    parts.push({ v: (postSleep - preSleep) / sleepMoodSpan, w: W.sleep });
   }
 
   const preMood = num(r.pre.mood);
   const postMood = num(r.post.mood);
   if (preMood !== null && postMood !== null) {
-    parts.push({ v: (postMood - preMood) / 4, w: W.mood });
+    parts.push({ v: (postMood - preMood) / sleepMoodSpan, w: W.mood });
   }
 
   if (parts.length === 0) return null;

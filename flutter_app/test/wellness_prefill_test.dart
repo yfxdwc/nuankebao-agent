@@ -142,15 +142,17 @@ void main() {
       expect(vals[5], vals[4], reason: "postMood 默认 = preMood");
     });
 
-    testWidgets("没有历史记录 → 保留出厂默认 (5/3/3 · 3/3/3)", (tester) async {
+    testWidgets("没有历史记录 → 保留出厂默认 (疼痛 5/3 · 睡眠 5/5 · 情绪 5/5)",
+        (tester) async {
+      // 2026-09-24: 睡眠/情绪 改 1-10 分制, 默认 5 (原来 1-5 默认 3)
       await pump(tester, records: const []);
       final vals = sliderValues(tester);
-      expect(vals[0], 5);
-      expect(vals[1], 3);
-      expect(vals[2], 3);
-      expect(vals[3], 3);
-      expect(vals[4], 3);
-      expect(vals[5], 3);
+      expect(vals[0], 5, reason: "疼痛·前 默认 5");
+      expect(vals[1], 3, reason: "疼痛·后 默认 3");
+      expect(vals[2], 5, reason: "睡眠·前 默认 5 (10 分制中位)");
+      expect(vals[3], 5, reason: "睡眠·后 默认 5");
+      expect(vals[4], 5, reason: "情绪·前 默认 5");
+      expect(vals[5], 5, reason: "情绪·后 默认 5");
     });
 
     testWidgets("上次缺某个评分 → 该字段保留默认 (不覆盖成 null/0)", (tester) async {
@@ -160,8 +162,8 @@ void main() {
       );
       final vals = sliderValues(tester);
       expect(vals[0], 2, reason: "有 pain → 用上次的");
-      expect(vals[2], 3, reason: "没 sleep → 保留默认 3");
-      expect(vals[4], 3, reason: "没 mood → 保留默认 3");
+      expect(vals[2], 5, reason: "没 sleep → 保留默认 5 (10 分制)");
+      expect(vals[4], 5, reason: "没 mood → 保留默认 5 (10 分制)");
     });
   });
 
@@ -188,9 +190,9 @@ void main() {
       await tester.pumpAndSettle();
 
       final vals = sliderValues(tester);
-      expect(vals[0], 5, reason: "pain 回到默认 5");
-      expect(vals[1], 3);
-      expect(vals[3], 3, reason: "post 也回默认");
+      expect(vals[0], 5, reason: "pain·前 回到默认 5");
+      expect(vals[1], 3, reason: "pain·后 回到默认 3");
+      expect(vals[3], 5, reason: "睡眠·后 回默认 5 (2026-09-24 起 10 分制)");
       expect(find.text("清空重填"), findsNothing, reason: "提示条应消失");
     });
   });

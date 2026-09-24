@@ -85,6 +85,13 @@ void main() {
         reason: '3 项指标 × (前/后) = 6 个滑块');
     expect(find.text('前'), findsNWidgets(3));
     expect(find.text('后'), findsNWidgets(3));
+
+    // 2026-09-24 主人拍: 睡眠 / 情绪 也走 10 分制 → 数值格式 `x/10` (原来 `x/5`)
+    //   4 处 = 睡眠前/后 + 情绪前/后 (默认都是 5)
+    expect(find.text('5/10'), findsNWidgets(4),
+        reason: '睡眠/情绪 是 10 分制且默认 5');
+    expect(find.textContaining('/5'), findsNothing,
+        reason: '不该再有 5 分制的数值显示');
   });
 
   testWidgets('② 差值徽章: 疼痛 5→3 = ↓2 改善; 睡眠/情绪未变 = 持平', (tester) async {

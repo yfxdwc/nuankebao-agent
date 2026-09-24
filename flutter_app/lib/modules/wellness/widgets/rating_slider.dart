@@ -156,15 +156,17 @@ class RatingSlider extends StatelessWidget {
   }
 }
 
-/// 1-5 评分滑块 (情绪 / 睡眠)
-class FiveRatingSlider extends StatelessWidget {
+/// 1-10 评分滑块 (睡眠质量 / 情绪, 2026-09-24 主人拍: 「睡眠质量和情绪也都用
+///   10 分制, 默认都是 5」—— 原来这两项是 1-5, 与疼痛 1-10 不齐, 前后对比时
+///   量程不同还容易误读)。
+class TenRatingSlider extends StatelessWidget {
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
   final Color? accent;
   final bool compact;
 
-  const FiveRatingSlider({
+  const TenRatingSlider({
     super.key,
     required this.label,
     required this.value,
@@ -179,8 +181,8 @@ class FiveRatingSlider extends StatelessWidget {
       label: label,
       value: value,
       min: 1,
-      max: 5,
-      valueFormatter: (v) => '$v/5',
+      max: 10,
+      valueFormatter: (v) => '$v/10',
       onChanged: onChanged,
       accent: accent,
       compact: compact,

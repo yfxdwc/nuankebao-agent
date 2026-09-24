@@ -126,6 +126,27 @@ describe("singleImprovement — 单次记录的改善程度", () => {
     expect(v).toBeCloseTo(0.45, 5);
   });
 
+  it("睡眠/情绪 声明 scale=10 → 按 10 分制归一 (5→10 = 满改善, 不虚高)", () => {
+    // 2026-09-24 主人拍: 睡眠/情绪 改 1-10 分制; 表单写 scale: 10
+    //   sleep (10-5)/9 = 0.5556; mood 同 → (0.3+0.2) 归一后仍是 0.5556
+    const v = singleImprovement(
+      record(
+        1,
+        { scale: 10, sleep_quality: 5, mood: 5 },
+        { scale: 10, sleep_quality: 10, mood: 10 },
+      )
+    );
+    expect(v).toBeCloseTo(5 / 9, 5);
+  });
+
+  it("历史记录没声明 scale → 仍按 1-5 解释 (老的分数不被改写)", () => {
+    // 老口径: sleep 2→4 = 2/4 = 0.5 (若被当成 10 分制会掉到 0.22)
+    const v = singleImprovement(
+      record(1, { sleep_quality: 2 }, { sleep_quality: 4 })
+    );
+    expect(v).toBeCloseTo(0.5, 5);
+  });
+
   it("只有 pain 也能算 —— 权重自动重归一化 (不被缺失项拖成 0)", () => {
     // pain (8-3)/10 = 0.5; 只有这一项 → 结果就是 0.5 (不是 0.5*0.5)
     const v = singleImprovement(record(1, { pain_level: 8 }, { pain_level: 3 }));

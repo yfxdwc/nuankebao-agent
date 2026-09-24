@@ -50,12 +50,14 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
   // 选中字段
   final Set<String> _bodyPartIds = {};
   String? _serviceItemId;
+  // 睡眠 / 情绪 = 1-10 (2026-09-24 主人拍), 默认 5 (中间值, 不预设好坏);
+  //   疼痛 1-10 默认 前 5 / 后 3 (后默认略低是历史约定: 做完通常会轻一点)
   int _prePainLevel = 5;
-  int _preSleep = 3;
-  int _preMood = 3;
+  int _preSleep = 5;
+  int _preMood = 5;
   int _postPainLevel = 3;
-  int _postSleep = 3;
-  int _postMood = 3;
+  int _postSleep = 5;
+  int _postMood = 5;
   final _processCtrl = TextEditingController();
   final _feedbackCtrl = TextEditingController();
   DateTime? _nextAdviceDate;
@@ -167,11 +169,11 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
       _bodyPartIds.clear();
       _serviceItemId = _dict == null ? null : _defaultServiceItemIdOf(_dict!);
       _prePainLevel = 5;
-      _preSleep = 3;
-      _preMood = 3;
+      _preSleep = 5;
+      _preMood = 5;
       _postPainLevel = 3;
-      _postSleep = 3;
-      _postMood = 3;
+      _postSleep = 5;
+      _postMood = 5;
       _prefilledFromLast = false;
       _prefilledFromDate = null;
     });
@@ -190,11 +192,11 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
       _photoUrls.addAll(r.photos);
       // preCondition / postCondition: {pain_level, sleep_quality, mood}
       _prePainLevel = (r.preCondition['pain_level'] as num?)?.toInt() ?? 5;
-      _preSleep = (r.preCondition['sleep_quality'] as num?)?.toInt() ?? 3;
-      _preMood = (r.preCondition['mood'] as num?)?.toInt() ?? 3;
+      _preSleep = (r.preCondition['sleep_quality'] as num?)?.toInt() ?? 5;
+      _preMood = (r.preCondition['mood'] as num?)?.toInt() ?? 5;
       _postPainLevel = (r.postCondition['pain_level'] as num?)?.toInt() ?? 3;
-      _postSleep = (r.postCondition['sleep_quality'] as num?)?.toInt() ?? 3;
-      _postMood = (r.postCondition['mood'] as num?)?.toInt() ?? 3;
+      _postSleep = (r.postCondition['sleep_quality'] as num?)?.toInt() ?? 5;
+      _postMood = (r.postCondition['mood'] as num?)?.toInt() ?? 5;
     });
   }
 
@@ -222,12 +224,17 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
       'serviceDate': DateTime.now().toIso8601String().split('T').first,
       'serviceItemId': _serviceItemId,
       'bodyPartIds': _bodyPartIds.toList(),
+      // ⚠ `scale: 10` = 睡眠/情绪的新量程声明 (2026-09-24 起 1-10)。
+      //   后端评分按它归一化; **历史记录没有这个键** → 仍按 1-5 解释 (跨度 4),
+      //   所以老记录的分数不会被静默改写 (详见 scoring.ts::singleImprovement 注释)。
       'preCondition': {
+        'scale': 10,
         'pain_level': _prePainLevel,
         'sleep_quality': _preSleep,
         'mood': _preMood,
       },
       'postCondition': {
+        'scale': 10,
         'pain_level': _postPainLevel,
         'sleep_quality': _postSleep,
         'mood': _postMood,
@@ -498,14 +505,14 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   post: _postSleep,
                   lowerIsBetter: false,
                 ),
-                pre: FiveRatingSlider(
+                pre: TenRatingSlider(
                   label: '前',
                   value: _preSleep,
                   accent: t.textSecondary,
                   compact: true,
                   onChanged: (v) => setState(() => _preSleep = v),
                 ),
-                post: FiveRatingSlider(
+                post: TenRatingSlider(
                   label: '后',
                   value: _postSleep,
                   compact: true,
@@ -521,14 +528,14 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                   post: _postMood,
                   lowerIsBetter: false,
                 ),
-                pre: FiveRatingSlider(
+                pre: TenRatingSlider(
                   label: '前',
                   value: _preMood,
                   accent: t.textSecondary,
                   compact: true,
                   onChanged: (v) => setState(() => _preMood = v),
                 ),
-                post: FiveRatingSlider(
+                post: TenRatingSlider(
                   label: '后',
                   value: _postMood,
                   compact: true,

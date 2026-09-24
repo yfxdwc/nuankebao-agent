@@ -103,13 +103,25 @@ export function buildCustomerCharts(input: ChartsInput): CustomerCharts {
     const hasPost = num(r.post.pain_level) !== null || num(r.post.sleep_quality) !== null;
     return hasPre || hasPost;
   });
-  const trend: TrendPoint[] = scored.slice(-limit).map((r) => ({
-    date: r.serviceDate.toISOString().slice(0, 10),
-    prePain: num(r.pre.pain_level),
-    postPain: num(r.post.pain_level),
-    preSleep: num(r.pre.sleep_quality),
-    postSleep: num(r.post.sleep_quality),
-  }));
+  // 睡眠量程: 2026-09-24 起 = 1-10 (记录里声明 scale: 10); 历史记录 = 1-5。
+  //   趋势图把疼痛 (0-10) 和睡眠画在同一根 Y 轴上 → 历史睡眠要 ×2 归一到 10 分制,
+  //   否则量程切换那天趋势线会凭空"跳一下" (同一维度两套尺子)。
+  const sleepNorm = (r: { pre: Record<string, unknown>; post: Record<string, unknown> }) => {
+    const scale = num(r.pre.scale) ?? num(r.post.scale);
+    return scale !== null && scale >= 10 ? 1 : 2;
+  };
+  const trend: TrendPoint[] = scored.slice(-limit).map((r) => {
+    const k = sleepNorm(r);
+    const preSleep = num(r.pre.sleep_quality);
+    const postSleep = num(r.post.sleep_quality);
+    return {
+      date: r.serviceDate.toISOString().slice(0, 10),
+      prePain: num(r.pre.pain_level),
+      postPain: num(r.post.pain_level),
+      preSleep: preSleep === null ? null : preSleep * k,
+      postSleep: postSleep === null ? null : postSleep * k,
+    };
+  });
 
   // ── ② 部位统计: 次数 + 止痛中位数 ──
   const acc = new Map<string, { count: number; drops: number[] }>();
