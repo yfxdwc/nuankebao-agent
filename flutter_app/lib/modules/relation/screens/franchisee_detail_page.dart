@@ -12,12 +12,13 @@ import 'package:go_router/go_router.dart';
 import '../../../core/models/franchisee.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/big_button.dart';
-import '../../../core/widgets/empty_state.dart';
+
+import '../../../core/widgets/app_empty.dart';
 import '../lib/franchisee_detail_provider.dart';
 import '../../../core/widgets/franchise_chip.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 class FranchiseeDetailPage extends ConsumerWidget {
   final String franchiseeId;
   const FranchiseeDetailPage({super.key, required this.franchiseeId});
@@ -72,9 +73,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
         const SizedBox(height: AppSpace.s16),
 
         // 联系按钮
-        BigButton(
-          label: '联系',
-          icon: Icons.phone_in_talk,
+        FilledButton.icon(
           onPressed: () {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -85,6 +84,11 @@ class FranchiseeDetailPage extends ConsumerWidget {
               ),
             );
           },
+          icon: const Icon(Icons.phone_in_talk, size: AppSize.iconLg),
+          label: const Text('联系'),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
+          ),
         ),
 
         const SizedBox(height: AppSpace.s16),
@@ -96,7 +100,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
   }
 
   Widget _buildHeader(BuildContext context, WidgetRef ref, Franchisee f) {
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s20),
@@ -160,7 +164,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
     final asyncReferrer = ref.watch(franchiseeDetailProvider(uplineFid));
     return asyncReferrer.maybeWhen(
       data: (r) {
-        return Card(
+        return B2NoChrome(
           margin: EdgeInsets.zero,
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),
@@ -189,7 +193,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
   }
 
   Widget _positionCard(Franchisee f) {
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(top: AppSpace.s12),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),
@@ -226,7 +230,7 @@ class FranchiseeDetailPage extends ConsumerWidget {
             ? '→'
             : '*';
 
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),

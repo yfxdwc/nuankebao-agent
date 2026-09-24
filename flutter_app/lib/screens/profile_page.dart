@@ -31,7 +31,7 @@ import '../core/providers/service_providers.dart';
 import '../core/providers/settings_provider.dart';
 import '../core/telemetry/usage_providers.dart';
 import '../core/theme/app_theme.dart';
-import '../core/widgets/empty_state.dart';
+import '../core/widgets/app_empty.dart';
 import '../core/widgets/franchise_chip.dart';
 import '../core/widgets/member_avatar.dart';
 import 'profile_sheets.dart';
@@ -39,6 +39,7 @@ import 'profile_widgets.dart';
 import 'theme_picker_card.dart';
 
 import '../core/theme/tokens.g.dart';
+import '../core/widgets/b2_no_chrome.dart';
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
@@ -90,7 +91,7 @@ class _ProfileSkeleton extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
       children: const [
-        Card(
+        B2NoChrome(
           margin: EdgeInsets.zero,
           child: Padding(
             padding: EdgeInsets.all(AppSpace.s20),
@@ -169,7 +170,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
     final phone = p.phone;
     final franchisee = p.franchisee;
 
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s20),
@@ -500,7 +501,7 @@ class _NotFranchiseeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isAdmin) return const _AdminNoFranchiseeCard();
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),
@@ -545,9 +546,8 @@ class _AdminNoFranchiseeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // ⚠ 用 elevation:0 + 不透明底色: Card 默认 elevation 1 + 半透明 color 会叠出一层
     //   灰罩 (2026-09-21 截图实测, 见 /tmp/pa1_top.png), 不是想要的浅绿
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
-      elevation: 0,
       color: AppColors.successLight, // 很浅的绿 (primaryLight #A8D5BA 当整卡底色太扎眼)
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),

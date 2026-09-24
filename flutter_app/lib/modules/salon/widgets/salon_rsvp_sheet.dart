@@ -12,7 +12,7 @@ import '../../../core/models/salon.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/big_button.dart';
+
 import '../providers/salon_providers.dart';
 
 import '../../../core/theme/tokens.g.dart';
@@ -221,11 +221,22 @@ class _SalonRsvpSheetState extends State<_SalonRsvpSheet> {
                 ),
               ),
               const SizedBox(height: AppSpace.s8),
-              BigButton(
-                label: '提交',
-                icon: Icons.send,
-                loading: _saving,
-                onPressed: _submit,
+              FilledButton.icon(
+                onPressed: _saving ? null : _submit,
+                icon: _saving
+                    ? const SizedBox(
+                        width: AppSize.iconLg,
+                        height: AppSize.iconLg,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.send, size: AppSize.iconLg),
+                label: const Text('提交'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
+                ),
               ),
             ],
           ),

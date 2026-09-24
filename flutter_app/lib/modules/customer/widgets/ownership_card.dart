@@ -7,6 +7,7 @@ import '../../../core/services/api.dart' show ReferralLookup;
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 
 // ============================================
 // 「归属」卡 (管理 Tab, P7, 主人 2026-09-23)
@@ -107,7 +108,7 @@ class _CustomerOwnershipCardState
     final t = context.tokens;
     final async = ref.watch(customerOwnershipProvider(widget.customerId));
 
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(

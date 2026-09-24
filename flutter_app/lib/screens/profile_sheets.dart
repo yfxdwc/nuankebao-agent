@@ -19,7 +19,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/http/api_client.dart';
-import '../core/widgets/empty_state.dart';
+import '../core/widgets/app_empty.dart';
 import '../core/http/session_token.dart';
 import '../core/models/me.dart';
 import '../core/services/api.dart' show ManualPayProduct;

@@ -1,3 +1,11 @@
+// ============================================
+// 登录页 (B2 换装, 2026-09-25)
+//   主人原话: 「这是门面」 —— 暖客宝 / 大健康气质 (温暖, 不冷峻)
+//   B2 收口: 黑色 / 灰色硬编码 → AppColors.* / context.tokens.* 令牌
+//   主按钮 → FilledButton (B 档) + minimumSize(buttonLgHeight)
+// 行为完全保留 (邀请制, 账号/手机号 + 密码, 错误显示, 推荐码注册入口)
+// ============================================
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,14 +13,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/http/api_client.dart';
 import '../../../core/telemetry/usage_providers.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_ext.dart';
 
 import '../../../core/theme/tokens.g.dart';
-/// 登录页 (2026-09-19 P2: 手机号+验证码 → 账号/手机号 + 密码)
-///
-/// 设计来源: docs/deploy/production-plan.md §1.1
-///   - 邀请制: 账号由管理员创建, 不开放自助注册
-///   - identifier = 登录名 (如 admin) 或 手机号
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -64,7 +68,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (mounted) _showError(state.error!);
       } else if (state.isLoggedIn) {
         ref.read(usageServiceProvider).track('login_success');
-        // fix-route: /dashboard 已删 (router 只留 客户/我的 两 tab) → 登录后回客户页
         if (mounted) context.go('/customers');
       }
     } catch (e) {
@@ -83,9 +86,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final tokens = context.tokens;
 
     return Scaffold(
-      backgroundColor: AppTheme.bgWarm,
+      backgroundColor: tokens.surface,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -94,7 +98,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               constraints: const BoxConstraints(maxWidth: 400),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: [
+                children: <Widget>[
                   Image.asset(
                     'assets/icons/nuankebao-logo.png',
                     width: AppSpace.s96,
@@ -102,18 +106,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: AppSpace.s16),
-                  const Text('暖客宝', style: TextStyle(
-                    fontSize: AppType.xxl, fontWeight: FontWeight.bold, color: AppTheme.primary,
-                  )),
+                  Text(
+                    '暖客宝',
+                    style: TextStyle(
+                      fontSize: AppType.xxl,
+                      fontWeight: AppWeight.bold,
+                      color: tokens.primary,
+                    ),
+                  ),
                   const SizedBox(height: AppSpace.s8),
-                  const Text('大健康客户管理・AI助手', style: TextStyle(color: Colors.black54)),
+                  const Text(
+                    '大健康客户管理 · AI 助手',
+                    style: TextStyle(
+                      fontSize: AppType.sm,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: AppSpace.s48),
                   _buildForm(authState),
                   const SizedBox(height: AppSpace.s24),
                   // 诊断信息: 当前连的后端地址 (登录不上时对照确认装对 APK)
                   Text(
                     ApiClient.baseUrl,
-                    style: TextStyle(fontSize: AppType.micro, color: Colors.grey.shade500),
+                    style: const TextStyle(
+                      fontSize: AppType.micro,
+                      color: AppColors.textTertiary,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -126,16 +144,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _buildForm(AuthState authState) {
+    final tokens = context.tokens;
     return Column(
-      children: [
+      children: <Widget>[
+        // 输入框高度统一 AppSize.fieldLg (52), token 化的热区
         TextField(
           controller: _identifierController,
           keyboardType: TextInputType.text,
           textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
+          style: const TextStyle(
+            fontSize: AppType.md,
+            color: AppColors.textPrimary,
+          ),
+          decoration: InputDecoration(
             labelText: '账号 / 手机号',
             hintText: 'admin 或 13800138000',
-            prefixIcon: Icon(Icons.person_outline),
+            prefixIcon: const Icon(Icons.person_outline,
+                size: AppSize.iconLg, color: AppColors.textSecondary),
           ),
         ),
         const SizedBox(height: AppSpace.s16),
@@ -144,59 +169,71 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           obscureText: _obscure,
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => loading ? null : _login(),
+          style: const TextStyle(
+            fontSize: AppType.md,
+            color: AppColors.textPrimary,
+          ),
           decoration: InputDecoration(
             labelText: '密码',
-            prefixIcon: const Icon(Icons.lock_outline),
+            prefixIcon: const Icon(Icons.lock_outline,
+                size: AppSize.iconLg, color: AppColors.textSecondary),
             suffixIcon: IconButton(
-              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility,
+                  color: AppColors.textSecondary),
               tooltip: _obscure ? '显示密码' : '隐藏密码',
               onPressed: () => setState(() => _obscure = !_obscure),
             ),
           ),
         ),
-        if (authState.error != null) ...[
+        if (authState.error != null) ...<Widget>[
           const SizedBox(height: AppSpace.s12),
           Text(
             authState.error!,
-            style: const TextStyle(color: Colors.red, fontSize: AppType.xs),
+            style: TextStyle(
+              color: tokens.danger,
+              fontSize: AppType.xs,
+            ),
             textAlign: TextAlign.center,
           ),
         ],
         const SizedBox(height: AppSpace.s20),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: loading ? null : _login,
-            child: loading
-                ? const SizedBox(
-                    width: AppSpace.s20,
-                    height: AppSpace.s20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('登录'),
+        // 主按钮 → FilledButton (B 档), 高度 buttonLgHeight (48)
+        FilledButton(
+          onPressed: loading ? null : _login,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
           ),
+          child: loading
+              ? const SizedBox(
+                  width: AppSize.iconLg,
+                  height: AppSize.iconLg,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('登录'),
         ),
         const SizedBox(height: AppSpace.s12),
-
-        // ★ 新用户入口 (B1, 主人 2026-09-20): 填朋友的推荐码自助注册
-        //   为什么放在登录页而不是单独藏起来: 新用户第一次打开 App 就落在这里,
-        //   找不到入口 = 以为要托人代建。注册完由推荐人确认 (页面上有说明)。
+        // 新用户入口 (推荐码注册) —— 仍按主人 2026-09-20 的要求放这里
         OutlinedButton.icon(
           onPressed: loading ? null : () => context.push('/register'),
-          icon: const Icon(Icons.person_add_alt_1, size: AppSize.iconMd),
-          label: const Text('有新推荐码? 去注册',
-              style: TextStyle(fontSize: AppTheme.fontMd)),
+          icon: const Icon(Icons.person_add_alt_1, size: AppSize.iconLg),
+          label: const Text('有新推荐码? 去注册'),
           style: OutlinedButton.styleFrom(
-            minimumSize: const Size(double.infinity, AppTheme.buttonMinHeight),
-            foregroundColor: AppTheme.primaryDark,
-            side: const BorderSide(color: AppTheme.primaryLight, width: AppSpace.s2),
+            minimumSize:
+                const Size(double.infinity, AppSize.buttonMinHeight),
+            foregroundColor: tokens.primaryDark,
+            side: BorderSide(color: tokens.primaryLight),
           ),
         ),
         const SizedBox(height: AppSpace.s12),
         const Text(
           '老账号忘记密码请联系管理员重置; 新用户需要朋友的推荐码才能注册',
-          style: TextStyle(fontSize: AppType.micro, color: Colors.black45),
+          style: TextStyle(
+            fontSize: AppType.micro,
+            color: AppColors.textTertiary,
+          ),
           textAlign: TextAlign.center,
         ),
       ],

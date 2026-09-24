@@ -22,6 +22,7 @@ import '../../../core/theme/app_theme.dart';
 import 'customer_activity_cards.dart' show showAddFollowUpSheet;
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 // ============================================
 // 用量埋点 helper (主人 2026-09-22: 用真实数据回答「AI 卡片到底有没有人点」)
 // ============================================
@@ -628,7 +629,7 @@ class _AiCardShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),

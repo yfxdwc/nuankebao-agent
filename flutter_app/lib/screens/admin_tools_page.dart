@@ -20,7 +20,7 @@ import '../core/http/api_client.dart';
 import '../core/providers/service_providers.dart';
 import '../core/services/api.dart' show AdminPayRequest;
 import '../core/theme/app_theme.dart';
-import '../core/widgets/empty_state.dart';
+import '../core/widgets/app_empty.dart';
 import 'profile_widgets.dart';
 
 import '../core/theme/tokens.g.dart';

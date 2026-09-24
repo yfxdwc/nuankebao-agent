@@ -11,10 +11,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/salon.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/app_empty.dart';
 import '../providers/salon_providers.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 class SalonGuestsPage extends ConsumerStatefulWidget {
   final String salonId;
   const SalonGuestsPage({super.key, required this.salonId});
@@ -41,7 +42,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
         ),
         data: (guests) {
           if (guests.isEmpty) {
-            return const EmptyState(
+            return const AppEmptyState(
               icon: Icons.people_outline,
               title: '还没有登记客人',
               hint: '受邀者登记后这里能看到',
@@ -83,7 +84,7 @@ class _SalonGuestsPageState extends ConsumerState<SalonGuestsPage> {
   }
 
   Widget _guestCard(SalonGuest g) {
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),

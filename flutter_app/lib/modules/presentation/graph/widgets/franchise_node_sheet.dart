@@ -211,8 +211,4 @@ class _FranchiseNodeSheet extends StatelessWidget {
       ),
     );
   }
-
-  void _showAddHint(BuildContext context, FranchiseeTreeNode parent, String side) {
-    // 已用 context.push 替换, 此方法不再使用
-  }
 }

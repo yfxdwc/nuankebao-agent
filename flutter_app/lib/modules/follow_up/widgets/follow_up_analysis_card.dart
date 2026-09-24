@@ -16,6 +16,7 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 class FollowUpAnalysisCard extends ConsumerStatefulWidget {
   final String customerId;
   const FollowUpAnalysisCard({super.key, required this.customerId});
@@ -55,7 +56,7 @@ class _FollowUpAnalysisCardState extends ConsumerState<FollowUpAnalysisCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s8),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.cardPadding),

@@ -14,10 +14,10 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_events.dart' show UsageEntityType;
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/big_button.dart';
 import 'ai_insight_cards.dart' show BigActionButton;
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 // ============================================
 // 建跟进任务 弹层 (客户详情页 / AI 跟进卡共用)
 //
@@ -85,11 +85,9 @@ Future<void> showAddFollowUpSheet(
                   .toList(),
             ),
             const SizedBox(height: AppSpace.s16),
-            BigButton(
-              label: saving ? '保存中...' : '保存',
-              icon: Icons.check,
+            FilledButton.icon(
               onPressed: saving
-                  ? () {}
+                  ? null
                   : () async {
                       if (reasonCtrl.text.trim().isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
@@ -127,6 +125,11 @@ Future<void> showAddFollowUpSheet(
                         }
                       }
                     },
+              icon: const Icon(Icons.check, size: AppSize.iconLg),
+              label: Text(saving ? '保存中...' : '保存'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
+              ),
             ),
             const SizedBox(height: AppSpace.s8),
           ],
@@ -184,7 +187,7 @@ class _CustomerFollowUpSectionState
     final fmt = DateFormat('MM-dd');
     final async = ref.watch(customerFollowUpTasksProvider(widget.customerId));
 
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),
@@ -337,7 +340,7 @@ class _CustomerInteractionSectionState
     final async = ref.watch(interactionsForCustomerProvider(widget.customerId));
     final items = async.valueOrNull ?? const <Interaction>[];
 
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),

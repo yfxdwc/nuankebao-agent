@@ -13,8 +13,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/models/franchisee.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/big_button.dart';
-import '../../../core/widgets/empty_state.dart';
+
+import '../../../core/widgets/app_empty.dart';
 
 import '../../../core/theme/tokens.g.dart';
 class AddFranchiseePage extends ConsumerStatefulWidget {
@@ -174,11 +174,22 @@ class _AddFranchiseePageState extends ConsumerState<AddFranchiseePage> {
             ),
             const SizedBox(height: AppSpace.s32),
 
-            BigButton(
-              label: _isSlotMode ? '添加为下线' : '添加',
-              icon: Icons.check,
-              onPressed: _submit,
-              loading: _loading,
+            FilledButton.icon(
+              onPressed: _loading ? null : _submit,
+              icon: _loading
+                  ? const SizedBox(
+                      width: AppSize.iconLg,
+                      height: AppSize.iconLg,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.check, size: AppSize.iconLg),
+              label: Text(_isSlotMode ? '添加为下线' : '添加'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
+              ),
             ),
             const SizedBox(height: AppSpace.s24),
           ],

@@ -16,14 +16,15 @@ import '../../../core/http/api_client.dart';
 import '../../../core/models/salon.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/big_button.dart';
-import '../../../core/widgets/empty_state.dart';
+
+import '../../../core/widgets/app_empty.dart';
 import '../providers/salon_providers.dart';
 import '../widgets/salon_rsvp_sheet.dart';
 import '../widgets/salon_section.dart';
 import '../widgets/salon_status_chip.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 class SalonDetailPage extends ConsumerStatefulWidget {
   final String salonId;
 
@@ -158,7 +159,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
   // ==========================================
 
   Widget _header(Salon salon) {
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s20),
@@ -289,7 +290,7 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
     final status = viewer.myStatus ?? SalonInvitationStatus.pending;
     final guestCount = viewer.myExpectedGuestCount ?? 0;
 
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),
@@ -352,10 +353,13 @@ class _SalonDetailPageState extends ConsumerState<SalonDetailPage> {
               ),
             ],
             const SizedBox(height: AppSpace.s14),
-            BigButton(
-              label: '修改我的回复',
-              icon: Icons.edit_note,
+            FilledButton.icon(
               onPressed: () => showSalonRsvpSheet(context, ref, salon),
+              icon: const Icon(Icons.edit_note, size: AppSize.iconLg),
+              label: const Text('修改我的回复'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
+              ),
             ),
           ],
         ),

@@ -13,6 +13,7 @@ import 'salon_section.dart';
 import 'salon_status_chip.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 class SalonCard extends StatelessWidget {
   final Salon salon;
   final VoidCallback onTap;
@@ -25,8 +26,7 @@ class SalonCard extends StatelessWidget {
         salon.status == SalonStatus.cancelled;
     final viewer = salon.viewer;
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return B2NoChrome(
       child: InkWell(
         onTap: onTap,
         child: Opacity(

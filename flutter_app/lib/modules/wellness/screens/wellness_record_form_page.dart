@@ -14,7 +14,8 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_ext.dart';
-import '../../../core/widgets/big_button.dart';
+import '../../../core/widgets/app_section.dart';
+
 import '../widgets/rating_slider.dart';
 import '../widgets/wellness_photo_uploader.dart';
 
@@ -294,11 +295,22 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
                         ref.read(usageServiceProvider).track('record_photo_taken'),
                   ),
                   const SizedBox(height: AppSpace.s32),
-                  BigButton(
-                    label: widget.recordId == null ? '保存' : '保存修改',
-                    icon: Icons.check,
-                    onPressed: _submit,
-                    loading: _loading,
+                  FilledButton.icon(
+                    onPressed: _loading ? null : _submit,
+                    icon: _loading
+                        ? const SizedBox(
+                            width: AppSize.iconLg,
+                            height: AppSize.iconLg,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check, size: AppSize.iconLg),
+                    label: Text(widget.recordId == null ? '保存' : '保存修改'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
+                    ),
                   ),
                   const SizedBox(height: AppSpace.s24),
                 ],
@@ -406,58 +418,63 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
   }
 
   Widget _buildConditionSection(String title, {bool isPost = false}) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: AppTheme.fontMd,
-                fontWeight: FontWeight.w600,
-              ),
+    // B2: 旧 B2NoChrome(margin: zero) → AppSection (无边框/无阴影) + 内层 padding
+    // 标题用户已写 Text → 内层用 Section-style Container
+    return Padding(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AppSectionHeader(title: title),
+          const SizedBox(height: AppSpace.s8),
+          Container(
+            padding: const EdgeInsets.all(AppSpace.s16),
+            decoration: BoxDecoration(
+              color: context.tokens.surfaceSunken,
+              borderRadius: BorderRadius.circular(AppRadius.card),
             ),
-            const SizedBox(height: AppSpace.s16),
-            PainSlider(
-              label: '疼痛程度',
-              value: isPost ? _postPainLevel : _prePainLevel,
-              onChanged: (v) => setState(() {
-                if (isPost) {
-                  _postPainLevel = v;
-                } else {
-                  _prePainLevel = v;
-                }
-              }),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                PainSlider(
+                  label: '疼痛程度',
+                  value: isPost ? _postPainLevel : _prePainLevel,
+                  onChanged: (v) => setState(() {
+                    if (isPost) {
+                      _postPainLevel = v;
+                    } else {
+                      _prePainLevel = v;
+                    }
+                  }),
+                ),
+                const SizedBox(height: AppSpace.s16),
+                FiveRatingSlider(
+                  label: '睡眠质量',
+                  value: isPost ? _postSleep : _preSleep,
+                  onChanged: (v) => setState(() {
+                    if (isPost) {
+                      _postSleep = v;
+                    } else {
+                      _preSleep = v;
+                    }
+                  }),
+                ),
+                const SizedBox(height: AppSpace.s16),
+                FiveRatingSlider(
+                  label: '情绪',
+                  value: isPost ? _postMood : _preMood,
+                  onChanged: (v) => setState(() {
+                    if (isPost) {
+                      _postMood = v;
+                    } else {
+                      _preMood = v;
+                    }
+                  }),
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpace.s16),
-            FiveRatingSlider(
-              label: '睡眠质量',
-              value: isPost ? _postSleep : _preSleep,
-              onChanged: (v) => setState(() {
-                if (isPost) {
-                  _postSleep = v;
-                } else {
-                  _preSleep = v;
-                }
-              }),
-            ),
-            const SizedBox(height: AppSpace.s16),
-            FiveRatingSlider(
-              label: '情绪',
-              value: isPost ? _postMood : _preMood,
-              onChanged: (v) => setState(() {
-                if (isPost) {
-                  _postMood = v;
-                } else {
-                  _preMood = v;
-                }
-              }),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

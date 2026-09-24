@@ -19,7 +19,7 @@ import 'package:go_router/go_router.dart';
 import '../core/models/admin_user.dart';
 import '../core/providers/service_providers.dart';
 import '../core/theme/app_theme.dart';
-import '../core/widgets/empty_state.dart';
+import '../core/widgets/app_empty.dart';
 import '../core/widgets/member_avatar.dart';
 import 'admin_reparent_sheet.dart';
 import 'admin_users_graph.dart';
@@ -353,7 +353,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
         loading: () => const Center(child: CircularProgressIndicator()),
         // 403 (非管理员) 给一句人话, 不要笼统"网络不太好" —— 那会让人一直重试
         error: (e, _) => e.toString().contains('403')
-            ? const EmptyState(
+            ? const AppEmptyState(
                 icon: Icons.lock_outline,
                 title: '只有管理员能看',
                 hint: '这个页面是系统管理员专用的',
@@ -362,7 +362,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
         data: (data) {
           _lastData = data;
           if (data.users.isEmpty) {
-            return const EmptyState(
+            return const AppEmptyState(
               icon: Icons.people_outline,
               title: '还没有注册用户',
               hint: '用户先注册, 你才能把他设为根节点',

@@ -18,7 +18,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/models/franchisee.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/app_empty.dart';
 import '../../../core/widgets/franchise_chip.dart';
 import '../../presentation/graph/widgets/franchise_node_sheet.dart';
 import '../../presentation/graph/widgets/franchise_tree_painter.dart';
@@ -333,21 +333,25 @@ class _FranchiseTreePageState extends ConsumerState<FranchiseTreePage> {
     //     → 旧版这情况是后端 404, Flutter ErrorState 误为「网络不太好」,
     //       误导用户. 业务上「未加盟」是合法状态, 应走 empty state.
     if (tree.id == '0' || tree.name == '未加盟') {
-      return EmptyState(
+      return AppEmptyState(
         icon: Icons.account_tree_outlined,
         title: '还不是加盟商, 没有加盟网络',
         hint: '当前账号未关联加盟关系, 无法查看加盟图谱',
-        onAction: () => context.push('/customers/new'),
-        actionLabel: '+ 添加客户',
+        action: FilledButton(
+          onPressed: () => context.push('/customers/new'),
+          child: const Text('+ 添加客户'),
+        ),
       );
     }
     if (tree.children.isEmpty) {
-      return EmptyState(
+      return AppEmptyState(
         icon: Icons.account_tree_outlined,
         title: '还没有下线',
         hint: '点击下方"添加下线"按钮, 发展第一位加盟商',
-        onAction: () => _showAddDownlineHint(tree),
-        actionLabel: '+ 添加下线',
+        action: FilledButton(
+          onPressed: () => _showAddDownlineHint(tree),
+          child: const Text('+ 添加下线'),
+        ),
       );
     }
 

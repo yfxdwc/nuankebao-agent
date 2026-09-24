@@ -24,6 +24,7 @@ import 'profile_sheets.dart';
 import 'profile_widgets.dart';
 
 import '../core/theme/tokens.g.dart';
+import '../core/widgets/b2_no_chrome.dart';
 final _packageInfoProvider = FutureProvider<PackageInfo>(
   (ref) => PackageInfo.fromPlatform(),
 );
@@ -41,7 +42,7 @@ class AboutPage extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 32),
         children: [
           // 顶部: 品牌 + 版本
-          Card(
+          B2NoChrome(
             margin: EdgeInsets.zero,
             child: Padding(
               padding: const EdgeInsets.all(AppSpace.s20),

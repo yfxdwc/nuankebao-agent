@@ -1,12 +1,25 @@
-// 客户列表行 (中老年版, 80pt 行高 + 大头像 + 待办点)
-import 'package:flutter/material.dart';
-import '../../../core/models/customer.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/birthday.dart';
-import '../../../core/widgets/typed_user_avatar.dart';
-import '../../../core/models/follow_up_info.dart';
+// ============================================
+// 客户列表行 (B 档换装, B1 客户域 2026-09-24)
+//
+// 拆完 customers_page.dart → 5 文件后, 本组件改用 B0a 的 [AppListRow]
+//   · 行高 80 → 60 (AppListRow 默认), 一屏可看 9+ 客户
+//   · 行高 60 由 AppListRow 的 ConstrainedBox(minHeight: AppSize.listRowHeight) 撑
+//   · 主文 = 姓名 (AppType.md/medium/textPrimary) + 标签尾巴 (横向滑动整体)
+//   · 副文 = 跟进信息 / 上级加盟人 / 上次到店 (sm/secondary)
+//   · meta  = 待办数 (右侧红点) + 箭头
+//   · 左侧紧急度色条 (仅会员) 用 Stack 套在外面, 不影响 AppListRow 的标准结构
+// ============================================
 
+import 'package:flutter/material.dart';
+
+import '../../../core/models/customer.dart';
+import '../../../core/models/follow_up_info.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/utils/birthday.dart';
+import '../../../core/widgets/app_list_row.dart';
+import '../../../core/widgets/typed_user_avatar.dart';
+
 class CustomerRow extends StatelessWidget {
   final Customer customer;
   /// @deprecated 改用 [customerType] (保留兼容旧调用点; 两者不一致时以 customerType 为准)
@@ -92,164 +105,169 @@ class CustomerRow extends StatelessWidget {
     }
   }
 
+  // ============================================
+  // 构建函数
+  // ============================================
+
+  /// 主文 (第一行): 姓名 + 推荐标签 + 🎂 生日徽章 + 已注册标
+  ///
+  /// 名字保底 55% 宽 + 标签尾巴占剩余 (放不下横向滑动, 不裁字/不报 overflow)
+  Widget _buildTitle() {
+    final tail = _rowTail;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 名字最多占 55%: 短名字 (「王女士」) 按真实宽度拿空间, 富余宽度
+        // 让给标签; 长名字到 55% 就省略号, 不把标签挤到看不见
+        final nameMax = constraints.maxWidth * 0.55;
+        return Row(
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: nameMax),
+              child: Text(
+                customer.name,
+                style: const TextStyle(
+                  fontSize: AppType.md,
+                  fontWeight: AppWeight.semibold,
+                  color: AppColors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+            if (tail.isNotEmpty) ...<Widget>[
+              const SizedBox(width: AppSpace.s6),
+              // 尾巴吃满剩余宽度; 实在放不下时可横向滑动 (不裁字/不报 overflow)
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: tail,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  /// 副文 (第二行): 跟进信息 / 上级加盟人 / 上次到店
+  Widget? _buildSubtitle(FollowUpInfo? f, bool isFranchiseeType, Color? barColor) {
+    if (f?.contactLine != null) {
+      return Text(
+        f!.contactLine!,
+        style: TextStyle(
+          fontSize: AppType.xs,
+          color: barColor ?? AppColors.textSecondary,
+          fontWeight: (f.levelKey == 'p0' || f.levelKey == 'p1')
+              ? AppWeight.semibold
+              : AppWeight.regular,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+    if (isFranchiseeType && referrerName != null) {
+      return Text(
+        '上级: $referrerName',
+        style: const TextStyle(
+          fontSize: AppType.xs,
+          color: AppTheme.franchisee,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+    if (lastVisitDate != null) {
+      return Text(
+        '上次到店 $lastVisitDate',
+        style: const TextStyle(
+          fontSize: AppType.xs,
+          color: AppColors.textSecondary,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+    return null;
+  }
+
+  /// 右侧 meta 区: 待办红点 + 箭头
+  Widget? _buildMeta() {
+    if (pendingCount <= 0) return null;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.s10, vertical: AppSpace.s4),
+      decoration: BoxDecoration(
+        color: AppTheme.danger,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      child: Text(
+        '•$pendingCount',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: AppType.xs,
+          fontWeight: AppWeight.semibold,
+        ),
+      ),
+    );
+  }
+
+  /// 最右 trailing: 箭头图标
+  Widget? _buildTrailing() {
+    return const Icon(
+      Icons.chevron_right,
+      color: AppColors.textSecondary,
+      size: AppSize.iconXl,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isFranchisee = _type == 'franchisee';
     final f = followUp;
     final barColor = f?.levelKey == null ? null : levelColor(f!.levelKey);
-    return InkWell(
+
+    final row = AppListRow(
+      // leading = 头像 (B 档 44, 视觉 44 但 hit box ≥48)
+      // 客户类型直接标在头像上 (主人 2026-09-19 拍:
+      //   列表不再显示「加盟/种子/普通」标签, 改由 头像环 + 角标 区分)
+      leading: TypedUserAvatar(
+        avatarUrl: customer.avatar,
+        name: customer.name,
+        customerType: _type,
+        size: AppTheme.avatarMd,
+        showLoadingIndicator: false,
+        // 会员 = 金环 + 右上角 👑 (客户类型角标仍在右下角, 互不遮挡)
+        isMember: isMember,
+      ),
+      title: _buildTitle(),
+      subtitle: _buildSubtitle(f, isFranchisee, barColor),
+      meta: _buildMeta(),
+      trailing: _buildTrailing(),
       onTap: onTap,
-      child: Stack(
-        children: [
-      Container(
-        constraints: const BoxConstraints(minHeight: AppTheme.listRowHeight),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s12),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: AppColors.divider, width: 1),
-          ),
+    );
+
+    // 左侧紧急度色条 (主人 2026-09-20 拍 Q1: 色条属于紧急度体系 → **仅会员**)
+    //   4pt 竖条 + 第二行文字也是同色 (色 + 文字双编码)
+    if (barColor == null) return row;
+    return Stack(
+      children: [
+        row,
+        Positioned(
+          left: AppSpace.s0,
+          top: AppSpace.s0,
+          bottom: AppSpace.s0,
+          width: AppSpace.s4,
+          child: Container(color: barColor),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // 头像 = AppTheme.avatarMd (B 档 44, 视觉 44 但 hit box ≥48) —— 客户类型直接标在头像上 (主人 2026-09-19 拍:
-            //   列表不再显示「加盟/种子/普通」标签, 改由 头像环 + 角标 区分)
-            TypedUserAvatar(
-              avatarUrl: customer.avatar,
-              name: customer.name,
-              customerType: _type,
-              size: AppTheme.avatarMd,
-              showLoadingIndicator: false,
-              // 会员 = 金环 + 右上角 👑 (客户类型角标仍在右下角, 互不遮挡)
-              isMember: isMember,
-            ),
-            const SizedBox(width: AppSpace.s12),
-
-            // 中间信息
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 第一行: 姓名 + 推荐标签 + 🎂 生日徽章
-                  //   ⚠ 布局 (2026-09-21 修 bug): 标签/徽章以前是**不可压缩**的, 长名字 +
-                  //   多个标签时名字会被挤成 0 宽 —— 截图实测「王女士」整行只剩标签, 名字
-                  //   直接消失。现在名字保底占 5/9, 标签尾巴占 4/9 且可横向滑动
-                  //   (放不下就滑动, 不裁字、不报 overflow)。
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      // 名字最多占 55%: 短名字 (「王女士」) 按真实宽度拿空间, 富余宽度
-                      // 让给标签; 长名字到 55% 就省略号, 不把标签挤到看不见
-                      final nameMax = constraints.maxWidth * 0.55;
-                      return Row(
-                        children: [
-                          ConstrainedBox(
-                            constraints: BoxConstraints(maxWidth: nameMax),
-                            child: Text(
-                              customer.name,
-                              style: const TextStyle(
-                                fontSize: AppTheme.fontMd,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.textPrimary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (_rowTail.isNotEmpty) ...<Widget>[
-                            const SizedBox(width: AppSpace.s6),
-                            // 尾巴吃满剩余宽度; 实在放不下时可横向滑动 (不裁字/不报 overflow)
-                            Expanded(
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: _rowTail,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: AppSpace.s4),
-                  // 第二行: 跟进信息优先 (主人 2026-09-20 拍 Q3: 动作在标签, 数据在这一行)
-                  if (f?.contactLine != null)
-                    Text(
-                      f!.contactLine!,
-                      style: TextStyle(
-                        fontSize: AppTheme.fontXs,
-                        color: barColor ?? AppTheme.textSecondary,
-                        fontWeight: (f.levelKey == 'p0' || f.levelKey == 'p1')
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                      ),
-                    )
-                  else if (isFranchisee && referrerName != null)
-                    Text(
-                      '上级: $referrerName',
-                      style: const TextStyle(
-                        fontSize: AppTheme.fontXs,
-                        color: AppTheme.franchisee,
-                      ),
-                    )
-                  else if (lastVisitDate != null)
-                    Text(
-                      '上次到店 $lastVisitDate',
-                      style: const TextStyle(
-                        fontSize: AppTheme.fontXs,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // 右侧: 待办红点
-            if (pendingCount > 0) ...[
-              const SizedBox(width: AppSpace.s8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.s10, vertical: AppSpace.s4),
-                decoration: BoxDecoration(
-                  color: AppTheme.danger,
-                  borderRadius: BorderRadius.circular(AppRadius.r12),
-                ),
-                child: Text(
-                  '•$pendingCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: AppTheme.fontXs,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(width: AppSpace.s4),
-            const Icon(
-              Icons.chevron_right,
-              color: AppTheme.textSecondary,
-              size: AppSize.iconXl,
-            ),
-          ],
-        ),
-      ),
-          // 左侧紧急度色条 (主人 2026-09-20 拍 Q1: 色条属于紧急度体系 → **仅会员**)
-          //   4pt 竖条 + 第二行文字也是同色 (色 + 文字双编码)
-          if (barColor != null)
-            Positioned(
-              left: AppSpace.s0,
-              top: AppSpace.s0,
-              bottom: AppSpace.s0,
-              width: AppSpace.s4,
-              child: Container(color: barColor),
-            ),
-        ],
-      ),
+      ],
     );
   }
 
-  /// 第一行右侧的尾巴: 推荐标签 (主人 2026-09-20 拍: 最多 2 个, 动作文案)
+  /// 第一行右侧的尾巴: 推荐标签 (主人 2026-09-20 拍 Q3: 最多 2 个, 动作文案)
   /// + 🎂 生日提醒 (落在她设的提醒窗口内才显示; 主人 2026-09-18 拍)。
   /// 抽出来是因为它现在是**一个可滑动整体**, 不再是 Row 里散开的子节点。
   List<Widget> get _rowTail {
@@ -270,8 +288,8 @@ class CustomerRow extends StatelessWidget {
             _birthdayDays == 0 ? '🎂 今天' : '🎂 ${_birthdayDays}天',
             style: const TextStyle(
               color: Colors.white,
-              fontSize: AppTheme.fontXs,
-              fontWeight: FontWeight.w600,
+              fontSize: AppType.xs,
+              fontWeight: AppWeight.semibold,
             ),
           ),
         ),
@@ -291,8 +309,8 @@ class CustomerRow extends StatelessWidget {
             style: TextStyle(
               // ⚠ 主题里必须显式给 color (AGENTS §5: 不给 = 真机白字)
               color: AppTheme.primaryDark,
-              fontSize: AppTheme.fontXs,
-              fontWeight: FontWeight.w600,
+              fontSize: AppType.xs,
+              fontWeight: AppWeight.semibold,
             ),
           ),
         ),
@@ -321,9 +339,9 @@ class _FollowUpTagChip extends StatelessWidget {
         child: Text(
           '${tag.emoji}${tag.label}',
           style: TextStyle(
-            fontSize: AppTheme.fontXs,
+            fontSize: AppType.xs,
             color: color,
-            fontWeight: FontWeight.w600,
+            fontWeight: AppWeight.semibold,
           ),
         ),
       ),

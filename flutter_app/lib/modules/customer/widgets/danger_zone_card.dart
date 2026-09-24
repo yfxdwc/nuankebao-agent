@@ -6,6 +6,7 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 
 // ============================================
 // 「危险操作」卡 (管理 Tab 底部, P8, 主人 2026-09-23)
@@ -151,14 +152,10 @@ class _CustomerDangerZoneCardState
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
-      // 危险区视觉: 淡红底 + 红边, 与普通卡片区分开
+      // 危险区视觉: 淡红底 (B 档「边框坚决不要」+ 危险语义靠 surface color 表达)
       color: t.dangerSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        side: BorderSide(color: t.danger.withOpacity(0.35)),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.cardPadding),
         child: Column(

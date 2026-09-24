@@ -10,11 +10,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/salon.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/app_empty.dart';
 import '../providers/salon_providers.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 class SalonManagePage extends ConsumerStatefulWidget {
   final String salonId;
   const SalonManagePage({super.key, required this.salonId});
@@ -197,13 +198,13 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
   Widget _salonInfoCard() {
     final asyncSalon = ref.watch(salonDetailProvider(widget.salonId));
     return asyncSalon.when(
-      loading: () => const Card(
+      loading: () => const B2NoChrome(
         child: Padding(
           padding: EdgeInsets.all(AppSpace.s24),
           child: Center(child: CircularProgressIndicator()),
         ),
       ),
-      error: (e, _) => Card(
+      error: (e, _) => B2NoChrome(
         child: ListTile(
           title: const Text('沙龙信息暂时加载不出来',
               style: TextStyle(fontSize: AppTheme.fontMd)),
@@ -214,7 +215,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
           ),
         ),
       ),
-      data: (s) => Card(
+      data: (s) => B2NoChrome(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.s16),
           child: Column(
@@ -282,7 +283,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
       ),
       data: (items) {
         if (items.isEmpty) {
-          return const EmptyState(
+          return const AppEmptyState(
             icon: Icons.group_add_outlined,
             title: '还没有邀请人',
             hint: '点右下角「添加邀请」把客人请进来',
@@ -298,7 +299,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
   }
 
   Widget _invitationTile(SalonInvitation inv) {
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),
@@ -547,7 +548,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
       ),
       data: (quotas) {
         if (quotas.isEmpty) {
-          return const EmptyState(
+          return const AppEmptyState(
             icon: Icons.flag_outlined,
             title: '还没有带约任务',
             hint: '点右下角「分配任务」给受邀者定个带约目标',
@@ -563,7 +564,7 @@ class _SalonManagePageState extends ConsumerState<SalonManagePage>
   }
 
   Widget _quotaCard(SalonQuota q) {
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),

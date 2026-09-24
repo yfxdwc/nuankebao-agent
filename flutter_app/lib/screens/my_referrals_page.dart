@@ -12,7 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/providers/service_providers.dart';
 import '../core/services/api.dart' show MyReferral;
 import '../core/theme/app_theme.dart';
-import '../core/widgets/empty_state.dart';
+import '../core/widgets/app_empty.dart';
 import 'profile_widgets.dart';
 
 import '../core/theme/tokens.g.dart';
@@ -93,7 +93,7 @@ class _MyReferralsPageState extends ConsumerState<MyReferralsPage> {
                 padding: const EdgeInsets.all(AppSpace.s16),
                 children: const [
                   SizedBox(height: AppSpace.s60),
-                  EmptyState(
+                  AppEmptyState(
                     icon: Icons.group_outlined,
                     title: '还没有人用你的推荐码注册',
                     hint: '把你的 6 位推荐码发给朋友, 对方注册时填上;\n'

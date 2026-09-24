@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 /// 白色卡片区块: 标题行 (图标 + 标题) + 内容, 可带右侧 trailing
 class SalonSection extends StatelessWidget {
   final String title;
@@ -28,7 +29,7 @@ class SalonSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),

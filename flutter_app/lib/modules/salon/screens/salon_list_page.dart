@@ -11,8 +11,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/models/salon.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/big_fab.dart';
-import '../../../core/widgets/empty_state.dart';
+
+import '../../../core/widgets/app_empty.dart';
 import '../providers/salon_providers.dart';
 import '../widgets/salon_card.dart';
 
@@ -67,12 +67,13 @@ class _SalonListPageState extends ConsumerState<SalonListPage>
           _buildList('organizing'),
         ],
       ),
-      // 纯图标 FAB (主人 2026-09-19 拍: 不要文字, 跟客户页一致)
-      // 用 core/widgets/big_fab.dart (BigFab 80pt 圆形, 中老年友好);
-      // tooltip 保留 = 长按/无障碍仍有说明
-      floatingActionButton: BigFab(
+      // 纯图标 FAB (主人 2026-09-19 拍: 不要文字, 跟客户页一致).
+      // 主题 FloatingActionButton 默认 56pt (B 档) —— 不再用 80pt BigFab.
+      // tooltip 保留 = 长按/无障碍仍有说明.
+      floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/salons/new'),
         tooltip: '创建沙龙',
+        child: const Icon(Icons.add),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
@@ -137,7 +138,7 @@ class _SalonListPageState extends ConsumerState<SalonListPage>
                 children: [
                   SizedBox(
                     height: constraints.maxHeight,
-                    child: const EmptyState(
+                    child: const AppEmptyState(
                       icon: Icons.event_outlined,
                       title: '还没有沙龙',
                       hint: '点右下角 + 创建一个',

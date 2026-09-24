@@ -13,9 +13,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/placement_request.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/app_empty.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 class PlacementRequestsPage extends ConsumerStatefulWidget {
   const PlacementRequestsPage({super.key});
 
@@ -214,7 +215,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
         child: ListView(
           children: [
             const SizedBox(height: AppSpace.s80),
-            EmptyState(
+            AppEmptyState(
               icon: Icons.check_circle_outline,
               title: mine ? '没有进行中的申请' : '没有等我确认的申请',
               hint: mine
@@ -236,7 +237,7 @@ class _PlacementRequestsPageState extends ConsumerState<PlacementRequestsPage>
   }
 
   Widget _buildCard(PlacementRequest r, {required bool mine}) {
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),

@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
 
 import '../core/theme/tokens.g.dart';
+import '../core/widgets/b2_no_chrome.dart';
 /// 分区卡 (标题 + 条目列表)
 class ProfileSection extends StatelessWidget {
   final String title;
@@ -34,7 +35,7 @@ class ProfileSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return B2NoChrome(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 8),

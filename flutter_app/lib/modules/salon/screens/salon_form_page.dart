@@ -13,10 +13,11 @@ import '../../../core/models/salon.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/app_empty.dart';
 import '../providers/salon_providers.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 /// 预设主题标签 (可自定义追加)
 const List<String> _presetTags = <String>[
   '沙龙',
@@ -1119,7 +1120,7 @@ class _SalonFormPageState extends ConsumerState<SalonFormPage> {
   // 通用小组件
   // ============================================
   Widget _card(String title, List<Widget> children) {
-    return Card(
+    return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s16),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.s16),

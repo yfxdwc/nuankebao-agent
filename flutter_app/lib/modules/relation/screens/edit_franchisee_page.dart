@@ -15,11 +15,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/models/franchisee.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/big_button.dart';
-import '../../../core/widgets/empty_state.dart';
+
+import '../../../core/widgets/app_empty.dart';
 import '../lib/franchisee_detail_provider.dart';
 
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/b2_no_chrome.dart';
 class EditFranchiseePage extends ConsumerStatefulWidget {
   final String franchiseeId;
   const EditFranchiseePage({super.key, required this.franchiseeId});
@@ -175,7 +176,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
           ),
           const SizedBox(height: AppSpace.s8),
           // 启用 / 停用
-          Card(
+          B2NoChrome(
             margin: EdgeInsets.zero,
             child: SwitchListTile(
               value: _isActive,
@@ -191,7 +192,7 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
           // 只读信息: 推荐人 / 位置 (建树后不可改)
           if (f != null) ...[
             const SizedBox(height: AppSpace.s16),
-            Card(
+            B2NoChrome(
               margin: EdgeInsets.zero,
               color: AppTheme.primaryLight.withOpacity(0.25),
               child: Padding(
@@ -235,11 +236,22 @@ class _EditFranchiseePageState extends ConsumerState<EditFranchiseePage> {
           ],
 
           const SizedBox(height: AppSpace.s32),
-          BigButton(
-            label: '保存修改',
-            icon: Icons.check,
-            onPressed: _submit,
-            loading: _saving,
+          FilledButton.icon(
+            onPressed: _saving ? null : _submit,
+            icon: _saving
+                ? const SizedBox(
+                    width: AppSize.iconLg,
+                    height: AppSize.iconLg,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.check, size: AppSize.iconLg),
+            label: const Text('保存修改'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
+            ),
           ),
         ],
       ),
