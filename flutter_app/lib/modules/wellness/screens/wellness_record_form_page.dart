@@ -10,7 +10,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/dictionaries.dart';
+import '../../../core/models/follow_up.dart' show FollowUpTask;
 import '../../../core/providers/service_providers.dart';
+import '../../../core/services/api.dart' show FollowUpService;
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_ext.dart';
@@ -21,6 +23,37 @@ import '../widgets/rating_slider.dart';
 import '../widgets/wellness_photo_uploader.dart';
 
 import '../../../core/theme/tokens.g.dart';
+/// 「下次建议日期」→ 顺手建一条跟进任务 (2026-09-24, 主人问: 「选了下次建议日期,
+///   保存后是否应该自动创建跟进任务?」→ 是)
+///
+/// 为什么: 这个日期是技师/销售**明确指定**的跟进时点, 属于 CHARTER §1.4 的
+///   「可落地的跟进指引」。原来它只喂洞察规则 7 (进窗口期才在「现在该做」冒一条,
+///   还得手动点「建任务」) —— 窗口期没人打开 App 就漏了; 直接落任务, 「跟进待办」
+///   列表 + 每日提醒都能挂住它。
+///
+/// **幂等**: 该客户已有 pending 任务 → 返回 null 不重复建 (与每日生成脚本
+///   `scripts/refresh-follow-up-tasks.ts` 的「一人同时只留一条 pending」同口径)。
+/// **失败**: 不在这里吞 —— 调用方负责 (记录已保存 = 主操作成功, 任务建不上
+///   不该让保存看起来失败)。
+///
+/// 到点时刻: 建议日期是"日", 任务要"时间点" → 取当天 09:00 (本地), 跟其它任务一致。
+Future<FollowUpTask?> createAdviceFollowUpTaskIfAbsent({
+  required FollowUpService followUps,
+  required String customerId,
+  required DateTime adviceDate,
+}) async {
+  final pending =
+      await followUps.list(customerId: customerId, status: 'pending');
+  if (pending.isNotEmpty) return null;
+  return followUps.create({
+    'customerId': customerId,
+    'dueAt': DateTime(adviceDate.year, adviceDate.month, adviceDate.day, 9)
+        .toUtc()
+        .toIso8601String(),
+    'reason': '按建议日期回访',
+  });
+}
+
 /// 新增记录时默认选中的服务项目 (主人 2026-09-18 拍: 「碧波庭-脉动负压提拉按摩」置顶 + 下拉 + 默认选中)
 /// 字典里找不到 → 不预选 (不硬编码假项目), 用户自己选
 const String _defaultServiceItemName = '碧波庭-脉动负压提拉按摩';
@@ -207,6 +240,48 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     super.dispose();
   }
 
+  /// 「下次建议日期」落任务的执行 + 反馈 (撤销 / 埋点 / 刷列表)。
+  ///
+  /// 失败静默: 记录已保存 (主操作), 任务没建上不该弹错吓人 —— 但会静默失败,
+  ///   所以只在成功时给 SnackBar (含「撤销」, 建错了能一键撤)。
+  Future<void> _createAdviceTaskIfNeeded() async {
+    final date = _nextAdviceDate;
+    final cid = _effectiveCustomerId;
+    if (date == null || cid == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final task = await createAdviceFollowUpTaskIfAbsent(
+        followUps: ref.read(followUpServiceProvider),
+        customerId: cid,
+        adviceDate: date,
+      );
+      if (task == null) return; // 已有 pending → 不重复, 也不打扰
+      ref.read(usageServiceProvider).track('follow_up_create',
+          props: {'source': 'wellness_record_advice'});
+      ref.invalidate(customerFollowUpTasksProvider(cid));
+      final label =
+          '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(
+        content: Text('已保存 · 顺手建了 $label 的跟进提醒',
+            style: const TextStyle(fontSize: AppTheme.fontMd)),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () async {
+            try {
+              await ref.read(followUpServiceProvider).cancel(task.id);
+              ref.invalidate(customerFollowUpTasksProvider(cid));
+            } catch (_) {
+              // 撤销失败: 让用户去「跟进待办」手动完成/取消, 不弹错
+            }
+          },
+        ),
+      ));
+    } catch (_) {
+      // 静默: 记录保存成功才是主操作
+    }
+  }
+
   Future<void> _submit() async {
     if (_serviceItemId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -253,6 +328,8 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
       } else {
         await ref.read(wellnessRecordServiceProvider).create(data);
         ref.read(usageServiceProvider).track('record_create');
+        // 选了「下次建议日期」→ 顺手落一条跟进任务 (见 helper 注释)
+        await _createAdviceTaskIfNeeded();
       }
       if (!mounted) return;
       ref.invalidate(customerWellnessRecordsProvider(_effectiveCustomerId!));
