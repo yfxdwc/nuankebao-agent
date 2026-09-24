@@ -14,6 +14,7 @@
 
 import '../../../core/models/dictionaries.dart';
 import '../../../core/models/wellness_record.dart';
+import 'package:intl/intl.dart';
 
 /// 字典里的服务项目名 → 中文 (为 null = 字典还没加载完 → 调用方回落「养生记录」)
 String? serviceItemName(Dictionaries? dict, String id) {
@@ -122,3 +123,116 @@ String metricDeltaSummary(WellnessRecord r, {int max = 2}) {
   }
   return parts.join(' · ');
 }
+
+// ============================================
+// 日期相关纯函数 (2026-09-25 客户详情「记录」Tab 时间线 10 项改进)
+// ============================================
+//
+// 设计原则:
+//   - 都是纯函数, 接受可选 `now` 便于单测
+//   - 都按**本地日期**对齐 (YYYY-MM-DD), 与 `followUpDaysUntilDue` 同一口径
+//     —— CST 早晨的 UTC 漂移教训 (见 AGENTS §5)。
+//   - 入参统一接受 YYYY-MM-DD 字符串 (serviceDate / createdAt 等的格式),
+//     内部 `DateTime.tryParse`; 解析失败时**降级**为 「」/null, 不抛。
+
+/// 把任意 DateTime 归一到「本地零点」(00:00:00)。用于日期比较, 避开时分秒/时区。
+DateTime _dayKey(DateTime dt) {
+  final l = dt.toLocal();
+  return DateTime(l.year, l.month, l.day);
+}
+
+/// 把 YYYY-MM-DD 解析为本地零点; 失败返回 null。
+DateTime? _parseYmd(String? ymd) {
+  if (ymd == null || ymd.isEmpty) return null;
+  final d = DateTime.tryParse(ymd);
+  if (d == null) return null;
+  return DateTime(d.year, d.month, d.day);
+}
+
+/// 「YYYY-MM-DD → 距今天 N 天」(0=今天, 1=明天, -1=昨天)。解析失败 → null。
+int? daysFromToday(String? ymd, {DateTime? now}) {
+  final d = _parseYmd(ymd);
+  if (d == null) return null;
+  final today = _dayKey(now ?? DateTime.now());
+  return d.difference(today).inDays;
+}
+
+/// 相对时间标签 (汇总行「最近一次 X」用):
+///   - 今天   → '今天'
+///   - 昨天   → '昨天'
+///   - N 天前 → 'N 天前'
+///   失败 → ''
+String relativeDayLabel(String? ymd, {DateTime? now}) {
+  final diff = daysFromToday(ymd, now: now);
+  if (diff == null) return '';
+  if (diff == 0) return '今天';
+  if (diff == 1) return '昨天';
+  if (diff < 0) return '${-diff} 天前';
+  // 未来 (理论上不该发生, 但 API 返回错值时给具体日期兜底)
+  return '$diff 天后';
+}
+
+/// 下次建议回访日期提示:
+///   - 无 nextAdviceDate 或解析失败 → null
+///   - 未逾期 (含今天) → '建议 MM-dd 回访'
+///   - 已逾期 N 天      → '建议 MM-dd · 已过 N 天'
+String? adviceHint(WellnessRecord r, {DateTime? now}) {
+  final ymd = r.nextAdviceDate;
+  final d = _parseYmd(ymd);
+  if (d == null) return null;
+  final today = _dayKey(now ?? DateTime.now());
+  final label = DateFormat('MM-dd').format(d);
+  final diff = d.difference(today).inDays;
+  if (diff <= 0) {
+    if (diff == 0) return '建议 $label 回访';
+    return '建议 $label · 已过 ${-diff} 天';
+  }
+  return '建议 $label 回访';
+}
+
+/// 是否为「已逾期」的下次建议日期 (供 Text.rich 染 AppColors.warning 用)。
+bool adviceOverdue(WellnessRecord r, {DateTime? now}) {
+  final diff = daysFromToday(r.nextAdviceDate, now: now);
+  return diff != null && diff < 0;
+}
+
+/// 时间线分组桶 (按本地日期划):
+///   'today' / 'yesterday' / 'thisWeek' / 'thisMonth' / 'earlier'
+///   解析失败 → 'earlier' (兜底, 走「更早」组)
+enum TimelineBucket { today, yesterday, thisWeek, thisMonth, earlier }
+
+/// 分组函数 (纯函数, 测试用):
+///   · 「今天」  diff == 0
+///   · 「昨天」  diff == -1
+///   · 「本周」  diff in [-6, -2] (周一起算: 今天 / 昨天 / 更早都视作当周)
+///     —— 范围 [-6, -2] 覆盖周一到周日七天 (diff=-2 = 前天)
+///   · 「本月」  diff in [-29, -7] (同月且非本周, 与时间序一致)
+///   · 「更早」  diff <= -30 或未来 (兜底)
+TimelineBucket bucketOf(String? ymd, {DateTime? now}) {
+  final diff = daysFromToday(ymd, now: now);
+  if (diff == null) return TimelineBucket.earlier;
+  if (diff == 0) return TimelineBucket.today;
+  if (diff == -1) return TimelineBucket.yesterday;
+  if (diff >= -6 && diff <= -2) return TimelineBucket.thisWeek;
+  // 同月但已超出本周范围 (粗略按 [this month start, -7])
+  if (diff >= -29 && diff <= -7) return TimelineBucket.thisMonth;
+  return TimelineBucket.earlier;
+}
+
+/// 分组桶显示文案 (给分组头用)
+String bucketLabel(TimelineBucket b) => switch (b) {
+      TimelineBucket.today => '今天',
+      TimelineBucket.yesterday => '昨天',
+      TimelineBucket.thisWeek => '本周',
+      TimelineBucket.thisMonth => '本月',
+      TimelineBucket.earlier => '更早',
+    };
+
+/// 桶在时间线上**从新到旧**的渲染顺序 (用于插分组头时倒序遍历不漏)
+const List<TimelineBucket> kBucketOrderDesc = [
+  TimelineBucket.today,
+  TimelineBucket.yesterday,
+  TimelineBucket.thisWeek,
+  TimelineBucket.thisMonth,
+  TimelineBucket.earlier,
+];

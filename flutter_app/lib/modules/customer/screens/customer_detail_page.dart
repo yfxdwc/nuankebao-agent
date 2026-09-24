@@ -351,7 +351,11 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
               AppSpace.pagePadding,
               0,
             ),
-            child: CustomerTimelineSection(customerId: customerId),
+            child: CustomerTimelineSection(
+              customerId: customerId,
+              // ⏵ 2026-09-25 ⑩ 趋势入口: 点「趋势」按钮 → 切到分析 Tab (index 1)
+              onViewTrends: () => _tabController.animateTo(1),
+            ),
           ),
         ),
       ],

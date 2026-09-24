@@ -214,6 +214,37 @@ void main() {
         reason: '编辑绝不能把记录日期改成今天 (时间线/趋势/复购周期全跟着错)');
   });
 
+  testWidgets('②-b 下次建议日期快捷档位 = 明天 / 3 / 7 / 10 天后', (tester) async {
+    final wellness = _FakeWellnessService();
+    await _pump(
+      tester,
+      form: const WellnessRecordFormPage(customerId: 'c1'),
+      wellness: wellness,
+      followUps: _FakeFollowUpService(),
+    );
+
+    // 主人 2026-09-24: 「快速选择标签改为: 明天、3天后、7天后、10天后」
+    expect(find.text('明天'), findsOneWidget);
+    expect(find.text('3 天后'), findsOneWidget);
+    expect(find.text('7 天后'), findsOneWidget);
+    expect(find.text('10 天后'), findsOneWidget);
+    // 旧的档位不该再出现
+    expect(find.text('14 天后'), findsNothing);
+    expect(find.text('30 天后'), findsNothing);
+
+    // 点「明天」→ 日期按钮显示明天, 且该 chip 选中
+    await tester.tap(find.text('明天'));
+    await tester.pumpAndSettle();
+
+    final tmr = DateTime.now().add(const Duration(days: 1));
+    final label =
+        '${tmr.year}-${tmr.month.toString().padLeft(2, '0')}-${tmr.day.toString().padLeft(2, '0')}';
+    expect(find.text(label), findsOneWidget,
+        reason: '点「明天」后日期按钮显示明天日期');
+    final chip = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '明天'));
+    expect(chip.selected, isTrue, reason: '选中的档位要高亮');
+  });
+
   testWidgets('③ 常用短语: 同一个短语连点**不会**重复写入', (tester) async {
     final wellness = _FakeWellnessService();
     await _pump(

@@ -450,6 +450,42 @@ class AppTheme {
         showUnselectedLabels: true,
       ),
 
+      // ---- NavigationBar (M3 底栏, 路由 shell 用的就是它) ----
+      //
+      // ⚠ M3 的 NavigationBar **默认高度 80pt** (SDK 硬编码 navigation_bar.dart)。
+      //   对「客户/沙龙/我的」三 tab 的销售员 App 来说，80pt 白占约 3 行列表的空间，
+      //   且比微信/ iOS (~50-56) 高一大截。主人 2026-09-24 拍「压缩一些」→
+      //   统一到令牌 AppSize.navBarHeight(56)：比热区下限 48 高，不至于难点。
+      // 同时对 Web admin 底栏生效（同一个令牌 → --size-nav-bar-height）。
+      navigationBarTheme: NavigationBarThemeData(
+        height: AppSize.navBarHeight,
+        backgroundColor: t.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: AppElevation.e0,
+        // 选中指示器用**浅品牌底**（不是实心块）—— 与 FilterChip active 同一语义
+        indicatorColor: t.primarySurface,
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        // ⚠ 每个 TextStyle 显式写 color（AGENTS §5：不写 = 顶掉默认色 = 真机白字）
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontSize: AppType.sm,
+            fontWeight: selected ? AppWeight.semibold : AppWeight.regular,
+            color: selected ? t.primary : t.textSecondary,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            size: AppSize.iconLg,
+            color: selected ? t.primary : t.textSecondary,
+          );
+        }),
+      ),
+
       // ---- Dialog ----
       dialogTheme: DialogTheme(
         backgroundColor: t.surfaceCard,

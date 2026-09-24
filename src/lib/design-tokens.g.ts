@@ -191,6 +191,7 @@ export const size = {
   "avatarMd": 44,
   "avatarLg": 64,
   "appBarHeight": 52,
+  "navBarHeight": 56,
   "borderHairline": 1,
   "borderThick": 2,
   "badgeMinWidth": 16,

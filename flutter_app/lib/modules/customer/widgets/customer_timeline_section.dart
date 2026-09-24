@@ -1,31 +1,17 @@
 // ============================================
 // 客户详情 · 「记录」Tab 时间线混合列表 (2026-09-24 拍板重构)
-//
-// 主人诉求:
-//   「养生记录和互动记录混合列表展示(养生记录条目优化得更紧凑),
-//     以胶囊键切换展示全部或仅养生记录、互动记录。
-//     添加养生记录、添加联系记录两个按键展示在混合列表上方。」
-//
-// ⏵ 2026-09-24 续拍 (本 commit):
-//   「记录列表内容选择标签(全部、养生、互动)折叠为下拉选择框。
-//     内容选择框的右侧显示添加记录键, 点击下拉框选择添加养生记录或添加联系记录。」
-//   ⇒ 把上面两个诉求合并成一行工具栏:
-//      左 = 内容选择下拉 (PopupMenuButton), 右 = 添加记录下拉 (PopupMenuButton)
-//   ⇒ 删掉「两个整宽按钮行」+「三个 ChoiceChip 行」, 改用一行 Row + Spacer
-//   ⇒ 文字 / 颜色 / 字号 / 间距 / 圆角 一律走 tokens (不写 hex, 不引用 AppTheme.xxx 常量色)
-//
-// 设计要点 (docs/ui-principles.md 原则 1 密度 + 原则 4 容器越少):
-//   - 列表行用 `AppListRow(dense: true)` 契约组件 (B 档统一行)
-//   - 整个混合列表包在 **一个** B2NoChrome 容器里 (避免「每行都套卡片」反 vibe)
-//   - 工具栏 (两下拉) + 汇总行 **不放**进容器 (容器越少, 内容越强)
-//   - 健壮性: 养生 / 互动两边 provider 各自 loading/error 时**互不遮蔽** ——
-//     valueOrNull 合并, 一边空另一边仍可见, 全空才显示错误 / 骨架
-//   - 触摸区: 下拉按钮高度 = AppSize.controlLg (44) —— 中老年友好, 满足 tapMin/tapCompact
-//
-// 数据来源 (与旧 customer_activity_cards 同 provider, 不另起):
-//   - 养生: customerWellnessRecordsProvider(customerId)   (limit=50, 按 serviceDate 倒序)
-//   - 互动: interactionsForCustomerProvider(customerId)  (按 createdAt 倒序)
-// ─────────────────────────────────────────────────────
+//   ⏵ 2026-09-25: 时间线 10 项 UI/交互改进
+//     ① 空态 → AppEmptyState (带 action + secondaryAction)
+//     ② 错误态 → ErrorState (两边都空) 或 行内错误行 (单边)
+//     ③ 加载态 → AppSkeletonList (两边都空)
+//     ④ 单边 loading → 列表尾部小字
+//     ⑤ 加载更多 → _visibleCount (初始 20, 步长 20; 切换 filter 重置 20)
+//     ⑥ 下次建议日期 → adviceHint (逾期片段染 AppColors.warning)
+//     ⑦ 相对时间 → relativeDayLabel (汇总行「最近一次 今天/昨天/N 天前」)
+//     ⑧ 照片指示 → meta 显示相机图标 + 张数
+//     ⑨ 日期分组头 → today/yesterday/thisWeek/thisMonth/earlier
+//     ⑩ 趋势入口 → onViewTrends callback (brand 色 + 热区≥48)
+// ============================================
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,7 +24,9 @@ import '../../../core/models/wellness_record.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
+import '../../../core/widgets/app_empty.dart';
 import '../../../core/widgets/app_list_row.dart';
+import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/b2_no_chrome.dart';
 import '../../follow_up/widgets/complete_follow_up_sheet.dart' show showAddInteractionSheet;
 import 'record_format.dart';
@@ -49,7 +37,16 @@ import 'record_format.dart';
 
 class CustomerTimelineSection extends ConsumerStatefulWidget {
   final String customerId;
-  const CustomerTimelineSection({super.key, required this.customerId});
+
+  /// ⑩ 趋势入口回调 — 主人要求在汇总行加「趋势」按钮, 点了切到分析 Tab
+  ///   (具体跳到哪个 Tab 由调用方决定, 本 widget 不持有 tab controller)
+  final VoidCallback? onViewTrends;
+
+  const CustomerTimelineSection({
+    super.key,
+    required this.customerId,
+    this.onViewTrends,
+  });
 
   @override
   ConsumerState<CustomerTimelineSection> createState() =>
@@ -61,8 +58,18 @@ class _CustomerTimelineSectionState
   /// 过滤胶囊: 全部 / 养生 / 互动 (默认「全部」, 主人诉求)
   _Filter _filter = _Filter.all;
 
-  /// 截断上限 (最多展示 20 条; 超出在列表底部一行小字提示)
-  static const int _maxRows = 20;
+  /// ⑤ 分页可见数 — 初始 20, 点「加载更多」+20; 切换 filter 时重置 20
+  static const int _pageSize = 20;
+
+  int _visibleCount = _pageSize;
+
+  void _resetVisibleCountOnFilterChange(_Filter next) {
+    if (_filter == next) return;
+    setState(() {
+      _filter = next;
+      _visibleCount = _pageSize;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,29 +94,28 @@ class _CustomerTimelineSectionState
     // 1) 养生汇总 (单行小字, fontXs + textTertiary) —— 与旧 _buildWellnessSection 同口径
     final summary = _summaryLine(wellness);
 
-    // 2) 合并 + 排序 (按时间倒序) + 截断 20
-    final timeline = _buildTimeline(
+    // 2) 合并 + 排序 (按时间倒序) + 截断到 _visibleCount
+    final timelineAll = _buildTimeline(
       wellness: wellness,
       interactions: interactions,
       filter: _filter,
-      maxRows: _maxRows,
     );
+    final timeline = timelineAll.length > _visibleCount
+        ? timelineAll.take(_visibleCount).toList()
+        : timelineAll;
 
-    // 2026-09-24 主人诉求 (第二版):
-    //   ① 「筛选和添加键与列表要整体卡片化」—— 之前工具栏/汇总在卡片外, 视觉隔离
-    //   ② 「记录列表表头不要随列表上滑而隐藏」—— 表头必须固定, 只有列表滚
-    //   ⇒ 结构 = **一张卡片**: 固定表头 (工具栏 + 汇总 + 分隔线) + 内部可滚列表。
     final list = _timelineList(
-        dict: dict,
-        timeline: timeline,
-        totalWellness: wellness.length,
-        totalInteractions: interactions.length,
-        bothLoading: asyncWellness.isLoading && asyncInteractions.isLoading,
-        firstError: asyncWellness.hasError
-            ? asyncWellness.error.toString()
-            : (asyncInteractions.hasError
-                ? asyncInteractions.error.toString()
-                : null));
+      dict: dict,
+      timeline: timeline,
+      timelineTotal: timelineAll.length,
+      totalWellness: wellness.length,
+      totalInteractions: interactions.length,
+      asyncWellness: asyncWellness,
+      asyncInteractions: asyncInteractions,
+      visibleCount: _visibleCount,
+      onLoadMore: () =>
+          setState(() => _visibleCount += _pageSize),
+    );
 
     // ── 固定表头 (不随列表滚动): 筛选下拉 + 添加记录 + 养生汇总 ──
     final header = Padding(
@@ -125,13 +131,7 @@ class _CustomerTimelineSectionState
           _toolbarRow(context),
           if (summary.isNotEmpty) ...[
             const SizedBox(height: AppSpace.s6),
-            Text(
-              summary,
-              style: const TextStyle(
-                fontSize: AppType.xs,
-                color: AppColors.textTertiary,
-              ),
-            ),
+            _summaryRowWidget(summary),
           ],
         ],
       ),
@@ -194,9 +194,6 @@ class _CustomerTimelineSectionState
   // 现合并后只占 44 + 一行间距。
   Widget _toolbarRow(BuildContext context) {
     final t = context.tokens;
-    // ⚠ 不再自带横向 padding —— 本行现在在卡片表头的 Padding 里,
-    //   再自己加一层会跟卡片内边距叠加 (旧版正是这样, 工具栏比列表多缩进 16px,
-    //   视觉上"隔离"; 主人 2026-09-24 指出要整体卡片化)。
     return Row(
       children: [
         // ── 左: 内容选择下拉 (act 模式: open menu 选中切换过滤) ──
@@ -204,7 +201,7 @@ class _CustomerTimelineSectionState
           // 锁 key: 测试与外层 `find.byKey('timelineFilterDropdown')` 共用
           key: const ValueKey('timelineFilterDropdown'),
           tooltip: '',
-          onSelected: (f) => setState(() => _filter = f),
+          onSelected: _resetVisibleCountOnFilterChange,
           position: PopupMenuPosition.under,
           itemBuilder: (ctx) => _Filter.values
               .map((f) => PopupMenuItem<_Filter>(
@@ -213,7 +210,6 @@ class _CustomerTimelineSectionState
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 当前选中项前打钩 (语义视觉, 不是颜色信号)
                         SizedBox(
                           width: AppSize.iconMd,
                           height: AppSize.iconMd,
@@ -257,11 +253,6 @@ class _CustomerTimelineSectionState
   }
 
   // ── 工具栏左: 当前过滤 + 下拉箭头 (胶囊外观) ──
-  //
-  // 高度 ≥ AppSize.controlLg (44), 圆角 AppRadius.r10, 边框 t.divider;
-  // 横向内边距 AppSpace.s12, 垂直 s8 (文字 sm 居中)。
-  // 为什么不直接套 PopupMenuButton 默认 Icon(more_vert) —— 默认箭头/图标不够清晰;
-  // 自己 child 才能精确控制「当前值 + 箭头」复合表达。
   Widget _filterDropdownChild(AppTokens t) {
     return Container(
       height: AppSize.controlLg,
@@ -290,10 +281,6 @@ class _CustomerTimelineSectionState
   }
 
   // ── 工具栏右: 「添加记录」+ 下拉箭头 (FilledButton.tonal 观感) ──
-  //
-  // FilledButton.tonal 观感: 背景 = 主题 primarySurface (浅绿), 文字 primaryDark;
-  // 实现方式 = Container + 主品牌色背景 + InkWell。
-  // 为什么不直接用 FilledButton.tonal 再叠 Icon: 高度/圆角/箭头都对不齐 (FilledButton 默认 40 高 + 字面箭头渲染固定) 。
   Widget _addRecordDropdownChild(AppTokens t) {
     return Container(
       height: AppSize.controlLg,
@@ -324,9 +311,6 @@ class _CustomerTimelineSectionState
   }
 
   // ── 添加菜单项工厂 ──
-  //
-  // 风格: 左侧图标 (颜色 t.textSecondary) + 文字 (t.textPrimary / sm);
-  // 与右按钮同高度 (controlLg) 保持整页节奏一致。
   PopupMenuItem<_AddAction> _addMenuItem(_AddAction action,
       {required IconData icon, required String label}) {
     final t = context.tokens;
@@ -355,10 +339,6 @@ class _CustomerTimelineSectionState
   }
 
   // ── 添加动作分发 ──
-  //
-  // 菜单关闭后才走 onSelected, 此时 context 仍是 widget 的 context (mounted 大概率还是 true) 。
-  // push 是异步 (Future 后仍可能在 navigator 里), 但导航是同步发起, 不会因页面销毁崩;
-  // 安全保险: push 前再 `if (context.mounted)`, showAddInteractionSheet 不需要 (showModalBottomSheet 内部检测)。
   void _handleAddAction(_AddAction a) {
     switch (a) {
       case _AddAction.wellness:
@@ -374,78 +354,355 @@ class _CustomerTimelineSectionState
     }
   }
 
+  // ── 汇总行 widget ──
+  //
+  // 设计:
+  //   · 左: 养生汇总小字 (fontXs + textTertiary)
+  //   · 右: ⑩「趋势」入口 (品牌色, 仅 summary 非空且有 onViewTrends 时出现)
+  //
+  // 「趋势」按钮:
+  //   · 视觉: 品牌色文字 + 箭头, **无卡片 / 无边框 / 无底色** (原则 4 容器越少)
+  //   · 热区: 包成 SizedBox(minHeight: tapMin=48) + InkWell (Ripple 反馈)
+  //   · 不写 MaterialTapTargetSize.padded (那是 ListTile 内部用的; InkWell + 显式
+  //     SizedBox 即可, 满足 ≥48 触摸底线)
+  Widget _summaryRowWidget(String summary) {
+    final t = context.tokens;
+    final hasTrends = widget.onViewTrends != null;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            summary,
+            style: const TextStyle(
+              fontSize: AppType.xs,
+              color: AppColors.textTertiary,
+            ),
+          ),
+        ),
+        if (hasTrends) ...[
+          const SizedBox(width: AppSpace.s8),
+          InkWell(
+            onTap: widget.onViewTrends,
+            // 直角 + 无边框: 与「列表行就该是直角的」同款
+            borderRadius: BorderRadius.circular(AppRadius.r4),
+            child: SizedBox(
+              height: AppSize.tapMin,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.s8, vertical: AppSpace.s4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '趋势',
+                      style: TextStyle(
+                        fontSize: AppType.xs,
+                        color: t.primaryDark,
+                        fontWeight: AppWeight.medium,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.s2),
+                    Icon(Icons.chevron_right,
+                        size: AppSize.iconXs, color: t.primaryDark),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   // ── 列表主体 ──
   Widget _timelineList({
     required Dictionaries? dict,
     required List<_TimelineRow> timeline,
+    required int timelineTotal,
     required int totalWellness,
     required int totalInteractions,
-    required bool bothLoading,
-    required String? firstError,
+    required AsyncValue<List<WellnessRecord>> asyncWellness,
+    required AsyncValue<List<Interaction>> asyncInteractions,
+    required int visibleCount,
+    required VoidCallback onLoadMore,
   }) {
-    // 错误优先 (任一边出错且**自己那份**为空 → 错也含蓄, 不让另一边的数据也被藏掉)
-    if (firstError != null && timeline.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
-        child: Text(
-          '加载失败: $firstError',
-          style: const TextStyle(color: AppColors.danger, fontSize: AppType.sm),
-        ),
+    // ② 两边都空且至少一边 error → ErrorState
+    //   (任一边有数据就走下面的「单边错误 → 行内错误」分支)
+    final wellnessEmpty = asyncWellness.valueOrNull == null ||
+        (asyncWellness.valueOrNull?.isEmpty ?? true);
+    final interactionsEmpty = asyncInteractions.valueOrNull == null ||
+        (asyncInteractions.valueOrNull?.isEmpty ?? true);
+    final bothEmpty = wellnessEmpty && interactionsEmpty;
+    if (bothEmpty &&
+        (asyncWellness.hasError || asyncInteractions.hasError)) {
+      final firstErr = asyncWellness.error ?? asyncInteractions.error;
+      return ErrorState(
+        error: firstErr ?? '加载失败',
+        onRetry: () {
+          ref.invalidate(customerWellnessRecordsProvider(widget.customerId));
+          ref.invalidate(interactionsForCustomerProvider(widget.customerId));
+        },
       );
     }
 
-    // 骨架 (两边都还在 loading 且**都没**数据 → 一行转圈 + 「加载中」)
-    if (bothLoading && timeline.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
-        child: Row(
-          children: [
-            const SizedBox(
-              width: AppSpace.s18,
-              height: AppSpace.s18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: AppSpace.s10),
-            Text('加载记录中...',
-                style: const TextStyle(
-                    fontSize: AppType.sm, color: AppColors.textTertiary)),
-          ],
-        ),
-      );
+    // ③ 两边都 loading 且**都**空 → AppSkeletonList (替换旧的「转圈 + 加载中」)
+    if (asyncWellness.isLoading && asyncInteractions.isLoading && bothEmpty) {
+      return const AppSkeletonList(rows: 4, dense: true);
     }
 
-    // 空态 (按当前过滤给不同文案)
+    // ① 空态 — 按当前过滤给不同文案 + action + secondaryAction
     if (timeline.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
-        child: Text(
-          _emptyTextFor(_filter, totalWellness, totalInteractions),
-          style: const TextStyle(
-              fontSize: AppType.sm, color: AppColors.textTertiary),
-        ),
-      );
+      return _emptyStateFor(_filter);
     }
 
-    // 列表 (最后一行的分割线靠 AppListRow.showDivider 默认 true 自动处理;
-    //   「共 N 条 · 只显示最近 20 条」单行小字也用 AppListRow 拼 trailing=meta
+    // ⑨ 日期分组: 把 timeline 按 today/yesterday/thisWeek/thisMonth/earlier 切片
+    //   单测覆盖在 record_format_test; 这里只组装 UI
+    final groups = _groupTimeline(timeline);
+
+    // 列表 — 行 + 分组头 + 行内错误 (单边) + 单边 loading 小字 + 加载更多 footer
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (var i = 0; i < timeline.length; i++)
-          _rowWidgetFor(timeline[i], dict,
-              showDivider: i < timeline.length - 1),
-        if (timeline.length >= _maxRows)
-          _truncatedFooter(
-            totalCount: timeline.length < _maxRows
-                ? timeline.length
-                : (_filter == _Filter.wellness
-                    ? totalWellness
-                    : _filter == _Filter.interaction
-                        ? totalInteractions
-                        : totalWellness + totalInteractions),
-          ),
+        for (var gi = 0; gi < groups.length; gi++) ...[
+          _groupHeader(groups[gi].bucket),
+          for (var ri = 0; ri < groups[gi].rows.length; ri++)
+            _rowWidgetFor(groups[gi].rows[ri], dict,
+                showDivider: !(gi == groups.length - 1 &&
+                    ri == groups[gi].rows.length - 1)),
+        ],
+        // ② 单边错误 (非空时): 行内错误行 + 仅 invalidate 出错 provider
+        ..._inlineErrorRows(
+          wellness: asyncWellness,
+          interactions: asyncInteractions,
+          filter: _filter,
+        ),
+        // ④ 单边 loading (其空且未被过滤排除): 列表尾部小字
+        ..._inlineLoadingRows(
+          wellness: asyncWellness,
+          interactions: asyncInteractions,
+          filter: _filter,
+        ),
+        // ⑤ 加载更多 footer
+        _loadMoreFooter(
+          timelineTotal: timelineTotal,
+          visibleCount: visibleCount,
+          onLoadMore: onLoadMore,
+          // ⑥ 「养生记录较多, 当前仅加载最近 50 条」条件
+          wellnessLoadedAtCap: asyncWellness.valueOrNull?.length == 50,
+        ),
       ],
     );
+  }
+
+  // ── 单边错误行 (② 列表尾部内嵌) ──
+  //
+  // 条件: 任一边 error + **该边**数据为空 + **该边未被当前 filter 排除**
+  //   · filter=all / wellness → 养生侧在视; 互动侧不在视 → 互动错误不显示
+  //   · filter=interaction → 反之
+  //   (有数据时 provider 自己的 error 已被 valueOrNull 吞掉, 走不到这里)
+  List<Widget> _inlineErrorRows({
+    required AsyncValue<List<WellnessRecord>> wellness,
+    required AsyncValue<List<Interaction>> interactions,
+    required _Filter filter,
+  }) {
+    final out = <Widget>[];
+    final showWellness = filter == _Filter.all || filter == _Filter.wellness;
+    final showInteractions =
+        filter == _Filter.all || filter == _Filter.interaction;
+    final wellnessErr = wellness.hasError &&
+        (wellness.valueOrNull == null || wellness.valueOrNull!.isEmpty);
+    final interactionsErr = interactions.hasError &&
+        (interactions.valueOrNull == null ||
+            interactions.valueOrNull!.isEmpty);
+    if (showWellness && wellnessErr) {
+      out.add(_inlineErrorLine(
+        text: '养生记录加载失败',
+        onRetry: () => ref.invalidate(
+            customerWellnessRecordsProvider(widget.customerId)),
+      ));
+    }
+    if (showInteractions && interactionsErr) {
+      out.add(_inlineErrorLine(
+        text: '互动加载失败',
+        onRetry: () => ref.invalidate(
+            interactionsForCustomerProvider(widget.customerId)),
+      ));
+    }
+    return out;
+  }
+
+  Widget _inlineErrorLine({required String text, required VoidCallback onRetry}) {
+    final t = context.tokens;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, AppSpace.s8),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline,
+              size: AppSize.iconSm, color: AppColors.danger),
+          const SizedBox(width: AppSpace.s8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: AppType.xs,
+                color: AppColors.textTertiary,
+              ),
+            ),
+          ),
+          // 重试按钮: 热区 ≥ AppSize.tapMin
+          InkWell(
+            onTap: onRetry,
+            borderRadius: BorderRadius.circular(AppRadius.r6),
+            child: SizedBox(
+              height: AppSize.tapMin,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.s10, vertical: AppSpace.s6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.refresh,
+                        size: AppSize.iconXs, color: t.primaryDark),
+                    const SizedBox(width: AppSpace.s4),
+                    Text(
+                      '重试',
+                      style: TextStyle(
+                        fontSize: AppType.xs,
+                        color: t.primaryDark,
+                        fontWeight: AppWeight.medium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 单边 loading 小字 (④) ──
+  //
+  // 条件: 一边已回数据 + 另一边 loading 且其为空 + 其未被 filter 排除
+  List<Widget> _inlineLoadingRows({
+    required AsyncValue<List<WellnessRecord>> wellness,
+    required AsyncValue<List<Interaction>> interactions,
+    required _Filter filter,
+  }) {
+    final out = <Widget>[];
+    final showWellness = filter == _Filter.all || filter == _Filter.wellness;
+    final showInteractions =
+        filter == _Filter.all || filter == _Filter.interaction;
+    final wellnessEmpty = wellness.valueOrNull == null ||
+        wellness.valueOrNull!.isEmpty;
+    final interactionsEmpty = interactions.valueOrNull == null ||
+        interactions.valueOrNull!.isEmpty;
+    if (showWellness && wellness.isLoading && wellnessEmpty) {
+      out.add(_inlineLoadingLine('养生记录加载中…'));
+    }
+    if (showInteractions && interactions.isLoading && interactionsEmpty) {
+      out.add(_inlineLoadingLine('互动加载中…'));
+    }
+    return out;
+  }
+
+  Widget _inlineLoadingLine(String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpace.pagePadding, AppSpace.s6, AppSpace.pagePadding, AppSpace.s6),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: AppType.xs + 2,
+            height: AppType.xs + 2,
+            child: CircularProgressIndicator(strokeWidth: 1.5),
+          ),
+          const SizedBox(width: AppSpace.s8),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: AppType.xs,
+              color: AppColors.textTertiary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 加载更多 footer (⑤) ──
+  //
+  // 三种形态:
+  //   · 总数 > visibleCount → 「加载更多（还有 N 条）」按钮 (热区 ≥48)
+  //   · 都显示完 + wellness.length == 50 → 「养生记录较多, 当前仅加载最近 50 条」
+  //   · 否则不显示
+  Widget _loadMoreFooter({
+    required int timelineTotal,
+    required int visibleCount,
+    required VoidCallback onLoadMore,
+    required bool wellnessLoadedAtCap,
+  }) {
+    if (timelineTotal > visibleCount) {
+      final remaining = timelineTotal - visibleCount;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.pagePadding,
+          AppSpace.s6,
+          AppSpace.pagePadding,
+          AppSpace.s10,
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: InkWell(
+            onTap: onLoadMore,
+            borderRadius: BorderRadius.circular(AppRadius.r6),
+            child: SizedBox(
+              height: AppSize.tapMin,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.s8, vertical: AppSpace.s4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '加载更多（还有 $remaining 条）',
+                      style: TextStyle(
+                        fontSize: AppType.xs,
+                        color: context.tokens.primaryDark,
+                        fontWeight: AppWeight.medium,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.s4),
+                    Icon(Icons.expand_more,
+                        size: AppSize.iconSm, color: context.tokens.primaryDark),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    if (wellnessLoadedAtCap) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.pagePadding,
+          AppSpace.s6,
+          AppSpace.pagePadding,
+          AppSpace.s12,
+        ),
+        child: Text(
+          '养生记录较多, 当前仅加载最近 50 条',
+          style: const TextStyle(
+            fontSize: AppType.xs,
+            color: AppColors.textTertiary,
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   // ── 单行 widget ──
@@ -455,19 +712,53 @@ class _CustomerTimelineSectionState
       case _Kind.wellness:
         final w = r.wellness!;
         final itemName = serviceItemName(dict, w.serviceItemId);
-        // 部位最多 2 个 (与 _recordSummary 同口径, 副文一行能装下)
         final parts = bodyPartNames(dict, w.bodyPartIds).take(2).toList();
         final delta = metricDeltaSummary(w);
-        // 「MM-dd · 部位(≤2) · 疼痛 8→3 ↓5」 —— 无指标则只到部位
-        final subtitleParts = <String>[
+        // ⑥ 下次建议日期提示 (逾期片段染 AppColors.warning)
+        final advice = adviceHint(w);
+        final isOverdue = adviceOverdue(w);
+
+        // 主副文拼接: 「MM-dd · 部位(≤2) · 疼痛 8→3 ↓5 · 建议 09-30 · 已过 3 天」
+        //   —— 用 join(' · ') 拼一个**基础串**, 但已过 N 天要变红 → 单独 build。
+        final baseParts = <String>[
           _formatDate(w.serviceDate),
           if (parts.isNotEmpty) parts.join('+'),
           if (delta.isNotEmpty) delta,
         ];
+        final baseStr = baseParts.join(' · ');
+        final subtitleText = (advice == null)
+            ? baseStr
+            : (baseStr.isEmpty ? advice : '$baseStr · $advice');
+
+        final Widget subtitle;
+        if (isOverdue && advice != null && baseStr.isNotEmpty) {
+          // 渲染「基础 · 建议 MM-dd · 已过 N 天」, 已过 N 天 染 AppColors.warning
+          final advicePrefix = advice.split('·').first.trim(); // "建议 MM-dd"
+          final overdueSuffix = advice.split('·').last.trim(); // "已过 N 天"
+          subtitle = Text.rich(
+            TextSpan(children: [
+              TextSpan(text: '$baseStr · $advicePrefix · '),
+              TextSpan(
+                text: overdueSuffix,
+                style: const TextStyle(color: AppColors.warning),
+              ),
+            ]),
+          );
+        } else {
+          subtitle = Text(subtitleText);
+        }
+
+        // ⑧ 照片指示: meta 显示相机图标 + 张数
+        final photoCount = w.photos.length;
+        final Widget? meta = photoCount > 0
+            ? _photosMeta(photoCount)
+            : null;
+
         return AppListRow(
           leading: _kindIcon(_Kind.wellness),
           title: Text(itemName ?? '养生记录'),
-          subtitle: Text(subtitleParts.join(' · ')),
+          subtitle: subtitle,
+          meta: meta,
           onTap: () => context.push('/wellness-records/${w.id}'),
           dense: true,
           showDivider: showDivider,
@@ -476,12 +767,10 @@ class _CustomerTimelineSectionState
         final i = r.interaction!;
         final typeLabel = interactionTypeLabels[i.type] ?? i.type;
         final summary = i.summary?.trim() ?? '';
-        // 「MM-dd · 内容」 —— 无内容只显示日期
         final subtitleParts = <String>[
           _formatDate(i.createdAt.toLocal().toIso8601String().split('T').first),
           if (summary.isNotEmpty) summary,
         ];
-        // 互动行无详情页 → onTap = null (整行不可点; 但仍渲染, 用于只读列表)
         return AppListRow(
           leading: _kindIcon(_Kind.interaction, typeKey: i.type),
           title: Text(typeLabel),
@@ -494,20 +783,7 @@ class _CustomerTimelineSectionState
     }
   }
 
-  Widget _truncatedFooter({required int totalCount}) {
-    // 「共 N 条 · 只显示最近 20 条」 —— 单行小字, 不与列表混排以免破坏行距
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, AppSpace.s12),
-      child: Text(
-        '共 $totalCount 条 · 只显示最近 $_maxRows 条',
-        style: const TextStyle(
-            fontSize: AppType.xs, color: AppColors.textTertiary),
-      ),
-    );
-  }
-
-  // ── 行内图标 (固定 leading, 圆形浅底色块) ──
+  // ── 行内图标 ──
   Widget _kindIcon(_Kind k, {String? typeKey}) {
     IconData icon;
     Color bg;
@@ -519,7 +795,6 @@ class _CustomerTimelineSectionState
         fg = AppPalette.amber500;
         break;
       case _Kind.interaction:
-        // 互动类型分别取; 缺省 → 「其他」
         icon = _iconForInteraction(typeKey);
         bg = AppColors.surfaceSubtle;
         fg = AppColors.textSecondary;
@@ -537,14 +812,41 @@ class _CustomerTimelineSectionState
     );
   }
 
-  // ── 汇总行 ──
+  // ── ⑧ 照片 meta (相机图标 + 张数) ──
+  //
+  // 用 Material Icons.photo_camera_outlined (实心图标, tokens 化的尺寸/颜色);
+  // 与 AppListRow 默认 meta (sm + textTertiary) 同节奏, 但内嵌图标颜色更明显。
+  Widget _photosMeta(int count) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.photo_camera_outlined,
+          size: AppSize.iconXs,
+          color: AppColors.textTertiary,
+        ),
+        const SizedBox(width: AppSpace.s2),
+        Text(
+          '$count',
+          style: const TextStyle(
+            fontSize: AppType.sm,
+            color: AppColors.textTertiary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── 汇总行 — ⑦ 相对时间「最近一次 今天/昨天/N 天前」 ──
   String _summaryLine(List<WellnessRecord> records) {
     if (records.isEmpty) return '';
     final last = records.first.serviceDate;
-    final parts = <String>['共 ${records.length} 次', '最近 $last'];
+    final relLabel = relativeDayLabel(last);
+    final lastDisplay = relLabel.isEmpty ? last : relLabel;
+
+    final parts = <String>['共 ${records.length} 次', '最近一次 $lastDisplay'];
 
     if (records.length >= 2) {
-      // 排序后算相邻差 (与 _buildWellnessSection 同口径)
       final days = records
           .map((r) => DateTime.tryParse(r.serviceDate))
           .whereType<DateTime>()
@@ -566,16 +868,81 @@ class _CustomerTimelineSectionState
     return parts.join(' · ');
   }
 
-  // ── 过滤后空态文案 ──
-  String _emptyTextFor(_Filter f, int totalWellness, int totalInteractions) {
+  // ── ① 空态 (按过滤给不同文案 + actions) ──
+  //
+  // 设计: AppEmptyState (B 档统一空态), 无装饰条/图标前缀, 原则 8「下一步做什么」;
+  //   · filter=all    → icon history, action 「记一条养生记录」+ secondary「记一笔联系」
+  //   · filter=wellness → action 「记第一条养生记录」
+  //   · filter=interaction → action 「记一笔联系」
+  Widget _emptyStateFor(_Filter f) {
     switch (f) {
       case _Filter.all:
-        return '还没有记录';
+        return AppEmptyState(
+          icon: Icons.history,
+          title: '还没有记录',
+          hint: '记录每一次到店和联系, 跟进更有依据',
+          action: FilledButton(
+            onPressed: _goNewWellnessRecord,
+            child: const Text('记一条养生记录'),
+          ),
+          secondaryAction: TextButton(
+            onPressed: _goNewInteraction,
+            child: const Text('记一笔联系'),
+          ),
+        );
       case _Filter.wellness:
-        return '还没有养生记录';
+        return AppEmptyState(
+          icon: Icons.spa_outlined,
+          title: '还没有养生记录',
+          hint: '第一次到店记下来, 后续变化一目了然',
+          action: FilledButton(
+            onPressed: _goNewWellnessRecord,
+            child: const Text('记第一条养生记录'),
+          ),
+        );
       case _Filter.interaction:
-        return '还没记过联系';
+        return AppEmptyState(
+          icon: Icons.phone_in_talk_outlined,
+          title: '还没记过联系',
+          hint: '每次电话 / 微信 / 到店都记一笔, 跟进节奏更稳',
+          action: FilledButton(
+            onPressed: _goNewInteraction,
+            child: const Text('记一笔联系'),
+          ),
+        );
     }
+  }
+
+  void _goNewWellnessRecord() {
+    if (!mounted) return;
+    if (!context.mounted) return;
+    context.push('/wellness-records/new?customerId=${widget.customerId}');
+  }
+
+  void _goNewInteraction() {
+    if (!mounted) return;
+    if (!context.mounted) return;
+    showAddInteractionSheet(context, ref, customerId: widget.customerId);
+  }
+
+  // ── ⑨ 日期分组头 (纯文字小标题, 无装饰条/色块/图标) ──
+  Widget _groupHeader(TimelineBucket bucket) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.pagePadding,
+        AppSpace.s10,
+        AppSpace.pagePadding,
+        AppSpace.s4,
+      ),
+      child: Text(
+        bucketLabel(bucket),
+        style: const TextStyle(
+          fontSize: AppType.xs,
+          color: AppColors.textTertiary,
+          fontWeight: AppWeight.medium,
+        ),
+      ),
+    );
   }
 }
 
@@ -593,7 +960,7 @@ extension on _Filter {
       };
 }
 
-/// 添加记录菜单项 (主人诉求: 点击下拉框选择添加养生记录或添加联系记录)
+/// 添加记录菜单项
 enum _AddAction { wellness, interaction }
 
 enum _Kind { wellness, interaction }
@@ -603,26 +970,49 @@ class _TimelineRow {
   final WellnessRecord? wellness;
   final Interaction? interaction;
   final DateTime sortKey; // 时间线排序键
+  final String? dateYmd; // YYYY-MM-DD (用于分组)
 
   _TimelineRow.wellness(WellnessRecord w)
       : kind = _Kind.wellness,
         interaction = null,
         wellness = w,
-        sortKey = DateTime.tryParse(w.serviceDate) ?? w.createdAt.toLocal();
+        sortKey = DateTime.tryParse(w.serviceDate) ?? w.createdAt.toLocal(),
+        dateYmd = w.serviceDate;
 
   _TimelineRow.interaction(Interaction i)
       : kind = _Kind.interaction,
         wellness = null,
         interaction = i,
-        sortKey = i.createdAt.toLocal();
+        sortKey = i.createdAt.toLocal(),
+        dateYmd = i.createdAt.toLocal().toIso8601String().split('T').first;
 }
 
-/// 混合 + 过滤 + 排序 + 截断 (纯函数, 容易单测)
+/// ⑨ 分组结果 — 一个桶 + 桶内行
+class _GroupedRows {
+  final TimelineBucket bucket;
+  final List<_TimelineRow> rows;
+  const _GroupedRows(this.bucket, this.rows);
+}
+
+/// ⑨ 按日期分组 (按桶顺序 today→...→earlier; 桶内保持原时间倒序)
+List<_GroupedRows> _groupTimeline(List<_TimelineRow> rows) {
+  final grouped = <TimelineBucket, List<_TimelineRow>>{
+    for (final b in kBucketOrderDesc) b: <_TimelineRow>[],
+  };
+  for (final r in rows) {
+    grouped[bucketOf(r.dateYmd)]!.add(r);
+  }
+  return <_GroupedRows>[
+    for (final b in kBucketOrderDesc)
+      if (grouped[b]!.isNotEmpty) _GroupedRows(b, grouped[b]!),
+  ];
+}
+
+/// 混合 + 过滤 + 排序 (纯函数, 容易单测)
 List<_TimelineRow> _buildTimeline({
   required List<WellnessRecord> wellness,
   required List<Interaction> interactions,
   required _Filter filter,
-  required int maxRows,
 }) {
   final list = <_TimelineRow>[];
   if (filter == _Filter.all || filter == _Filter.wellness) {
@@ -636,7 +1026,6 @@ List<_TimelineRow> _buildTimeline({
     }
   }
   list.sort((a, b) => b.sortKey.compareTo(a.sortKey));
-  if (list.length > maxRows) return list.take(maxRows).toList();
   return list;
 }
 
@@ -656,7 +1045,7 @@ IconData _iconForInteraction(String? typeKey) {
   }
 }
 
-/// 「YYYY-MM-DD」 → 「MM-dd」 (副文里省 5 个字符, 与旧版同口径)
+/// 「YYYY-MM-DD」 → 「MM-dd」 (副文里省 5 个字符)
 String _formatDate(String serviceDate) {
   final d = DateTime.tryParse(serviceDate);
   if (d == null) return serviceDate;

@@ -80,7 +80,9 @@ export function MobileBottomTab() {
           "pb-[env(safe-area-inset-bottom)]"
         )}
       >
-        <div className="grid grid-cols-5 h-16">
+        {/* h-nav = 令牌 --size-nav-bar-height (56px, 与 Flutter AppSize.navBarHeight 同源)。
+            改前是写死的 h-16(64px) 且与 Flutter 的 80pt 不一致 —— 2026-09-24 统一 */}
+        <div className="grid grid-cols-5 h-nav">
           {PRIMARY_TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = tab.exact

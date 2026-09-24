@@ -368,19 +368,21 @@ class _MainShell extends StatelessWidget {
           }
         },
         destinations: const [
+          // 图标尺寸走 navigationBarTheme.iconTheme (AppSize.iconLg = 24)。
+          // 不在这里写 size —— 写死的 size 会顶掉主题，且 bar 压到 56pt 后 28pt 图标会挤掉标签
           NavigationDestination(
-            icon: Icon(Icons.people_outline, size: AppSize.iconXl),
-            selectedIcon: Icon(Icons.people, size: AppSize.iconXl),
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
             label: '客户',
           ),
           NavigationDestination(
-            icon: Icon(Icons.event_outlined, size: AppSize.iconXl),
-            selectedIcon: Icon(Icons.event, size: AppSize.iconXl),
+            icon: Icon(Icons.event_outlined),
+            selectedIcon: Icon(Icons.event),
             label: '沙龙',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outline, size: AppSize.iconXl),
-            selectedIcon: Icon(Icons.person, size: AppSize.iconXl),
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
             label: '我的',
           ),
         ],

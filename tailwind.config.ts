@@ -195,6 +195,8 @@ const config: Config = {
         "control-lg": "var(--size-control-lg)",
         tap: "var(--size-tap-min)",
         fab: "var(--size-fab-size)",
+        // 底栏高度 (B 档 56px; 与 Flutter AppSize.navBarHeight 同源同值)
+        nav: "var(--size-nav-bar-height)",
       },
       width: {
         "control-sm": "var(--size-control-sm)",

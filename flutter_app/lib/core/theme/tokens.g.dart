@@ -232,6 +232,7 @@ abstract final class AppSize {
   static const double avatarMd = 44.0;
   static const double avatarLg = 64.0;
   static const double appBarHeight = 52.0;
+  static const double navBarHeight = 56.0;
   static const double borderHairline = 1.0;
   static const double borderThick = 2.0;
   static const double badgeMinWidth = 16.0;

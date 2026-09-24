@@ -1108,14 +1108,15 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
           ),
         ),
         const SizedBox(height: AppSpace.s8),
-        // 快捷档位 (2026-09-24): 实际业务里 80% 是 7/14/30 天后, 比开日期选择器快 3 步
+        // 快捷档位 (2026-09-24 主人拍: 明天 / 3 天后 / 7 天后 / 10 天后)
+        //   —— 实际回访节奏基本落在这四档, 比开日期选择器快 3 步
         Wrap(
           spacing: AppSpace.s8,
           runSpacing: AppSpace.s4,
           children: [
-            for (final d in const [7, 14, 30])
+            for (final d in const [1, 3, 7, 10])
               ChoiceChip(
-                label: Text('$d 天后',
+                label: Text(d == 1 ? '明天' : '$d 天后',
                     style: const TextStyle(fontSize: AppTheme.fontSm)),
                 selected: _nextAdviceDate != null &&
                     _sameDay(_nextAdviceDate!,
