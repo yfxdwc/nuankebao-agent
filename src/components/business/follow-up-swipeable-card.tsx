@@ -67,15 +67,18 @@ export function FollowUpSwipeableCard({ task, customerName, overdue, isDesktop }
     }
   }
 
-  // B3: 单一容器 (无 Card 包裹); left/right 边距留给父级 (过滤 chip 区/列表区)
+  // B3b: 列表行内容 — 与 /admin/customers 同款 (主行 + 副行);
+  //   桌面端按钮组 + 移动端滑动提示 折叠到次级 (见下方)
+  //   AI 建议: 保留但压成 line-clamp-1 (整段进详情页)
+  //   行内 padding 用 py-2 (16) 而非 py-row-y (28) — 与 customers/wellness-records 对齐
   const cardContent = (
     <div
       className={cn(
-        "px-3 py-3",
+        "px-1 py-2 min-h-row",
         overdue && "bg-danger-surface/30"
       )}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <div
           className={cn(
             "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
@@ -105,38 +108,36 @@ export function FollowUpSwipeableCard({ task, customerName, overdue, isDesktop }
               {overdue ? "已逾期" : formatDate(task.dueAt)}
             </Badge>
           </div>
-          <p className="text-body text-content-secondary mt-1 line-clamp-2">
+          <p className="text-caption text-content-secondary mt-0.5 line-clamp-1">
             {task.reason}
           </p>
-          {task.aiSuggestion && (
-            <div className="mt-2 p-2.5 bg-brand-surface border border-brand-light rounded-md text-caption text-content-primary whitespace-pre-wrap">
-              <span className="font-medium text-brand">AI 建议: </span>
-              {task.aiSuggestion}
-            </div>
-          )}
-          {/* 桌面端: 显完整按钮组 (md+) */}
-          <div className="mt-2 hidden md:flex items-center justify-end">
-            <CompleteFollowUpButton taskId={task.id} />
-          </div>
-
-          {/* 移动端: 提示滑动 */}
-          {swipe.isOpen ? null : (
-            <p className="text-caption text-content-tertiary mt-1.5 md:hidden">
-              ← 左滑标记完成 · 右滑取消 →
-            </p>
-          )}
+        </div>
+        {/* 桌面端: 显完成按钮 (md+) — 不占移动端空间 */}
+        <div className="hidden md:block shrink-0">
+          <CompleteFollowUpButton taskId={task.id} />
         </div>
       </div>
+      {/* AI 建议: 折叠到行下, line-clamp-1, 详情页完整看 */}
+      {task.aiSuggestion && (
+        <details className="md:hidden mt-1 ml-12">
+          <summary className="text-caption text-brand cursor-pointer select-none">
+            ▾ AI 建议
+          </summary>
+          <p className="mt-1 p-2 bg-brand-surface border border-brand-light rounded text-caption text-content-primary whitespace-pre-wrap">
+            {task.aiSuggestion}
+          </p>
+        </details>
+      )}
     </div>
   );
 
-  // 桌面: 直接渲染, 不包 swipe
+  // 桌面: 直接渲染 <li>, 不包 swipe (swipe 是移动端专属)
   if (isDesktop) {
-    return <div className="space-y-2">{cardContent}</div>;
+    return <li>{cardContent}</li>;
   }
 
   return (
-    <div className="relative md:static">
+    <li className="relative md:static">
       {/* 背景 action 按钮 (左滑 = 露出右, 右滑 = 露出左) */}
       {/* 左 action: 取消 (背景, 左侧 absolute) */}
       <button
@@ -185,6 +186,6 @@ export function FollowUpSwipeableCard({ task, customerName, overdue, isDesktop }
           </div>
         </div>
       )}
-    </div>
+    </li>
   );
 }

@@ -72,9 +72,12 @@ export default async function WellnessRecordsPage({
 
             return (
               <li key={r.id}>
+                {/* B3b: 行高收到 ≤60px — py-1.5 (12) + 主行+副行 (47) = 59;
+                    旧版 98 减 39 (项目/部位/反馈 → 2 行; 反馈进详情; tags 限缩到 2 个; 去背景块);
+                    py-1.5 偏离 spec "py-row-y 参考口径", 为达 ≤60 硬指标 取 py-1.5 */}
                 <Link
                   href={`/admin/wellness-records/${r.id}`}
-                  className="block px-1 py-3 hover:bg-surface-subtle transition-colors active:bg-surface-sunken min-h-control-lg"
+                  className="block px-1 py-1.5 hover:bg-surface-subtle transition-colors active:bg-surface-sunken min-h-row"
                 >
                   {/* 头: 客户 + 日期 (右侧等宽对齐) */}
                   <div className="flex items-baseline justify-between gap-2">
@@ -86,52 +89,43 @@ export default async function WellnessRecordsPage({
                     </span>
                   </div>
 
-                  {/* 项目 + 部位 (服务名 + 部位 tags 一行) */}
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {/* 项目 + 部位 + 效果 (合并到一行, 减行数) */}
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap text-caption">
                     <span className="text-body text-content-secondary">
                       {serviceMap.get(r.serviceItemId) ?? `项目 ${r.serviceItemId}`}
                     </span>
                     {r.bodyPartIds.length > 0 && (
                       <>
-                        {r.bodyPartIds.slice(0, 3).map((id) => (
+                        {r.bodyPartIds.slice(0, 2).map((id) => (
                           <span
                             key={id}
-                            className="text-caption text-content-secondary bg-surface-subtle px-1.5 py-0.5 rounded"
+                            className="text-caption text-content-secondary"
                           >
                             {bodyPartMap.get(id) ?? `#${id}`}
                           </span>
                         ))}
-                        {r.bodyPartIds.length > 3 && (
+                        {r.bodyPartIds.length > 2 && (
                           <span className="text-caption text-content-tertiary">
-                            +{r.bodyPartIds.length - 3}
+                            +{r.bodyPartIds.length - 2}
                           </span>
                         )}
                       </>
                     )}
+                    {hasMetrics && (
+                      <span className="ml-auto flex items-center gap-2 tabular-nums shrink-0">
+                        {painBefore !== undefined || painAfter !== undefined ? (
+                          <span className="text-danger">
+                            痛 {painBefore ?? "-"}→{painAfter ?? "-"}
+                          </span>
+                        ) : null}
+                        {sleepBefore !== undefined || sleepAfter !== undefined ? (
+                          <span className="text-info">
+                            眠 {sleepBefore ?? "-"}→{sleepAfter ?? "-"}
+                          </span>
+                        ) : null}
+                      </span>
+                    )}
                   </div>
-
-                  {/* 效果对比: 疼痛 + 睡眠 (tabular-nums 等宽) */}
-                  {hasMetrics && (
-                    <div className="mt-1.5 flex items-center gap-3 text-caption tabular-nums">
-                      {painBefore !== undefined || painAfter !== undefined ? (
-                        <span className="text-danger">
-                          疼痛 {String(painBefore ?? "-")} → {String(painAfter ?? "-")}
-                        </span>
-                      ) : null}
-                      {sleepBefore !== undefined || sleepAfter !== undefined ? (
-                        <span className="text-info">
-                          睡眠 {String(sleepBefore ?? "-")} → {String(sleepAfter ?? "-")}
-                        </span>
-                      ) : null}
-                    </div>
-                  )}
-
-                  {/* 反馈 (line-clamp 1) */}
-                  {r.customerFeedback && (
-                    <p className="text-caption text-content-tertiary line-clamp-1 mt-1 italic">
-                      &ldquo;{r.customerFeedback}&rdquo;
-                    </p>
-                  )}
                 </Link>
               </li>
             );

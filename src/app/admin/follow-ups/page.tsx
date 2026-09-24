@@ -123,7 +123,9 @@ export default async function FollowUpsPage({
           {activeFilter === "all" && "暂无待跟进任务"}
         </div>
       ) : (
-        <div className="space-y-2 md:space-y-3">
+        /* B3b: 统一行列表 — divide-y 分隔线 (与 customers/wellness-records 同一套);
+           每行 = FollowUpSwipeableCard 内部包成 <li>, swipe 手势保留 (absolute 不影响 divide-y) */
+        <ul className="divide-y divide-divider">
           {filtered.map((t) => {
             const customer = customerMap.get(t.customerId);
             const dueMs = new Date(t.dueAt).getTime();
@@ -146,7 +148,7 @@ export default async function FollowUpsPage({
               />
             );
           })}
-        </div>
+        </ul>
       )}
 
       <div className="h-16 md:hidden" aria-hidden="true" />

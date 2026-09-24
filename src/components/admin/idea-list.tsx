@@ -204,14 +204,14 @@ export function IdeaList() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="一句话记一下这个想法..."
-            className="flex-1 h-10 px-3 rounded-md border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="flex-1 h-10 px-3 rounded-md border border-border bg-background text-body-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             disabled={creating}
             maxLength={200}
           />
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="h-10 px-3 rounded-md border border-border bg-background text-sm text-muted-foreground hover:bg-muted transition-colors"
+            className="h-10 px-3 rounded-md border border-border bg-background text-body-lg text-muted-foreground hover:bg-muted transition-colors"
             aria-label={expanded ? "收起描述" : "展开描述"}
             disabled={creating}
           >
@@ -220,7 +220,7 @@ export function IdeaList() {
           <button
             type="submit"
             disabled={creating || !title.trim()}
-            className="h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="h-10 px-4 rounded-md bg-primary text-primary-foreground text-body-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             <Plus className="h-4 w-4" />
             新增
@@ -233,7 +233,7 @@ export function IdeaList() {
             placeholder="详细描述 (可空)"
             rows={3}
             maxLength={5000}
-            className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            className="w-full px-3 py-2 rounded-md border border-border bg-background text-body-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
             disabled={creating}
           />
         )}
@@ -250,7 +250,7 @@ export function IdeaList() {
               aria-selected={active}
               onClick={() => setTab(t.key)}
               className={cn(
-                "px-3 py-1.5 text-sm font-medium rounded-t-md transition-colors",
+                "px-3 py-1.5 text-body-lg font-medium rounded-t-md transition-colors",
                 active
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -264,16 +264,16 @@ export function IdeaList() {
 
       {/* ===== 错误提示 ===== */}
       {error && (
-        <div className="rounded-md border border-warning/40 bg-warning-surface p-3 text-sm">
+        <div className="rounded-md border border-warning/40 bg-warning-surface p-3 text-body">
           <div className="font-medium text-warning-foreground">⚠ {error}</div>
         </div>
       )}
 
       {/* ===== 列表 (1px 分隔线分组, 不套 Card) ===== */}
       {loading ? (
-        <p className="text-sm text-muted-foreground py-4">加载中...</p>
+        <p className="text-body text-muted-foreground py-4">加载中...</p>
       ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4">
+        <p className="text-body text-muted-foreground py-4">
           {tab === "open"
             ? "还没有待办的想法 — 上方记一条?"
             : tab === "done"
@@ -296,7 +296,7 @@ export function IdeaList() {
                 <div className="flex items-start gap-3 flex-wrap">
                   <p
                     className={cn(
-                      "flex-1 min-w-0 text-sm font-medium",
+                      "flex-1 min-w-0 text-body-lg font-medium",
                       isDone
                         ? "text-muted-foreground line-through"
                         : isDiscarded
@@ -351,7 +351,7 @@ export function IdeaList() {
                 {it.description && (
                   <div className="pl-1">
                     {descShown ? (
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      <p className="text-body text-muted-foreground whitespace-pre-wrap">
                         {it.description}
                       </p>
                     ) : null}

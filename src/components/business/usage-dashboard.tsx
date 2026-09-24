@@ -214,19 +214,53 @@ export function UsageDashboard() {
     if (next && rawEvents.length === 0) void loadRaw();
   };
 
+  // B3b: 把 PageHeader 拉到所有状态前面 (loading / error / 加载完都有 h1),
+  //   其它页面 (customers/wellness-records) 已经是这种结构; 这里之前只在数据加载完后
+  //   才挂 PageHeader, 非 admin 用户看错误态时整页没 h1 (探针测出 h1Count = 0)
+  const header = (
+    <PageHeader
+      title="使用数据"
+      description="真实用户行为 (release APK 上报; 只记 ID/枚举/计数, 无客户隐私内容)"
+      actions={
+        <div className="flex gap-2">
+          {[7, 30, 90].map((d) => (
+            <button
+              key={d}
+              onClick={() => setDays(d)}
+              className={cn(
+                "h-11 rounded-md px-4 text-body-lg font-medium transition-colors min-h-control",
+                days === d
+                  ? "bg-brand text-brand-foreground"
+                  : "bg-surface-subtle text-content-secondary hover:bg-surface-sunken"
+              )}
+            >
+              近 {d} 天
+            </button>
+          ))}
+        </div>
+      }
+    />
+  );
+
   if (error) {
     return (
-      <div className="rounded-md border border-danger/30 bg-danger-surface p-4 text-body text-danger">
-        {error}
+      <div className="space-y-section-y">
+        {header}
+        <div className="rounded-md border border-danger/30 bg-danger-surface p-4 text-body text-danger">
+          {error}
+        </div>
       </div>
     );
   }
 
   if (!overview) {
     return (
-      <p className="py-12 text-center text-body text-content-secondary">
-        {loading ? "加载中..." : "暂无数据"}
-      </p>
+      <div className="space-y-section-y">
+        {header}
+        <p className="py-12 text-center text-body text-content-secondary">
+          {loading ? "加载中..." : "暂无数据"}
+        </p>
+      </div>
     );
   }
 
@@ -235,29 +269,7 @@ export function UsageDashboard() {
 
   return (
     <div className="space-y-section-y">
-      {/* PageHeader + 时间范围 (右对齐 action) */}
-      <PageHeader
-        title="使用数据"
-        description="真实用户行为 (release APK 上报; 只记 ID/枚举/计数, 无客户隐私内容)"
-        actions={
-          <div className="flex gap-2">
-            {[7, 30, 90].map((d) => (
-              <button
-                key={d}
-                onClick={() => setDays(d)}
-                className={cn(
-                  "h-11 rounded-md px-4 text-body-lg font-medium transition-colors min-h-control",
-                  days === d
-                    ? "bg-brand text-brand-foreground"
-                    : "bg-surface-subtle text-content-secondary hover:bg-surface-sunken"
-                )}
-              >
-                近 {d} 天
-              </button>
-            ))}
-          </div>
-        }
-      />
+      {header}
 
       {!hasData && (
         <div className="rounded-md border border-dashed border-divider p-6 text-body text-content-secondary">

@@ -77,7 +77,7 @@ const CardDescription = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("text-sm text-content-tertiary", className)} {...props} />
+  <div ref={ref} className={cn("text-body text-content-tertiary", className)} {...props} />
 ));
 CardDescription.displayName = "CardDescription";
 
@@ -114,7 +114,7 @@ const ListRow = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <li
     ref={ref}
-    className={cn("p-4 transition-colors hover:bg-surface-subtle", className)}
+    className={cn("p-3 transition-colors hover:bg-surface-subtle", className)}
     {...props}
   />
 ));

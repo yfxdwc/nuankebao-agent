@@ -67,19 +67,15 @@ export default async function InteractionsPage() {
           暂无联系记录
         </div>
       ) : (
+        /* B3b: 统一行列表 — divide-y 分隔线 (与 customers/wellness-records/follow-ups 同一套);
+           原 timeline 视觉改为行内 icon leading element (小图标 + 主行 + 副时间), 保留分组标题 */
         <div className="space-y-section-y">
           {groups.map(([dateKey, items]) => (
             <Section
               key={dateKey}
               title={`${relativeDay(dateKey, today)} · ${dateKey}`}
             >
-              {/* 时间线 (左侧竖线 + 节点圆点), 内容用 divide-y 分隔线列表 (无 Card) */}
-              <ol className="relative ml-3 md:ml-4">
-                {/* 竖线 */}
-                <div
-                  className="absolute left-2.5 md:left-3 top-3 bottom-3 w-px bg-divider"
-                  aria-hidden="true"
-                />
+              <ul className="divide-y divide-divider">
                 {items.map((i) => {
                   const meta = TYPE_META[i.type] ?? TYPE_META.other;
                   const Icon = meta.icon;
@@ -88,43 +84,41 @@ export default async function InteractionsPage() {
                     .split("T")[1]
                     ?.slice(0, 5); // HH:MM
                   return (
-                    <li
-                      key={i.id.toString()}
-                      className="relative pl-8 md:pl-10 py-3 first:pt-0 last:pb-0"
-                    >
-                      {/* 节点圆点 */}
-                      <div
-                        className={cn(
-                          "absolute left-0 top-3 h-5 w-5 md:h-6 md:w-6 rounded-full flex items-center justify-center ring-2 ring-background",
-                          meta.tone
-                        )}
-                        aria-hidden="true"
-                      >
-                        <Icon className="h-3 w-3 md:h-3.5 md:w-3.5" />
-                      </div>
-                      {/* 内容 (无 bg-card border 包裹; 同质列表 = divide-y) */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-body-lg text-content-primary">
-                            {meta.label}
-                          </span>
-                          <span className="text-caption text-content-tertiary tabular-nums">
-                            客户 #{i.customerId.toString()}
-                          </span>
+                    <li key={i.id.toString()} className="py-2 min-h-row">
+                      <div className="flex items-center gap-3">
+                        {/* 行内 icon leading (替代原 timeline 竖线 + 圆点) */}
+                        <div
+                          className={cn(
+                            "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
+                            meta.tone
+                          )}
+                          aria-hidden="true"
+                        >
+                          <Icon className="h-4 w-4" />
                         </div>
-                        <span className="text-caption text-content-tertiary tabular-nums shrink-0">
-                          {time}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-body-lg text-content-primary truncate">
+                              {meta.label}
+                              <span className="text-caption text-content-tertiary ml-1.5 tabular-nums">
+                                客户 #{i.customerId.toString()}
+                              </span>
+                            </span>
+                            <span className="text-caption text-content-tertiary tabular-nums shrink-0">
+                              {time}
+                            </span>
+                          </div>
+                          {i.summaryEncrypted && (
+                            <p className="text-caption text-content-tertiary mt-0.5 italic line-clamp-1">
+                              (内容已加密,详情见客户详情页)
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      {i.summaryEncrypted && (
-                        <p className="text-caption text-content-tertiary mt-1 italic">
-                          (内容已加密,详情见客户详情页)
-                        </p>
-                      )}
                     </li>
                   );
                 })}
-              </ol>
+              </ul>
             </Section>
           ))}
         </div>

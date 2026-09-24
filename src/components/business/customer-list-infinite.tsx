@@ -110,6 +110,9 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
   return (
     <>
       {/* B3: 同质列表 = divide-y 分隔线, 不再包 border + bg-card (反 SaaS 观感) */}
+      {/* B3b: 行高尽量压到 ≤60 — h-9 头像 + 主/副行; tags 移到详情页 (3 行→2 行);
+         py-2 (16) + 2 行 (42) = 58; py-row-y (28) 太撑 (70), 这里为达 ≤60 用 py-2 (中剑)
+         spec 说"py-row-y 参考口径", 但 ≤60 是硬指标, 此处偏离 spec (走轻 padding) */}
       <ul className="divide-y divide-divider">
         {items.map((customer) => (
           <Link
@@ -117,10 +120,9 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
             href={`/admin/customers/${customer.id}`}
             className="block hover:bg-surface-subtle transition-colors active:bg-surface-sunken"
           >
-            {/* B3: min-h-control-lg 行高 (44px) 兜底热区, 移动/桌面统一 */}
-            <div className="px-1 py-3 min-h-control-lg flex items-start gap-3">
+            <div className="px-1 py-2 min-h-row flex items-center gap-3">
                 <div
-                  className="h-10 w-10 rounded-full bg-brand-surface text-brand flex items-center justify-center text-body-lg font-medium shrink-0"
+                  className="h-9 w-9 rounded-full bg-brand-surface text-brand flex items-center justify-center text-body-lg font-medium shrink-0"
                   aria-hidden="true"
                 >
                   {customer.name.slice(0, 1)}
@@ -138,7 +140,7 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                           : "-"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-caption text-content-secondary mt-0.5">
+                  <div className="flex items-center gap-1.5 text-caption text-content-secondary">
                     <Phone className="h-3 w-3 shrink-0" />
                     <span className="truncate tabular-nums">
                       {customer.phone.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2")}
@@ -147,23 +149,6 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                       {customer.createdAt.split("T")[0]}
                     </span>
                   </div>
-                  {customer.healthTags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {customer.healthTags.slice(0, 2).map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-caption text-content-secondary bg-surface-subtle px-1.5 py-0.5 rounded"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                      {customer.healthTags.length > 2 && (
-                        <span className="text-caption text-content-tertiary self-center">
-                          +{customer.healthTags.length - 2}
-                        </span>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
           </Link>

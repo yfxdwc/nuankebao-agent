@@ -4,7 +4,9 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  // B3b: 字号档位收口 — 走语义令牌 (text-body-lg / text-body),
+  // 不再裸用 Tailwind text-sm (14px, 非令牌档位, 与 Flutter AppType.md(15) 不齐)
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-body-lg font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
@@ -21,7 +23,8 @@ const buttonVariants = cva(
       size: {
         // B 档: 主按钮 = tapMin = 48 (Material 标准 + 视觉/热区一致)
         default: "h-tap px-5 py-2",
-        sm: "h-control px-3 text-sm",
+        // sm 仍走 13px (text-body), 与正文齐, 不再退到 14px 越档
+        sm: "h-control px-3 text-body",
         lg: "h-control-lg px-8",
         icon: "h-tap w-tap",
       },
