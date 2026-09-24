@@ -2,6 +2,60 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 修「标记完成」400 契约错位 (2026-09-24)
+
+主人 2026-09-24 反馈: 客户详情「跟进任务」点「标记完成」报错。后端日志实证
+`PATCH /api/follow-ups/38 400` (两次)。
+
+### 根因
+
+- **后端契约 (唯一真相源)** = `src/app/api/follow-ups/[id]/route.ts::CompleteSchema` (Zod):
+  `{ action: 'complete' | 'cancel', notes?: string }`。
+- **web admin 正确** = `src/components/business/complete-follow-up-button.tsx` 已按上面契约发。
+- **Flutter 客户端发错了** = `flutter_app/lib/core/services/api.dart::FollowUpService`:
+  - 旧 `complete()` 发 `{status:'done', completedNotes: notes}` → Zod 拒 (没 `action` 字段) → **400**。
+  - 旧 `cancel()` 发 `{status:'cancelled'}` → 同上 → **400**。
+- 两个调用点都跟着错: `modules/follow_up/screens/follow_ups_page.dart:129`
+  + `modules/customer/widgets/customer_activity_cards.dart:162`。
+
+### 修法 (只动 Flutter 客户端; 后端不动)
+
+| 文件 | 改动 | 说明 |
+|---|---|---|
+| `flutter_app/lib/core/services/api.dart::FollowUpService.complete` | body 改为 `{action:'complete', if (notes!=null && notes.isNotEmpty) 'notes': notes}` | notes 空串/缺省不写键 (后端 optional, 写空串无意义 + 占日志) |
+| `flutter_app/lib/core/services/api.dart::FollowUpService.cancel` | body 改为 `{action:'cancel'}` | 不传 status/completedNotes |
+| `flutter_app/lib/core/services/api.dart::FollowUpService` | 加块注释 | 写明"2026-09-24 契约错位修复, 改本文件必须同步 web 端 `complete-follow-up-button.tsx` + 后端 Zod schema, 三者一字对上" |
+| `flutter_app/test/follow_up_service_test.dart` | **新建** (3 例) | 假 `HttpClientAdapter` 抓请求; 反向断言 body **不**含 `status` / `completedNotes` 键 (旧错形状回归保护) |
+
+### 真 API 冒烟证据 (localhost:3003, 凭证 t_ad 表示凭证已隐去)
+
+| 步骤 | 凭证 | 备注 |
+|---|---|---|
+| 1. `POST /api/auth/flutter-login` | t_ad | `cookieName=authjs.session-token`, sessionToken len=457 |
+| 2. `GET /api/customers?limit=1` | t_ad | customerId=740 |
+| 3. `POST /api/follow-ups` | t_ad | 新建 taskId=39 (reason='smoke 契约验证(可删)') |
+| 4. `PATCH /api/follow-ups/39` body `{"action":"complete"}` | t_ad | **HTTP 200**, response `status: 'done'`, `completedAt` 已写 |
+| 4b. 再 PATCH 一次 | t_ad | **HTTP 404** `{"error":"Not found or already completed"}` (语义正确, 不是 400) |
+| Bonus. `POST` 新建 taskId=40 → `PATCH {"action":"cancel"}` | t_ad | **HTTP 200**, response `status: 'cancelled'` |
+| 反向证据. `PATCH {"status":"done","completedNotes":"x"}` | t_ad | **HTTP 400**, Zod 报错 `"expected: 'complete' \| 'cancel', received: undefined, path: ['action'], message: Required"` —— 与主人描述"报错"完全一致 |
+| 清理. `DELETE FROM follow_up_task WHERE id IN (39,40,41)` | t_ad | DELETE 3 |
+
+### 验证结果
+
+- `flutter analyze lib test` → 0 issue (128 个 flutter analyze 报的"issue"全在
+  `tools/font-weight-probe/lib/main.dart`, 跟 lib/test 无关, 属历史探针目录,
+  本次不动)
+- `flutter test` → 365/365 全绿 (含 3 例新契约测试)
+- `tools/check-ui-tokens.sh --strict` → exit 0 (无新增硬编码色/字/间距, 不加 Card)
+
+### 同步责任 (写在代码注释里, 也会进 ADR 草稿)
+
+- 改 `api.dart` 的 `complete/cancel` body → 必须**同时**对照 web 端 `complete-follow-up-button.tsx`
+  + 后端 `route.ts::CompleteSchema`, 三者一字对上, 否则客户端发 Zod 又拒 (老 APK 不能
+  下发新版 web; web 不能下发新版 APK, 但 dev 改了 schema 必须同步两边)。
+- 老 APK 在用户手机上**不会自动更新**: 真要全员可用, 还得排一次"重 build APK + 走
+  §5 APK 分发 SOP (`cp ... data/prod/downloads/NUANKEBAO-release.apk`)"。
+
 ## [Unreleased] — 任务"当天到期"不再是已过期 (2026-09-24)
 
 主人 2026-09-24 反馈: 行动卡点「建任务」后, 任务**创建时**就被标成「已过期」,

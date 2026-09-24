@@ -425,16 +425,22 @@ class FollowUpService {
     return FollowUpTask.fromJson(res.data as Map<String, dynamic>);
   }
 
+  // 2026-09-24 契约错位修复: 旧版发 {status, completedNotes} → 后端 Zod 400
+  // 后端契约 (src/app/api/follow-ups/[id]/route.ts::CompleteSchema) 只接受
+  //   { action: 'complete' | 'cancel', notes?: string }
+  // web 端 (src/components/business/complete-follow-up-button.tsx) 已按契约发送。
+  // 改本文件后必须**同步** 改 web 端契约 (两边共用 schema 一致);
+  // 否则老 APK / 老 web 端仍按旧字段发, 后端 400, 错误复发。
   Future<FollowUpTask> complete(String id, {String? notes}) async {
     final res = await _dio.patch('/follow-ups/$id', data: {
-      'status': 'done',
-      if (notes != null) 'completedNotes': notes,
+      'action': 'complete',
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
     });
     return FollowUpTask.fromJson(res.data as Map<String, dynamic>);
   }
 
   Future<FollowUpTask> cancel(String id) async {
-    final res = await _dio.patch('/follow-ups/$id', data: {'status': 'cancelled'});
+    final res = await _dio.patch('/follow-ups/$id', data: {'action': 'cancel'});
     return FollowUpTask.fromJson(res.data as Map<String, dynamic>);
   }
 }
