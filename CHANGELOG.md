@@ -2,6 +2,86 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — UI 全面升级 (B0–B4, 2026-09-22~24)
+
+主人 2026-09-22 拍: 「下一波主要针对 UI 升级」。五天 5 批落地, 本条汇总。
+
+### 风格定名: 「**暖精确**」 (warm + 紧凑专业, B 档)
+
+- 气质 = **微信 × Linear × Things 3** —— 简洁 + 克制 + 信息密度高
+- 反 vibe: SaaS 风 (销售漏斗/冷色调/dashboard 复杂图表/炫技动画/暗色主题)
+- 完整规格: [docs/ui-principles.md](docs/ui-principles.md) (§1 五条原则 + §2 B 档规格)
+
+### 组件语言层 (两批, 双向同步)
+
+| 组件 | Flutter (`flutter_app/lib/core/widgets/`) | Web (`src/components/ui/`) |
+|---|---|---|
+| 列表行 | `AppListRow` (60/52 dense, 无 Card) | `ListRow` (shadcn 风格化) |
+| 区块 | `AppSection` / `AppSectionHeader` | `section.tsx` / `page-header.tsx` |
+| 键值对 | `AppStatRow` / `AppStatGroup` | `stat-row.tsx` |
+| 弹层头 | `AppSheetHeader` | — (弹层走 shadcn Dialog 兼容层) |
+| 徽章 | `AppBadge` (7 tone: neutral/brand/success/warning/danger/info/gold) | `badge.tsx` |
+| 空态 | `AppEmptyState` / `LoadingState` / `ErrorState` | `empty-state.tsx` |
+| 骨架 | `AppSkeleton` / `AppSkeletonList` | `skeleton.tsx` |
+| 表格 | — | `data-table.tsx` (B 档紧凑专业) |
+| 筛选 | — | `filter-bar.tsx` |
+
+**任一端遗漏 = UI 漂移**; 改两边都用同一令牌 (`design/tokens/design-tokens.json` 真源)。
+
+### 范围 (5 批)
+
+| 批 | 范围 | 状态 |
+|---|---|---|
+| **B0a** | Flutter 7 个核心组件 + Material 3 主题装配 + AppTheme.light() | ✅ 2026-09-22 |
+| **B0b** | Web 7 个核心组件 + Tailwind 语义类化 + density 旋钮 | ✅ 2026-09-22 |
+| **B1** | 客户域 (列表 + 详情 + 跟进) 换装 | ✅ 2026-09-23 |
+| **B2** | APK 其余 (养生记录 / 跟进 / 沙龙 / 我的 / 主页) | ✅ 2026-09-23 |
+| **B3** | Web admin (客户 / 跟进 / 互动 / 养生记录 / 报表 / 设置 / 首页) | ✅ 2026-09-23 |
+| **B4** | **护栏 + 验收 + 收口** (本文) | ✅ 2026-09-24 |
+
+### 量化结果 (B0 之前 vs B3 后)
+
+| 维度 | B0 前 | B4 当前 |
+|---|---|---|
+| Flutter `Card(` 调用 | 106 (散 21 文件) | **87** (含 8 个 dialog 内, 已在白名单思路) |
+| Web `rounded-lg border shadow-sm` 三件套 | 多文件命中 | **0** (护栏拦) |
+| 客户列表一屏可见行数 (1440×900) | ~5 | **11** |
+| 客户列表行高 | 80 | **60** |
+| 主页正文 | 18 | **15** |
+
+### 护栏工具 (B4 新)
+
+| 工具 | 干什么 |
+|---|---|
+| `tools/check-ui-tokens.sh` | 硬编码棘轮 (色值 / 间距 / 字号 / 圆角 / 调色板类); **新增** `flutter.cardWidget` + `flutter.legacyBigWidget` |
+| `tools/check-ui-density.sh` | 密度棘轮 (framed 上限 + visibleRows 下限) — **新工具** |
+| `tools/check-auto-snapshot-extension.sh` | 扩展护栏: 不许有 `agent_end` hook + `git add -A` |
+| `tests/ui-kit-contract.test.ts` | 17 个组件文件存在 + SaaS 三件套扫描 — **新** |
+| `tests/auto-task-snapshot-extension.test.ts` | 双重断言扩展合规 — **新** |
+| `flutter_app/test/app_kit_white_text_test.dart` | 防「主题漏 color → 真机白字」 (7 例) — **新** |
+| `flutter_app/test/wellness_form_dict_error_test.dart` | 防「字典加载失败 → 无限转圈」 (2 例) — **新** |
+
+### 文档沉淀 (B4 新 / 改)
+
+- [docs/ui-font-weight-verification.md](docs/ui-font-weight-verification.md) — Android CJK 字重真机验证 (状态: 未跑)
+- [tools/font-weight-probe/](tools/font-weight-probe/) — 探测程序 (独立 Flutter 工程, 已落地, 待主人跑)
+- [docs/dev-modules/ui-kit.md](docs/dev-modules/ui-kit.md) — B0b 17 组件契约文档 (覆盖旧版本)
+- `docs/ui-principles.md` §4 review 清单 + §6 文档关系表 补齐本批 6 项检查
+- `AGENTS.md` §3 该做 (UI 改动必走契约组件) + §5 反模式 (「顺手加个卡片」) + §8.1.3 验收清单 (扩展护栏)
+
+### 遗留事项 (不粉饰)
+
+1. **真机未验收** — 手机未接入 adb (主人机器 8765/5555 端口未开放)。所有 Flutter 改动
+   只经 widget test + Flutter web 真浏览器验证, 真机渲染可能与 CanvasKit 有差异
+   (AGENTS §5 chip 白字教训)
+2. **Android 字重验证未做** — `tools/font-weight-probe/` 程序已落地, 待主人跑 + 看 logcat +
+   拍板「中文字面是否真有 medium」→ 决定走「颜色 + 字号」 / 打包 MiSans / 接受现状
+3. **Flutter web 登录失败** — `tools/verify-flutter-p2p3.mjs` 本次 0/3 通; Cookie header /
+   connection error, 与本批 UI 改动无关, 属 Flutter web 平台适配遗留 (AGENTS §10.3)
+4. **web 列表行高待拍** — 用 `py-2`/`py-1.5` 而非 `py-row-y`; 两者在「两行文字 + ≤60px」下互斥
+5. **`franchise_chip.dart` 未迁** — 哏哙 加盟 / 🌱 种子 徽章视觉与 `AppBadge` tone 体系不同,
+   需设计决策
+
 ## [Unreleased] — 管理维度: 合并重复客户 (2026-09-23)
 
 主人 2026-09-23「做: 归属转移、合并重复客户、归档删除入口」—— 第三件。

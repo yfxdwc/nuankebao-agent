@@ -1,0 +1,25 @@
+{
+  "_comment": "UI 密度棘轮基线 (B4, 2026-09-24 钉)。修完一批就 tools/check-ui-density.sh --update-baseline 往下拧一格。",
+  "_source": "tools/ui-acceptance-probe.mjs (含登录; 真浏览器; 计算真实的列表可见行数)",
+  "_generatedBy": "tools/check-ui-density.sh --update-baseline",
+  "updatedAt": "2026-09-24",
+  "_rules": {
+    "framed":        "棘轮 = 上限 (上涨=fail). framed = '有边框或有阴影' 的容器数 (排除 chip/badge). 原则 4: 列表页不出现卡片.",
+    "visibleRows":   "列表路由 (/admin/customers, follow-ups, interactions, wellness-records) 的「一屏可见列表行数」 ≥ 10 @ 1440x900. 棘轮 = 下限 (跌破 = fail).",
+    "rowHeight":     "列表行高 (B 档 = 60). 涨到 80+ 就是「中老年版」回潮 — 但本期不卡这个, 留作后续."
+  },
+  "_routes": {
+    "/admin@1440x900":                  {"route": "/admin",                  "viewport": "1440x900", "framed": 3, "visibleRows": 7,  "rowHeight": 40, "isListRoute": false, "note": "仪表盘 (KPI tile 墙 → framed=3 是合理的, 不算回潮)"},
+    "/admin/customers@1440x900":        {"route": "/admin/customers",        "viewport": "1440x900", "framed": 0, "visibleRows": 11, "rowHeight": 60, "isListRoute": true},
+    "/admin/follow-ups@1440x900":       {"route": "/admin/follow-ups",       "viewport": "1440x900", "framed": 0, "visibleRows": 1,  "rowHeight": 60, "isListRoute": true, "note": "baseline = 1 (DB 里目前只有 1 条跟进) —— 棘轮仍卡下限 ≥ 1; 跟数据量耦合, 主人拍板时再调"},
+    "/admin/interactions@1440x900":     {"route": "/admin/interactions",     "viewport": "1440x900", "framed": 0, "visibleRows": 10, "rowHeight": 60, "isListRoute": true},
+    "/admin/wellness-records@1440x900": {"route": "/admin/wellness-records", "viewport": "1440x900", "framed": 0, "visibleRows": 12, "rowHeight": 60, "isListRoute": true},
+    "/admin/reports@1440x900":          {"route": "/admin/reports",          "viewport": "1440x900", "framed": 0, "visibleRows": 0,  "rowHeight": 0,  "isListRoute": false, "note": "报表页 (图表 + 表头, 不是列表)"},
+    "/admin/usage@1440x900":            {"route": "/admin/usage",            "viewport": "1440x900", "framed": 0, "visibleRows": 0,  "rowHeight": 0,  "isListRoute": false, "note": "用量统计页 (KPI + 表格)"},
+    "/admin@375x812":                   {"route": "/admin",                  "viewport": "375x812",  "framed": 3, "visibleRows": 7,  "rowHeight": 40, "isListRoute": false},
+    "/admin/customers@375x812":         {"route": "/admin/customers",        "viewport": "375x812",  "framed": 0, "visibleRows": 10, "rowHeight": 60, "isListRoute": true},
+    "/admin/follow-ups@375x812":        {"route": "/admin/follow-ups",       "viewport": "375x812",  "framed": 0, "visibleRows": 1,  "rowHeight": 60, "isListRoute": true},
+    "/admin/interactions@375x812":      {"route": "/admin/interactions",     "viewport": "375x812",  "framed": 0, "visibleRows": 9,  "rowHeight": 60, "isListRoute": true},
+    "/admin/wellness-records@375x812":  {"route": "/admin/wellness-records", "viewport": "375x812",  "framed": 0, "visibleRows": 11, "rowHeight": 60, "isListRoute": true}
+  }
+}

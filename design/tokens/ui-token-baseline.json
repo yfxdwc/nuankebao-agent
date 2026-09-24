@@ -1,8 +1,8 @@
 {
   "_comment": "UI 硬编码棘轮基线。修完一批就 tools/check-ui-tokens.sh --update-baseline 往下拧。只许下降。",
   "_generatedBy": "tools/check-ui-tokens.sh --update-baseline",
-  "updatedAt": "2026-09-23",
-  "total": 0,
+  "updatedAt": "2026-09-24",
+  "total": 87,
   "counts": {
     "flutter.color": 0,
     "flutter.fontSize": 0,
@@ -13,6 +13,8 @@
     "flutter.motionDuration": 0,
     "flutter.radiusRadius": 0,
     "flutter.constThemeRef": 0,
+    "flutter.cardWidget": 87,
+    "flutter.legacyBigWidget": 0,
     "web.paletteClass": 0,
     "web.arbitraryValue": 0,
     "web.hexLiteral": 0

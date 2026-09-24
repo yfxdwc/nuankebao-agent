@@ -86,6 +86,7 @@
 - ✅ **单点问题修一处后必全仓扫一遍** (2026-09-15 主人立) → 修一个具体 bug (如整页刷新的 `<a>`) 后, 必须全仓 grep 同类问题 (如所有 `<a href>` / `window.location` / `router.push` / `<form action>`), 确认无其他遗漏才 commit. 单点修复 = 必复发, 跟 §5 登录循环 w14 三次复发同根.
 - ✅ **改前端必起 dev server + 截图验证** (2026-09-15 主人立)
   → **改 UI 前/后跑 `bash tools/density-report.sh`** 看量化对比 (卡片数 / 视口行数 / 主字号 / 主按钮 / 列表项)。`docs/ui-principles.md` 是改 UI 时的逐条验收清单。 → 任何 web admin / Next.js / Flutter web UI 改动, 必 `pnpm dev` 起服务 (port 先跑 `./tools/check-port.sh`) + 截图 (playwright / 浏览器) + 视觉验证, 不能只看 `tsc --noEmit` / `pnpm build` 就 commit. 详见 §5 w14 R12 puppeteer ≠ Flutter web UI 真行为 同根问题.
+- ✅ **UI 改动必用契约组件 (B4 拍, 2026-09-24)**: Flutter 走 `flutter_app/lib/core/widgets/app_*.dart` (7 个 B 档组件); Web 走 `src/components/ui/{page-header,section,data-table,empty-state,filter-bar,stat-row,skeleton}.tsx` (B0b 7 个同名组件). **新增卡片必须过 `bash tools/check-ui-tokens.sh` 的 `cardWidget` 棘轮** (涨 = 阻断); **新增可见列表行数**过 `bash tools/check-ui-density.sh` (跌破基线 = 阻断). 详见 §5 「顺手加个卡片」条目.
 
 ### 不该做
 - ❌ **不要 sudo 改系统配置** — 这是 暖客宝 项目级别,跨用户操作要找主人拍
@@ -295,6 +296,8 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
 - ❌ **贴告示 ≠ 修复 (登录循环 w14 第三次复发, 2026-09-11)** — 在登录按钮上方加 banner 解释“为什么不能点”，不等于阻止了循环。**修法 = 让触发条件物理上不发生** (pointer-events:none / 服务端拦截 / API disable / 重构为不可能调用)，不是“让人自觉”。w14 第一次（R4 单点修）和第三次（加 banner）都犯这个错。详见 `docs/login-failure-triage.md §0` DoD。
   - ⚠ **主人 override (2026-09-12, CHANGELOG [0.4.1])**: /app-preview 完全删除 blockIframe 机制, iframe 永远可点. Banner 降级为纯 informational (sky 蓝, 恢复 dismiss 按钮). R12 登录循环改用其他方式 (puppeteer 拦截 / middleware / API disable, 待实施). 后果: iframe 里点登录 = 必崩循环. 主人拍接受这个风险. **此变更仅限 /app-preview, 不要外推到其他登录场景**. 后续补: post-mortem + AGENTS.md §5 沉淈特例条目.
 - ❌ **修一个根因就 commit (登录循环 w14 三次复发, 2026-09-11)** — R1-R12 共 12 个已知根因（详见 `docs/login-failure-triage.md §2`）。任何登录 / auth / 拦截器 / middleware / Flutter web 相关改动，**必须全 12 项过一遍验证**，不能“修了 R4 就 commit, R6 下次再说”。单点修复 = 必复发。CI 阻断（待补 §6 checklist）。
+
+- ❌ **「顺手加个卡片」= 卡片墙回潮 (B4 沉淀, 2026-09-24)** — 任何 UI 改动若「看起来差个卡片装一下」就加 Card(), 三个月后回到「卡片墙回潮」原样。**护栏**: ① Flutter 侧 `bash tools/check-ui-tokens.sh` 的 `cardWidget` 棘轮 (当前基线 87); ② Web 侧 `bash tools/check-ui-density.sh` 的 `framed` 棘轮 (当前基线 0, 上限 = fail); ③ 视觉跟 `docs/ui-principles.md` §1 原则 4 (容器越少, 内容越强) 一一对。 详情见 [docs/ui-principles.md](docs/ui-principles.md) + 验收证据 `/tmp/nkb-ui-acceptance/`. 同根: 字号越级 / 颜色越多 / 行高变胖 — 全部有棘轮护栏 (`flutter.fontSize` + `web.paletteClass` + `density rowHeight`).
 - ❌ **puppeteer / curl 模拟 ≠ Flutter web UI 真行为 (w14 R12 发现, 2026-09-11)** — puppeteer `ctx.request.post()` 走 chromium 完整 cookie jar，模拟不到 dio web 平台 XHR 拿不到 Set-Cookie 头的真实情况。**"puppeteer 通过" ≠ "Flutter web 能用"**。任何“登录成功”的验证不能只看 API 状态码 / puppeteer 模拟，必须跑真 Flutter web UI（input → button click → 看 toast）+ 主人真手机 APK 验证。详见 `docs/login-failure-triage.md §4`。
 - ❌ **Button asChild 套原生 `<a>` 触发整页刷新 (2026-09-15 发现)** — shadcn `Button asChild` 套 `<a href="/admin/x">` 时, 浏览器按超链接语义跳转, 整页 HTML 重新加载, sidebar/topbar 全部重挂载, 视觉上整页闪一下。**修法 = 必须 `Button asChild` 套 `<Link href>`** (next/link) 走 RSC 软导航, 只换 `<main>` 区域 children, sidebar/topbar 保留。例外 (仍用原生 `<a>`): `tel:` 协议 (按钮触发拨号) + `download` 属性 (浏览器原生下载) + `mailto:`。仓内已知误用点: `src/components/business/import-customers.tsx:272` 修复于 commit 717a289。验证手段: playwright + dev server, Network 面板看 `document` 请求数 = 0 + `fetch/xhr` 请求 (RSC `?_rsc=...`) > 0 = 软导航成功。
 - ❌ **Next.js dev mode 下不要并发打 30+ API 请求 (2026-09-20 w21 调试 prewarm 失误)** — dev mode 懒编译下并发请求 = webpack 编译队列堆积 + 内存爆炸 (实测 1.4GB), 单路由响应从 <1s 退化成 30-60s, 必须 `systemctl --user restart nuankebao-nextjs.service` 才恢复。**修法 = 改完路径 / 重写 prewarm 类脚本后, 先 dry-run 用 `grep` / `sed -n` 验证 URL 路径, 再 curl 测单个路径, 不要 30+ 并发打**。教训: dev mode 架构性问题 (冷编译) 治本是换 `next start` production 模式; dev mode 仅适合「边改边看 HMR」, 不适合「批量验证脚本」。详见 CHANGELOG [0.5.4] + `tools/prewarm-dev-routes.sh` 头部注释。
@@ -756,6 +759,11 @@ bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached +
       ⛔ **已作废** (2026-09-23): `agent_end` 自动 commit 已去掉 —— 现在 agent 说完话后
       working tree **本来就该有未提交改动**, 由 agent/主人收尾时自己提语义化 commit。
       验证钩子是否生效改为看: `bash scripts/task-snapshot.sh list` 有新的 `pre-auto-*` tag。
+- [ ] **扩展护栏 (B4 加, 2026-09-24)**: `bash tools/check-auto-snapshot-extension.sh`
+      应报「✓ auto-task-snapshot 扩展合规」; 同时 `pnpm test:run tests/auto-task-snapshot-extension.test.ts`
+      6 例全过 (断言插件**不含** `pi.on("agent_end", ...)` + 不含 `git add -A` + 仅 1 个 turn_start hook).
+      任何人修改 `.pi/extensions/auto-task-snapshot.ts` 后**必须**跑这两条 ——
+      是「并发 session 被 git add -A 扫进别人 commit」(AGENTS §5) 的治本护栏。
 
 ## §9. 预览框架冻结 (Preview Framework Freeze) (CHARTER §7 反模式沉淀 + ADR-0009)
 

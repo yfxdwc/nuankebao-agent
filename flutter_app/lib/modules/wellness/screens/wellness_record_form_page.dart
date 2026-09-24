@@ -14,6 +14,7 @@ import '../../../core/providers/service_providers.dart';
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/widgets/app_empty.dart';
 import '../../../core/widgets/app_section.dart';
 
 import '../widgets/rating_slider.dart';
@@ -40,8 +41,11 @@ class WellnessRecordFormPage extends ConsumerStatefulWidget {
 }
 
 class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage> {
-  // 字典
+  // 字典 —— null = 加载中; 非 null (含空字典) = 加载完成
   Dictionaries? _dict;
+
+  // 字典加载失败 (B4, 2026-09-24 修「无限转圈」: 抛异常时进入错误态, 不是死循环)
+  Object? _dictError;
 
   // 选中字段
   final Set<String> _bodyPartIds = {};
@@ -86,14 +90,22 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
   }
 
   Future<void> _loadDict() async {
-    final d = await ref.read(dictionaryServiceProvider).all();
-    if (!mounted) return;
-    setState(() {
-      _dict = d;
-      // 新增: 默认选中「碧波庭-脉动负压提拉按摩」
-      // 编辑: _loadExisting() 已填好原值 (谁后到谁生效, 两边都不覆盖非空值)
-      _serviceItemId ??= _defaultServiceItemIdOf(d);
-    });
+    try {
+      final d = await ref.read(dictionaryServiceProvider).all();
+      if (!mounted) return;
+      setState(() {
+        _dict = d;
+        _dictError = null;
+        // 新增: 默认选中「碧波庭-脉动负压提拉按摩」
+        // 编辑: _loadExisting() 已填好原值 (谁后到谁生效, 两边都不覆盖非空值)
+        _serviceItemId ??= _defaultServiceItemIdOf(d);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      // 修「无限转圈」: body 用 _dict == null 渲染 LoadingState, 抛异常时
+      // _dict 永远是 null → 永远 LoadingState → 永远转圈。必须切到错误态。
+      setState(() => _dictError = e);
+    }
   }
 
   /// 找默认服务项目 id: 先精确匹配全名, 再宽松匹配「碧波庭」, 都没有 → null
@@ -259,7 +271,21 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
         toolbarHeight: AppSize.appBarHeight,
       ),
       body: _dict == null
-          ? const Center(child: CircularProgressIndicator())
+          ? (_dictError != null
+              // 字典加载失败 → 错误态, 给重试按钮 (原则 8: 必须告诉下一步做什么)
+              //   ⚠ 不能用 ErrorState.error 直接显示 —— 那是网络错, 这里可能是后端字典接口挂了,
+              //   区分文案让用户知道是「字典没加载」, 不是笼统的「网络问题」。
+              ? AppEmptyState(
+                  icon: Icons.menu_book_outlined,
+                  title: '字典没加载出来',
+                  hint: '下拉选不了部位 / 服务, 先重试一下',
+                  action: FilledButton.icon(
+                    onPressed: _loadDict,
+                    icon: const Icon(Icons.refresh, size: AppSize.iconMd),
+                    label: const Text('重试'),
+                  ),
+                )
+              : const LoadingState())
           : WellnessPhotoUploaderScope(
               upload: (b64) => ref.read(photoServiceProvider).upload(b64),
               child: ListView(

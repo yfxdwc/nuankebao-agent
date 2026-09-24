@@ -291,6 +291,18 @@ IconButton(
 - [ ] **对比度**：`pnpm tokens:contrast` 无 FAIL？
 - [ ] **令牌**：`tools/check-ui-tokens.sh` 硬编码计数未上涨？
 - [ ] **真机**：真机截图看过（web 预览会骗人，见 AGENTS §5）
+- [ ] **卡片棘轮 (B4)**：`bash tools/check-ui-tokens.sh` 的 `flutter.cardWidget` 未上涨？
+  若确需新增 Card，须在 `tools/check-ui-tokens.sh` 的 `FLUTTER_CARD_WHITELIST`
+  数组里加文件路径 + 拍板日期（理由写在 commit message）
+- [ ] **密度棘轮 (B4)**：`bash tools/check-ui-density.sh` 全路由不涨？
+  列表路由 `/admin/customers` / `/admin/follow-ups` / `/admin/interactions` /
+  `/admin/wellness-records` 的 `framed ≤ 基线` 且 `visibleRows ≥ 10 @1440×900`
+- [ ] **字重验证 (B4)**：Android 中文真机是否真有 `w500` 笔画？见
+  [`docs/ui-font-weight-verification.md`](./ui-font-weight-verification.md)
+  （本批状态：**未在真机验证**, 主人跑 `tools/font-weight-probe/` 后填结论）
+- [ ] **白字回归 (B4)**：本批引入/改造的 Flutter 组件的 TextStyle 都显式 color？
+  跑 `cd flutter_app && flutter test test/app_kit_white_text_test.dart --concurrency=1`
+  （防 AGENTS §5 chip 白字教训）
 
 ---
 
@@ -315,4 +327,9 @@ IconButton(
 | [`docs/CHARTER.md`](./CHARTER.md) §1 | 项目 vibe / 用户画像（本文件 §0 的纠偏依据） |
 | [`docs/ui-tokens.md`](./ui-tokens.md) | 令牌机制：怎么改、怎么加主题、怎么防漂移 |
 | [`AGENTS.md`](../AGENTS.md) §1 §3 | 操作层：agent 做 UI 改动时的强制规则 |
-| [`design/tokens/ui-token-baseline.json`](../design/tokens/ui-token-baseline.json) | 硬编码棘轮基线 |
+| [`design/tokens/ui-token-baseline.json`](../design/tokens/ui-token-baseline.json) | 硬编码棘轮基线（`flutter.cardWidget` 等） |
+| [`design/tokens/density-baseline.json`](../design/tokens/density-baseline.json) | 密度棘轮基线 (`framed` / `visibleRows`) — **B4 新** |
+| [`docs/ui-font-weight-verification.md`](./ui-font-weight-verification.md) | Android CJK 字重真机验证状态 — **B4 新** |
+| [`tools/check-ui-tokens.sh`](../tools/check-ui-tokens.sh) | 硬编码棘轮护栏 (Bash + vitest 双保险) |
+| [`tools/check-ui-density.sh`](../tools/check-ui-density.sh) | 密度棘轮护栏 (framed / visibleRows / rowHeight) — **B4 新** |
+| [`tools/check-auto-snapshot-extension.sh`](../tools/check-auto-snapshot-extension.sh) | 扩展护栏: `agent_end` + `git add -A` 双重禁用 — **B4 新** |

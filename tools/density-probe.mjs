@@ -57,9 +57,22 @@ for (const vp of VIEWPORTS) {
         const listItems = document.querySelectorAll(
           '[role="listitem"],li,[class*="divide-y"] > *',
         ).length;
+        // 真正在视口里可见的「列表行」 (用于「一屏可见行数 ≥ 10」的棘轮).
+        //   旧 visibleRows 是 (vh-80)/(font*1.5) 的理论值, 跟实际渲染无关;
+        //   这个用 getBoundingClientRect 算的才是真值 —— tools/check-ui-density.sh 用它.
+        const rowEls = [...document.querySelectorAll('[class*="divide-y"] > *')].filter(
+          (e) => e.getBoundingClientRect().height > 20,
+        );
+        const vh = window.innerHeight;
+        const visibleListRows = rowEls.filter((e) => {
+          const b = e.getBoundingClientRect();
+          return b.top < vh - 60 && b.bottom > 0;
+        }).length;
         return {
           cardsCount: cardsLike.length,
           visibleRows: Math.floor((window.innerHeight - 80) / (bodyFont * 1.5)),
+          visibleListRows,                                          // ← B4 新增 (棘轮真值)
+          listRowHeight: rowEls.length ? Math.round(rowEls[0].getBoundingClientRect().height) : 0,
           bodyFont,
           primaryBtnHeight: primaryBtn
             ? primaryBtn.getBoundingClientRect().height

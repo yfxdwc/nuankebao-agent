@@ -81,12 +81,45 @@ count() {
 FLUTTER_ACTIVE=$(find flutter_app/lib -name '*.dart' \
   -not -path '*/core/theme/*' 2>/dev/null)
 
+# ---- 文件级白名单 (B4, 2026-09-24 加) ----
+#   flutter.cardWidget 若确有正当用途 (例: Dialog 内嵌、Sheet 顶部、单实体卡) →
+#   把路径加进下面数组, **注明理由 + 拍板日期**。 禁止行号级豁免 (行号会漂移)。
+#   改本数组时, 同步在 AGENTS §5「卡片墙回潮」反模式里加一条备注。
+FLUTTER_CARD_WHITELIST=(
+  # (空 = 无豁免; 真有需要再加, 拍板日期格式 YYYY-MM-DD)
+)
+
 # shellcheck disable=SC2086
 if [ -n "$FLUTTER_ACTIVE" ]; then
   count "flutter.color"        'Color\(0x[0-9A-Fa-f]{6,8}\)'   $FLUTTER_ACTIVE
   count "flutter.fontSize"     'fontSize: *[1-9][0-9]*(\.[0-9]+)?[^0-9]' $FLUTTER_ACTIVE
   count "flutter.radius"       'BorderRadius\.circular\([0-9]'  $FLUTTER_ACTIVE
   count "flutter.spacing"      '(EdgeInsets\.[a-zA-Z]+\([0-9]|SizedBox\((height|width): *[0-9]|(height|width): *(1[2-9]|[2-9][0-9])\b)' $FLUTTER_ACTIVE
+
+  # B4 新增: 卡片墙回潮信号
+  #   flutter.cardWidget: Card( 调用 —— 原则 4 说列表项 / 同质块不应用 Card
+  #   flutter.legacyBigWidget: BigButton / BigFab 旧大号组件 (B 档拍板不用的)
+  #   两个都进棘轮: 只许下降, 不许上涨
+  if [ "${#FLUTTER_CARD_WHITELIST[@]}" -gt 0 ] && [ "$FLUTTER_ACTIVE" ]; then
+    WL_FILTER=$(printf -- '-not -path %s ' "${FLUTTER_CARD_WHITELIST[@]}")
+    # shellcheck disable=SC2086
+    FLUTTER_CARD_SCAN=$(eval "find flutter_app/lib -name '*.dart' $WL_FILTER")
+  else
+    FLUTTER_CARD_SCAN="$FLUTTER_ACTIVE"
+  fi
+  # shellcheck disable=SC2086
+  count "flutter.cardWidget"     'Card\('                       $FLUTTER_CARD_SCAN
+
+  # flutter.legacyBigWidget: BigButton / BigFab 旧大号组件。
+  #   ⚠ 这些组件名常出现在注释里 (「已退役」「不再使用」之类说明) —— 注释不算违规。
+  #   先 sed 掉 // 后内容再 grep, 把注释里的提及当作文档而不是代码。
+  TMP=$(mktemp)
+  sed -E 's|/\*[^*]*\*+([^/*][^*]*\*+)*/||g; s|//.*$||g' $FLUTTER_ACTIVE 2>/dev/null \
+    | grep -E '(BigButton|BigFab)' > "$TMP" || true
+  N_BIG=$(wc -l < "$TMP" | tr -d ' ')
+  rm -f "$TMP"
+  COUNTS["flutter.legacyBigWidget"]=$N_BIG
+  TOTAL=$((TOTAL + N_BIG))
 fi
 
 # ============================================
@@ -168,6 +201,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 KEYS=(flutter.color flutter.fontSize flutter.radius flutter.spacing \
       flutter.toolbarHeight flutter.iconSize flutter.motionDuration flutter.radiusRadius \
       flutter.constThemeRef \
+      flutter.cardWidget flutter.legacyBigWidget \
       web.paletteClass web.arbitraryValue web.hexLiteral)
 
 BASELINE_JSON='{}'
