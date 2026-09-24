@@ -2,6 +2,23 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 「现在该做」只在记录 Tab (2026-09-24)
+
+主人 2026-09-24: 「'现在该做'卡片仅在记录tab显示。不要在分析和管理tab显示」。
+
+- 行动卡从 `TabBarView` **外面**搬进 `_buildRecordTab` (记录 Tab 顶部, 跟进卡之上):
+  分析 / 管理 Tab 不再渲染它。
+- **口径变更**: P2 (2026-09-23) 曾按 CHARTER §1.4「行动输出必须切 Tab 可见」把它挂在
+  TabBarView 外; 本次主人明确改口径 —— 行动属于「记录 / 跟进」流程, 分析 / 管理 Tab
+  保持干净。(CHARTER 文档口径如需同步修改, 由主人另行拍板。)
+- 折叠机制不变: 上滑 > 24px 收起 / 回顶展开, 与跟进卡共用 `_actionsCollapsed`。
+- 测试: a/b/c 的 Tab 归属断言更新 —— 分析/管理 Tab 用 `.hitTestable()` 判「显示」
+  (PageView 会把相邻页留在树上, 裸 `findsNothing` 会假失败);
+  ⑦b 重写 (行动卡只在记录 Tab, "从分析 Tab 点建任务再切回"的老场景不复存在);
+  `_tapTab` 改为等切页动画走完 (`indexIsChanging`) 再断言。
+
+验证: `flutter analyze` 0 issue; `flutter test` 全量 **395/395** 全绿
+
 ## [Unreleased] — 「+ 新建」按键化 (背景显式) (2026-09-24)
 
 主人 2026-09-24: 「跟进任务卡片中，'+新建'按键化，按键背景显式」。

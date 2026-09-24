@@ -7,11 +7,13 @@
 //   - 原则 4: 容器越少内容越强 (原则: 一屏有边框/阴影的元素 ≤ 2)
 //   - 原则 5: 颜色是信号, 不是装饰 (状态色只在有状态时出现)
 //
-// 详情页结构 (P2 主人 2026-09-23 + 2026-09-24 两次拍板):
-//   L0: CustomerInsightActions (「现在该做」行动卡) — 切 Tab 也可见
+// 详情页结构 (P2 2026-09-23 + 2026-09-24 三次拍板):
 //   TabBar: 记录 / 分析 / 管理
-//   分析 Tab 顶部 (TabBarView 内): CustomerScoreCard (评分环 + 三维度条 + 展开明细)
-//   L0 在 TabBarView **外面** —— "切 Tab 才看见" = "要滚才看见" 的老毛病
+//   记录 Tab 顶部: CustomerInsightActions (「现在该做」) + CustomerFollowUpSection
+//     (两张固定卡; 上滑各自收起, 见各自注释)
+//   分析 Tab 顶部: CustomerScoreCard (评分环 + 三维度条 + 展开明细)
+//   ⚠ 「现在该做」2026-09-24 起**只在记录 Tab** (主人拍板) —— 之前挂 TabBarView
+//     外面"切 Tab 也可见", 现改为记录 Tab 内; 分析/管理 Tab 保持干净。
 //
 // 2026-09-24 收尾: 评分卡从 L0 搬到分析 Tab (主人拍: 「三个 Tab 都有评分环 = 反 vibe,
 //   评分是参考, 行动才是产出, 应该分析才需要看评分」)。
@@ -226,27 +228,12 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
           onNotification: _onScrollForCollapse,
           child: Column(
             children: [
-              // L0: 行动输出卡「现在该做」(切 Tab 可见 —— CHARTER §1.4 拍板)
-              // 评分卡不在这里: 它只放在「分析」Tab (主人 2026-09-24 拍)。
-              // 折叠态由本页状态推进: 上滑越过 24px → 折叠; 回顶 → 展开。
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, 0),
-                child: CustomerInsightActions(
-                  customerId: customerId,
-                  onBuildTask: (action) =>
-                      _buildTaskFromAction(context, ref, action),
-                  onClaim: (action) =>
-                      _claimFromAction(context, ref, action),
-                  collapsed: _actionsCollapsed,
-                  onToggleCollapsed: () {
-                    // 手动点展开图标 → 强制回到展开态 (不管当前滚动位置)
-                    if (_actionsCollapsed) {
-                      setState(() => _actionsCollapsed = false);
-                    }
-                  },
-                ),
-              ),
+              // ⚠ 2026-09-24 主人拍板: 「现在该做」行动卡**只在记录 Tab 显示**
+              //   (分析 / 管理 Tab 不再出现) —— 所以它从 TabBarView 外面**搬进
+              //   `_buildRecordTab` 了** (见下方该方法)。
+              //   历史: P2 (2026-09-23) 曾按 CHARTER §1.4「行动输出必须切 Tab 可见」
+              //   把它挂在 TabBarView 外; 本次主人明确改口径 —— 行动是"记录/跟进"
+              //   流程的一部分, 分析/管理 Tab 要干净。
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
@@ -310,6 +297,27 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
   ) {
     return Column(
       children: [
+        // ★ L0 行动输出卡「现在该做」—— **只在记录 Tab** (主人 2026-09-24 拍板;
+        //   之前挂在 TabBarView 外, 切 Tab 也可见)。
+        //   折叠态由页面状态推进 (上滑 > 24px → 折叠; 回顶 → 展开), 跟下面的
+        //   跟进卡共用同一个 `_actionsCollapsed`。
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+              AppSpace.pagePadding, AppSpace.s8, AppSpace.pagePadding, 0),
+          child: CustomerInsightActions(
+            customerId: customerId,
+            onBuildTask: (action) =>
+                _buildTaskFromAction(context, ref, action),
+            onClaim: (action) => _claimFromAction(context, ref, action),
+            collapsed: _actionsCollapsed,
+            onToggleCollapsed: () {
+              // 手动点展开图标 → 强制回到展开态 (不管当前滚动位置)
+              if (_actionsCollapsed) {
+                setState(() => _actionsCollapsed = false);
+              }
+            },
+          ),
+        ),
         // ★ 固定跟进卡 (跟 L0 共用 _actionsCollapsed; 折叠图标也在卡内,
         //   点了回调切回 false)。Padding 是横向 pagePadding (跟 L0 左侧对齐),
         //   上方 s12 (跟 L0 间留呼吸), 下方 0 (时间线自身有 padding)。

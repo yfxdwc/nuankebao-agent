@@ -3,10 +3,11 @@
 //
 // 主人 2026-09-24 拍板诉求:
 //   「评分卡」只允许出现在「分析」Tab, 三个 Tab 都有 = 反 vibe;
-//   「现在该做」行动卡保留在 L0 (切 Tab 可见) —— CHARTER §1.4 既有拍板, 不要一起移走。
+//   「现在该做」行动卡**只在记录 Tab** (2026-09-24 主人拍板, 覆盖早先的
+//   "切 Tab 也可见" 口径) —— 分析 / 管理 Tab 必须看不到它。
 //
 // 本文件 (页面级) 守结构归属:
-//   · CustomerInsightActions (行动卡) 在 TabBarView **外面** = L0, 永远可见
+//   · CustomerInsightActions (行动卡) 在记录 Tab 顶部; 分析/管理 Tab **不渲染**
 //   · CustomerScoreCard (评分卡) 在 TabBarView **里面**, 而且只在「分析」Tab
 //     (不是「记录」, 也不是「管理」)
 //   · 评分卡不会出现在另外两个 Tab (回归保护)
@@ -285,8 +286,16 @@ Future<void> _tapTab(WidgetTester tester, int index) async {
   final state =
       tester.state<CustomerDetailPageState>(find.byType(CustomerDetailPage));
   state.tabController.index = index;
-  // PageView 需要一些帧重建子页 + 懒加载 build 新 Tab
-  for (var i = 0; i < 5; i++) {
+  // ⚠ 切页动画 ~300ms (kTabScrollDuration): 动画没走完时 **前一个 Tab 仍在树上**
+  //   (PageView 过渡期同时挂两页) —— 2026-09-24 行动卡搬进记录 Tab 后,
+  //   「分析/管理 Tab 不该出现行动卡」的 findsNothing 断言会被这半挂的旧页假失败。
+  //   有界推进直到 indexIsChanging == false, 再多推几帧让旧页卸载。
+  for (var i = 0; i < 20; i++) {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    if (!state.tabController.indexIsChanging) break;
+  }
+  for (var i = 0; i < 4; i++) {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
   }
@@ -303,13 +312,13 @@ Finder _scoreRing() => find.byWidgetPredicate(
 
 void main() {
   testWidgets(
-    'a) 默认「记录」Tab → 行动卡在 L0 (可见), 评分卡不可见',
+    'a) 默认「记录」Tab → 行动卡可见 (只在这个 Tab), 评分卡不可见',
     (tester) async {
       await _pumpPage(tester);
 
-      // 行动卡**可见** —— 验证"切 Tab 也可见"的核心 (即便在默认「记录」Tab 也在)
+      // 行动卡**可见** —— 2026-09-24 主人拍板: 只在记录 Tab 显示
       expect(find.byType(CustomerInsightActions), findsOneWidget,
-          reason: 'L0 行动卡必须一直挂载 (CHARTER §1.4 拍板: 切 Tab 也可见)');
+          reason: '「现在该做」在记录 Tab 必须可见 (主人 2026-09-24 拍)');
 
       // 评分卡**不可见** —— 默认 Tab 是「记录」, CustomerScoreCard 在「分析」Tab,
       //   TabBarView 懒加载: 没切到的 Tab 不渲染。验证分数 78 也不在树里。
@@ -343,15 +352,18 @@ void main() {
       expect(find.text('关系温度'), findsWidgets);
       expect(find.text('价值潜力'), findsWidgets);
 
-      // 行动卡**仍**可见 — L0 (TabBarView 外), 不该被切 Tab 藏掉
-      expect(find.byType(CustomerInsightActions), findsOneWidget,
-          reason: '行动卡在 L0, 切 Tab 不该藏掉 (CHARTER §1.4)');
-      expect(find.textContaining('现在该做'), findsOneWidget);
+      // 行动卡**不可见** —— 2026-09-24 主人拍板: 「现在该做」只在记录 Tab。
+      // ⚠ 用 `.hitTestable()` 而不是裸 findsNothing: TabBarView 底层 PageView 会把
+      //   相邻页**留在树上** (离屏但不卸载), 裸 findsNothing 会假失败;
+      //   hitTestable = "在视口里、能点到" = 用户口径的"显示"。
+      expect(find.byType(CustomerInsightActions).hitTestable(), findsNothing,
+          reason: '分析 Tab 不该显示「现在该做」(主人 2026-09-24 拍)');
+      expect(find.textContaining('现在该做').hitTestable(), findsNothing);
     },
   );
 
   testWidgets(
-    'c) 切到「管理」Tab → 评分卡不可见, 行动卡仍可见',
+    'c) 切到「管理」Tab → 评分卡不可见, 行动卡也不可见',
     (tester) async {
       await _pumpPage(tester);
       await _tapTab(tester, 2); // 管理
@@ -362,13 +374,13 @@ void main() {
       expect(_scoreRing(), findsNothing,
           reason: '管理 Tab 不该出现评分环');
 
-      // 行动卡**仍**可见 — L0 切 Tab 可见是 CHARTER §1.4 拍板,
-      // 不能因为本次"评分卡只在分析 Tab"诉求撤掉
-      expect(find.byType(CustomerInsightActions), findsOneWidget,
-          reason: '行动卡在 L0, 切 Tab 不该藏掉 (CHARTER §1.4)');
-      expect(find.textContaining('现在该做'), findsOneWidget);
-      expect(find.text('约下次到店'), findsWidgets);
-      expect(find.text('建任务'), findsOneWidget);
+      // 行动卡**不可见** —— 2026-09-24 主人拍板: 只在记录 Tab 显示
+      //   (同分析 Tab: 用 hitTestable 判"显示", 见上方注释)
+      expect(find.byType(CustomerInsightActions).hitTestable(), findsNothing,
+          reason: '管理 Tab 不该显示「现在该做」(主人 2026-09-24 拍)');
+      expect(find.textContaining('现在该做').hitTestable(), findsNothing);
+      // 管理 Tab 该有的内容还在 (证明不是整页空了)
+      expect(find.textContaining('客户类型'), findsWidgets);
     },
   );
 
@@ -431,29 +443,23 @@ void main() {
     );
 
     testWidgets(
-      '⑦b 点「查看任务」 → 切回记录 Tab (tabController.index == 0)',
+      '⑦b 点「查看任务」 → 停在记录 Tab + 跟进卡仍可见 (行动卡只在记录 Tab)',
       (tester) async {
         final fake = _FakeFollowUpService();
         await _pumpPageWithFakeFollowUp(tester, fake: fake);
 
-        // 先手动切到「分析」Tab (默认在 0, 需要跳走才能验证「切回」)
-        await _tapTab(tester, 1);
-        final before = tester
-            .state<CustomerDetailPageState>(find.byType(CustomerDetailPage));
-        expect(before.tabController.index, 1,
-            reason: '预条件: 已在分析 Tab 才能验证「切回记录」');
-
-        // 点 L0 「建任务」 —— L0 切 Tab 可见 (CHARTER §1.4)
+        // 2026-09-24 行动卡只在记录 Tab → 「在别的 Tab 点建任务再切回来」这个
+        //   老场景不再存在; 现在验证: 点「查看任务」后**留在**记录 Tab、
+        //   跟进卡(固定卡)仍在, 且不崩 (_revealFollowUpSection 的收折叠分支)。
         await tester.tap(find.text('建任务'));
         for (var i = 0; i < 8; i++) {
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 50));
         }
 
-        // 点「查看任务」action —— 原本用户「在分析 Tab 点建任务, 回到记录看新任务」
         await tester.tap(find.widgetWithText(TextButton, '查看任务'));
-        // 让 animateTo + Scrollable.ensureVisible + Future.delayed 走完
-        for (var i = 0; i < 20; i++) {
+        // 让 Future.delayed / setState 走完 (有界推进)
+        for (var i = 0; i < 10; i++) {
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 50));
         }
@@ -461,7 +467,9 @@ void main() {
         final after = tester
             .state<CustomerDetailPageState>(find.byType(CustomerDetailPage));
         expect(after.tabController.index, 0,
-            reason: '点「查看任务」 → 切回记录 Tab (验证 _revealFollowUpSection)');
+            reason: '点「查看任务」后应停在记录 Tab (行动卡 / 跟进卡都在这里)');
+        expect(find.byKey(CustomerFollowUpSection.cardKey), findsOneWidget,
+            reason: '跟进卡是固定卡, 点 action 后仍可见');
       },
     );
 
