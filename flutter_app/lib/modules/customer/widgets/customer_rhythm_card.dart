@@ -229,7 +229,7 @@ class _CustomerRhythmCardState extends ConsumerState<CustomerRhythmCard> {
         ),
       );
     }
-    return _RepurchaseBody(data: _repurchase!);
+    return _RepurchaseBody(data: _repurchase!, customerId: widget.customerId);
   }
 
   // ────────────────────────────────────────────────────────────
@@ -427,15 +427,16 @@ class _FollowUpBody extends StatelessWidget {
 // 用 ConsumerWidget —— showAddFollowUpSheet 要 (ctx, ref), ref 在 StatelessWidget
 // 里拿不到 (需要 ConsumerWidget.build 的 ref 参数).
 class _RepurchaseBody extends ConsumerWidget {
-  const _RepurchaseBody({required this.data});
+  const _RepurchaseBody({required this.data, required this.customerId});
   final RepurchasePrediction data;
+
+  /// 显式传 customerId (不要用 context 向上找父 widget —— 兜底空串会让
+  /// 「建跟进任务」拿到无效 id; 由父 State 直传, 类型安全 + 一眼可查)
+  final String customerId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tokens;
-    final customerId = (context.findAncestorWidgetOfExactType<CustomerRhythmCard>()
-            ?.customerId) ??
-        '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
