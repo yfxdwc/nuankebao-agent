@@ -32,6 +32,7 @@
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -61,6 +62,9 @@ import '../widgets/customer_insight_actions.dart';
 import '../widgets/customer_rhythm_card.dart';
 import '../widgets/customer_score_card.dart';
 import '../widgets/customer_timeline_section.dart';
+import '../../../core/widgets/app_section.dart';
+import '../widgets/audit_trail_card.dart';
+import '../widgets/customer_health_card.dart';
 import '../widgets/danger_zone_card.dart';
 import '../widgets/ownership_card.dart';
 import '../../../core/widgets/b2_no_chrome.dart';
@@ -413,22 +417,45 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     WidgetRef ref,
     Customer customer,
   ) {
+    // 2026-09-24 重构 (建议 #7): 5 张卡平铺 → 三节分组 (档案 / 关系与身份 / 最近改动)
+    //   + 危险操作单独放最后 (视觉隔离, 防误点)
     return _tabScroll(children: [
-      // 大头像 + 基本信息 (类型徽章 / 年龄 / 拨号)
-      _buildHeader(context, ref, customer),
+      // ── ① 档案 ──
+      const AppSectionHeader(title: '档案', padding: EdgeInsets.zero),
+      const SizedBox(height: AppSpace.s8),
+      // #9: 健康提示独立成卡 (过敏/病史 = 安全信息, 不再埋在大头像卡里;
+      //   没填时给一条轻提示 —— AI 话术/效果分析都要用)
+      CustomerHealthCard(customer: customer),
       const SizedBox(height: AppSpace.cardGap),
-      // ★ 归属 (P7 管理维度补的缺口): 谁把她当客户在管 + 认领
-      //   放在类型卡**之前**: 归属是"她算不算我的客户"的前提,
-      //   比"她是普通还是种子客户"更前置 (ADR-0015 Q11/Q12)。
+      // 大头像 + 基本信息 (类型徽章 / 手机号+复制 / 生日+提醒档位 / 标签 / 备注)
+      _buildHeader(context, ref, customer),
+
+      const SizedBox(height: AppSpace.s24),
+      // ── ② 关系与身份 ──
+      const AppSectionHeader(title: '关系与身份', padding: EdgeInsets.zero),
+      const SizedBox(height: AppSpace.s8),
+      // ★ 归属 (P7): 谁把她当客户在管 + 认领。
+      //   放在类型卡**之前**: 归属是"她算不算我的客户"的前提 (ADR-0015 Q11/Q12)。
       CustomerOwnershipCard(customerId: customerId),
       const SizedBox(height: AppSpace.cardGap),
       // 客户类型切换 (主人 2026-09-18: 「没找到修改客户类型的入口」)
       _buildTypeCard(context, ref, customer),
       const SizedBox(height: AppSpace.cardGap),
-      // app 身份 (ADR-0016): 已注册 / 未注册 + 填邀请码绑定
+      // app 身份 (ADR-0016): 已注册/未注册 + 邀请码绑定 + **她的邀请码** (#6)
       _buildIdentityCard(context, ref, customer),
-      const SizedBox(height: AppSpace.cardGap),
-      // ★ 危险操作 (P8): 归档 / (后续: 合并) —— 放最底部, 需要时才滑下来看
+
+      const SizedBox(height: AppSpace.s24),
+      // ── ③ 最近改动 (#2): 归属转移/合并/绑定/归档 都能查到"谁改的" ──
+      const AppSectionHeader(
+        title: '最近改动',
+        subtitle: '谁在什么时候改了什么 (只记字段名, 不记内容)',
+        padding: EdgeInsets.zero,
+      ),
+      const SizedBox(height: AppSpace.s8),
+      CustomerAuditCard(customerId: customerId),
+
+      const SizedBox(height: AppSpace.s24),
+      // ── 危险操作 (P8): 归档 / 合并 —— 放最底部, 需要时才滑下来看 ──
       CustomerDangerZoneCard(
         customerId: customerId,
         customerName: customer.name,
@@ -599,19 +626,17 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: AppSpace.s2),
                       ),
-                      child: const Icon(Icons.photo_camera,
-                          size: AppSize.iconSm, color: Colors.white),
+                      child: const Tooltip(
+                        message: '点头像可以换 (拍照 / 相册 / 现成头像)',
+                        child: Icon(Icons.photo_camera,
+                            size: AppSize.iconSm, color: Colors.white),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: AppSpace.s6),
-            const Text(
-              '点头像可以换 (拍照 / 相册 / 现成头像)',
-              style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
-            ),
-            const SizedBox(height: AppSpace.s6),
+            const SizedBox(height: AppSpace.s8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -633,29 +658,49 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
               ],
             ),
             const SizedBox(height: AppSpace.s6),
-            Text(
-              _maskPhone(c.phone),
-              style: const TextStyle(
-                fontSize: AppTheme.fontMd,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            if (c.gender != null || age != null) ...[
-              const SizedBox(height: AppSpace.s8),
-              Wrap(
-                spacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  if (c.gender != null)
-                    Chip(label: Text(c.gender == 'F' ? '女' : c.gender == 'M' ? '男' : '未知')),
-                  if (age != null) Chip(label: Text('$age 岁')),
-                  Chip(
-                    label: Text(
-                        '建档 ${DateFormat('yyyy-MM-dd').format(c.createdAt)}'),
+            // 手机号 + 一键复制 (2026-09-24 建议 #4: 销售经常要粘到微信里)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _maskPhone(c.phone),
+                  style: const TextStyle(
+                    fontSize: AppTheme.fontMd,
+                    color: AppTheme.textSecondary,
                   ),
-                ],
+                ),
+                const SizedBox(width: AppSpace.s4),
+                IconButton(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: c.phone));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('手机号已复制')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy_rounded, size: AppSize.iconSm),
+                  tooltip: '复制手机号',
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(AppSpace.s4),
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            // #8: 三个 chip → 一行文字 (密度)
+            const SizedBox(height: AppSpace.s4),
+            Text(
+              [
+                if (c.gender != null)
+                  c.gender == 'F' ? '女' : c.gender == 'M' ? '男' : '未知',
+                if (age != null) '$age 岁',
+                '建档 ${DateFormat('yyyy-MM-dd').format(c.createdAt)}',
+              ].join(' · '),
+              style: TextStyle(
+                fontSize: AppTheme.fontSm,
+                color: context.tokens.textTertiary,
               ),
-            ],
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: AppSpace.s12),
             // 快捷操作: 打电话 / 记一次互动 (拨号在 web 不支持时静默失败)
             Row(
@@ -740,6 +785,32 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
                             fontSize: AppTheme.fontXs,
                             color: AppTheme.textSecondary),
                       ),
+                      // #5 (2026-09-24): 提醒档位**就地**可改 (原来要进编辑表单)
+                      const SizedBox(height: AppSpace.s6),
+                      Wrap(
+                        spacing: AppSpace.s6,
+                        children: [
+                          for (final d in const [7, 3, 0])
+                            ChoiceChip(
+                              label: Text(
+                                d == 0 ? '当天' : '提前 $d 天',
+                                style: const TextStyle(fontSize: AppTheme.fontXs),
+                              ),
+                              selected: c.birthdayRemindDays == d,
+                              visualDensity: VisualDensity.compact,
+                              onSelected: (_) =>
+                                  _setBirthdayRemind(context, ref, c, d),
+                            ),
+                          ChoiceChip(
+                            label: const Text('不提醒',
+                                style: TextStyle(fontSize: AppTheme.fontXs)),
+                            selected: c.birthdayRemindDays == null,
+                            visualDensity: VisualDensity.compact,
+                            onSelected: (_) =>
+                                _setBirthdayRemind(context, ref, c, null),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 );
@@ -752,59 +823,70 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
                     fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
               ),
             ],
-            if (c.diseaseHistory != null && c.diseaseHistory!.isNotEmpty) ...[
-              const SizedBox(height: AppSpace.s12),
-              Container(
-                padding: const EdgeInsets.all(AppSpace.s12),
-                decoration: BoxDecoration(
-                  color: AppColors.dangerSurface,
-                  borderRadius: BorderRadius.circular(AppRadius.r8),
-                ),
-                child: Text(
-                  '既往病史: ${c.diseaseHistory}',
-                  style: const TextStyle(
-                    fontSize: AppTheme.fontSm,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-              ),
-            ],
-            if (c.allergyHistory != null && c.allergyHistory!.isNotEmpty) ...[
-              const SizedBox(height: AppSpace.s8),
-              Container(
-                padding: const EdgeInsets.all(AppSpace.s12),
-                decoration: BoxDecoration(
-                  color: AppColors.accentSurfaceWarm,
-                  borderRadius: BorderRadius.circular(AppRadius.r8),
-                  border: Border.all(color: AppTheme.accent.withOpacity(0.4)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.warning_amber_rounded,
-                        size: AppSize.iconMd, color: AppTheme.accent),
-                    const SizedBox(width: AppSpace.s6),
-                    Expanded(
-                      child: Text(
-                        '过敏史: ${c.allergyHistory}',
-                        style: const TextStyle(
-                          fontSize: AppTheme.fontSm,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
             if (c.healthTags.isNotEmpty) ...[
               const SizedBox(height: AppSpace.s12),
               _buildHealthTags(c),
             ],
+            // #3 (2026-09-24): 备注 + 最后修改 —— 之前管理 Tab 只显示到标签
+            if ((c.notes ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: AppSpace.s12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpace.s12),
+                decoration: BoxDecoration(
+                  color: context.tokens.surfaceSubtle,
+                  borderRadius: BorderRadius.circular(AppRadius.r8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('备注',
+                        style: TextStyle(
+                            fontSize: AppTheme.fontXs,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary)),
+                    const SizedBox(height: AppSpace.s4),
+                    Text(c.notes!.trim(),
+                        style: const TextStyle(fontSize: AppTheme.fontSm)),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpace.s8),
+            Text(
+              '最后修改 ${DateFormat('yyyy-MM-dd HH:mm').format(c.updatedAt.toLocal())}',
+              style: TextStyle(
+                  fontSize: AppTheme.fontXs, color: context.tokens.textTertiary),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  /// 生日提醒档位 (7/3/当天/不提醒) —— PATCH 后刷新详情 (#5)
+  Future<void> _setBirthdayRemind(
+    BuildContext context,
+    WidgetRef ref,
+    Customer c,
+    int? days,
+  ) async {
+    if (c.birthdayRemindDays == days) return;
+    try {
+      await ref
+          .read(customerServiceProvider)
+          .update(c.id, {'birthdayRemindDays': days});
+      ref.invalidate(customerDetailProvider(c.id));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(days == null ? '已关闭生日提醒' : '生日提醒已设为提前 $days 天')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('设置失败: $e')),
+      );
+    }
   }
 
   /// 换客户头像 (主人 2026-09-18 拍)
@@ -915,6 +997,51 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
               ],
             ),
             const SizedBox(height: AppSpace.s8),
+            // #6 (2026-09-24): 已注册 → 直接显示**她的邀请码** + 一键复制
+            //   (拉她进沙龙/活动、核对身份时不用回头问她)
+            if (bound) ...[
+              Row(
+                children: [
+                  Icon(Icons.qr_code_2,
+                      size: AppSize.iconMd, color: context.tokens.primaryDark),
+                  const SizedBox(width: AppSpace.s6),
+                  const Text('她的邀请码',
+                      style: TextStyle(
+                          fontSize: AppTheme.fontSm, color: AppTheme.textSecondary)),
+                  const Spacer(),
+                  Text(
+                    (c.accountReferralCode ?? '').isEmpty
+                        ? '—'
+                        : c.accountReferralCode!,
+                    style: const TextStyle(
+                      fontSize: AppTheme.fontLg,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  if ((c.accountReferralCode ?? '').isNotEmpty) ...[
+                    const SizedBox(width: AppSpace.s4),
+                    IconButton(
+                      onPressed: () async {
+                        await Clipboard.setData(
+                            ClipboardData(text: c.accountReferralCode!));
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('邀请码已复制')),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: AppSize.iconSm),
+                      tooltip: '复制邀请码',
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.all(AppSpace.s4),
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: AppSpace.s8),
+            ],
             Text(
               bound
                   ? '她已经是 app 用户 —— 可以在 app 内直接邀请她 (沙龙 / 活动)'

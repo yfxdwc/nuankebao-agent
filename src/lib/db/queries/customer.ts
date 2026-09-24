@@ -80,6 +80,11 @@ export interface CustomerView {
    */
   isMember: boolean;
   /**
+   * ★ 她的邀请码 (2026-09-24): 有账号才有, 没有账号 = null。
+   *   管理 Tab 的「app 身份」卡直接显示 + 一键复制 (拉她进沙龙 / 核对身份用)。
+   */
+  accountReferralCode: string | null;
+  /**
    * ★ 这条档案**对应一个 app 账号**吗 (ADR-0016 D8, 主人 2026-09-22 拍「UI 上要有区别」)
    *   true  = 她是已注册用户 (user.customer_id 指过来)
    *   false = 凭空建档的客户 (还没注册 / 永远不会注册)
@@ -163,7 +168,8 @@ function toView(
   row: Customer,
   isMyDownline: boolean = false,
   isMember: boolean = false,
-  hasAccount: boolean = false
+  hasAccount: boolean = false,
+  accountReferralCode: string | null = null
 ): CustomerView {
   return {
     id: row.id.toString(),
@@ -192,6 +198,7 @@ function toView(
     customerType: resolveCustomerType(row, isMyDownline),
     isMember,
     hasAccount,
+    accountReferralCode,
     lastInteractionAt: row.lastInteractionAt ?? null,
     lastVisitAt: row.lastVisitAt ?? null,
     createdAt: row.createdAt,
@@ -470,7 +477,8 @@ export async function getCustomerById(
     row,
     await isMyDirectDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.phoneHash),
     flags.isMember,
-    flags.hasAccount
+    flags.hasAccount,
+    flags.accountReferralCode
   );
 }
 

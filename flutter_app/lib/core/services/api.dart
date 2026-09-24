@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/customer_charts.dart';
 import '../models/customer_insight.dart';
 import '../models/customer.dart';
+import '../models/audit_entry.dart';
 import '../models/customer_ownership.dart';
 import '../models/follow_up_info.dart';
 import '../models/ai_insight.dart';
@@ -210,6 +211,17 @@ class CustomerService {
       'offset': offset,
     });
     return CustomerListResult.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 客户档案改动记录 (管理 Tab「最近改动」, 2026-09-24)
+  ///
+  /// 返回**只含"改了哪些列"(列名), 不含列值** —— 列值可能是密文/手机号/病史,
+  /// 没必要透到前端; 中文标签在 UI 侧映射 (audit_trail_card.dart)。
+  Future<List<AuditEntry>> audit(String customerId, {int limit = 20}) async {
+    final res = await _dio.get('/customers/$customerId/audit',
+        queryParameters: {'limit': limit});
+    final items = (res.data['items'] as List).cast<Map<String, dynamic>>();
+    return items.map(AuditEntry.fromJson).toList();
   }
 
   /// 客户跟进分析 (详情页「跟进分析」卡; 客观指标免费, aiTipAvailable = 会员能否看 AI 解读)

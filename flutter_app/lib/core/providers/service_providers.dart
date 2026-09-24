@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../http/api_client.dart';
 import '../services/notifications/follow_up_reminder.dart';
 import '../services/api.dart';
+import '../models/audit_entry.dart';
 import '../models/customer_charts.dart';
 import '../models/customer_insight.dart';
 import '../models/customer_ownership.dart';
@@ -236,6 +237,15 @@ final interactionsForCustomerProvider =
 /// 客户详情
 final customerDetailProvider = FutureProvider.family<dynamic, String>(
   (ref, id) async => ref.watch(customerServiceProvider).getById(id),
+);
+
+/// 客户档案改动记录 (管理 Tab「最近改动」, 2026-09-24)
+///
+/// autoDispose: 管理 Tab 是"要看才看"的低频区; TabBarView 切走会卸载子树,
+///   下次进来重新拉一次 = 天然看到最新改动 (不用在各处 mutation 后记得 invalidate)。
+final customerAuditProvider =
+    FutureProvider.autoDispose.family<List<AuditEntry>, String>(
+  (ref, id) async => ref.watch(customerServiceProvider).audit(id),
 );
 
 /// 客户的养生记录

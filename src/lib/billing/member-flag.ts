@@ -81,13 +81,34 @@ export async function memberFlagByCustomerId(customerId: bigint): Promise<boolea
  */
 export async function customerFlagsByCustomerId(
   customerId: bigint
-): Promise<{ hasAccount: boolean; isMember: boolean }> {
-  const rows = await db.execute<{ a: boolean; m: boolean }>(sql`
+): Promise<{
+  hasAccount: boolean;
+  isMember: boolean;
+  /**
+   * ★「她的邀请码」(2026-09-24 管理 Tab 建议 #6): 有账号时带出 —— 销售拉她进
+   *   沙龙 / 活动、或核对身份时直接用, 不必回头问她。
+   *   没有账号 = null。取数走 `user.customer_id` 连接 (ADR-0016 D3 唯一真相源),
+   *   `referral_code.user_id` 有唯一索引 → 至多一行。
+   */
+  accountReferralCode: string | null;
+}> {
+  const rows = await db.execute<{ a: boolean; m: boolean; code: string | null }>(sql`
     SELECT
       EXISTS (SELECT 1 FROM "user" u WHERE u.customer_id = ${customerId}) AS a,
-      ${memberExistsSql(sql`u.customer_id = ${customerId}`)} AS m
+      ${memberExistsSql(sql`u.customer_id = ${customerId}`)} AS m,
+      (
+        SELECT rc.code
+        FROM "user" u
+        JOIN referral_code rc ON rc.user_id = u.id
+        WHERE u.customer_id = ${customerId}
+        LIMIT 1
+      ) AS code
   `);
-  return { hasAccount: rows[0]?.a === true, isMember: rows[0]?.m === true };
+  return {
+    hasAccount: rows[0]?.a === true,
+    isMember: rows[0]?.m === true,
+    accountReferralCode: rows[0]?.code ?? null,
+  };
 }
 
 /**

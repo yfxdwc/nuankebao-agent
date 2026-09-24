@@ -43,6 +43,10 @@ class Customer with _$Customer {
     ///   true = 她是已注册用户 (user.customer_id 指过来) / false = 凭空建档的客户
     ///   老后端不返回 → 默认 false (退化成旧视觉, 不崩)
     @Default(false) bool hasAccount,
+    /// ★ 她的邀请码 (2026-09-24 管理 Tab 建议 #6): 有账号才有; 没有账号 = null。
+    ///   管理 Tab「app 身份」卡直接显示 + 一键复制 (拉她进沙龙 / 核对身份用)。
+    ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
+    String? accountReferralCode,
     required DateTime createdAt,
     required DateTime updatedAt,
   }) = _Customer;

@@ -202,7 +202,7 @@ class _FakeFollowUpService extends FollowUpService {
 
 // ---------- pump helper ----------
 
-Future<void> _pumpPage(WidgetTester tester) async {
+Future<void> _pumpPage(WidgetTester tester, {Customer? customer}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local/api'))
@@ -216,7 +216,7 @@ Future<void> _pumpPage(WidgetTester tester) async {
       interactionServiceProvider
           .overrideWithValue(_FakeInteractionService(const [])),
       customerDetailProvider('798')
-          .overrideWith((ref) async => _customer()),
+          .overrideWith((ref) async => customer ?? _customer()),
       customerInsightProvider('798')
           .overrideWith((ref) async => _insightWithActions()),
     ],
@@ -682,5 +682,56 @@ void main() {
             reason: '展开态跟进卡仍在树上 (本来就是固定的)');
       },
     );
+  });
+
+  // ============================================
+  // ⑩ 管理 Tab 改进 (2026-09-24 建议 #2/#6/#7/#9)
+  //
+  // 守什么:
+  //   · 三节分组标题在 (档案 / 关系与身份 / 最近改动)
+  //   · 健康提示卡在档案组顶部 (有过敏史 → 显示"过敏史"; 无 → 轻提示)
+  //   · app 身份卡: 已注册客户显示**她的邀请码** (#6)
+  // ============================================
+  group('⑩ 管理 Tab 分组 + 邀请码 (2026-09-24)', () {
+    testWidgets('三节分组标题 + 健康提示空态提示', (tester) async {
+      await _pumpPage(tester);
+      await _tapTab(tester, 2); // 管理
+
+      // #7 分节
+      expect(find.text('档案'), findsWidgets);
+      expect(find.text('关系与身份'), findsOneWidget);
+      expect(find.text('最近改动'), findsOneWidget);
+
+      // #9 健康卡空态 (测试客户没填过敏/病史)
+      expect(find.textContaining('还没填健康信息'), findsOneWidget);
+    });
+
+    testWidgets('有过敏史 → 健康卡显示过敏史; 已注册 → 显示她的邀请码 (#6)',
+        (tester) async {
+      await _pumpPage(
+        tester,
+        customer: Customer.fromJson({
+          'id': '798',
+          'name': '演示-蒋金娣',
+          'phone': '13800001111',
+          'allergyHistory': '花粉、海鲜',
+          'hasAccount': true,
+          'accountReferralCode': 'AB12CD',
+          'createdAt': '2026-09-01T00:00:00.000Z',
+          'updatedAt': '2026-09-01T00:00:00.000Z',
+        }),
+      );
+      await _tapTab(tester, 2); // 管理
+
+      // #9 健康提示
+      expect(find.text('过敏史'), findsOneWidget);
+      expect(find.text('花粉、海鲜'), findsOneWidget);
+      expect(find.textContaining('还没填健康信息'), findsNothing);
+
+      // #6 她的邀请码 + 复制
+      expect(find.text('她的邀请码'), findsOneWidget);
+      expect(find.text('AB12CD'), findsOneWidget);
+      expect(find.byTooltip('复制邀请码'), findsOneWidget);
+    });
   });
 }

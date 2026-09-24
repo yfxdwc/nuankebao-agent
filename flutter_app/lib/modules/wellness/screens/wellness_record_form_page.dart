@@ -14,6 +14,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/models/dictionaries.dart';
+import '../../../core/models/customer.dart';
 import '../../../core/models/follow_up.dart' show FollowUpTask;
 import '../../../core/providers/service_providers.dart';
 import '../../../core/services/api.dart' show FollowUpService;
@@ -437,6 +438,64 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
     }
   }
 
+  /// 客户健康警示条 (2026-09-24 建议 #1)
+  ///
+  /// 有过敏史 / 既往病史才出现 (都没有 = SizedBox.shrink, 不占地方)。
+  /// 只读 —— 要改去客户详情「管理」Tab 或编辑档案 (这里不重复一套编辑入口)。
+  /// 客户信息拿不到 (加载中 / 报错 / 批量录入门路) → 静默不显示, 绝不能挡住记录。
+  Widget _buildHealthBand() {
+    final cid = _effectiveCustomerId;
+    if (cid == null) return const SizedBox.shrink();
+    final c = ref.watch(customerDetailProvider(cid)).valueOrNull;
+    if (c is! Customer) return const SizedBox.shrink();
+    final allergy = (c.allergyHistory ?? '').trim();
+    final disease = (c.diseaseHistory ?? '').trim();
+    if (allergy.isEmpty && disease.isEmpty) return const SizedBox.shrink();
+
+    final t = context.tokens;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.s16),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.s12),
+        decoration: BoxDecoration(
+          color: t.accentSurfaceWarm,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: t.accent),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded,
+                    size: AppSize.iconMd, color: t.accent),
+                const SizedBox(width: AppSpace.s6),
+                Text(
+                  '做项目前请注意',
+                  style: TextStyle(
+                    fontSize: AppType.sm,
+                    fontWeight: AppWeight.semibold,
+                    color: t.accent,
+                  ),
+                ),
+              ],
+            ),
+            if (allergy.isNotEmpty) ...[
+              const SizedBox(height: AppSpace.s6),
+              Text('过敏史: $allergy',
+                  style: TextStyle(fontSize: AppType.sm, color: t.textPrimary)),
+            ],
+            if (disease.isNotEmpty) ...[
+              const SizedBox(height: AppSpace.s4),
+              Text('既往病史: $disease',
+                  style: TextStyle(fontSize: AppType.sm, color: t.textPrimary)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   /// 记录日期区块 (2026-09-24: 补录 + 默认今天)
   Widget _buildServiceDate() {
     final isToday = _sameDay(_serviceDate, DateTime.now());
@@ -669,6 +728,10 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
               child: ListView(
                 padding: const EdgeInsets.all(AppSpace.s16),
                 children: [
+                  // ★ 客户健康警示条 (2026-09-24 建议 #1): 过敏史 / 既往病史
+                  //   必须**做项目前**看到 —— 原来这个页面只拿 customerId 取字典,
+                  //   完全不显示健康信息 (安全缺口)。
+                  _buildHealthBand(),
                   // P3 提速: 沿用上次时给一条明确提示
                   //   —— 不提示的话销售不知道已经填好了, 反而会把每个字段重看一遍
                   // 草稿恢复提示 (2026-09-24): 用户自己填到一半的 → 优先于「沿用上次」

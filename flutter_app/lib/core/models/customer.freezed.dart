@@ -65,6 +65,11 @@ mixin _$Customer {
   ///   true = 她是已注册用户 (user.customer_id 指过来) / false = 凭空建档的客户
   ///   老后端不返回 → 默认 false (退化成旧视觉, 不崩)
   bool get hasAccount => throw _privateConstructorUsedError;
+
+  /// ★ 她的邀请码 (2026-09-24 管理 Tab 建议 #6): 有账号才有; 没有账号 = null。
+  ///   管理 Tab「app 身份」卡直接显示 + 一键复制 (拉她进沙龙 / 核对身份用)。
+  ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
+  String? get accountReferralCode => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get updatedAt => throw _privateConstructorUsedError;
 
@@ -102,6 +107,7 @@ abstract class $CustomerCopyWith<$Res> {
       bool isSeed,
       String customerType,
       bool hasAccount,
+      String? accountReferralCode,
       DateTime createdAt,
       DateTime updatedAt});
 }
@@ -139,6 +145,7 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
     Object? isSeed = null,
     Object? customerType = null,
     Object? hasAccount = null,
+    Object? accountReferralCode = freezed,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -215,6 +222,10 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
           ? _value.hasAccount
           : hasAccount // ignore: cast_nullable_to_non_nullable
               as bool,
+      accountReferralCode: freezed == accountReferralCode
+          ? _value.accountReferralCode
+          : accountReferralCode // ignore: cast_nullable_to_non_nullable
+              as String?,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -254,6 +265,7 @@ abstract class _$$CustomerImplCopyWith<$Res>
       bool isSeed,
       String customerType,
       bool hasAccount,
+      String? accountReferralCode,
       DateTime createdAt,
       DateTime updatedAt});
 }
@@ -289,6 +301,7 @@ class __$$CustomerImplCopyWithImpl<$Res>
     Object? isSeed = null,
     Object? customerType = null,
     Object? hasAccount = null,
+    Object? accountReferralCode = freezed,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -365,6 +378,10 @@ class __$$CustomerImplCopyWithImpl<$Res>
           ? _value.hasAccount
           : hasAccount // ignore: cast_nullable_to_non_nullable
               as bool,
+      accountReferralCode: freezed == accountReferralCode
+          ? _value.accountReferralCode
+          : accountReferralCode // ignore: cast_nullable_to_non_nullable
+              as String?,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -399,6 +416,7 @@ class _$CustomerImpl implements _Customer {
       this.isSeed = false,
       this.customerType = 'normal',
       this.hasAccount = false,
+      this.accountReferralCode,
       required this.createdAt,
       required this.updatedAt})
       : _healthTags = healthTags;
@@ -481,6 +499,12 @@ class _$CustomerImpl implements _Customer {
   @override
   @JsonKey()
   final bool hasAccount;
+
+  /// ★ 她的邀请码 (2026-09-24 管理 Tab 建议 #6): 有账号才有; 没有账号 = null。
+  ///   管理 Tab「app 身份」卡直接显示 + 一键复制 (拉她进沙龙 / 核对身份用)。
+  ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
+  @override
+  final String? accountReferralCode;
   @override
   final DateTime createdAt;
   @override
@@ -488,7 +512,7 @@ class _$CustomerImpl implements _Customer {
 
   @override
   String toString() {
-    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, avatar: $avatar, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, hasAccount: $hasAccount, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, avatar: $avatar, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, hasAccount: $hasAccount, accountReferralCode: $accountReferralCode, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -525,6 +549,8 @@ class _$CustomerImpl implements _Customer {
                 other.customerType == customerType) &&
             (identical(other.hasAccount, hasAccount) ||
                 other.hasAccount == hasAccount) &&
+            (identical(other.accountReferralCode, accountReferralCode) ||
+                other.accountReferralCode == accountReferralCode) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -553,6 +579,7 @@ class _$CustomerImpl implements _Customer {
         isSeed,
         customerType,
         hasAccount,
+        accountReferralCode,
         createdAt,
         updatedAt
       ]);
@@ -593,6 +620,7 @@ abstract class _Customer implements Customer {
       final bool isSeed,
       final String customerType,
       final bool hasAccount,
+      final String? accountReferralCode,
       required final DateTime createdAt,
       required final DateTime updatedAt}) = _$CustomerImpl;
 
@@ -662,6 +690,12 @@ abstract class _Customer implements Customer {
   ///   老后端不返回 → 默认 false (退化成旧视觉, 不崩)
   @override
   bool get hasAccount;
+
+  /// ★ 她的邀请码 (2026-09-24 管理 Tab 建议 #6): 有账号才有; 没有账号 = null。
+  ///   管理 Tab「app 身份」卡直接显示 + 一键复制 (拉她进沙龙 / 核对身份用)。
+  ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
+  @override
+  String? get accountReferralCode;
   @override
   DateTime get createdAt;
   @override

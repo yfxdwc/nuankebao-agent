@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:nuankebao/core/models/customer.dart';
 import 'package:nuankebao/core/models/dictionaries.dart';
 import 'package:nuankebao/core/models/follow_up.dart';
 import 'package:nuankebao/core/models/wellness_record.dart';
@@ -128,6 +129,8 @@ Future<void> _pump(
   required WellnessRecordService wellness,
   required FollowUpService followUps,
   Dictionaries? dict,
+  /// 注入客户档案 (健康警示条 #1 的数据源); 不传 = 客户加载失败 → 不显示警示条
+  Customer? customer,
 }) async {
   SharedPreferences.setMockInitialValues({});
   await tester.binding.setSurfaceSize(const Size(900, 2400));
@@ -160,6 +163,9 @@ Future<void> _pump(
       dioProvider.overrideWithValue(dio),
       wellnessRecordServiceProvider.overrideWithValue(wellness),
       followUpServiceProvider.overrideWithValue(followUps),
+      if (customer != null)
+        customerDetailProvider(customer.id)
+            .overrideWith((ref) async => customer),
     ],
     child: MaterialApp.router(routerConfig: router),
   ));
@@ -212,6 +218,51 @@ void main() {
     expect(wellness.updated, hasLength(1));
     expect(wellness.updated.single['serviceDate'], '2026-09-14',
         reason: '编辑绝不能把记录日期改成今天 (时间线/趋势/复购周期全跟着错)');
+  });
+
+  testWidgets('①-b 客户有过敏/病史 → 表单顶部出现「做项目前请注意」警示条', (tester) async {
+    final wellness = _FakeWellnessService();
+    await _pump(
+      tester,
+      form: const WellnessRecordFormPage(customerId: 'c1'),
+      wellness: wellness,
+      followUps: _FakeFollowUpService(),
+      customer: Customer(
+        id: 'c1',
+        name: '演示-蒋金娣',
+        phone: '13800001111',
+        allergyHistory: '花粉、海鲜',
+        diseaseHistory: '高血压',
+        createdAt: DateTime(2026, 9, 1),
+        updatedAt: DateTime(2026, 9, 1),
+      ),
+    );
+
+    // 2026-09-24 建议 #1: 做项目前必须看到安全信息
+    expect(find.text('做项目前请注意'), findsOneWidget);
+    expect(find.textContaining('过敏史: 花粉、海鲜'), findsOneWidget);
+    expect(find.textContaining('既往病史: 高血压'), findsOneWidget);
+  });
+
+  testWidgets('①-c 客户没有过敏/病史 (或档案拿不到) → 不显示警示条, 不占地方',
+      (tester) async {
+    final wellness = _FakeWellnessService();
+    await _pump(
+      tester,
+      form: const WellnessRecordFormPage(customerId: 'c1'),
+      wellness: wellness,
+      followUps: _FakeFollowUpService(),
+      customer: Customer(
+        id: 'c1',
+        name: '演示-蒋金娣',
+        phone: '13800001111',
+        createdAt: DateTime(2026, 9, 1),
+        updatedAt: DateTime(2026, 9, 1),
+      ),
+    );
+
+    expect(find.text('做项目前请注意'), findsNothing);
+    expect(find.textContaining('过敏史'), findsNothing);
   });
 
   testWidgets('②-b 下次建议日期快捷档位 = 明天 / 3 / 7 / 10 天后', (tester) async {
