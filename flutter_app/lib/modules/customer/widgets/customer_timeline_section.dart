@@ -29,6 +29,10 @@ import '../../../core/widgets/app_list_row.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/b2_no_chrome.dart';
 import '../../follow_up/widgets/complete_follow_up_sheet.dart' show showAddInteractionSheet;
+import '../../follow_up/widgets/interaction_detail_sheet.dart'
+    show showInteractionDetailSheet;
+import '../../wellness/widgets/wellness_record_detail_sheet.dart'
+    show showWellnessRecordDetailSheet;
 import 'record_format.dart';
 
 // ============================================
@@ -759,7 +763,11 @@ class _CustomerTimelineSectionState
           title: Text(itemName ?? '养生记录'),
           subtitle: subtitle,
           meta: meta,
-          onTap: () => context.push('/wellness-records/${w.id}'),
+          onTap: () => showWellnessRecordDetailSheet(
+            context,
+            ref,
+            recordId: w.id,
+          ),
           dense: true,
           showDivider: showDivider,
         );
@@ -776,7 +784,12 @@ class _CustomerTimelineSectionState
           title: Text(typeLabel),
           subtitle: Text(subtitleParts.join(' · '),
               maxLines: 2),
-          onTap: null,
+          onTap: () => showInteractionDetailSheet(
+            context,
+            ref,
+            interaction: i,
+            customerId: widget.customerId,
+          ),
           dense: true,
           showDivider: showDivider,
         );

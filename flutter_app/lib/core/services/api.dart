@@ -465,6 +465,25 @@ class InteractionService {
     final res = await _dio.post('/interactions', data: data);
     return Interaction.fromJson(res.data as Map<String, dynamic>);
   }
+
+  /// 编辑一条联系记录 (PATCH /api/interactions/[id])
+  ///
+  /// [data] 可传 type / summary / followUpAt; 服务端只动这些字段。
+  /// summary 传 "" 会清空 (与后端契约一致)。
+  /// 后端**不**挂会员闸 (主人 2026-09-25 拍: 修自己记错的记录不该被会员到期锁住)。
+  /// 返回完整 view JSON。
+  Future<Interaction> update(String id, Map<String, dynamic> data) async {
+    final res = await _dio.patch('/interactions/$id', data: data);
+    return Interaction.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// 删除一条联系记录 (DELETE /api/interactions/[id])
+  ///
+  /// 后端**不**挂会员闸 (同上: 自己记错的该删就删)。
+  /// 返回 `{success: true}`。
+  Future<void> delete(String id) async {
+    await _dio.delete('/interactions/$id');
+  }
 }
 
 // ============================================

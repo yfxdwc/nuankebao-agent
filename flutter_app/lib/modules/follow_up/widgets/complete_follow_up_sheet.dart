@@ -22,6 +22,7 @@
 //   「修完成跟进的 bug 时忘了同步修添加联系」(同根 §5「并发 session commit」: 一份源码 + 两处复制 → 一改一漏)。
 // ============================================
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -188,6 +189,7 @@ class _InteractionSheetState extends State<_InteractionSheet> {
 
       // 2. 记一条互动 (可能失败)
       String? interactionError;
+      bool interactionMembership = false;
       try {
         await widget.ref.read(interactionServiceProvider).create({
           'customerId': _customerId,
@@ -195,7 +197,13 @@ class _InteractionSheetState extends State<_InteractionSheet> {
           if (hasNotes) 'summary': summary,
         });
       } catch (e) {
-        interactionError = e.toString();
+        // 2026-09-25: 402 (会员功能) 不弹裸异常 —— 全局 onMembershipRequired 已有人话提示,
+        //   这里是「任务已完成 + 互动需会员」的**部分成功**, 给友好提示就够了。
+        if (_isMembershipRequired(e)) {
+          interactionMembership = true;
+        } else {
+          interactionError = e.toString();
+        }
       }
 
       // 3. 用量埋点 (1 成功后就 track —— follow_up_done 跟 Interaction 后口成败解耦,
@@ -213,9 +221,17 @@ class _InteractionSheetState extends State<_InteractionSheet> {
       // 5. 关弹层 + 反馈
       Navigator.pop(context, true);
       final typeLabel = interactionTypeLabels[_selectedType] ?? _selectedType;
-      if (interactionError == null) {
+      if (interactionError == null && !interactionMembership) {
         messenger.showSnackBar(
           SnackBar(content: Text('已标记完成 · 已记一条${typeLabel}互动')),
+        );
+      } else if (interactionMembership) {
+        // 部分成功: 任务已标完成 (不可逆); 互动是会员功能, 不让记录这单
+        //   —— 明确告知, 全局提示已有人话说明, 这里不再重复「会员」字样
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('任务已完成（互动记录是会员功能, 本次未记录）'),
+          ),
         );
       } else {
         // 部分成功: 任务确实完成了 (不可逆), 但互动没记上 —— 明确告知, 不让用户以为全好
@@ -243,11 +259,34 @@ class _InteractionSheetState extends State<_InteractionSheet> {
     } catch (e) {
       if (mounted) {
         setSheetState(() => _saving = false);
-        messenger.showSnackBar(
-          SnackBar(content: Text('保存失败: $e')),
-        );
+        // 2026-09-25: 402 → 全局 onMembershipRequired 已负责人话说明, 这里不再
+        //   弹裸「保存失败: DioException(...402)」让人看不懂。
+        if (_isMembershipRequired(e)) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('互动记录是会员功能, 本次未保存'),
+            ),
+          );
+        } else {
+          messenger.showSnackBar(
+            SnackBar(content: Text('保存失败: $e')),
+          );
+        }
       }
     }
+  }
+
+  /// 异常是不是 402 (Payment Required, 后端用会员门槛)
+  ///
+  /// 2026-09-25: 之前状态是全弹一层把 DioException(...402) 原样丢给用户, 全局
+  ///   onMembershipRequired 已经弹了一条「这是会员功能」提示, 但本弹层**再**贴一条
+  ///   「保存失败: DioException(...402)」就重了 + 用户看不懂「Payment Required」。
+  ///   兜两类来源: dio 直抛 / 包装过的 ApiException (测试替身常用)。
+  bool _isMembershipRequired(Object e) {
+    if (e is DioException) {
+      return e.response?.statusCode == 402;
+    }
+    return false;
   }
 
   @override

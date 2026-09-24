@@ -419,6 +419,10 @@ class _WellnessRecordFormPageState extends ConsumerState<WellnessRecordFormPage>
       _dirty = false; // 已保存 → 离开不再确认
       await _clearDraft();
       ref.invalidate(customerWellnessRecordsProvider(_effectiveCustomerId!));
+      // 2026-09-25 修: 编辑保存后**同时**失效按 id 取的 provider, 否则弹层 / 详情页显示旧数据
+      if (widget.recordId != null) {
+        ref.invalidate(wellnessRecordByIdProvider(widget.recordId!));
+      }
       context.pop();
     } catch (e) {
       if (!mounted) return;

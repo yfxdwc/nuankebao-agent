@@ -254,6 +254,15 @@ final customerWellnessRecordsProvider =
   },
 );
 
+/// 单条养生记录 (按 id 取, 2026-09-25 从详情页私有 `_recordProvider` 提到公共)
+/// 用途: 详情页 + 底部弹层共用同一份缓存; 任一处编辑保存后调用
+/// `ref.invalidate(wellnessRecordByIdProvider(id))` 即双向刷新。
+final wellnessRecordByIdProvider =
+    FutureProvider.family<WellnessRecord, String>(
+  (ref, recordId) async =>
+      ref.watch(wellnessRecordServiceProvider).getById(recordId),
+);
+
 /// 加盟商列表
 final franchiseesProvider = FutureProvider<List<dynamic>>(
   (ref) async => ref.watch(franchiseeServiceProvider).list(),

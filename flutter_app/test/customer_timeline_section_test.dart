@@ -876,6 +876,62 @@ void main() {
       expect(fakeInteraction.createCalls.single['type'], 'phone');
     },
   );
+
+  // ============================================
+  // 2026-09-25 第 13/14/5 项: 时间线行 → 弹层
+  // ============================================
+
+  testWidgets(
+    '13/14 点养生记录行 → 打开「养生详情」底部弹层',
+    (tester) async {
+      await _pumpSection(
+        tester,
+        wellness: [_wellness(id: 'w1', serviceDate: '2026-09-22')],
+        interactions: const [],
+      );
+
+      // 点养生行 (AppListRow onTap → showWellnessRecordDetailSheet)
+      //   弹层由 wellnessRecordByIdProvider 拉取, 假 service 不在 widget test 注入,
+      //   会走真 service.getById → dio 抛错 → ErrorState
+      await tester.tap(find.text('肩颈经络理疗'));
+      await tester.pumpAndSettle();
+
+      // 弹层进入画面 + 标题可见
+      expect(find.text('养生详情'), findsOneWidget);
+      // 「编辑」入口在
+      expect(find.text('编辑'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    '5 点互动记录行 → 打开「联系记录」底部弹层',
+    (tester) async {
+      await _pumpSection(
+        tester,
+        wellness: const [],
+        interactions: [
+          _interaction(
+            id: 'i1',
+            createdAt: DateTime(2026, 9, 22, 14, 30),
+            type: 'phone',
+            summary: '约下周三到店',
+          ),
+        ],
+      );
+
+      // 点互动行 (AppListRow onTap → showInteractionDetailSheet)
+      await tester.tap(find.text('电话'));
+      await tester.pumpAndSettle();
+
+      // 弹层头部 + 类型 + 内容
+      expect(find.text('联系记录'), findsOneWidget);
+      expect(find.text('电话'), findsWidgets); // 行标题 + 弹层主标题都可能是「电话」
+      expect(find.text('约下周三到店'), findsOneWidget);
+      // 「编辑」+「删除」操作入口
+      expect(find.text('编辑'), findsOneWidget);
+      expect(find.text('删除'), findsOneWidget);
+    },
+  );
 }
 
 // ============================================
