@@ -42,7 +42,38 @@ const text = (page) => page.evaluate(() => document.body.innerText || "");
  * 命中多个时取**面积最小**的 (最内层) —— 否则会点到覆盖整屏的祖先容器。
  */
 async function tapText(page, pattern, { nth = 0, index = 0 } = {}) {
-  const box = await page.evaluate(
+  /**
+   * ⚠ 2026-09-24 修 (B1/B2 换装后在 ⑤ 步踩到):
+   *   语义节点的坐标**可以落在视口外** (node 存在于语义树, 但内容在屏幕下方)。
+   *   旧版直接 `page.mouse.click(x, y)` —— y > viewport.height 时点击落在视口外,
+   *   什么都不会发生, 却报成「表单未按预期打开」这种**看起来像应用 bug** 的失败。
+   *   而旧版只在「找不到节点」时才滚动 —— 节点存在但不可见这条路径没人管。
+   *   现在: 先找 → 若坐标在视口外(或贴边) → 用滚轮把内容滚上来 → 重新找 → 再点。
+   */
+  let box = await findBox();
+  if (box) {
+    const vp = page.viewportSize();
+    const margin = 60;
+    let guard = 0;
+    while (box && (box.y < margin || box.y > vp.height - margin) && guard++ < 8) {
+      const delta =
+        box.y > vp.height / 2
+          ? Math.min(500, Math.round(box.y - vp.height / 2))
+          : -Math.min(500, Math.round(vp.height / 2 - box.y));
+      await page.mouse.move(vp.width / 2, vp.height / 2);
+      await page.mouse.wheel(0, delta);
+      await page.waitForTimeout(600);
+      const before = box.y;
+      box = await findBox();
+      if (box && Math.abs(box.y - before) < 4) break; // 滚不动了 (已到顶/底)
+    }
+    if (box && (box.y < 0 || box.y > vp.height)) {
+      note(`    [tap 警告] 目标仍在视口外 y=${Math.round(box.y)} (视口 ${vp.height}) —— 点击可能无效`);
+    }
+  }
+
+  async function findBox() {
+    return await page.evaluate(
     ([pat, useNth, useIndex]) => {
       const re = new RegExp(pat);
       /**
@@ -63,8 +94,10 @@ async function tapText(page, pattern, { nth = 0, index = 0 } = {}) {
       if (!hit) return null;
       return { x: hit.r.x + hit.r.width / 2, y: hit.r.y + hit.r.height / 2, w: hit.r.width, h: hit.r.height };
     },
-    [pattern, nth, index],
-  );
+      [pattern, nth, index],
+    );
+  }
+
   if (!box) {
     // 命中失败时给诊断 (语义树有几个节点 / 候选文本长啥样) —— 不然只能靠猜
     const diag = await page.evaluate((pat) => {
