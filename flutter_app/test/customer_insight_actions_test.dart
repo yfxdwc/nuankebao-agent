@@ -265,15 +265,18 @@ void main() {
   // ⑧ 折叠态 (2026-09-24 主人诉求)
   //
   // 主人原话: 「随页面上滑折叠到最少一行, 补折叠状态时卡片右上角出现
-  //   图标 (向下展开)」。
+  //   图标 (向下展开)」 + 「现在该做折叠后, 颜色要高亮显示」
+  //   (折叠成一行时卡片要有高亮色, 跟展开态的白卡明显区分, 一眼能看出
+  //   "这里还有事要做」)。
   //
   // 守什么:
   //   · collapsed == true + 有行动 → 只显示一行 header, 行动行不可见, 右上角
-  //     出现 Icons.expand_more (中老年手指友好, IconButton 自带 48×48 触摸区)
+  //     出现 Icons.expand_more + **卡片高亮**: 浅绿底 (primaryLight) + 深绿边
+  //     (primary) + 深绿字 (primaryDark) —— 跟展开态白卡明确区分。
   //   · 点 expand_more → 回调被调 (详情页负责把状态收回展开)
-  //   · collapsed == false → 现有展开态不受影响
-  //   · collapsed == true + **无**行动 → 「节奏正常」可见, **不**出图标
-  //     (没东西可展开, 出图标 = 贴告示 ≠ 修复, 同根 §5)
+  //   · collapsed == false → 现有展开态不受影响 (仍白卡, 防止把展开态也染了)
+  //   · collapsed == true + **无**行动 → 「节奏正常」可见, **不**出图标,
+  //     **不**高亮 (没东西可折叠 → 不高亮)
   //
   // 页面上滑驱动折叠 = 详情页 (页面级测试) 的职责 —— 本文件只守 widget 级
   // 「传入 collapsed 后渲染对不对」。
@@ -301,6 +304,37 @@ void main() {
     );
 
     testWidgets(
+      'collapsed=true + 有行动 → 卡片高亮 (浅绿底 + 深绿边 + 深绿字, 与展开态明确区分)',
+      (tester) async {
+        await pump(tester, insight(actions: [action()]), collapsed: true);
+        final tokens = AppThemes.resolve(null);
+
+        // ⚠ 关键锁: 卡片必须能按 key 抓 —— 页面级测试用同一 key 区分行动卡 vs
+        //   其他 BoxDecoration (卡片基类不会染色, 整页只有这一张该染)
+        final cardFinder = find.byKey(const ValueKey('insightActionsCard'));
+        expect(cardFinder, findsOneWidget,
+            reason: '卡片必须挂 insightActionsCard key 供测试抓取');
+
+        final decoration = tester.widget<Container>(cardFinder).decoration
+            as BoxDecoration;
+        // 浅绿底 — 这就是"高亮"的视觉落点
+        expect(decoration.color, tokens.primaryLight,
+            reason: '折叠态卡片底应是浅绿 (primaryLight), 跟展开态白卡区分');
+        // 深绿边 — 同色系, 比底更深一档做轮廓
+        expect(decoration.border, isA<Border>());
+        final borderTop =
+            (decoration.border as Border).top;
+        expect(borderTop.color, tokens.primary,
+            reason: '折叠态卡片边框应是深绿 (primary)');
+
+        // 「现在该做」文字颜色 = primaryDark
+        final titleText = tester.widget<Text>(find.text('现在该做 (1)'));
+        expect(titleText.style?.color, tokens.primaryDark,
+            reason: '折叠态标题文字应是深绿 (primaryDark), 浅绿底上读得清');
+      },
+    );
+
+    testWidgets(
       '点 expand_more → onToggleCollapsed 被调',
       (tester) async {
         var toggled = 0;
@@ -319,7 +353,7 @@ void main() {
     );
 
     testWidgets(
-      'collapsed=false → 行动可见, 无 expand_more (回归保护)',
+      'collapsed=false → 行动可见, 无 expand_more, 卡片白卡 (回归保护)',
       (tester) async {
         await pump(tester, insight(actions: [action()]), collapsed: false);
 
@@ -329,11 +363,24 @@ void main() {
             reason: '展开态必须渲染行动行按钮');
         expect(find.byIcon(Icons.expand_more), findsNothing,
             reason: '展开态**不**该出现展开图标');
+
+        // ⚠ 回归保护: 展开态维持白卡, **不**被折叠态的染着色牵连。
+        //   主人原话 2026-09-24 "折叠后颜色要高亮显示" —— 只指折叠态。
+        final tokens = AppThemes.resolve(null);
+        final cardFinder = find.byKey(const ValueKey('insightActionsCard'));
+        expect(cardFinder, findsOneWidget);
+        final decoration = tester.widget<Container>(cardFinder).decoration
+            as BoxDecoration;
+        expect(decoration.color, tokens.surfaceCard,
+            reason: '展开态卡片仍是白卡, 高亮只用于折叠态');
+        final borderTop = (decoration.border as Border).top;
+        expect(borderTop.color, tokens.divider,
+            reason: '展开态边框仍是细灰, 不染深绿');
       },
     );
 
     testWidgets(
-      'collapsed=true + 无行动 → 「节奏正常」可见, 无展开图标',
+      'collapsed=true + 无行动 → 「节奏正常」可见, 无展开图标, 卡片不高亮',
       (tester) async {
         await pump(tester, insight(actions: []), collapsed: true);
 
@@ -346,6 +393,16 @@ void main() {
             reason: '无行动时折叠态不该出现展开图标 (没东西可展开)');
         // 顺带回归: 「建任务」按钮不该出现 (空行动 = 节奏正常)
         expect(find.text('建任务'), findsNothing);
+
+        // ⚠ 折叠 = true 但 todos 为空 → _isCollapsed = false → 走的是「节奏正常」分支,
+        //   卡片仍是白卡 (没东西可折叠 → 不高亮, 高亮必须挂在有内容的折叠态上)
+        final tokens = AppThemes.resolve(null);
+        final cardFinder = find.byKey(const ValueKey('insightActionsCard'));
+        expect(cardFinder, findsOneWidget);
+        final decoration = tester.widget<Container>(cardFinder).decoration
+            as BoxDecoration;
+        expect(decoration.color, tokens.surfaceCard,
+            reason: '没东西可折叠 → 卡片不染高亮色, 维持白卡');
       },
     );
   });

@@ -2,6 +2,50 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 「现在该做」折叠态高亮 (2026-09-24)
+
+主人 2026-09-24 诉求 (本日折叠诉求的续): 「"现在该做"折叠后, 颜色要高亮显示」—— 折叠成一行时卡片要有高亮色, 跟展开态的白卡明显区分, 一眼能看出「这里还有事要做」。
+
+### 做法 (A)
+
+1. **`_ActionsBody` 最外层 Container 加 key + 分支着色**:
+   · `key: const ValueKey('insightActionsCard')` —— 测试锁卡用 (页面级测试也共用)
+   · `_isCollapsed = true` → `color: t.primaryLight` (品牌浅绿) + `border: t.primary` (深绿)
+   · `_isCollapsed = false` → 维持 `t.surfaceCard` (白) + `t.divider` (灰)
+
+2. **`_CollapsedHeader` 前景色全用 `t.primaryDark`**:
+   · 左侧 checklist 图标 + 「现在该做 (N)」标题 + 「共 N 条」计数 + `Icons.expand_more`
+   · 不要再用 `textTertiary` (灰字在浅绿底上发灰) 或默认黑 (`textPrimary`, 没信号意义)
+
+### 为什么不影响展开态
+
+- `_isCollapsed` = `collapsed && todos.isNotEmpty` —— 只有「折叠了 + 有行动」才走浅绿底分支;
+  展开 + 无行动都仍走白卡路径, 渲染逻辑**整块不动**。
+- 既有测试 `collapsed=false` 仍断言白卡 (`decoration.color == tokens.surfaceCard`),
+  这是主人诉求的字面边界「折叠后高亮」= 顺向白卡 → 折叠态切色, 反向折叠 → 展开态复原。
+- 无行动的折叠 (`collapsed=true + todos=[]`) → 走「节奏正常」分支, 仍白卡,
+  「没东西可折叠 → 不高亮」 = 跟既有的「没东西可展开 → 不出图标」同根。
+
+### 为什么不写成「整页所有折叠态都染」
+
+- 高亮是**信号**, 不是**装饰** (ui-principles.md §1 原则 5): 折叠态 = 「还有待办, 收起来了」这
+  一个语义需要信号色, 其它 (banner / detail Tab header / ...) 没这个诉求。
+- 卡片颜色一变就跟展开态明确区分 —— 切回去销售也能立刻知道「我展开回来了」
+  (避免销售点开又觉得"跟刚折叠的差不多"折叠回去)。
+
+### 信号色模式 (整套色域内已有先例)
+
+- `AppTheme.primaryLight` 做「已注册」胶囊底 + `primaryDark` 字, profile / 我的推荐页沿用
+- 新卡片只在这块复用同模式, **不**新引入硬编码色 (`AppColors.xxx` / hex) —— 颜色一律
+  `context.tokens.xxx` (换肤不失效)。
+
+### 验证
+
+- `flutter analyze` → 0 issue
+- `flutter test test/customer_insight_actions_test.dart` → +3 (折叠高亮 + 展开回归 + 无行动折叠回归)
+- `flutter test` → 全绿
+- `bash tools/check-ui-tokens.sh --strict` → exit 0 (cardWidget 持平基线 1, 不新增 Card)
+
 ## [Unreleased] — 「现在该做」卡片滚动折叠 (2026-09-24)
 
 主人 2026-09-24 诉求: 「优化『现在该做』卡片：随页面上滑折叠到最少一行，补折叠状态时卡片右上角出现图标 (向下展开)」。

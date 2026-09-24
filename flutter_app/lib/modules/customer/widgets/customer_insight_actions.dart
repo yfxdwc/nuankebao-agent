@@ -119,11 +119,25 @@ class _ActionsBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tokens;
 
+    // 高亮信号色 (2026-09-24 主人诉求):
+    //   折叠态 = 「这里还有事要做, 收起来了」→ 用品牌浅绿 (primaryLight) 底 +
+    //   深绿边框 (primary) + 深绿字 (primaryDark) —— 一眼可见「这条线还没处理完」。
+    //   展开态 = 仍是白卡 (列行动, 重点在文字内容, 不需要"还在等你"的视觉强调),
+    //     跟折叠态**明确**区分 (避免"展开后看着跟折叠差不多, 销售以为没点开" 错觉)。
+    //   对齐 ui-principles.md §1 原则 5「颜色是信号, 不是装饰」 —— 信号色只在
+    //   "被收起的待办"这个状态出现, 不是给所有卡都染色。
+    //
+    // key = 'insightActionsCard' 给测试锁定卡片 (避免 descendant + 父级 BoxDecoration
+    //   在页面级测试里一并报上来)。**不要**改这个 key —— 已有测试按它抓。
     return Container(
+      key: const ValueKey('insightActionsCard'),
       decoration: BoxDecoration(
-        color: t.surfaceCard,
+        // 折叠态 = sage 浅绿底 + 深绿边; 展开态 = 白卡 + 细灰边 (维持现状)
+        color: _isCollapsed ? t.primaryLight : t.surfaceCard,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: t.divider),
+        border: Border.all(
+          color: _isCollapsed ? t.primary : t.divider,
+        ),
       ),
       // AnimatedSize: 折叠 / 展开切换平滑过渡 (~180ms easeOut),
       // alignment 顶部 → 折叠时行动区从顶部收起来 (而非从底部 / 中央)
@@ -228,6 +242,12 @@ class _ActionsBody extends StatelessWidget {
 //
 // 触摸区 ≥ AppSize.tapMin (48pt): IconButton 默认 MaterialTapTargetSize.padded
 // 是 48×48, 中老年手指友好 —— 同 AGENTS §1「移动优先, 移动端重度使用」。
+//
+// 2026-09-24 折叠态高亮: 卡片底是 primaryLight (浅绿), 这块的所有前景色必须用
+//   primaryDark (深绿) —— 不要用 textPrimary (近似黑, 在浅绿上刺眼且无信号意义)
+//   也不要 textTertiary (灰字, 在浅绿底上几乎看不见)。
+//   既有的 "primaryLight 底 + primaryDark 字" 模式参考 profile_page / 我的推荐页
+//   的 "已注册" 胶囊 (主人原话 2026-09-24)。
 // ============================================
 
 class _CollapsedHeader extends StatelessWidget {
@@ -243,6 +263,8 @@ class _CollapsedHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 折叠态一定是在 primaryLight 底色下渲染 (调用方 _ActionsBody 根据
+    //   _isCollapsed 分支已切色); 整块前景色统一用 primaryDark 才能在浅绿底上读得清。
     final t = context.tokens;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -253,7 +275,7 @@ class _CollapsedHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.checklist_rtl, size: AppSize.iconSm, color: t.textSecondary),
+          Icon(Icons.checklist_rtl, size: AppSize.iconSm, color: t.primaryDark),
           const SizedBox(width: AppSpace.s6),
           Expanded(
             child: Text(
@@ -261,7 +283,9 @@ class _CollapsedHeader extends StatelessWidget {
               style: TextStyle(
                 fontSize: AppType.sm,
                 fontWeight: AppWeight.semibold,
-                color: t.textPrimary,
+                // 折叠态在浅绿底上 —— 跟展开态的 textPrimary 区分开,
+                //   "深绿信号字" 是这个卡片独有的折叠特征
+                color: t.primaryDark,
               ),
             ),
           ),
@@ -272,12 +296,13 @@ class _CollapsedHeader extends StatelessWidget {
               child: Text(
                 '共 $totalActions 条',
                 style:
-                    TextStyle(fontSize: AppType.xs, color: t.textTertiary),
+                    TextStyle(fontSize: AppType.xs, color: t.primaryDark),
               ),
             ),
-          // 展开图标 —— IconButton 自带 tooltip「展开」 + 48×48 触摸区
+          // 展开图标 —— IconButton 自带 tooltip「展开」 + 48×48 触摸区。
+          //   折叠态唯一可见的图标 → 用信号色, 不要用默认灰 (灰在浅绿上发虚)
           IconButton(
-            icon: const Icon(Icons.expand_more, size: AppSize.iconMd),
+            icon: Icon(Icons.expand_more, size: AppSize.iconMd, color: t.primaryDark),
             tooltip: '展开',
             // 详情页在「确实有内容可展开」时才会传回调 (collapsed && todos.isNotEmpty),
             // 这里给个空保护: 即便外部传了 null, 按钮也不该可点 (避免点了没反应)
