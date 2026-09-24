@@ -373,6 +373,42 @@ callbackUrl: string
 }
 ```
 
+### `GET /api/interactions/[id]`
+详情。
+
+**响应**:
+```json
+{
+  "id": "12",
+  "customerId": "1",
+  "type": "phone",
+  "summary": "已电话联系",
+  "followUpAt": "2026-09-15T10:00:00Z",
+  "createdBy": "1",
+  "createdAt": "2026-09-20T08:30:00Z"
+}
+```
+
+### `PATCH /api/interactions/[id]`
+修正 (字段全可选; `summary` 走 pgcrypto 加密, 空串 `""` = 清空 → 落 `null`;
+`followUpAt: null` = 清空下次跟进时间; 至少需给一个字段, 空 body → 400)。
+
+> 权限口径: **不挂 `featureGuard`**。`features.ts` 写的是「GET 允许看历史, POST 需会员」;
+> 修正 / 删除自己记错的数据不应因会员到期被锁死, 否则错数据永远错下去。
+
+**Body**:
+```json
+{
+  "type": "wechat",                                  // 可选
+  "summary": "已微信沟通, 客户同意下周体验",          // 可选, 走加密, ""=清空
+  "followUpAt": "2026-09-25T10:00:00Z"              // 可选, null=清空
+}
+```
+
+### `DELETE /api/interactions/[id]`
+硬删除。同一事务内重算 `customer.last_interaction_at` = 该客户剩余 interaction 的
+`MAX(created_at)` (无则 `NULL`), 避免「删掉最近一条后客户仍显示刚联系过」。
+
 ---
 
 ## 7. 字典

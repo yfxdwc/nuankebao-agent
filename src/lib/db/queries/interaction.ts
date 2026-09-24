@@ -74,3 +74,114 @@ export async function listInteractionsByCustomer(
 
   return rows.map(toView);
 }
+
+export interface UpdateInteractionInput {
+  type?: "phone" | "wechat" | "visit" | "holiday_greeting" | "other";
+  /**
+   * 备注:
+   *   - undefined = 不动
+   *   - ""        = 清空 (落 null, 但加密列写 null)
+   *   - 非空串    = encryptField 覆盖
+   */
+  summary?: string;
+  /**
+   * 下次跟进时间:
+   *   - undefined = 不动
+   *   - null      = 清空
+   *   - 字符串     = new Date(input)
+   */
+  followUpAt?: string | null;
+}
+
+export async function getInteractionById(
+  id: bigint
+): Promise<InteractionView | null> {
+  const [row] = await db
+    .select()
+    .from(interaction)
+    .where(eq(interaction.id, id))
+    .limit(1);
+  return row ? toView(row) : null;
+}
+
+export async function updateInteraction(
+  id: bigint,
+  input: UpdateInteractionInput,
+  ctx: AuditContext
+): Promise<InteractionView | null> {
+  return await withAuditContext(ctx, async (tx) => {
+    const updateData: Partial<NewInteraction> = {};
+    if (input.type !== undefined) updateData.type = input.type;
+    if (input.summary !== undefined) {
+      // "" → null (清空); 非空 → encryptField 覆盖
+      updateData.summaryEncrypted =
+        input.summary === "" ? null : encryptField(input.summary);
+    }
+    if (input.followUpAt !== undefined) {
+      updateData.followUpAt = input.followUpAt
+        ? new Date(input.followUpAt)
+        : null;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      // 没字段要改 → 直接读回当前行
+      const [row] = await tx
+        .select()
+        .from(interaction)
+        .where(eq(interaction.id, id))
+        .limit(1);
+      return row ? toView(row) : null;
+    }
+
+    const [row] = await tx
+      .update(interaction)
+      .set(updateData)
+      .where(eq(interaction.id, id))
+      .returning();
+    return row ? toView(row) : null;
+  });
+}
+
+export async function deleteInteraction(
+  id: bigint,
+  ctx: AuditContext
+): Promise<boolean> {
+  return await withAuditContext(ctx, async (tx) => {
+    // 先拿 customerId (同事务 → 一致快照)
+    const [target] = await tx
+      .select({ customerId: interaction.customerId })
+      .from(interaction)
+      .where(eq(interaction.id, id))
+      .limit(1);
+    if (!target) return false;
+
+    const deleted = await tx
+      .delete(interaction)
+      .where(eq(interaction.id, id))
+      .returning({ id: interaction.id });
+    if (deleted.length === 0) return false;
+
+    // 跟 createInteraction 对称: create 把 lastInteractionAt 往前推
+    // (GREATEST 兜底老行), delete 必须能回退, 否则删掉最近一条后
+    // 客户仍显示"刚联系过" → 跟进紧急度排序错位
+    // 重算口径 = 该客户剩余 interaction 的 MAX(created_at), 无则 NULL
+    const [agg] = await tx
+      .select({ maxAt: sql<Date | null>`MAX(${interaction.createdAt})` })
+      .from(interaction)
+      .where(eq(interaction.customerId, target.customerId));
+
+    // MAX() 返回值在 postgres-js 里是 JS Date, 但保险起见显式 new Date()
+    // —— 避免下一步 customer.update 把字符串塞进 timestamptz 列后 .toISOString() 报 "not a function"
+    const nextLastInteractionAt = agg?.maxAt ? new Date(agg.maxAt) : null;
+
+    await tx
+      .update(customer)
+      .set({
+        lastInteractionAt: nextLastInteractionAt,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(customer.id, target.customerId));
+
+    return true;
+  });
+}

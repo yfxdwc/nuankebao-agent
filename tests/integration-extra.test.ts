@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { db } from "@/lib/db";
 import { customer, followUpTask, interaction, wellnessRecord, serviceItem } from "@/lib/db/schema";
-import { sql, inArray } from "drizzle-orm";
+import { eq, sql, inArray } from "drizzle-orm";
 import { encryptField, hashForLookup } from "@/lib/crypto/field";
 
 // 每个测试文件跑前自动清理 (避免重复 phone_hash 冲突)
@@ -121,6 +121,145 @@ describe("queries/interaction", () => {
     const list = await listInteractionsByCustomer(c.id);
     expect(list.length).toBe(2);
     expect(list[0].customerId).toBe(c.id);
+
+    await cleanup(c.id);
+  });
+
+  it("getById: 命中 / 不存在 → null", async () => {
+    const c = await setupTestCustomer();
+    const ctx = { userId: BigInt(1), ipAddress: "127.0.0.1" };
+    const { createInteraction, getInteractionById } = await import(
+      "@/lib/db/queries/interaction"
+    );
+
+    const i = await createInteraction(
+      { customerId: c.id, type: "visit", summary: "上门拜访" },
+      ctx,
+      BigInt(1)
+    );
+    const got = await getInteractionById(BigInt(i.id));
+    expect(got).not.toBeNull();
+    expect(got!.id).toBe(i.id);
+    expect(got!.type).toBe("visit");
+    expect(got!.summary).toBe("上门拜访");
+
+    // 不存在的 id → null
+    const missing = await getInteractionById(BigInt("999999999999"));
+    expect(missing).toBeNull();
+
+    await cleanup(c.id);
+  });
+
+  it("update: 改 summary 往返加密 / 空串清空 / 改 type / 不存在 → null", async () => {
+    const c = await setupTestCustomer();
+    const ctx = { userId: BigInt(1), ipAddress: "127.0.0.1" };
+    const { createInteraction, updateInteraction, getInteractionById } =
+      await import("@/lib/db/queries/interaction");
+
+    const i = await createInteraction(
+      { customerId: c.id, type: "phone", summary: "原文" },
+      ctx,
+      BigInt(1)
+    );
+
+    // 改 summary (往能反解密出来)
+    const updated = await updateInteraction(
+      BigInt(i.id),
+      { summary: "修正后的备注" },
+      ctx
+    );
+    expect(updated).not.toBeNull();
+    expect(updated!.summary).toBe("修正后的备注");
+    // 再读一次确认加密列被覆盖
+    const reread = await getInteractionById(BigInt(i.id));
+    expect(reread!.summary).toBe("修正后的备注");
+
+    // 空串 → 清空
+    const cleared = await updateInteraction(
+      BigInt(i.id),
+      { summary: "" },
+      ctx
+    );
+    expect(cleared!.summary).toBeNull();
+
+    // 改 type (其他字段不动)
+    await updateInteraction(BigInt(i.id), { type: "wechat" }, ctx);
+    const afterType = await getInteractionById(BigInt(i.id));
+    expect(afterType!.type).toBe("wechat");
+    expect(afterType!.summary).toBeNull();
+
+    // 不存在 id → null
+    const missing = await updateInteraction(
+      BigInt("999999999999"),
+      { type: "other" },
+      ctx
+    );
+    expect(missing).toBeNull();
+
+    await cleanup(c.id);
+  });
+
+  it("delete: 成功 true / 再删 false + lastInteractionAt 回退到剩余 MAX", async () => {
+    const c = await setupTestCustomer();
+    const ctx = { userId: BigInt(1), ipAddress: "127.0.0.1" };
+    const { createInteraction, deleteInteraction } = await import(
+      "@/lib/db/queries/interaction"
+    );
+
+    // 造两条不同 createdAt (直接 db.insert 控住, 不走 createInteraction 的 GREATEST)
+    const earlier = new Date("2026-09-01T08:00:00Z");
+    const later = new Date("2026-09-20T08:00:00Z");
+    const [iEarly] = await db
+      .insert(interaction)
+      .values({
+        customerId: BigInt(c.id),
+        type: "phone",
+        summaryEncrypted: encryptField("较早一条"),
+        createdBy: BigInt(1),
+        createdAt: earlier,
+      })
+      .returning();
+    const [iLate] = await db
+      .insert(interaction)
+      .values({
+        customerId: BigInt(c.id),
+        type: "wechat",
+        summaryEncrypted: encryptField("较近一条"),
+        createdBy: BigInt(1),
+        createdAt: later,
+      })
+      .returning();
+
+    // 手动把 customer.lastInteractionAt 推到较近的时间点 (模拟 createInteraction 状态)
+    await db
+      .update(customer)
+      .set({ lastInteractionAt: later })
+      .where(eq(customer.id, BigInt(c.id)));
+
+    // 删较近的 → lastInteractionAt 应回到较早那条
+    const ok = await deleteInteraction(BigInt(iLate.id), ctx);
+    expect(ok).toBe(true);
+    const [rowAfterFirstDelete] = await db
+      .select({ lastInteractionAt: customer.lastInteractionAt })
+      .from(customer)
+      .where(eq(customer.id, BigInt(c.id)));
+    expect(rowAfterFirstDelete.lastInteractionAt).not.toBeNull();
+    expect(
+      new Date(rowAfterFirstDelete.lastInteractionAt!).getTime()
+    ).toBe(earlier.getTime());
+
+    // 再删同一条 → false (幂等 delete 应不报 500)
+    const again = await deleteInteraction(BigInt(iLate.id), ctx);
+    expect(again).toBe(false);
+
+    // 删较早那条 → lastInteractionAt 应变 NULL
+    const ok2 = await deleteInteraction(BigInt(iEarly.id), ctx);
+    expect(ok2).toBe(true);
+    const [rowAfterAllDelete] = await db
+      .select({ lastInteractionAt: customer.lastInteractionAt })
+      .from(customer)
+      .where(eq(customer.id, BigInt(c.id)));
+    expect(rowAfterAllDelete.lastInteractionAt).toBeNull();
 
     await cleanup(c.id);
   });
