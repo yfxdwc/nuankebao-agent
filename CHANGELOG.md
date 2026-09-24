@@ -2,6 +2,38 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 客户详情页「分析」Tab P0/P1/P2 全量改进 (2026-09-24)
+
+对「分析 Tab 改进建议」清单的落地 (P0/P1/P2 全做)。与下一条「跟进节奏卡重构」是同一张卡的接力:
+本条负责**合并** (FollowUpAnalysisCard + RepurchaseCard → CustomerRhythmCard) 与 P0/P1/P2 其余项, 紧凑化由下一条接力。
+
+### P0 — 数据已有、UI 没用上的四处
+
+1. **短板标注** — 评分卡用后端已返回的 `weakDimensions` 显示「短板: 价值潜力」(空列表不显示, 未知 key 忽略)。
+2. **空态进度化** — 趋势/部位空态改用 `scoredRecordCount / recordCount` 说「再记 1 次就能画」「都还没填疼痛评分」。
+3. **AI 样本来源** — AI 卡事实底稿下显示「数据范围: {from} → {to}」。
+4. **会员锁态设计化** — `scriptAvailable=false` 时 AI 卡出「🔒 升级会员可看 AI 解读」+「升级会员」按钮 (直开购买弹层);
+   402 兜底同款锁态。不再出现裸 `DioException`; 锁态下跟进理由 chips 隐藏。
+
+### P1 — 结构
+
+5. **能力雷达删除** — 与评分卡三维条同源重复、3 维雷达可读性差、Tab 过长; 趋势图提前到图表区第一位。
+6. **复购预测移出「AI 助手」区** — 纯 DB 计算不烧额度, 与跟进分析合并为「跟进节奏」卡 (去重「距上次到店 / 平均复购周期」)。
+
+### P2 — 收口
+
+7. **AI 三卡单入口** — 只有话术卡出「生成 AI 解读」(P5 一次调用不变量保持), 画像/效果卡提示「点上方…」。
+8. **错误态统一** — 评分卡/图表/AI 卡不再静默消失或裸报错, 一律友好文案 + 重试。
+9. **无边框统一 + `_buildSectionTitle` 走 token**。
+10. **后端取样收口** — 新增 `src/lib/customer/wellness-history.ts` (唯一口径: 最近 200 条, DESC);
+    charts/scoring 共用; 修正 charts 此前 `ASC + limit` 取**最早** 200 条、记录 >200 条的客户看不到近期数据的取样 bug。
+
+### 验收
+
+- 独立 reviewer: 需求 10/10 满足, 红线 (行动卡位置 / §1.3 文案 / P5 单调用 / 无白字 / 无残留引用) 全守住, 无阻断问题;
+- `flutter analyze` 0 issue; `flutter test` 全绿; `pnpm type-check` 0 error; `pnpm test:run` (→ nuankebao_test) 633/633;
+  `tools/check-ui-tokens.sh --strict` exit 0。
+
 ## [Unreleased] — 客户详情页「记录」Tab 14 项改进 + 跟进节奏卡重构 (2026-09-24)
 
 主人 2026-09-24: 「做你列出的全部12条」+ 追加「养生记录查看改底部弹窗, 内容/显示与最新详情页同步」+
