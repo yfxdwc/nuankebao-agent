@@ -72,7 +72,21 @@ class CustomerDetailPage extends ConsumerWidget {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('客户详情'),
+          // 标题 = **当前客户的姓名** (主人 2026-09-24 拍):
+          //   原来固定写「客户详情」—— 但销售经常同时开着好几个客户的详情页 /
+          //   从中转/搜索结果点进来, 顶部不写名字就不知道在谁那里 (得往下滚看一眼 L0)。
+          //   与 body 同一套 `asyncCustomer.maybeWhen`: 还没拿到数据时回落通用文案,
+          //   避免顶部空一块 (与 AppBar.bottom 只在 data 分支出 Tab 同一思路)。
+          //   ⚠ 不写 fontSize / color —— 让 AppBarTheme.titleTextStyle 管样式
+          //   (写死字号会绕过字号档位, 也是护栏 `flutter.fontSize` 盯的项)。
+          title: asyncCustomer.maybeWhen(
+            data: (c) => Text(
+              c.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            orElse: () => const Text('客户详情'),
+          ),
           toolbarHeight: AppSize.appBarHeight,
           actions: [
             IconButton(
