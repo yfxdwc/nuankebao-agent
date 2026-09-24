@@ -35,7 +35,18 @@ const ok = (m) => { results.push({ pass: true, m }); console.log(`  ✅ ${m}`); 
 const bad = (m) => { results.push({ pass: false, m }); console.log(`  ❌ ${m}`); };
 const note = (m) => console.log(`  ℹ ${m}`);
 
-const text = (page) => page.evaluate(() => document.body.innerText || "");
+const text = (page) =>
+  page.evaluate(() => {
+    // ⚠ 2026-09-24: 只读 innerText **不够** —— Flutter web 会把一组控件合并成
+    //   一个语义节点, 合并后的文案放在该节点的 aria-label 里 (textContent 为空),
+    //   典型: 记录 Tab 的「现在该做」+「跟进任务」两卡 (实测 innerText 里完全没有
+    //   「节奏正常/跟进任务/0 条待办」, 但 aria-label 里有) → 断言假失败。
+    //   两处一起读 = 真实可见文案。
+    const labels = Array.from(document.querySelectorAll("[aria-label]"))
+      .map((e) => e.getAttribute("aria-label") || "")
+      .join("\n");
+    return (document.body.innerText || "") + "\n" + labels;
+  });
 
 /**
  * 按文字找语义节点并**点它的中心**。
