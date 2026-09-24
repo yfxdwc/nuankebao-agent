@@ -493,5 +493,37 @@ void main() {
         await checkAtCorner(collapsed: true);
       },
     );
+
+    testWidgets(
+      '「+ 新建」是实心按钮 (背景显式, 主人 2026-09-24 「按键化, 按键背景显式」)',
+      (tester) async {
+        final fake = _FakeFollowUpService([
+          FollowUpTask(
+            id: 't1',
+            customerId: 'c1',
+            dueAt: _local(2026, 9, 25, 9, 0),
+            reason: '按键化验证',
+            status: 'pending',
+            createdAt: _local(2026, 9, 24, 10, 0),
+          ),
+        ]);
+        await tester.pumpWidget(_wrap(
+          child: const CustomerFollowUpSection(customerId: 'c1'),
+          fake: fake,
+        ));
+        await _pumpUntilSettled(tester);
+
+        final btn = tester.widget<FilledButton>(
+            find.byKey(const ValueKey('followUpNewButton')));
+        // 显式背景: style 里必须给 backgroundColor (浅主色), 不是靠主题默认或透明
+        final bg = btn.style?.backgroundColor?.resolve(<WidgetState>{});
+        expect(bg, AppTheme.primaryLight,
+            reason: '「+ 新建」要有显式按键背景 (浅主色底), 不能再是无背景文字链');
+        // 前景色也要显式 (深主色), 保证浅底上可读
+        final fg = btn.style?.foregroundColor?.resolve(<WidgetState>{});
+        expect(fg, AppTheme.primaryDark,
+            reason: '浅主色底上必须配深主色字 (对比度)');
+      },
+    );
   });
 }

@@ -2,6 +2,19 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 「+ 新建」按键化 (背景显式) (2026-09-24)
+
+主人 2026-09-24: 「跟进任务卡片中，'+新建'按键化，按键背景显式」。
+
+- `TextButton.icon` (无背景文字链) → **`FilledButton.icon`**:
+  背景 `primaryLight` (浅主色) + 前景 `primaryDark` (深主色) + 圆角 `r10` + `elevation: 0`
+  —— 一眼是「可以点的键」, 且不靠浮起阴影抢视线; 展开态 / 折叠态两个 header 都改。
+- 测试: 新增「显式背景」断言 (style.backgroundColor == primaryLight /
+  foregroundColor == primaryDark, 防回退成无背景文字链);
+  原有「贴卡片右上角 + 最右控件」断言保持。
+
+验证: `flutter analyze` 0 issue; `flutter test` 全量 **395/395** 全绿
+
 ## [Unreleased] — 记录卡整体卡片化 + 表头钉住 (2026-09-24)
 
 主人 2026-09-24: 「记录列表表头的筛选和添加键与列表要整体卡片化。当前显示得有些隔离。

@@ -410,7 +410,7 @@ class _FollowUpHeader extends ConsumerWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis),
         const SizedBox(width: AppSpace.s8),
-        TextButton.icon(
+        FilledButton.icon(
           // 测试契约 key: 「+ 新建」要固定卡片右上角 (2026-09-24) —— 测试按 key 抓
           //   它的 rect 断言"最右控件 + 贴右缘"; 改 key 前先 grep 测试引用。
           key: const ValueKey('followUpNewButton'),
@@ -421,12 +421,20 @@ class _FollowUpHeader extends ConsumerWidget {
           icon: const Icon(Icons.add, size: AppSize.iconMd),
           label: const Text('新建',
               style: TextStyle(fontSize: AppTheme.fontSm)),
-          style: TextButton.styleFrom(
+          style: FilledButton.styleFrom(
+            // 背景显式 (主人 2026-09-24: 「按键化, 按键背景显式」) ——
+            //   浅主色底 + 深主色字 + 圆角, 一眼是「可以点的键」(不再是无背景文字链);
+            //   elevation 0: 卡片里的次级动作, 不加浮起阴影抢视线。
+            backgroundColor: AppTheme.primaryLight,
+            foregroundColor: AppTheme.primaryDark,
+            elevation: 0,
             visualDensity: VisualDensity.compact,
             padding: const EdgeInsets.symmetric(
-                horizontal: AppSpace.s8, vertical: AppSpace.s4),
+                horizontal: AppSpace.s10, vertical: AppSpace.s4),
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.r10)),
           ),
         ),
       ],
@@ -513,7 +521,7 @@ class _FollowUpCollapsedHeader extends ConsumerWidget {
           // 「+ 新建」按钮 —— **最右位 (卡片右上角)** (主人 2026-09-24 拍):
           //   折叠态也要能建任务 (避免展开→建→折叠 多一跳);
           //   箭头已在它左侧 → 它是 header 里唯一贴右边缘的控件。
-          TextButton.icon(
+          FilledButton.icon(
             // 测试契约 key: 跟展开态同一个 key (同一时刻只渲染一个头) ——
             //   测试用 `find.byKey` 抓 rect 断言"最右控件 + 贴右缘"
             key: const ValueKey('followUpNewButton'),
@@ -522,12 +530,20 @@ class _FollowUpCollapsedHeader extends ConsumerWidget {
             icon: const Icon(Icons.add, size: AppSize.iconMd),
             label: const Text('新建',
                 style: TextStyle(fontSize: AppTheme.fontSm)),
-            style: TextButton.styleFrom(
+            style: FilledButton.styleFrom(
+              // 背景显式 (主人 2026-09-24: 「按键化, 按键背景显式」) ——
+              //   浅主色底 + 深主色字 + 圆角, 一眼是「可以点的键」(不再是无背景文字链);
+              //   elevation 0: 卡片里的次级动作, 不加浮起阴影抢视线。
+              backgroundColor: AppTheme.primaryLight,
+              foregroundColor: AppTheme.primaryDark,
+              elevation: 0,
               visualDensity: VisualDensity.compact,
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpace.s8, vertical: AppSpace.s4),
+                  horizontal: AppSpace.s10, vertical: AppSpace.s4),
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.r10)),
             ),
           ),
         ],
