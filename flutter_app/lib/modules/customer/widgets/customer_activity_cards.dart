@@ -11,10 +11,10 @@ import 'package:intl/intl.dart';
 
 import '../../../core/models/follow_up.dart';
 import '../../../core/providers/service_providers.dart';
-import '../../../core/telemetry/usage_events.dart' show UsageEntityType;
 import '../../../core/telemetry/usage_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import 'ai_insight_cards.dart' show BigActionButton;
+import '../../follow_up/widgets/complete_follow_up_sheet.dart';
 
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/widgets/b2_no_chrome.dart';
@@ -143,50 +143,21 @@ Future<void> showAddFollowUpSheet(
 // 跟进任务 (该客户)
 // ============================================
 
-class CustomerFollowUpSection extends ConsumerStatefulWidget {
+class CustomerFollowUpSection extends ConsumerWidget {
   final String customerId;
   const CustomerFollowUpSection({super.key, required this.customerId});
 
   @override
-  ConsumerState<CustomerFollowUpSection> createState() =>
-      _CustomerFollowUpSectionState();
-}
-
-class _CustomerFollowUpSectionState
-    extends ConsumerState<CustomerFollowUpSection> {
-  String? _completingId;
-
-  Future<void> _complete(FollowUpTask t) async {
-    setState(() => _completingId = t.id);
-    try {
-      await ref.read(followUpServiceProvider).complete(t.id);
-      ref.read(usageServiceProvider).track(
-            'follow_up_done',
-            entityType: UsageEntityType.followUp,
-            entityId: t.id,
-          );
-      if (!mounted) return;
-      // invalidate → 列表重拉 (provider 驱动, 不用本地 state)
-      ref.invalidate(customerFollowUpTasksProvider(widget.customerId));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已标记完成')),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _completingId = null);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final fmt = DateFormat('MM-dd');
-    final async = ref.watch(customerFollowUpTasksProvider(widget.customerId));
+    final async = ref.watch(customerFollowUpTasksProvider(customerId));
 
+    // 「标记完成」 → 弹出新弹层 (主人 2026-09-24 拍: 选跟进方式 + 记内容)。
+    // 原来这里是 ConsumerStatefulWidget + `_completingId` 局部 spinner,
+    // 现在改走弹层 → 弹层自己管 saving 转圈 → 本 widget 回归 ConsumerWidget,
+    // 去掉没用的状态和 setState。 (为什么这么改: 2026-09-24 反馈
+    // 「点击跟进后只看到任务没了」—— 一闪而过的 spinner 不解决"不知道怎么跟进的"问题,
+    // 弹层才对。)
     return B2NoChrome(
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
@@ -223,14 +194,17 @@ class _CustomerFollowUpSectionState
               error: (e, _) => _SectionError(
                 message: '$e',
                 onRetry: () => ref
-                    .invalidate(customerFollowUpTasksProvider(widget.customerId)),
+                    .invalidate(customerFollowUpTasksProvider(customerId)),
               ),
               data: (tasks) => tasks.isEmpty
                   ? const Text('没有待办跟进',
                       style: TextStyle(
                           fontSize: AppTheme.fontSm,
                           color: AppTheme.textSecondary))
-                  : Column(children: tasks.map((t) => _tile(t, fmt)).toList()),
+                  : Column(
+                      children: tasks
+                          .map((t) => _tile(context, ref, t, fmt))
+                          .toList()),
             ),
             const SizedBox(height: AppSpace.s8),
             BigActionButton(
@@ -238,7 +212,7 @@ class _CustomerFollowUpSectionState
               label: '新建跟进任务',
               compact: true,
               onTap: () => showAddFollowUpSheet(context, ref,
-                  customerId: widget.customerId),
+                  customerId: customerId),
             ),
           ],
         ),
@@ -246,7 +220,12 @@ class _CustomerFollowUpSectionState
     );
   }
 
-  Widget _tile(FollowUpTask t, DateFormat fmt) {
+  Widget _tile(
+    BuildContext context,
+    WidgetRef ref,
+    FollowUpTask t,
+    DateFormat fmt,
+  ) {
     // 2026-09-24 用户反馈修: 旧逻辑 `t.dueAt.isBefore(DateTime.now())` 按时间戳比,
     //   建完下一秒就误判"已过期"。改走日期口径 (`isFollowUpOverdue` = 与后端
     //   `urgency.ts::daysBetween > 0` 同口径), 今天 / 明天 / 更远 文案分开。
@@ -295,19 +274,17 @@ class _CustomerFollowUpSectionState
               ],
             ),
           ),
-          if (_completingId == t.id)
-            const SizedBox(
-              width: AppSpace.s20,
-              height: AppSpace.s20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.check_circle_outline, size: AppSize.iconLg),
-              tooltip: '标记完成',
-              color: AppTheme.primary,
-              onPressed: () => _complete(t),
-            ),
+          IconButton(
+            icon: const Icon(Icons.check_circle_outline, size: AppSize.iconLg),
+            tooltip: '标记完成',
+            color: AppTheme.primary,
+            onPressed: () async {
+              // 2026-09-24 弹层接手: complete + 记互动 + track + invalidate +
+              // SnackBar 都收进 showCompleteFollowUpSheet。返回值: true=业务完成 (含部分成功),
+              // false=用户取消, null=异常。返回 false 时什么也不动 (本来就是用户的本意)。
+              await showCompleteFollowUpSheet(context, ref, task: t);
+            },
+          ),
         ],
       ),
     );

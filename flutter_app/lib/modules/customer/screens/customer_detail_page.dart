@@ -38,6 +38,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/customer_insight.dart';
 import '../../../core/models/customer_ownership.dart';
+import '../../../core/models/follow_up.dart' show interactionTypeLabels;
 import '../../../core/models/franchisee.dart';
 import '../../../core/models/placement_request.dart';
 import '../../../core/models/wellness_record.dart';
@@ -913,13 +914,8 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
   /// 记一次互动 (电话/微信/到店/节日问候/其他 + 备注)
   void _showAddInteractionSheet(
     BuildContext context, WidgetRef ref, String customerId) {
-    const types = {
-      'phone': '电话',
-      'wechat': '微信',
-      'visit': '到店',
-      'holiday_greeting': '节日问候',
-      'other': '其他',
-    };
+    // 互动类型标签 = `interactionTypeLabels` (跟 complete_follow_up_sheet 共用一张表,
+    // 增删类型必须**同步**改后端 Zod schema —— 详见 follow_up.dart 该常量上方注释)。
     var selected = 'phone';
     final summaryCtrl = TextEditingController();
     var saving = false;
@@ -946,7 +942,7 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: types.entries
+                children: interactionTypeLabels.entries
                     .map((e) => ChoiceChip(
                           label: Text(e.value,
                               style: const TextStyle(fontSize: AppTheme.fontSm)),

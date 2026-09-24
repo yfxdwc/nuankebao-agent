@@ -98,3 +98,20 @@ class Interaction with _$Interaction {
   factory Interaction.fromJson(Map<String, dynamic> json) =>
       _$InteractionFromJson(json);
 }
+
+/// 互动类型 → 中文标签 (唯一真相源)
+//
+// 2026-09-24 提取: 原本**散落**在 customer_detail_page.dart::_showAddInteractionSheet,
+//
+//	「标记完成」跟进时由本表生成 ChoiceChip + 生成 SnackBar「已记一条…互动」。
+//
+// 调用方: complete_follow_up_sheet.dart (新增), customer_detail_page.dart::_showAddInteractionSheet。
+// 约束: 增删类型必须**同步**改 src/app/api/interactions POST body 的 Zod schema
+//   + src/lib/db/queries/interaction.ts 的清洗白名单 —— 否则前端发后端 400。
+const Map<String, String> interactionTypeLabels = {
+  'phone': '电话',
+  'wechat': '微信',
+  'visit': '到店',
+  'holiday_greeting': '节日问候',
+  'other': '其他',
+};

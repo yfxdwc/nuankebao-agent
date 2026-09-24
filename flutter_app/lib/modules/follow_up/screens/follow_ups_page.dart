@@ -17,6 +17,7 @@ import '../../../core/widgets/app_list_row.dart';
 import '../../../core/widgets/app_section.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/user_avatar.dart';
+import '../widgets/complete_follow_up_sheet.dart';
 
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/theme/theme_ext.dart';
@@ -126,16 +127,19 @@ class FollowUpsPage extends ConsumerWidget {
     WidgetRef ref,
     FollowUpTodo todo,
   ) async {
-    await ref.read(followUpServiceProvider).complete(todo.task.id);
-    ref.read(usageServiceProvider).track('follow_up_done');
-    ref.invalidate(pendingFollowUpsProvider);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('已标记「${todo.customerName}」跟进完成',
-              style: const TextStyle(fontSize: AppType.sm)),
-        ),
-      );
+    // 2026-09-24: 跟进任务点「标记完成」→ 弹层接手三动作 (complete + interaction + track)
+    // + SnackBar。**本调用方**只负责自己独有的 `pendingFollowUpsProvider` 刷新 —
+    //   弹层**不** import 本 provider (避免 widget→screen 反向依赖)。
+    // 返回 null / false = 取消或异常 → 本页不动;
+    // 返回 true = 业务完成 (含「任务完成 + 互动失败」部分成功, 见弹层注释) → 刷待办列表。
+    final ok = await showCompleteFollowUpSheet(
+      context,
+      ref,
+      task: todo.task,
+      customerName: todo.customerName,
+    );
+    if (ok == true) {
+      ref.invalidate(pendingFollowUpsProvider);
     }
   }
 }

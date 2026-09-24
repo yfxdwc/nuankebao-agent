@@ -2,6 +2,53 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 完成跟进 = 记一次跟进 (方式 + 内容) (2026-09-24)
+
+主人 2026-09-24 反馈: 客户详情「跟进任务」点「标记完成」, 任务**直接消失**,
+没有「怎么跟进的、聊了什么」任何记录 —— 跟「记一次互动」成了两件事,
+但语义上**一次跟进就等于一次互动**, 不应该要销售点两次。
+
+### 诉求
+
+点「标记完成」→ 弹层 → 选跟进方式 (电话/微信/到店/节日问候/其他) + 可填跟进内容 → 一次动作收尾两件事:
+1. 跟进任务标完成 (PATCH `/api/follow-ups/:id action=complete notes?`)
+2. 顺手记一条互动 (POST `/api/interactions customerId type=? summary?`)
+
+### 做法 (弹层三件事 + 收口两调用方)
+
+| 文件 | 改动 | 说明 |
+|---|---|---|
+| `flutter_app/lib/modules/follow_up/widgets/complete_follow_up_sheet.dart` | **新建** `showCompleteFollowUpSheet(context, ref, task, customerName?)` | 弹层 = 5 ChoiceChip (默认「电话」) + 多行 TextField + 「取消 / 标记完成」双按钮 |
+| `flutter_app/lib/core/models/follow_up.dart` | 加 `const Map<String, String> interactionTypeLabels = {...}` | 互动类型 → 中文唯一真相源 (避免两处 drift) |
+| `flutter_app/lib/modules/customer/screens/customer_detail_page.dart::_showAddInteractionSheet` | 删本地 map, 改用 `interactionTypeLabels` | 同一张表, 调用方零漂移 |
+| `flutter_app/lib/modules/customer/widgets/customer_activity_cards.dart::_CustomerFollowUpSectionState` | 删 `_complete()` + `_completingId`; 改为 `ConsumerWidget` | 弹层接管三动作, 本组件无需局部 state |
+| `flutter_app/lib/modules/customer/widgets/customer_activity_cards.dart::_tile` | IconButton.onPressed → `await showCompleteFollowUpSheet(...)` | 客户详情「记录」Tab 跟进任务行 |
+| `flutter_app/lib/modules/follow_up/screens/follow_ups_page.dart::_complete` | 改弹层调用, 成功后**自己** invalidate `pendingFollowUpsProvider` | 全局「跟进待办」页 + 避免 widget→screen 反向依赖 |
+| `flutter_app/test/complete_follow_up_sheet_test.dart` | **新建** (4 例) | 默认电话/无备注 · 切微信/有内容 · 取消 · complete 抛错不崩 |
+
+#### 弹层关键决策
+
+- **三件事顺序** (代码注释 + 测试都钉死): `complete` → `interaction.create` → `usage.track('follow_up_done')` → `invalidate 两个 provider`
+  - **complete 失败 → 弹层不关**, saving 复位可重试 (同 AGENTS §5「贴告示 ≠ 修复」)
+  - **complete 成功 + interaction 失败 → 弹层关 + SnackBar「任务已完成, 但互动记录失败: …」**, 不撒谎说全成功
+  - **埋点** `follow_up_done` 在 complete 成功后**一定**打 (任务本身确实完成; 部分成功用 SnackBar 文案区分, 不动埋点)
+- **invalidate 边界**: 弹层**不** import `pendingFollowUpsProvider` (在 `follow_ups_page.dart`), 避免 widget→screen 反向依赖 — 调用方拿 true 后自己 invalidate
+- **track 收口**: 原来 `customer_activity_cards._complete` + `follow_ups_page._complete` **各自** track → 一次操作双报 (≈ 埋点翻倍)。收进弹层后只有 1 次。
+
+### 为什么记一条 interaction
+
+跟进 = 主动联系客户 (电话/微信/到店问候), 在数据模型里**就是**一条 interaction (跟「记一次互动」/ 详情页「打电话」按钮的产物同表同 API)。
+原来拆开 = 销售点两次 (「标记完成」 + 「记一次互动」), 实际只有一次动作; 合并后 = 「点标记完成」即「记这次联系」, 互动记录跟着**自动补齐**, 后续「客户收益复购周期」/「跟进了几次」统计不会漏。
+
+后端零改动 (既有 `PATCH /api/follow-ups/[id]` + `POST /api/interactions` 已对齐)。
+
+### 验证结果
+
+- `flutter analyze` 0 issue (lib + test)
+- `flutter test test/complete_follow_up_sheet_test.dart test/customer_follow_up_section_test.dart test/customer_detail_tabs_test.dart` → 4 + 5 + 6 = **15 全绿**
+- `flutter test` 全量 → **369/369 全绿** (基线 365 + 新增 4 例)
+- `tools/check-ui-tokens.sh --strict` → exit 0 (无新增硬编码色/字/间距/圆角, cardWidget = 1 不变)
+
 ## [Unreleased] — dev 3003 健康守护 (2026-09-24)
 
 主人 2026-09-24 提问: 「/app-preview 又挂了吗, 没有系统守护吗」
