@@ -9,6 +9,7 @@
 
 | # | 标题 | 状态 | 拍板日期 | 关键决策 |
 |---|---|---|---|---|
+| 0019 | [RBAC 可见范围扩围 + 客户推送机制 (`customer_share`)](./0019-rbac-scope-and-customer-share.md) | ⏳ Proposed 待主人拍板 | 2026-09-25 (起草) | D4 列表可见扩围 (下级 + 上级推送); 四段式 `viewerCustomerScopeSql` (a+b1+b2+c) supersede `myCustomerScopeSql` 两段式; 手机号分级表 (`mine`/`direct_upline`/`upline_shared` 明文 + 其余 `maskPhone`); `customer_share` 表 + S1-S7 + SHARE-1..7 (含禁止二次转发 + 扩散上限); manager 与 sales 同口径 (D9); Phase D 实施闸门 = `identity-privacy-review.md` 评审通过 + 主人 ask_user; 口径字面来源 = `customer-identity-system.md` v1.3,本 ADR 不引入新决策 |
 | 0018 | [核心定位 — 客户管理为核心 (记录+管理+分析) + AI 跟进指引 → 付费/加盟转化](./0018-core-positioning.md) | ✅ Accepted | 2026-09-23 | 主人 2026-09-23 核实定位; 锁定四要素 (核心功能 / 三大动作 / 行动输出 / 终极目的); CHARTER §1.1 改写 + §1.4 新增; 任何新功能提案必答 §1.4 末段"四问"; AI 域优先级 = 跟进指引可执行性 > AI 能力; "养生记录"角色降为实现手段; 加盟率不引入金额/计酬 (CHARTER §3.6 保留) |
 | 0017 | [web admin 解冻 (结束 mobile-only, 恢复双线开发)](./0017-web-admin-unfreeze.md) | ✅ Accepted | 2026-09-22 | 主人: 「"web admin 冻结中"这是个错误，需要解冻结」→ `src/app/admin/**` 全部恢复活跃; backend/schema 双线同步 (`pnpm type-check` 必过); 解冻 ≠ 重做; 首个模块 = usage analytics (migration 0023 + `/admin/usage`); 部分 Supersede ADR-0005 |
 | 0016 | [身份锚与同号识别 —— 邀请码是唯一识别码, 手机号只是联系方式](./0016-identity-anchor.md) | ✅ Accepted | 2026-09-22 | 唯一识别码 = **邀请码** (手机号不是身份); 系统内部连接一律走 ID (`user.customer_id` / `user.franchisee_id`); 同号 → 识别提醒 (不静默合并); 沙龙客人归带来人 (不加转化入口); 同号不允许两条档案 (定案); 生命周期初步机制 (停用/软删/退出图谱 + admin 入口); UI 区分「已注册」vs「凭空建档」 |
@@ -57,13 +58,14 @@
 - **ADR-0013**: 账号 = 客户 (建号即强制建档)
 - **ADR-0016**: 身份锚与同号识别 (邀请码 = 唯一识别码)
 - **ADR-0015**: 主体模型 (人 / 账号 / 客户 / 节点 —— 消歧 + 单一真相源; ⏳ Draft 待拍板)
+- **ADR-0019**: RBAC 可见范围扩围 + 客户推送机制 (`customer_share`) (⏳ Proposed 待主人拍板; Phase D 实施闸门)
 
 ---
 
 ## ADR 起草指南
 
 新 ADR 必须:
-1. 编号递增 (下一个 = `0015-...md`)
+1. 编号递增 (下一个 = `0020-...md`)
 2. 文件名 kebab-case
 3. 包含 7 个标准节: 上下文 / 决策 / 候选评估 / 影响 / 风险 / 关联文档 / 元数据
 4. 元宪法引用: `本决策对应元宪法 [CHARTER §X](../CHARTER.md)`
