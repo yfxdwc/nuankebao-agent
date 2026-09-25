@@ -146,7 +146,7 @@ export async function resolveCustomerIdentity(
 | **B1** | 所有 identity SQL 必须 `franchisee.deleted_at IS NULL` | 软删节点仍被判"加盟直推" = 离岗销售看到死人 (已有 `customer-scope.ts:44` 防护) |
 | **B2** | viewer 无加盟节点 (`franchiseeId = null`) → `affiliation` = `none`,`ownership` 只可能 `none` / `mine`,禁止 `null` | 返回 `null` = 调用方必须 nullable 处理 = bug 温床 (与 `customer-scope.ts:18` 现有规则一致) |
 | **B3** | "**直推**" 一词**只允许表示 `referrer_id` 口径**;禁止再用 "点位父 = 我" 叫直推 (该口径已 supersede, §2)。档案/列表写 `加盟·直推` / `加盟·非直推`,图谱写 `直推` / `下级引荐` / `上级引荐` —— 两者是**同一真相源的两种视图**,不是两套判定 | 两处各用一套口径 = "图谱说直推、档案说非直推"同屏矛盾 (§2.1 旧实现实证) |
-| **B4** | `ownership ≠ mine` 时手机号一律走 `maskPhone` (`utils.ts:24`) | "他人客户" 显示完整手机号 = 隐私泄漏 + 违反 AGENTS §3 红线 |
+| **B4** | 手机号 mask 以 **§3.4 分级表为唯一真相源**: `ownership ∈ {subordinate, other, none}` 一律走 `maskPhone` (`utils.ts:24`); **明文例外两类** = `mine` / `direct_upline`; `upline_shared` 按 D8 (2026-09-25) = 明文 | "他人客户" 显示完整手机号 = 隐私泄漏 + 违反 AGENTS §3 红线 |
 
 ### 3.4 列表可见集合 RBAC (维度 5 归属 → 可见性口径)
 
@@ -465,7 +465,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 | **SHARE-1** | 推送不写 `customer.owner_id` (S3) |
 | **SHARE-2** | 推送不改变紧急度算法结果 (S3 + §3.3) |
 | **SHARE-3** | 被推送人看到的是**同一份客户档案**, 不是副本 (无 `customer_copy` 表) |
-| **SHARE-4** | 推送 `to_user_id` 停用 → 列表不可见 (`to_user_id` 走 `EXISTS user active`) |
+| **SHARE-4** | 推送**双方**账号 (`from_user_id` / `to_user_id`) **任一停用** → 列表不可见 (§3.4 (c) 的两个 `EXISTS user active` 子句对称) |
 | **SHARE-5** | `customer_share` 表必挂审计触发器 (`customer_share_audit`), 与 `franchisee_audit` 同模式 |
 | **SHARE-6** | `customer.owner_id` 被 transfer 后, 该客户的 active 推送**保留** (推送是独立可见性授权, 与归属无关); 新 owner 可撤销 (S5 已含) |
 | **SHARE-7** | `(b1)` 命中的客户其 ownership 必须是 `direct_downline` (不得落 `other`), 否则误报 scope 漏检 |
@@ -484,7 +484,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 | **E2** | 「直推者必是上级」**只做写入时校验 + 巡检例外报告**；搬树（admin 强改上层）**不级联改** `referrer_id`（保 AGENTS §6.8 拆栏） | `franchisee-reparent.ts` (`referrerTouched:false`) + `scripts/audit-placement-integrity.ts:103` 加 referrer 例外报告 + 老节点白名单 |
 | **E3** | **三方确认角色不新增**（发起人 / 新加盟者 / 目标点位父 三方已够） | `franchisee-placement.ts:131-156` `requiredRoles` 保持; §6 不引入新角色枚举 |
 | **D3** | **种子从客户类型轴退出** — 列表只剩「全部 / 加盟 / 未加盟」; `is_seed` 列、详情页都不需要保留 | `resolveCustomerType` (`customer.ts:159-165`) 返回类型三态 → 二态; `CustomerView.isSeed` zod 字段删; API 不再返回; Flutter 表单与详情删除种子控件 + 🌱 标识; 类型筛选 UI 简化为 `all` + `加盟` + `未加盟`; **DB 列暂不 DROP**, 处置详见 §5.4 (灰度 30 天后单独 drop migration) |
-| **D4** | **「下级的客户」**在客户列表中显示 (与用户自己的客户做视觉区分); **「上级的客户」**需要上级推送给我才显示 (也在客户列表中与自己的客户做区分) | §3.4 RBAC 口径三段式 (a 我的客户 / b 下级的客户 / c 上级推送的客户); §4.2 L2 归属 5 态; 实施需独立 RBAC/隐私评审 (§8 Phase D); 手机号按 §3.4 表分级 (下级 / 上级推送 / 他人 / 无归属 一律 `maskPhone`) |
+| **D4** | **「下级的客户」**在客户列表中显示 (与用户自己的客户做视觉区分); **「上级的客户」**需要上级推送给我才显示 (也在客户列表中与自己的客户做区分) | §3.4 RBAC 口径四段式 (a 我的客户 / b1 我的下层加盟节点本人 / b2 下层的客户 / c 上级推送的客户); §4.2 L2 归属 5 态; 实施需独立 RBAC/隐私评审 (§8 Phase D); 手机号按 §3.4 表分级 (**上级推送 upline_shared 按 D8 = 明文**; 下级 / 他人 / 无归属 走 `maskPhone`) |
 | **D5** | **来源选填**; 仅转介绍 (`referral`) 时介绍人必填 | `acquire_source` 列 nullable + 应用层 zod refine (`referral` 分支展开 `source_referrer_name` 必填); 老 APK INSERT 兼容 (无 DEFAULT, §5 M1) |
 | **D6** | **客户列表不显示客户来源**; 仅在客户详情页的**管理区块**中显示来源 | §4.2 展示位映射表: Flutter 列表行 L4 = 不显示; Flutter 详情 = 仅管理 Tab 的档案卡; Web admin 列表 = 来源列删除; Web admin 详情 = 来源放管理 / 档案区; 表单来源位置不变 (姓名/性别/手机 与 生日 之间) |
 | **D7** | **来源列命名 `acquire_source`**; key = `friend` / `referral` / `cold_visit` / `ground_promo`; `NULL` = 未填写 | §5 M2 命名硬约束; enum 写入 `drizzle/0026_customer_acquire_source.sql`; Flutter + Web admin + API zod 双线同步; 落地字符串与设计稿字面一致 |
@@ -587,7 +587,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 | **INV-2** | "直推 / 下级引荐 / 上级引荐" 三词只允许出现在图谱 (B3) | §3.3 B3 |
 | **INV-3** | viewer 无加盟节点 → `affiliation = none`,`ownership ∈ {none, mine}` (B2) | §3.3 B2 |
 | **INV-4** | 所有 identity SQL 必须 `franchisee.deleted_at IS NULL` (B1) | §3.3 B1 |
-| **INV-5** | `ownership ≠ mine` 时手机号必 `maskPhone` (B4);**例外** `ownership = upline_shared` (D8, 2026-09-25 已拍) → 明文 | §3.3 B4 + §3.4 手机号分级表 + §7.2 D8 |
+| **INV-5** | 手机号 mask 以 §3.4 分级表为准: `subordinate` / `other` / `none` → `maskPhone`; **明文例外两类** = `direct_upline` (b1 我的下层加盟节点本人) + `upline_shared` (c, D8 2026-09-25 拍) | §3.3 B4 + §3.4 手机号分级表 + §7.2 D8 |
 | **INV-6** | `placement_parent_id` ≠ `referrer_id` 是**允许**的 (I-2);`audit-placement-integrity.ts:103` 例外报告不报错 | AGENTS §6.8 拆栏 |
 
 ### 9.2 风险
@@ -596,7 +596,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 |---|---|---|
 | **R-1** | **搬树后 referrer 可能不再是她的上级** (admin `reparent` 后,直推人掉到子树外) | **只写入时校验 + 巡检例外** (§7 E2),**不级联修正** — 否则破坏 AGENTS §6.8 拆栏 |
 | **R-2** | **老数据 referrer = 发起人,手工改过的可能不在链上** | `audit-placement-integrity.ts` 加「referrer 不在祖先链」报告 + **老节点白名单** (`whitelist: Map<fid, reason>`),**不自动改** |
-| **R-3** | **手机号 mask 漏一处 = 隐私事故** | B4 硬约束 + 集成测试覆盖 `ownership ≠ mine` 的所有 view 路径 |
+| **R-3** | **手机号 mask 漏一处 = 隐私事故** | B4 硬约束 + 集成测试覆盖 `ownership ∈ {subordinate, other, none}` 的所有 view 路径 (§3.4 分级表为唯一真相源) |
 | **R-4** | **`acquire_source` 与 `referral_reward.source` 同名混淆** | §5 M2 命名硬约束 + ADR-0015 §3 术语表后续同步 |
 | **R-5** | **UI 棘轮破基线** (新徽章引入 Card / 涨行高 / 多色) | §4.3 三条护栏 (`check-ui-tokens.sh` / `check-ui-density.sh` / `check-auto-snapshot-extension.sh`),CI 阻断 |
 | **R-6** | **来源必填 = 老 APK 升级崩** (M1 反向) | §7 D5 已拍选填;转介绍介绍人走应用层 zod refine |
@@ -633,7 +633,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 - [ ] 详情管理 Tab 的档案卡**显示**来源; 详情其它区块**不**显示来源 (D6)
 - [ ] 来源选填; 选「转介绍」展开介绍人必填 (D5); 老 APK INSERT 兼容
 - [ ] **种子移除** (D3): zod 不再接受 `isSeed` + API 不再返回 + Flutter 表单与详情无种子控件 + 类型筛选只剩 `all` + `加盟` + `未加盟`
-- [ ] **mask 生效** (B4 + §3.4 手机号分级): `ownership ≠ mine` 的所有列表 / 详情 / 概览路径手机号走 `maskPhone` (`utils.ts:24`), 集成测试覆盖
+- [ ] **mask 分级生效** (B4 + §3.4 分级表): `ownership ∈ {subordinate, other, none}` 的列表 / 详情 / 概览路径手机号走 `maskPhone` (`utils.ts:24`); 明文仅 `mine` / `direct_upline` (与 §3.4 表一致); 集成测试覆盖
 - [ ] Flutter 列表行高 60 不变 (`AppSize.listRowHeight`)
 - [ ] `bash tools/check-ui-density.sh` 全路由 visibleRows ≥ 11
 - [ ] `bash tools/check-ui-tokens.sh` flutter.cardWidget / web.paletteClass 不破
