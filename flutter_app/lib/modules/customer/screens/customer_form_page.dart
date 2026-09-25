@@ -355,6 +355,29 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
         title: Text(widget.customerId == null ? '添加客户' : '编辑客户'),
         toolbarHeight: AppSize.appBarHeight,
       ),
+      // ★ 保存**吸底** (2026-09-25 主人): 表单不用滑到底才能保存
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+              AppSpace.s16, AppSpace.s8, AppSpace.s16, AppSpace.s12),
+          child: FilledButton.icon(
+            // 测试契约 key: 吸底保存键 (测试断言"滚动时不动")
+            key: const ValueKey('customerFormSaveButton'),
+            onPressed: _loading ? null : _submit,
+            icon: _loading
+                ? const SizedBox(
+                    width: AppSize.iconMd,
+                    height: AppSize.iconMd,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check, size: AppSize.iconLg),
+            label: Text(widget.customerId == null ? '保存' : '保存修改'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(double.infinity, AppSize.buttonLgHeight),
+            ),
+          ),
+        ),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -399,48 +422,99 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               ],
               const SizedBox(height: AppSpace.s12),
             ],
-            TextFormField(
-              controller: _nameController,
-              style: const TextStyle(fontSize: AppTheme.fontMd),
-              readOnly: _claimMode, // 已注册用户用她的真实姓名 (claim 不改档案)
-              decoration: InputDecoration(
-                labelText: '姓名 *',
-                helperText: _claimMode ? '用对方账号的真实姓名 (不能改)' : null,
-              ),
-              validator: (v) => (v == null || v.trim().isEmpty) ? '请输入姓名' : null,
-            ),
-            const SizedBox(height: AppSpace.s12),
-            // 已注册用户: 手机号在对方账号里, 不需要录 (档案已存在)
-            if (!_claimMode) ...[
-              TextFormField(
-                controller: _phoneController,
-                style: const TextStyle(fontSize: AppTheme.fontMd),
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: '手机号 *'),
-                validator: (v) {
-                  if (v == null || !RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) {
-                    return '请输入正确的手机号';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpace.s12),
-            ],
-            // 性别 (大按钮组)
-            const Text('性别', style: TextStyle(fontSize: AppTheme.fontMd)),
-            const SizedBox(height: AppSpace.s8),
+            // ★ 姓名 / 性别 / 手机号 **一行** (2026-09-25 主人: 「排版要更紧凑,
+            //   姓名、性别、电话完全可以并排到同一行」)
+            //   性别从"三个大按钮占一行"改成紧凑下拉 —— 这栏本来就只有一个值。
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _genderButton('女', 'F'),
+                Expanded(
+                  flex: 4,
+                  child: TextFormField(
+                    controller: _nameController,
+                    style: const TextStyle(fontSize: AppTheme.fontMd),
+                    readOnly: _claimMode, // 已注册用户用她的真实姓名 (claim 不改档案)
+                    decoration: InputDecoration(
+                      labelText: '姓名 *',
+                      helperText: _claimMode ? '用对方账号的真实姓名 (不能改)' : null,
+                    ),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? '请输入姓名' : null,
+                  ),
+                ),
                 const SizedBox(width: AppSpace.s8),
-                _genderButton('男', 'M'),
-                const SizedBox(width: AppSpace.s8),
-                _genderButton('未知', 'U'),
+                Expanded(
+                  flex: 2,
+                  child: DropdownButtonFormField<String>(
+                    value: _gender ?? 'U',
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: '性别'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'F',
+                          child: Text('女',
+                              style: TextStyle(fontSize: AppTheme.fontMd))),
+                      DropdownMenuItem(
+                          value: 'M',
+                          child: Text('男',
+                              style: TextStyle(fontSize: AppTheme.fontMd))),
+                      DropdownMenuItem(
+                          value: 'U',
+                          child: Text('未知',
+                              style: TextStyle(fontSize: AppTheme.fontMd))),
+                    ],
+                    onChanged: (v) => setState(() => _gender = v ?? 'U'),
+                  ),
+                ),
+                // 已注册用户: 手机号在对方账号里, 不需要录 (档案已存在)
+                if (!_claimMode) ...[
+                  const SizedBox(width: AppSpace.s8),
+                  Expanded(
+                    flex: 4,
+                    child: TextFormField(
+                      controller: _phoneController,
+                      style: const TextStyle(fontSize: AppTheme.fontMd),
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(labelText: '手机号 *'),
+                      validator: (v) {
+                        if (v == null ||
+                            !RegExp(r'^1[3-9]\d{9}$').hasMatch(v)) {
+                          return '请输入正确的手机号';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: AppSpace.s12),
             // ===== 生日 (主人 2026-09-18: 年月日可选填 + 农历/阳历 + 生日提醒) =====
-            const Text('生日', style: TextStyle(fontSize: AppTheme.fontMd)),
+            // 2026-09-25: 历法收进标题行 (省一整行)
+            Row(
+              children: [
+                const Text('生日', style: TextStyle(fontSize: AppTheme.fontMd)),
+                const Spacer(),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                        value: 'solar',
+                        label: Text('阳历', style: TextStyle(fontSize: AppType.xs))),
+                    ButtonSegment(
+                        value: 'lunar',
+                        label: Text('农历', style: TextStyle(fontSize: AppType.xs))),
+                  ],
+                  selected: {_birthCalendar},
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      minimumSize:
+                          WidgetStatePropertyAll(Size(0, AppSize.controlLg))),
+                  onSelectionChanged: (v) =>
+                      setState(() => _birthCalendar = v.first),
+                ),
+              ],
+            ),
             const SizedBox(height: AppSpace.s4),
             const Text(
               '知道多少填多少, 不知道的留空 (例: 只记得属相/年份 → 只填年; 过农历生日 → 切「农历」)',
@@ -470,27 +544,6 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     label: '日',
                     value: _birthDay == null ? null : '$_birthDay',
                     onPick: () => _pickBirthPart(isMonth: false),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.s8),
-            // 历法 (阳历 / 农历)
-            Row(
-              children: [
-                const Text('历法:', style: TextStyle(fontSize: AppTheme.fontSm)),
-                const SizedBox(width: AppSpace.s8),
-                Expanded(
-                  child: SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'solar', label: Text('阳历', style: TextStyle(fontSize: AppType.xs))),
-                      ButtonSegment(value: 'lunar', label: Text('农历', style: TextStyle(fontSize: AppType.xs))),
-                    ],
-                    selected: {_birthCalendar},
-                    showSelectedIcon: false,
-                    expandedInsets: EdgeInsets.zero,
-                    onSelectionChanged: (v) =>
-                        setState(() => _birthCalendar = v.first),
                   ),
                 ),
               ],
@@ -647,7 +700,8 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 value: _isSeed,
                 onChanged: (v) => setState(() => _isSeed = v),
                 activeColor: AppTheme.accent,
-                contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s8),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.s12, vertical: AppSpace.s4),
                 title: const Text('🌱 种子客户', style: TextStyle(fontSize: AppTheme.fontMd)),
                 subtitle: const Text(
                   '还没体验过/刚加好友的潜在客户。勾上后客户列表可用「种子」筛出',
@@ -659,48 +713,17 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
             TextFormField(
               controller: _notesController,
               style: const TextStyle(fontSize: AppTheme.fontMd),
-              maxLines: 3,
+              // 2026-09-25: 3 行 → 2 行 (排版紧凑; 要写长文进详情页的备注卡看)
+              maxLines: 2,
               decoration: const InputDecoration(labelText: '备注'),
             ),
-            const SizedBox(height: AppSpace.s32),
-            SizedBox(
-              width: double.infinity,
-              height: AppSize.buttonLgHeight,
-              child: FilledButton.icon(
-                onPressed: _loading ? null : _submit,
-                icon: _loading
-                    ? const SizedBox(
-                        width: AppSize.iconMd,
-                        height: AppSize.iconMd,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.check, size: AppSize.iconLg),
-                label: Text(widget.customerId == null ? '保存' : '保存修改'),
-              ),
-            ),
+            const SizedBox(height: AppSpace.s24),
           ],
         ),
       ),
     );
   }
 
-  Widget _genderButton(String label, String value) {
-    final selected = _gender == value;
-    return Expanded(
-      child: OutlinedButton(
-        onPressed: () => setState(() => _gender = value),
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 56),
-          backgroundColor: selected ? AppTheme.primary : Colors.white,
-          foregroundColor: selected ? Colors.white : AppTheme.primary,
-          side: BorderSide(
-            color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.4),
-            width: AppSpace.s2,
-          ),
-        ),
-        child: Text(label, style: const TextStyle(fontSize: AppTheme.fontMd)),
-      ),
-    );
-  }
+
 
 }
