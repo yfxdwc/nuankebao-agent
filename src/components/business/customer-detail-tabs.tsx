@@ -51,6 +51,10 @@ interface CustomerLite {
    *   单一真相源 = src/lib/customer/identity.ts.
    */
   ownership?: Ownership;
+  /** 归属人姓名 (「下级的客户 · 张三」; Phase D 后端返回) */
+  ownerName?: string | null;
+  /** 上级推送人姓名 (「上级推送 · 张三」; 仅 ownership = upline 有值) */
+  sharedByName?: string | null;
   /**
    * ★ 客户来源 (Phase C §1 维度 6 + §4.2 L4, D6).
    *   null / undefined = 未填写 → 显示"未填写".
@@ -69,7 +73,8 @@ interface CustomerLite {
  */
 function ownershipBadgeLabel(
   o: Ownership | undefined,
-  ownerName?: string | null
+  ownerName?: string | null,
+  sharedByName?: string | null
 ): { label: string; className: string } | null {
   switch (o) {
     case "mine":
@@ -82,7 +87,7 @@ function ownershipBadgeLabel(
       };
     case "upline":
       return {
-        label: ownerName ? `上级推送 · ${ownerName}` : "上级推送",
+        label: sharedByName ? `上级推送 · ${sharedByName}` : "上级推送",
         className: "bg-brand-light text-brand",
       };
     case "none":
@@ -221,7 +226,7 @@ function ProfileTab({ customer }: { customer: CustomerLite }) {
   //   详情页 = 老板视角: "她的客户归谁管"比列表更重要 —— 总是显示 (mine 也加个静默标也行,
   //   但设计拍"默认静默、异常态显形", mine 也按静默, 避免同色铺满).
   //   详情页现不传 ownerName (Phase D 后端 src/view/[id] 接入 identity.ts 后带).
-  const own = ownershipBadgeLabel(customer.ownership);
+  const own = ownershipBadgeLabel(customer.ownership, customer.ownerName, customer.sharedByName);
   // ★ 来源 (Phase C §1 维度 6 + D6): 仅在详情页"档案/管理区"显示,
   //   列表**不**显示 (D6 硬约束); referral 时展开介绍人 (zod refine 校验)
   const src = customer.source;

@@ -79,6 +79,10 @@ export interface CustomerIdentity {
   member: boolean;
   registered: boolean;
   source: { kind: AcquireSource | null; referrerName: string | null };
+  /** 归属人姓名 (「下级的客户 · 张三」用); 无归属 = null */
+  ownerName: string | null;
+  /** 上级推送人姓名 (「上级推送 · 张三」用; 仅 ownership = upline 时有值) */
+  sharedByName: string | null;
 }
 
 // ============================================
@@ -260,6 +264,8 @@ async function loadIdentityRow(
     has_account: boolean;
     acquire_source: AcquireSource | null;
     source_referrer_name: string | null;
+    owner_name: string | null;
+    shared_by_name: string | null;
   }>(sql`
     SELECT
       ${fields.isFranchisee}             AS is_franchisee,
@@ -272,7 +278,9 @@ async function loadIdentityRow(
       ${fields.isMember}                AS is_member,
       ${fields.hasAccount}              AS has_account,
       ${fields.acquireSource}           AS acquire_source,
-      ${fields.sourceReferrerName}      AS source_referrer_name
+      ${fields.sourceReferrerName}      AS source_referrer_name,
+      ${fields.ownerName}               AS owner_name,
+      ${fields.sharedByName}            AS shared_by_name
     FROM "customer"
     WHERE "customer"."id" = ${customerId} AND "customer"."deleted_at" IS NULL
     LIMIT 1
@@ -292,6 +300,8 @@ async function loadIdentityRow(
     hasAccount: r.has_account === true,
     acquireSource: (r.acquire_source ?? null) as AcquireSource | null,
     sourceReferrerName: r.source_referrer_name ?? null,
+    ownerName: r.owner_name ?? null,
+    sharedByName: r.shared_by_name ?? null,
   };
 }
 
@@ -316,6 +326,8 @@ export interface IdentityFlags {
   hasAccount: boolean;
   acquireSource: AcquireSource | null;
   sourceReferrerName: string | null;
+  ownerName: string | null;
+  sharedByName: string | null;
 }
 
 /**
@@ -348,7 +360,26 @@ export function renderIdentitySelectFields(viewer: ViewerContext): {
   hasAccount: SQL<boolean>;
   acquireSource: SQL<AcquireSource | null>;
   sourceReferrerName: SQL<string | null>;
+  ownerName: SQL<string | null>;
+  sharedByName: SQL<string | null>;
 } {
+  // 归属人姓名 (「下级的客户 · 张三」) —— 只回姓名, 不回手机号
+  const ownerNameSql = sql<string | null>`(
+    SELECT u.name FROM "user" u WHERE u.id = "customer"."owner_id"
+  )`;
+  // 上级推送人姓名 (「上级推送 · 张三」) —— 仅当 viewer 是该推送的接收人
+  const sharedByNameSql =
+    viewer.userId != null
+      ? sql<string | null>`(
+          SELECT f.name FROM customer_share cs
+          JOIN "user" f ON f.id = cs.from_user_id
+          WHERE cs.customer_id = "customer"."id"
+            AND cs.to_user_id = ${viewer.userId}
+            AND cs.revoked_at IS NULL
+          LIMIT 1
+        )`
+      : sql<string | null>`NULL::text`;
+
   return {
     isFranchisee: isFranchiseeSql(),
     direct: referredFranchiseeSql(viewer.franchiseeId) as SQL<boolean>,
@@ -361,6 +392,8 @@ export function renderIdentitySelectFields(viewer: ViewerContext): {
     hasAccount: hasAccountSql as SQL<boolean>,
     acquireSource: sql`"customer"."acquire_source"`,
     sourceReferrerName: sql`"customer"."source_referrer_name"`,
+    ownerName: ownerNameSql,
+    sharedByName: sharedByNameSql,
   };
 }
 
@@ -418,6 +451,8 @@ export function identityFromFlags(flags: IdentityFlags): CustomerIdentity {
       kind: flags.acquireSource,
       referrerName: flags.sourceReferrerName,
     },
+    ownerName: flags.ownerName,
+    sharedByName: flags.sharedByName,
   };
 }
 

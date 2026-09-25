@@ -44,6 +44,8 @@ class CustomerOwnershipCard extends ConsumerStatefulWidget {
 class _CustomerOwnershipCardState
     extends ConsumerState<CustomerOwnershipCard> {
   bool _busy = false;
+  /// 我发出的 active 推送 (「已推送给 X」+ 撤销入口; 懒加载, 见 build)
+  Future<List<CustomerShareEntry>>? _sharesFuture;
 
   Future<void> _claim() async {
     if (_busy) return;
@@ -103,6 +105,41 @@ class _CustomerOwnershipCardState
     }
   }
 
+  /// 撤销推送 (必须填原因; S5 四方撤销, 这里是「推送人」视角)
+  Future<void> _revokeShare(CustomerShareEntry entry) async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (_) => const _RevokeReasonDialog(),
+    );
+    if (reason == null || reason.trim().isEmpty) return;
+
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(customerServiceProvider).revokeShare(
+            widget.customerId,
+            entry.toUserId,
+            reason: reason.trim(),
+          );
+      ref.invalidate(customerOwnershipProvider(widget.customerId));
+      if (mounted) {
+        setState(() {
+          _sharesFuture =
+              ref.read(customerServiceProvider).sharesOfCustomer(widget.customerId);
+        });
+      }
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text('已撤销对 ${entry.toName} 的推送')),
+      );
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text(humanShareError(e))));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// 转给同事: 先弹「输邀请码 → 识别 → 确认」, 确认后真转
   Future<void> _transfer() async {
     final code = await showDialog<String>(
@@ -131,6 +168,48 @@ class _CustomerOwnershipCardState
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 「已推送给」列表 (仅归属人可见; 空则不占位)
+  Widget _buildSharedList() {
+    final t = context.tokens;
+    _sharesFuture ??=
+        ref.read(customerServiceProvider).sharesOfCustomer(widget.customerId);
+    return FutureBuilder<List<CustomerShareEntry>>(
+      future: _sharesFuture,
+      builder: (context, snap) {
+        final items = snap.data ?? const <CustomerShareEntry>[];
+        if (items.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: AppSpace.s10),
+            Text('已推送给',
+                style: TextStyle(
+                    fontSize: AppTheme.fontXs, color: t.textSecondary)),
+            const SizedBox(height: AppSpace.s4),
+            for (final e in items)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      e.note == null || e.note!.isEmpty
+                          ? e.toName
+                          : '${e.toName} · ${e.note}',
+                      style: const TextStyle(fontSize: AppTheme.fontSm),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _busy ? null : () => _revokeShare(e),
+                    child: const Text('撤销'),
+                  ),
+                ],
+              ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -291,6 +370,7 @@ class _CustomerOwnershipCardState
                       style: TextStyle(fontSize: AppTheme.fontMd)),
                 ),
               ),
+              _buildSharedList(),
             ],
           )
         else
@@ -554,7 +634,7 @@ class _PushShareSheetState extends ConsumerState<_PushShareSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).extension<AppThemeExt>()!;
+    final t = context.tokens;
     final maxH = MediaQuery.of(context).size.height * 0.7;
     return SafeArea(
       child: ConstrainedBox(
@@ -663,6 +743,62 @@ class _PushShareSheetState extends ConsumerState<_PushShareSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+/// 撤销推送必须填原因 (S5 + 审计留痕); 空 = 取消
+class _RevokeReasonDialog extends StatefulWidget {
+  const _RevokeReasonDialog();
+
+  @override
+  State<_RevokeReasonDialog> createState() => _RevokeReasonDialogState();
+}
+
+class _RevokeReasonDialogState extends State<_RevokeReasonDialog> {
+  final _reason = TextEditingController();
+  bool _valid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reason.addListener(() {
+      final v = _reason.text.trim().isNotEmpty;
+      if (v != _valid) setState(() => _valid = v);
+    });
+  }
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('撤销推送',
+          style: TextStyle(fontSize: AppTheme.fontLg)),
+      content: TextField(
+        controller: _reason,
+        maxLength: 200,
+        decoration: const InputDecoration(
+          labelText: '原因 (必填, 会写进审计)',
+          counterText: '',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed:
+              _valid ? () => Navigator.pop(context, _reason.text.trim()) : null,
+          child: const Text('确认撤销'),
+        ),
+      ],
     );
   }
 }

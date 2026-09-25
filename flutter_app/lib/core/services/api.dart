@@ -372,6 +372,15 @@ class CustomerService {
         data: {'reason': reason});
   }
 
+  /// GET /api/customers/[id]/shares —— 这个客户当前推给过谁 (撤销入口用)
+  Future<List<CustomerShareEntry>> sharesOfCustomer(String customerId) async {
+    final res = await _dio.get('/customers/$customerId/shares');
+    final items = (res.data as Map<String, dynamic>)['items'] as List? ?? [];
+    return items
+        .map((e) => CustomerShareEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   /// GET /api/customers/shares/received —— 我收到的推送 (角标/元数据, 手机号一律打码)
   Future<List<ReceivedShare>> receivedShares() async {
     final res = await _dio.get('/customers/shares/received');

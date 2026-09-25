@@ -123,6 +123,10 @@ export interface CustomerView {
    *   direct_downline / upline_shared 明文; subordinate / other / none 走 maskPhone)
    */
   ownership: "mine" | "direct_downline" | "subordinate" | "upline" | "other" | "none";
+  /** 归属人姓名 (「下级的客户 · 张三」用); 无归属 = null (Phase D) */
+  ownerName: string | null;
+  /** 上级推送人姓名 (「上级推送 · 张三」用); 仅 ownership = upline 有值 (Phase D) */
+  sharedByName: string | null;
   /**
    * ★ 客户来源 (Phase A §1 维度 6, migration 0026): 用于详情页管理区块
    *   (D6: 列表不显示)。结构 = { kind, referrerName } 与 identity.ts 对齐。
@@ -243,7 +247,10 @@ function toView(
   isMember: boolean = false,
   hasAccount: boolean = false,
   accountReferralCode: string | null = null,
-  identity?: Pick<CustomerIdentity, "affiliation" | "ownership" | "source"> | null,
+  identity?: Pick<
+    CustomerIdentity,
+    "affiliation" | "ownership" | "source" | "ownerName" | "sharedByName"
+  > | null,
   /**
    * ★ 详情页 / 例外场景需要明文手机号 (如: 编辑资料 / 详情管理卡)
    *   此时 ownership = subordinate 也返回明文 — 跳过 maskPhone (决定于调用方语义)
@@ -291,6 +298,8 @@ function toView(
     affiliation:
       identity?.affiliation ?? (isMyDownline ? "direct" : "none"),
     ownership,
+    ownerName: identity?.ownerName ?? null,
+    sharedByName: identity?.sharedByName ?? null,
     source: identity?.source ?? {
       kind: (row.acquireSource ?? null) as
         | "friend"
@@ -732,6 +741,8 @@ export async function listCustomers(
         hasAccount: identityFields.hasAccount,
         acquireSourceCol: identityFields.acquireSource,
         sourceReferrerNameCol: identityFields.sourceReferrerName,
+        ownerNameCol: identityFields.ownerName,
+        sharedByNameCol: identityFields.sharedByName,
       })
       .from(customer)
       .where(whereClause)
@@ -772,6 +783,8 @@ export async function listCustomers(
         sourceReferrerName: r.sourceReferrerNameCol != null
           ? String(r.sourceReferrerNameCol)
           : null,
+        ownerName: r.ownerNameCol != null ? String(r.ownerNameCol) : null,
+        sharedByName: r.sharedByNameCol != null ? String(r.sharedByNameCol) : null,
       };
       const identity = identityFromFlags(flags);
       // toView 第二参 (isMyDownline) = 原始 direct 口径，与旧 listCustomers 保持一致
@@ -1339,7 +1352,21 @@ export async function getCustomerOwnership(
     statusLabel = "我的客户";
   } else {
     // ④ 归属别人 → 先到先得, 不给按钮 (给了就是"一点就 409")
-    statusLabel = `已是 ${row.ownerName ?? "他人"} 的客户`;
+    // ★ Phase D: 归属不是我、但有人推给我 → 说明「推送关系」而不是只说归属人
+    //   (详情归属卡的唯一文案来源; 前端不拼中文)
+    const sharer = await db.execute<{ from_name: string }>(sql`
+      SELECT f.name AS from_name
+      FROM customer_share cs
+      JOIN "user" f ON f.id = cs.from_user_id
+      WHERE cs.customer_id = ${customerId}
+        AND cs.to_user_id = ${viewerUserId}
+        AND cs.revoked_at IS NULL
+      LIMIT 1
+    `);
+    const sharedByName = sharer[0]?.from_name ?? null;
+    statusLabel = sharedByName
+      ? `上级推送 · ${sharedByName}`
+      : `已是 ${row.ownerName ?? "他人"} 的客户`;
     blockedReason = "已被别人先认领 (先到先得); 要转移需与对方协商";
   }
 

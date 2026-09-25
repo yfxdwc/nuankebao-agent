@@ -37,7 +37,7 @@ interface CustomerView {
  * 归属 badge 文案 (D4 + §4.2 L2 五态).
  *   mine       → null (静默, 不出标签)
  *   subordinate → "下级的客户 · X" (X = 上级 user 姓名; 现 list 未带 ownerName → 仅前缀)
- *   upline     → "上级推送 · X" (Phase D 落地)
+ *   upline     → "上级推送 · X" (X = 推送人姓名; 列表暂用 ownerName 兜底, 详情走 sharedByName)
  *   none       → "无归属"
  *   other      → "他人客户" (兜底, scope 漏检告警)
  */

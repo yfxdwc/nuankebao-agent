@@ -78,8 +78,8 @@ class CustomerRow extends StatelessWidget {
 
   /// 归属五态 (Phase C §3.4): 默认 mine 静默, 异常态显形 (设计 §4.2 L2)
   ///   'mine'         → null (静默, 不出 badge)
-  ///   'subordinate'  → 「下级的客户」(ownerName 待 Phase D 后端带, 现仅前缀)
-  ///   'upline'       → 「上级推送」 (Phase D 落地后才有数据)
+  ///   'subordinate'  → 「下级的客户 · 张三」(ownerName, Phase D 后端已带)
+  ///   'upline'       → 「上级推送 · 张三」(sharedByName, Phase D 后端已带)
   ///   'none'         → 「无归属」
   ///   'other'        → 「他人客户」(scope 漏检告警兜底)
   /// 老后端不返回 ownership → 默认 'none' (异常态显形, 与设计文档一致)
@@ -90,9 +90,17 @@ class CustomerRow extends StatelessWidget {
       case '':
         return null; // 默认静默
       case 'subordinate':
-        return ('下级的客户', AppBadgeTone.info);
+        final n = customer.ownerName;
+        return (
+          n == null || n.isEmpty ? '下级的客户' : '下级的客户 · $n',
+          AppBadgeTone.info,
+        );
       case 'upline':
-        return ('上级推送', AppBadgeTone.brand);
+        final n = customer.sharedByName;
+        return (
+          n == null || n.isEmpty ? '上级推送' : '上级推送 · $n',
+          AppBadgeTone.brand,
+        );
       case 'none':
         return ('无归属', AppBadgeTone.neutral);
       case 'other':

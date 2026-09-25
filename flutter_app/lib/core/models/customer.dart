@@ -60,6 +60,10 @@ class Customer with _$Customer {
     ///   "none" 无归属
     /// 列表默认 mine 静默, 异常态显形 (设计 §4.2 L2 五态)。
     @Default('none') String ownership,
+    /// 归属人姓名 (「下级的客户 · 张三」用; Phase D 后端返回, 无归属 = null)
+    String? ownerName,
+    /// 上级推送人姓名 (「上级推送 · 张三」用; 仅 ownership = "upline" 有值)
+    String? sharedByName,
     /// 客户来源 (§1 维度 6 + §5 migration 0026, 主人 2026-09-25 D5 拍「选填」):
     ///   null / "friend" 亲友 / "referral" 转介绍 / "cold_visit" 陌生拜访 / "ground_promo" 地推
     ///   referral 时 referrerName 必填 (后端 zod refine 校验, §5 M3, 不加 DB CHECK)

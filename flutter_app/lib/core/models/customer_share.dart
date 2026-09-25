@@ -60,3 +60,26 @@ String humanShareError(Object e) {
   if (s.contains('404')) return '客户不存在或不在你的可见范围';
   return '操作失败: $e';
 }
+
+/// GET /api/customers/[id]/shares 的一项 (我发出的 active 推送)
+class CustomerShareEntry {
+  final String toUserId;
+  final String toName;
+  final String? note;
+  final String createdAt;
+
+  const CustomerShareEntry({
+    required this.toUserId,
+    required this.toName,
+    this.note,
+    required this.createdAt,
+  });
+
+  factory CustomerShareEntry.fromJson(Map<String, dynamic> json) =>
+      CustomerShareEntry(
+        toUserId: (json['toUserId'] ?? '').toString(),
+        toName: (json['toName'] ?? '').toString(),
+        note: json['note']?.toString(),
+        createdAt: (json['createdAt'] ?? '').toString(),
+      );
+}

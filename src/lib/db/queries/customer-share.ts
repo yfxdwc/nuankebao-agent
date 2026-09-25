@@ -604,3 +604,48 @@ export async function listReceivedShares(
 }
 
 
+
+/**
+ * 「这个客户当前推给过谁」 —— 归属卡上的「已推送」列表 + 撤销入口用。
+ *
+ * 与 listReceivedShares 的分工:
+ *   - listReceivedShares: 我**收到**的推送 (被推送人视角, 「上级推送 · X」来源)
+ *   - listSharesOfCustomer: 我**发出**的推送 (归属人视角, 撤销入口)
+ *
+ * @param fromUserId 传入时只回该用户发出的 (UI 用); admin 传 null = 全部
+ */
+export interface CustomerShareEntry {
+  toUserId: string;
+  toName: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export async function listSharesOfCustomer(
+  customerId: bigint,
+  fromUserId: bigint | null,
+): Promise<CustomerShareEntry[]> {
+  const rows = await db.execute<{
+    to_user_id: string;
+    to_name: string;
+    note: string | null;
+    created_at: string;
+  }>(sql`
+    SELECT cs.to_user_id::text AS to_user_id,
+           tu.name             AS to_name,
+           cs.note             AS note,
+           cs.created_at::text AS created_at
+    FROM customer_share cs
+    JOIN "user" tu ON tu.id = cs.to_user_id
+    WHERE cs.customer_id = ${customerId}
+      AND cs.revoked_at IS NULL
+      ${fromUserId != null ? sql`AND cs.from_user_id = ${fromUserId}` : sql``}
+    ORDER BY cs.created_at DESC
+  `);
+  return rows.map((r) => ({
+    toUserId: r.to_user_id,
+    toName: r.to_name,
+    note: r.note,
+    createdAt: r.created_at,
+  }));
+}

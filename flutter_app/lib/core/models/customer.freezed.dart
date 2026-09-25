@@ -85,6 +85,12 @@ mixin _$Customer {
   /// 列表默认 mine 静默, 异常态显形 (设计 §4.2 L2 五态)。
   String get ownership => throw _privateConstructorUsedError;
 
+  /// 归属人姓名 (「下级的客户 · 张三」用; Phase D 后端返回, 无归属 = null)
+  String? get ownerName => throw _privateConstructorUsedError;
+
+  /// 上级推送人姓名 (「上级推送 · 张三」用; 仅 ownership = "upline" 有值)
+  String? get sharedByName => throw _privateConstructorUsedError;
+
   /// 客户来源 (§1 维度 6 + §5 migration 0026, 主人 2026-09-25 D5 拍「选填」):
   ///   null / "friend" 亲友 / "referral" 转介绍 / "cold_visit" 陌生拜访 / "ground_promo" 地推
   ///   referral 时 referrerName 必填 (后端 zod refine 校验, §5 M3, 不加 DB CHECK)
@@ -135,6 +141,8 @@ abstract class $CustomerCopyWith<$Res> {
       String? accountReferralCode,
       String affiliation,
       String ownership,
+      String? ownerName,
+      String? sharedByName,
       String? acquireSource,
       String? sourceReferrerName,
       DateTime createdAt,
@@ -177,6 +185,8 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
     Object? accountReferralCode = freezed,
     Object? affiliation = null,
     Object? ownership = null,
+    Object? ownerName = freezed,
+    Object? sharedByName = freezed,
     Object? acquireSource = freezed,
     Object? sourceReferrerName = freezed,
     Object? createdAt = null,
@@ -267,6 +277,14 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
           ? _value.ownership
           : ownership // ignore: cast_nullable_to_non_nullable
               as String,
+      ownerName: freezed == ownerName
+          ? _value.ownerName
+          : ownerName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      sharedByName: freezed == sharedByName
+          ? _value.sharedByName
+          : sharedByName // ignore: cast_nullable_to_non_nullable
+              as String?,
       acquireSource: freezed == acquireSource
           ? _value.acquireSource
           : acquireSource // ignore: cast_nullable_to_non_nullable
@@ -317,6 +335,8 @@ abstract class _$$CustomerImplCopyWith<$Res>
       String? accountReferralCode,
       String affiliation,
       String ownership,
+      String? ownerName,
+      String? sharedByName,
       String? acquireSource,
       String? sourceReferrerName,
       DateTime createdAt,
@@ -357,6 +377,8 @@ class __$$CustomerImplCopyWithImpl<$Res>
     Object? accountReferralCode = freezed,
     Object? affiliation = null,
     Object? ownership = null,
+    Object? ownerName = freezed,
+    Object? sharedByName = freezed,
     Object? acquireSource = freezed,
     Object? sourceReferrerName = freezed,
     Object? createdAt = null,
@@ -447,6 +469,14 @@ class __$$CustomerImplCopyWithImpl<$Res>
           ? _value.ownership
           : ownership // ignore: cast_nullable_to_non_nullable
               as String,
+      ownerName: freezed == ownerName
+          ? _value.ownerName
+          : ownerName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      sharedByName: freezed == sharedByName
+          ? _value.sharedByName
+          : sharedByName // ignore: cast_nullable_to_non_nullable
+              as String?,
       acquireSource: freezed == acquireSource
           ? _value.acquireSource
           : acquireSource // ignore: cast_nullable_to_non_nullable
@@ -492,6 +522,8 @@ class _$CustomerImpl implements _Customer {
       this.accountReferralCode,
       this.affiliation = 'none',
       this.ownership = 'none',
+      this.ownerName,
+      this.sharedByName,
       this.acquireSource,
       this.sourceReferrerName,
       required this.createdAt,
@@ -601,6 +633,14 @@ class _$CustomerImpl implements _Customer {
   @JsonKey()
   final String ownership;
 
+  /// 归属人姓名 (「下级的客户 · 张三」用; Phase D 后端返回, 无归属 = null)
+  @override
+  final String? ownerName;
+
+  /// 上级推送人姓名 (「上级推送 · 张三」用; 仅 ownership = "upline" 有值)
+  @override
+  final String? sharedByName;
+
   /// 客户来源 (§1 维度 6 + §5 migration 0026, 主人 2026-09-25 D5 拍「选填」):
   ///   null / "friend" 亲友 / "referral" 转介绍 / "cold_visit" 陌生拜访 / "ground_promo" 地推
   ///   referral 时 referrerName 必填 (后端 zod refine 校验, §5 M3, 不加 DB CHECK)
@@ -620,7 +660,7 @@ class _$CustomerImpl implements _Customer {
 
   @override
   String toString() {
-    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, avatar: $avatar, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, hasAccount: $hasAccount, accountReferralCode: $accountReferralCode, affiliation: $affiliation, ownership: $ownership, acquireSource: $acquireSource, sourceReferrerName: $sourceReferrerName, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, avatar: $avatar, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, hasAccount: $hasAccount, accountReferralCode: $accountReferralCode, affiliation: $affiliation, ownership: $ownership, ownerName: $ownerName, sharedByName: $sharedByName, acquireSource: $acquireSource, sourceReferrerName: $sourceReferrerName, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -663,6 +703,10 @@ class _$CustomerImpl implements _Customer {
                 other.affiliation == affiliation) &&
             (identical(other.ownership, ownership) ||
                 other.ownership == ownership) &&
+            (identical(other.ownerName, ownerName) ||
+                other.ownerName == ownerName) &&
+            (identical(other.sharedByName, sharedByName) ||
+                other.sharedByName == sharedByName) &&
             (identical(other.acquireSource, acquireSource) ||
                 other.acquireSource == acquireSource) &&
             (identical(other.sourceReferrerName, sourceReferrerName) ||
@@ -698,6 +742,8 @@ class _$CustomerImpl implements _Customer {
         accountReferralCode,
         affiliation,
         ownership,
+        ownerName,
+        sharedByName,
         acquireSource,
         sourceReferrerName,
         createdAt,
@@ -743,6 +789,8 @@ abstract class _Customer implements Customer {
       final String? accountReferralCode,
       final String affiliation,
       final String ownership,
+      final String? ownerName,
+      final String? sharedByName,
       final String? acquireSource,
       final String? sourceReferrerName,
       required final DateTime createdAt,
@@ -836,6 +884,14 @@ abstract class _Customer implements Customer {
   /// 列表默认 mine 静默, 异常态显形 (设计 §4.2 L2 五态)。
   @override
   String get ownership;
+
+  /// 归属人姓名 (「下级的客户 · 张三」用; Phase D 后端返回, 无归属 = null)
+  @override
+  String? get ownerName;
+
+  /// 上级推送人姓名 (「上级推送 · 张三」用; 仅 ownership = "upline" 有值)
+  @override
+  String? get sharedByName;
 
   /// 客户来源 (§1 维度 6 + §5 migration 0026, 主人 2026-09-25 D5 拍「选填」):
   ///   null / "friend" 亲友 / "referral" 转介绍 / "cold_visit" 陌生拜访 / "ground_promo" 地推
