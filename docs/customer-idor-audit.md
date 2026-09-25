@@ -1,10 +1,12 @@
 # Customer 端点 IDOR 同源排查 (R-12 后续)
 
-**日期**: 2026-09-25 (R-12 IDOR 修复后)
+**日期**: 2026-09-25 (R-12 IDOR 修复后; 同日 follow-ups 续修)
 **作者**: worker (pi 任务)
 **任务**: R-12 同源 —— 全仓审计 `/api/customers/[id]/*` + 同类面, 并修掉确认的越权
 
-> **结论先报**: 排查 `src/app/api/customers/**` + `src/app/api/interactions/**` + `src/app/api/wellness-records/**` 共 **17 个 route** (含子路由 GET/PATCH/DELETE), 确认 **5 个 route / 7 个方法** 有 IDOR (按 URL 的 `id` 查, 没接 `customerRbacFilter`); 已修; 测试新增 `tests/idor-customer-routes.test.ts` 18 例。
+> **结论先报**:
+> - **本轮 (R-12 后续)**: 排查 `src/app/api/customers/**` + `src/app/api/interactions/**` + `src/app/api/wellness-records/**` 共 **17 个 route** (含子路由 GET/PATCH/DELETE), 确认 **5 个 route / 7 个方法** 有 IDOR (按 URL 的 `id` 查, 没接 `customerRbacFilter`); 已修; 测试新增 `tests/idor-customer-routes.test.ts` 28 例 (后增至 28 例, 含 admin 豁免 + 双向对称)。
+> - **同日续修 (follow-ups)**: 任务 A (本任务) 关闭 `src/app/api/follow-ups/**` 同源 3 个方法 (GET / PATCH / POST 写侧), 测试新增 `tests/idor-follow-ups.test.ts` 21 例。详见 §1 #17-18 行 + §5 首条 (✅ 标记)。
 
 ---
 
@@ -42,13 +44,13 @@
 | 15 | `/api/wellness-records/[id]` | DELETE | `wellness-records/[id]/route.ts` | ❌ `deleteWellnessRecord(BigInt(id), ...)` 无 scope | **HIGH** | ✏️ 修 |
 | 16 | `/api/wellness-records` | GET | `wellness-records/route.ts` | ❌ `listWellnessRecords({ customerId })` 无 scope; **且** 无 customerId 时返回**全库**记录 (更严重) | **CRITICAL** | ✏️ 修 (要求 customerId + scope 校验) |
 | 16 | `/api/wellness-records` | POST | `wellness-records/route.ts` | ✅ POST = 建新记录归属 creator, 不是 IDOR (但 customerId 是否在范围内未校验 — 留待 v2, 本轮不动) | OK (P1) | — |
-| 17 | `/api/follow-ups` | GET | `follow-ups/route.ts` | ❌ `listFollowUpTasks({ customerId })` 无 scope (同 wellness-records 模式) | **HIGH** | 📌 **不在本轮范围** (见 §5 后续) |
-| 17 | `/api/follow-ups` | POST | `follow-ups/route.ts` | ✅ POST = 建新任务归属 creator, 同 wellness-record POST, 不是 IDOR | OK (P1) | — |
-| 18 | `/api/follow-ups/[id]` | PATCH | `follow-ups/[id]/route.ts` | ❌ `completeFollowUpTask(id, ...)` / `cancelFollowUpTask(id, ...)` 无 scope (同 interactions/[id] 模式) | **HIGH** | 📌 **不在本轮范围** (见 §5 后续) |
-
-> **#16 POST**: POST 端点不校验 `customerId` 是否在 viewer 范围内, 即「销售 A 可以给销售 B 的客户建养生记录」。这一条严格说**也算越权** (写错地方), 但跟 R-12 同源「按 URL id 直接 load」不是一类, 留待后续 ticket (本轮专注读/改/删面的 IDOR)。
+| 17 | `/api/follow-ups` | GET | `follow-ups/route.ts` | ✅ `listFollowUpTasks({ ..., scope: customerRbacFilter(ctx), viewerUserId })` (2026-09-25) | OK | — |
+| 17 | `/api/follow-ups` | POST | `follow-ups/route.ts` | ✅ body.customerId 走 `customerRbacFilter` 校验, 不可见 → 400 (2026-09-25) | OK | — |
+| 18 | `/api/follow-ups/[id]` | PATCH | `follow-ups/[id]/route.ts` | ✅ `loadFollowUpTaskScopeById` + `getCustomerById(customerId, { scope })` + assignedTo 比对, 不可见 → 404 (2026-09-25) | OK | — |
 
 > **#17/#18 follow-ups**: 任务书显式枚举的范围是 `customers/[id]/*` + `wellness-records/**` + `interactions/**`。`follow-ups/**` 跟它们是同模式 (task 也是挂 customerId) 且**同样有 IDOR** — 但**不在本轮任务书显式枚举中**。记录在这里供后续 ticket; 不擅自扩范围。
+>
+> **🟢 #17/#18 follow-ups (2026-09-25 本任务关闭)**: 由本次任务 (任务 A: 修 follow-ups 的两个越权 IDOR) 完成, 修法 = 与 `interactions/[id]` / `wellness-records/[id]` 完全同口径。详见 §5 后续 ticket 块首条 (✅ 标记)。
 
 ## §2. 修法 (统一口径)
 
@@ -86,8 +88,16 @@
 
 ## §5. 后续 ticket (本轮不动, 留待)
 
-- **`/api/follow-ups` GET + `/api/follow-ups/[id]` PATCH**: 同样的 customerId / id 直接 load 越权模式, 应加 `customerRbacFilter` 行级过滤。修法跟 `interactions/` + `wellness-records/` 一模一样。
-- **`/api/interactions` POST + `/api/wellness-records` POST**: 写端点没校验 customerId 是否在 viewer 范围内, 属于「写错地方」类的越权 (用户 A 可给用户 B 的客户建互动/养生记录)。
+- ✅ **`/api/follow-ups` GET + `/api/follow-ups/[id]` PATCH + `/api/follow-ups` POST (写侧 customerId 校验)** — **已修 (2026-09-25, 本任务)**:
+  - **GET**: `listFollowUpTasks` 加 `scope` + `viewerUserId` 两个可选参数 (向后兼容, `src/app/admin/follow-ups/page.tsx` 老调用不动); route 层传 `customerRbacFilter(rbacCtx)` + viewerId → SQL 在 WHERE 末尾追加 EXISTS 子查询 (任务关联客户在范围内) OR `assigned_to = viewer`。
+    - `?customerId=别人客户` → EXISTS 自然过滤为空 → 返回 `{ items: [], total: 0 }` (**不** 404, 避免泄漏存在性, 任务书显式要求)
+    - 无 `customerId` → 同一 SQL 逻辑过滤全表
+    - admin / dev skip-auth 无 session → 不传 scope, 全见 (双门闸保护)
+  - **PATCH [id]**: route 层先 `loadFollowUpTaskScopeById(id)` 拿 (customerId, assignedTo) → 404 (不存在); 再走 `getCustomerById(customerId, { scope })` + assignedTo 比对 → 命中不到 → 404 (不泄漏存在性, 与 `interactions/[id]` 同口径); 命中 → 才调 `completeFollowUpTask` / `cancelFollowUpTask`。顺带加了非法 id → 400 兜底。
+  - **POST (写侧同源)**: 校验 `body.customerId` 必须在 viewer 范围内 → **400** `Customer not found in your scope` (而非 404 —— 理由: customerId 是 body 字段, 400 = 请求体不合法 语义更准; 错误信息显式写明 "not in your scope" 与 404 区分开)。
+  - 测试: `tests/idor-follow-ups.test.ts` 新增 21 例覆盖 ① 他人客户的任务不出现 ② ?customerId=别人客户 → 仅指派给 viewer 的任务可见 ③ PATCH 别人任务 → 404 + UPDATE 不发 ④ PATCH 自己任务 → 200 ⑤ 指派给我但客户不可见 → 可见 (规则 1 第二段) ⑥ admin 全可见 (GET + PATCH 跨范围) ⑦ 未登录 → 401 + 400/404 边界。
+  - **单一真相源** = `rbac.ts::customerRbacFilter(rbacCtx)` 传入; Phase D 升级 `viewerCustomerScopeSql` 时**只换 `rbac.ts` 内一处**, 本批 3 个 route + 1 个 query 文件不动。
+- **`/api/interactions` POST + `/api/wellness-records` POST**: 写端点没校验 customerId 是否在 viewer 范围内, 属于「写错地方」类的越权 (用户 A 可给用户 B 的客户建互动/养生记录)。⚠️ 同源修法参考本批 follow-ups POST 400 实现, 留待后续 ticket (本任务书未枚举)。
 - **`updateWellnessRecord` / `updateInteraction`**: 函数体结尾在**未提交的 tx 上下文**里调 `getWellnessRecordById(id)` / `getInteractionById(id)`, 这两个函数用全局 `db.select()` 走不同连接 → 看不到未提交 update → 返回的 view 是**旧的** (stale-return bug)。调试时已确认:
   - DB 实际写入正确 (`DB decrypted: 新内容`)
   - 但响应 body 返回旧值 (`body.processNote: 原内容`)
