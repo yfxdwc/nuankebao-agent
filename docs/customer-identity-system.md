@@ -180,6 +180,8 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
                    AND cs.to_user_id  = viewer.user_id
                    AND cs.revoked_at IS NULL
                    AND EXISTS (SELECT 1 FROM "user" r WHERE r.id = cs.to_user_id AND r.is_active = true)
+                   -- ★ 推送人停用 → 推送失效 (与 §6.5.3 「双方都必须对应活账号」文字对齐)
+                   AND EXISTS (SELECT 1 FROM "user" f WHERE f.id = cs.from_user_id AND f.is_active = true)
                    -- ★ P0-B (reviewer 第二轮): 推送人必须与我在同一棵树
                    --    否则我在被 admin 强改上层搬走后, 旧推送仍会命中 (跨枝隐私泄漏)
                    AND ( NOT EXISTS (SELECT 1 FROM "user" f
@@ -193,7 +195,7 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
 
 > **(b1) 为什么不能叫“直推加盟商”** (reviewer P1): (b1) 读的是 `placement_parent_id` = **结构口径**，而 §2.1 已拍「直推 = `referrer_id`」。为避免与 §9.1 INV-2 矛盾，全文统一称 **(b1) = 我的下层加盟节点本人档案**。
 
-> **(c) 的三个隐含条件** (评审补): ① 接收人账号必须 active (停用即失效, 与 §6.5 SHARE-4 一致); ② **推送人必须与我在同一棵树** (P0-B: 不加这条, 我被 admin 强改上层搬走后旧推送仍可见 = 跨枝泄漏; admin 无节点时豁免); ③ 推送人节点软删 (`ff.deleted_at IS NOT NULL`) 时推送失效。三者都要进巡检。
+> **(c) 的四个隐含条件** (评审补): ① 接收人账号必须 active (停用即失效, 与 §6.5 SHARE-4 一致); ② **推送人必须与我在同一棵树** (P0-B: 不加这条, 我被 admin 强改上层搬走后旧推送仍可见 = 跨枝泄漏; admin 无节点时豁免); ③ 推送人节点软删 (`ff.deleted_at IS NOT NULL`) 时推送失效; ④ **推送人账号停用**时推送失效 (与 §6.5.3 文字一致)。四条都要进巡检。
 
 **集中点**:`src/lib/db/queries/customer-scope.ts` 一处 —— Phase D 落地时在该模块顶部加注释明示"`viewerCustomerScopeSql()` 走 a+b1+b2+c 四段" (现该函数尚未存在, 属 Phase D 新增)。将来要收窄为「仅直接下级」时,**只动 (b2) 子句**, 调用方 (列表 / 胶囊计数 / `/api/me` 概览 / 行级过滤) 零改动。
 
@@ -645,7 +647,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 - [ ] `customer_share_audit` 触发器挂载成功 (参照 `audit_trigger.sql:41-44` `franchisee_audit` 模式)
 - [ ] `viewerCustomerScopeSql(viewer)` 三段式单测覆盖 (a 我的 / b 下级的 / c 上级推送)
 - [ ] **上级未推送时不可见** (D4 + S3 + R-10): 推送前 B 列表无 A 的客户; 推送后 B 列表立即出现; 撤销后 100ms 内 B 列表减少
-- [ ] **mask 生效**: 推送路径下 `to_user_id` 视图手机号一律 `maskPhone` (SHARE 不授明文)
+- [ ] **mask 分级生效** (D8, 以 §3.4 分级表为准): `ownership = upline_shared` (c 命中行) 手机号**明文** (推送即授权跟进); `subordinate` / `other` / `none` 一律 `maskPhone`; **推送管理角标例外**: `/api/customers/shares/received` 返回的**列表元数据**里手机号一律 maskPhone (角标是元数据不是客户档案)
 - [ ] 跨枝推送拒绝 (S2); 越权推送拒绝 (S1); 重复推送幂等 (S4, 部分唯一索引)
 - [ ] `bash tools/check-ui-density.sh` Phase D 上线前**必跑**全路由, visibleRows ≥ 11 棘轮不破
 - [ ] `scripts/audit-customer-share.ts` 上线后 7 天观察期推送异常检测 = 0 报错
