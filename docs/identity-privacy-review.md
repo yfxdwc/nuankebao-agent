@@ -33,7 +33,7 @@ D4 (主人 2026-09-25 拍) 把客户列表可见集合从「我的归属 + 我�
 
 > 本节留空,**主人签字**后生效。
 >
-> - ☐ 评审通过 (主人 __________________ YYYY-MM-DD)
+> - ☑ **评审通过 (主人 2026-09-25)** — 主人原话「全按建议 + R-9 接受最小兜底」; 7 项 D-PRIV 决策结果见 §5.1.1
 > - ☐ 需修订 (理由: ________________________________________________; 重审日期: ____________)
 > - ☐ 拒绝 (理由: ________________________________________________)
 
@@ -48,7 +48,7 @@ D4 (主人 2026-09-25 拍) 把客户列表可见集合从「我的归属 + 我�
 | **可见集合口径** | `(a) 我的归属 ∪ (b1) 我的下层加盟节点本人 ∪ (b2) 我的下层归属的客户 ∪ (c) 上级推送给我的客户` | 主文档 §3.4 (四段式) |
 | **(b2) 子句字面** | `customer.owner_id IN (SELECT u.id FROM "user" u JOIN franchisee sub ON sub.id = u.franchisee_id WHERE sub.deleted_at IS NULL AND sub.id <> viewer.franchisee_id AND sub.root_id IS NOT DISTINCT FROM me.root_id AND ...)` | 主文档 §3.4 (b2) |
 | **(c) 子句字面** | `EXISTS (SELECT 1 FROM customer_share cs WHERE cs.customer_id = customer.id AND cs.to_user_id = viewer.user_id AND cs.revoked_at IS NULL ...)` | 主文档 §3.4 (c) |
-| **手机号分级表** | `mine` / `direct_upline` / `upline_shared` 明文;`subordinate` / `other` / `none` 走 `maskPhone` | 主文档 §3.4 + §3.3 B4 + §9.1 INV-5 |
+| **手机号分级表** | `mine` / `direct_downline` / `upline_shared` 明文;`subordinate` / `other` / `none` 走 `maskPhone` | 主文档 §3.4 + §3.3 B4 + §9.1 INV-5 |
 | **推送表结构** | `customer_share(id, customer_id, from_user_id, to_user_id, note, created_at, revoked_at, revoked_by)` | 主文档 §6.5.1 |
 | **推送规则 S1-S7 + SHARE-1..7** | 见 [ADR-0019 §2.4](./adr/0019-rbac-scope-and-customer-share.md) 字面引用 | 主文档 §6.5.2 + §6.5.6 + ADR-0019 |
 
@@ -57,7 +57,7 @@ D4 (主人 2026-09-25 拍) 把客户列表可见集合从「我的归属 + 我�
 | 维度 | 扩围前 (现状 `myCustomerScopeSql` 两段式) | 扩围后 (`viewerCustomerScopeSql` 四段式) | 扩张幅度 |
 |---|---|---|---|
 | **可见集合** | `owner_id = 我 ∪ placement_parent_id = 我` | `owner_id = 我 ∪ placement_parent_id = 我 (b1) ∪ 同枝下层归属的客户 (b2) ∪ 上级推送 (c)` | 新增两类可见客户 |
-| **手机号可见度** | `mine` 命中行 明文;`subordinate` 不存在 (两段式无此态) | `mine` / `direct_upline` / `upline_shared` 明文;`subordinate` / `other` / `none` `maskPhone` | (b2) 类新增 = 一律打码 |
+| **手机号可见度** | `mine` 命中行 明文;`subordinate` 不存在 (两段式无此态) | `mine` / `direct_downline` / `upline_shared` 明文;`subordinate` / `other` / `none` `maskPhone` | (b2) 类新增 = 一律打码 |
 | **跨用户授权机制** | 无 | `customer_share` 表 + S1-S7 (推送 / 撤销 / 扩散上限) | 新增完整机制 |
 | **审计** | 现有 `user` / `customer` / `franchisee` 触发器 | + 新增 `customer_share_audit` 触发器 (SHARE-5) | 新增推送 / 撤销留痕 |
 
@@ -206,6 +206,20 @@ D4 (主人 2026-09-25 拍) 把客户列表可见集合从「我的归属 + 我�
 | **D-PRIV-5** | **「已被推送又撤销」的旧接收人,推送人能否看到「撤销历史」?** (SHARE-6 隐含) | A 推送人能在自己推送列表看到「已撤销」记录;B 推送人只能看到 active 推送;C 仅 admin 可见撤销历史 | 主文档 §6.5.6 SHARE-6 + §6.5.2 S5 |
 | **D-PRIV-6** | **S6 扩散上限 (同一客户 ≤ 5 active 推送 / 同一接收人每日 ≤ 100) 是否合适?** | A 默认 5 / 100;B 默认 3 / 50 (更保守);C 默认 10 / 200 (更宽松);D 上线后第 7 天 / 30 天各出 `share_density` 报告调阈值 | 主文档 §6.5.2 S6 |
 | **D-PRIV-7** | **(b2) 默认排序 / 默认折叠策略** | A `(b2)` 排在 `(a)` 之后;B `(b2)` 默认折叠;**A+B 组合**: `(a)` 默认展示,`(b2)` 默认折叠需点开 | 主文档 §4.2 (隐含) |
+
+### 5.1.1 ✅ 主人拍板结果 (2026-09-25)
+
+| # | 议题 | 拍板结果 |
+|---|---|---|
+| **D-PRIV-1** | 枝深销售可见数千行是否接受 | **A 接受** (与图谱同源, 符合 D4); 保留单点收窄开关; 上线后看 O-3 密度数据再调 |
+| **D-PRIV-2** | 推送撤销的客户端刷新机制 | **A 客户端主动 refresh** (+ 全链路 no-store 兜底); 不做 SSE |
+| **D-PRIV-3** | web admin 是否也做推送 UI | **A 一期仅 Flutter**; web admin 仅保留归属标识 (二期再补 UI) |
+| **D-PRIV-4** | 客户被推送给下级是否通知客户 (PIPL) | **A 不通知** (内部协作、合理期待), 已写入 ADR 留痕; 监管要求再补 |
+| **D-PRIV-5** | 推送人能否看到「已撤销」历史 | **A 能** (透明 + 审计友好) |
+| **D-PRIV-6** | S6 扩散上限默认值 | **A + D**: 默认 5 / 100; 第 7 / 30 天各出 `share_density` 报告再调 |
+| **D-PRIV-7** | (b2) 排序 / 折叠 | **A**: (b2) 排在 (a) 之后, 不默认折叠 |
+| **R-9** | 列表膨胀 | **接受最小兜底** (集中收窄开关 + 密度棘轮 + 上线后 O-3 实测); 深度优化仍挂起 |
+| **R-10** | 推遒撤销立即生效 | **接受最小兜底** (不缓存 + 主动 refresh + 索引 + 100ms 集成测试); 深度优化仍挂起 |
 
 ### 5.2 实施后 7 天观察期必查项 (上线后主人 review)
 

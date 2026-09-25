@@ -1,6 +1,6 @@
 # ADR-0019: RBAC 可见范围扩围 + 客户推送机制 (`customer_share`)
 
-> **状态**: ⏳ **Proposed (待主人拍板)** — 起草 2026-09-25;依赖 [`docs/customer-identity-system.md`](../customer-identity-system.md) §3.4 / §6.5 + [`docs/identity-privacy-review.md`](../identity-privacy-review.md) 主人签字;Phase D 实施闸门
+> **状态**: ✅ **Accepted (2026-09-25 主人拍板)** — 主人原话「全按建议 + R-9 接受最小兜底」;依赖 [`docs/customer-identity-system.md`](../customer-identity-system.md) §3.4 / §6.5 + [`docs/identity-privacy-review.md`](../identity-privacy-review.md) (2026-09-25 已签字);Phase D 实施闸门已开
 > **关联 (上游已拍,本 ADR 不重述)**: [`customer-identity-system.md`](../customer-identity-system.md) §3.4 (四段式可见集合) · §6.5 (`customer_share` 表 + S1-S7 + SHARE-1..7) · §7.1 (D4 列表可见扩围) · §7.2 (D8 手机号明文 `upline_shared` / D9 manager 与 sales 同口径) · §8.4 (Phase D 验收清单) · §9.2 (R-9 / R-10 / R-11 风险与缓解)
 > **关联 (平行 ADR)**: [ADR-0004](./0004-schema-evolution.md) (schema 演进红线) · [ADR-0015](./0015-subject-model.md) (主体模型 / 「我的客户」口径) · [ADR-0016](./0016-identity-anchor.md) (ID 化连接 / 手机号不是身份) · [ADR-0017](./0017-web-admin-unfreeze.md) (web admin 解冻后双线同步)
 > **关联 (操作层)**: `AGENTS.md` §6.6.1 (主体模型不变量 / 「我的客户」口径) · §6.7 (节点 ⇒ 账号不变量 / 推送双方必须活账号) · §6.8 (拆栏 / 改上层绝不改 referrer)
@@ -87,7 +87,7 @@ export function myCustomerScopeSql(input: {
 | # | 决策 (字面引用主文档) | 落点 | 引用 |
 |---|---|---|---|
 | **RBAC-1** | 列表可见集合 = `viewerCustomerScopeSql(viewer)` 四段式 (a / b1 / b2 / c) | `customer-scope.ts` 新增函数 (Phase D) | 主文档 §3.4 |
-| **RBAC-2** | 手机号分级表 = `mine` / `direct_upline` / `upline_shared` 明文;`subordinate` / `other` / `none` 走 `maskPhone` | `identity.ts` toView + 集成测试 | 主文档 §3.4 + §3.3 B4 + §9.1 INV-5 |
+| **RBAC-2** | 手机号分级表 = `mine` / `direct_downline` / `upline_shared` 明文;`subordinate` / `other` / `none` 走 `maskPhone` | `identity.ts` toView + 集成测试 | 主文档 §3.4 + §3.3 B4 + §9.1 INV-5 |
 | **RBAC-3** | 推送机制 = `customer_share` 表 + S1-S7 + SHARE-1..7 | migration 0028 + `customer-share.ts` 新模块 | 主文档 §6.5 |
 | **RBAC-4** | manager 角色在扩围后与 sales 同口径 (走 `viewerCustomerScopeSql`) | `auth/rbac.ts::customerRbacFilter` 重审 | 主文档 §7.2 D9 |
 | **RBAC-5** | 禁止二次转发 (S7) + 推送扩散上限 (S6) | `customer-share.ts` 校验层 | 主文档 §6.5.2 S6 + S7 |
@@ -138,7 +138,7 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
 | 归属取值 | 手机号展示 | 唯一真相源 |
 |---|---|---|
 | `mine` 我的客户 (a) | **明文** | §3.4 手机号分级表 |
-| `direct_upline` 我的直推加盟商本人 (b1) | **明文** | §3.4 手机号分级表 |
+| `direct_downline` 我的直推加盟商本人 (b1) | **明文** | §3.4 手机号分级表 |
 | `subordinate` 我的下层归属的客户 (b2) | **maskPhone** (`src/lib/utils.ts:24`) | §3.4 + B4 |
 | `upline_shared` 上级推送给我的客户 (c) | **明文** (D8, 2026-09-25 拍: 推送即授权跟进) | §3.4 + D8 |
 | `other` 他人客户 | **maskPhone** (理论上不出现在列表中, 若出现 = scope 漏检告警) | §3.4 + B4 |
