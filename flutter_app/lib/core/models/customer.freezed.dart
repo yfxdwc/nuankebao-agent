@@ -146,6 +146,10 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
     Object? customerType = null,
     Object? hasAccount = null,
     Object? accountReferralCode = freezed,
+    Object? affiliation = null,
+    Object? ownership = null,
+    Object? acquireSource = freezed,
+    Object? sourceReferrerName = freezed,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -226,6 +230,22 @@ class _$CustomerCopyWithImpl<$Res, $Val extends Customer>
           ? _value.accountReferralCode
           : accountReferralCode // ignore: cast_nullable_to_non_nullable
               as String?,
+      affiliation: null == affiliation
+          ? _value.affiliation
+          : affiliation // ignore: cast_nullable_to_non_nullable
+              as String,
+      ownership: null == ownership
+          ? _value.ownership
+          : ownership // ignore: cast_nullable_to_non_nullable
+              as String,
+      acquireSource: freezed == acquireSource
+          ? _value.acquireSource
+          : acquireSource // ignore: cast_nullable_to_non_nullable
+              as String?,
+      sourceReferrerName: freezed == sourceReferrerName
+          ? _value.sourceReferrerName
+          : sourceReferrerName // ignore: cast_nullable_to_non_nullable
+              as String?,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -266,6 +286,10 @@ abstract class _$$CustomerImplCopyWith<$Res>
       String customerType,
       bool hasAccount,
       String? accountReferralCode,
+      String affiliation,
+      String ownership,
+      String? acquireSource,
+      String? sourceReferrerName,
       DateTime createdAt,
       DateTime updatedAt});
 }
@@ -302,6 +326,10 @@ class __$$CustomerImplCopyWithImpl<$Res>
     Object? customerType = null,
     Object? hasAccount = null,
     Object? accountReferralCode = freezed,
+    Object? affiliation = null,
+    Object? ownership = null,
+    Object? acquireSource = freezed,
+    Object? sourceReferrerName = freezed,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -382,6 +410,22 @@ class __$$CustomerImplCopyWithImpl<$Res>
           ? _value.accountReferralCode
           : accountReferralCode // ignore: cast_nullable_to_non_nullable
               as String?,
+      affiliation: null == affiliation
+          ? _value.affiliation
+          : affiliation // ignore: cast_nullable_to_non_nullable
+              as String,
+      ownership: null == ownership
+          ? _value.ownership
+          : ownership // ignore: cast_nullable_to_non_nullable
+              as String,
+      acquireSource: freezed == acquireSource
+          ? _value.acquireSource
+          : acquireSource // ignore: cast_nullable_to_non_nullable
+              as String?,
+      sourceReferrerName: freezed == sourceReferrerName
+          ? _value.sourceReferrerName
+          : sourceReferrerName // ignore: cast_nullable_to_non_nullable
+              as String?,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -417,6 +461,10 @@ class _$CustomerImpl implements _Customer {
       this.customerType = 'normal',
       this.hasAccount = false,
       this.accountReferralCode,
+      this.affiliation = 'none',
+      this.ownership = 'none',
+      this.acquireSource,
+      this.sourceReferrerName,
       required this.createdAt,
       required this.updatedAt})
       : _healthTags = healthTags;
@@ -505,6 +553,24 @@ class _$CustomerImpl implements _Customer {
   ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
   @override
   final String? accountReferralCode;
+
+  /// 加盟细分 (Phase A §1 维度 1+2; 默认 "none" 老后端兼容)
+  @override
+  @JsonKey()
+  final String affiliation;
+
+  /// 归属五态 (Phase A §1 维度 5 + §3.4 五态; 默认 "none")
+  @override
+  @JsonKey()
+  final String ownership;
+
+  /// 客户来源 (Phase A §1 维度 6 + §5 migration 0026)
+  @override
+  final String? acquireSource;
+
+  /// 转介绍介绍人姓名 (referral 时后端 zod refine 必填)
+  @override
+  final String? sourceReferrerName;
   @override
   final DateTime createdAt;
   @override
@@ -512,7 +578,7 @@ class _$CustomerImpl implements _Customer {
 
   @override
   String toString() {
-    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, avatar: $avatar, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, hasAccount: $hasAccount, accountReferralCode: $accountReferralCode, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Customer(id: $id, name: $name, phone: $phone, gender: $gender, birthYear: $birthYear, birthMonth: $birthMonth, birthDay: $birthDay, birthCalendar: $birthCalendar, birthdayRemindDays: $birthdayRemindDays, healthTags: $healthTags, diseaseHistory: $diseaseHistory, allergyHistory: $allergyHistory, avatar: $avatar, notes: $notes, referrerId: $referrerId, isSeed: $isSeed, customerType: $customerType, hasAccount: $hasAccount, accountReferralCode: $accountReferralCode, affiliation: $affiliation, ownership: $ownership, acquireSource: $acquireSource, sourceReferrerName: $sourceReferrerName, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -551,6 +617,14 @@ class _$CustomerImpl implements _Customer {
                 other.hasAccount == hasAccount) &&
             (identical(other.accountReferralCode, accountReferralCode) ||
                 other.accountReferralCode == accountReferralCode) &&
+            (identical(other.affiliation, affiliation) ||
+                other.affiliation == affiliation) &&
+            (identical(other.ownership, ownership) ||
+                other.ownership == ownership) &&
+            (identical(other.acquireSource, acquireSource) ||
+                other.acquireSource == acquireSource) &&
+            (identical(other.sourceReferrerName, sourceReferrerName) ||
+                other.sourceReferrerName == sourceReferrerName) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -580,6 +654,10 @@ class _$CustomerImpl implements _Customer {
         customerType,
         hasAccount,
         accountReferralCode,
+        affiliation,
+        ownership,
+        acquireSource,
+        sourceReferrerName,
         createdAt,
         updatedAt
       ]);
@@ -621,6 +699,10 @@ abstract class _Customer implements Customer {
       final String customerType,
       final bool hasAccount,
       final String? accountReferralCode,
+      final String affiliation,
+      final String ownership,
+      final String? acquireSource,
+      final String? sourceReferrerName,
       required final DateTime createdAt,
       required final DateTime updatedAt}) = _$CustomerImpl;
 
@@ -696,6 +778,25 @@ abstract class _Customer implements Customer {
   ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
   @override
   String? get accountReferralCode;
+
+  // ─── Phase A/C 客户标识体系 v1 (§1 维度 1/5/6, docs/customer-identity-system.md) ───
+  /// 加盟细分: "none" 未加盟 / "direct" 加盟·直推 / "nondirect" 加盟·非直推
+  @override
+  @JsonKey()
+  String get affiliation;
+
+  /// 归属五态 (§3.4 五态)
+  @override
+  @JsonKey()
+  String get ownership;
+
+  /// 客户来源 (§1 维度 6 + §5 migration 0026)
+  @override
+  String? get acquireSource;
+
+  /// 转介绍介绍人姓名 (referral 时必填, 后端 zod refine 保证)
+  @override
+  String? get sourceReferrerName;
   @override
   DateTime get createdAt;
   @override

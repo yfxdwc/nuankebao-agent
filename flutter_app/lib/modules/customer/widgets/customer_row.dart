@@ -17,6 +17,7 @@ import '../../../core/models/follow_up_info.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/utils/birthday.dart';
+import '../../../core/widgets/app_badge.dart';
 import '../../../core/widgets/app_list_row.dart';
 import '../../../core/widgets/typed_user_avatar.dart';
 
@@ -67,10 +68,38 @@ class CustomerRow extends StatelessWidget {
   }
 
   /// 实际展示的类型: 显式 customerType > customer 模型里的 customerType 字段 > isFranchisee 推导
+  /// Phase C D3 (§5.4 种子退场): 后端 legacy 'seed' 仍可能在灰度期返回, UI 兜底为 'normal'
+  ///   → 'franchisee' / 'normal' 二态 (设计 §4.2 L1, 头像环按此渲染)
   String get _type {
     final t = customerType ?? customer.customerType;
-    if (t.isNotEmpty) return t;
-    return isFranchisee ? 'franchisee' : 'normal';
+    if (t == 'franchisee') return 'franchisee';
+    return 'normal'; // seed/normal/未知 一律按未加盟走
+  }
+
+  /// 归属五态 (Phase C §3.4): 默认 mine 静默, 异常态显形 (设计 §4.2 L2)
+  ///   'mine'         → null (静默, 不出 badge)
+  ///   'subordinate'  → 「下级的客户」(ownerName 待 Phase D 后端带, 现仅前缀)
+  ///   'upline'       → 「上级推送」 (Phase D 落地后才有数据)
+  ///   'none'         → 「无归属」
+  ///   'other'        → 「他人客户」(scope 漏检告警兜底)
+  /// 老后端不返回 ownership → 默认 'none' (异常态显形, 与设计文档一致)
+  (String, AppBadgeTone)? get _ownershipBadge {
+    final o = customer.ownership;
+    switch (o) {
+      case 'mine':
+      case '':
+        return null; // 默认静默
+      case 'subordinate':
+        return ('下级的客户', AppBadgeTone.info);
+      case 'upline':
+        return ('上级推送', AppBadgeTone.brand);
+      case 'none':
+        return ('无归属', AppBadgeTone.neutral);
+      case 'other':
+        return ('他人客户', AppBadgeTone.warning);
+      default:
+        return null; // 未知值 → 静默 (避免乱出)
+    }
   }
 
   static const Color _levelP2 = AppColors.memberGoldLight;
@@ -109,16 +138,18 @@ class CustomerRow extends StatelessWidget {
   // 构建函数
   // ============================================
 
-  /// 主文 (第一行): 姓名 + 推荐标签 + 🎂 生日徽章 + 已注册标
+  /// 主文 (第一行): 姓名 + 归属 badge (L2) + 推荐标签 + 🎂 生日徽章 + 已注册标
   ///
-  /// 名字保底 55% 宽 + 标签尾巴占剩余 (放不下横向滑动, 不裁字/不报 overflow)
+  /// 名字保底 50% 宽 + L2 归属 badge + 标签尾巴占剩余 (放不下横向滑动, 不裁字/不报 overflow)
+  /// Phase C §4.2 L2: 归属 5 态 — mine 静默 (不出), 其余显形, 走 AppBadge tone (不新增 Card)
   Widget _buildTitle() {
     final tail = _rowTail;
+    final own = _ownershipBadge;
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 名字最多占 55%: 短名字 (「王女士」) 按真实宽度拿空间, 富余宽度
-        // 让给标签; 长名字到 55% 就省略号, 不把标签挤到看不见
-        final nameMax = constraints.maxWidth * 0.55;
+        // 名字最多占 50%: 留空间给 L2 归属 badge (异常态) + 标签尾巴; 短名字按真实宽度,
+        // 长名字到 50% 就省略号, 不把标签挤到看不见
+        final nameMax = constraints.maxWidth * 0.50;
         return Row(
           children: [
             ConstrainedBox(
@@ -134,7 +165,12 @@ class CustomerRow extends StatelessWidget {
                 maxLines: 1,
               ),
             ),
-            if (tail.isNotEmpty) ...<Widget>[
+            // L2 归属 badge (Phase C §4.2 五态): mine 静默, 其余显形, 不撑行高 (AppBadge dense)
+            if (own != null) ...<Widget>[
+              const SizedBox(width: AppSpace.s6),
+              AppBadge(label: own.$1, tone: own.$2, dense: true),
+            ],
+            if (tail.isNotEmpty || own != null) ...<Widget>[
               const SizedBox(width: AppSpace.s6),
               // 尾巴吃满剩余宽度; 实在放不下时可横向滑动 (不裁字/不报 overflow)
               Expanded(

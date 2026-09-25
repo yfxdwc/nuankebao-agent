@@ -47,6 +47,28 @@ class Customer with _$Customer {
     ///   管理 Tab「app 身份」卡直接显示 + 一键复制 (拉她进沙龙 / 核对身份用)。
     ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
     String? accountReferralCode,
+    // ─── Phase A/C 客户标识体系 v1 (§1 维度 1/5/6, docs/customer-identity-system.md) ───
+    /// 加盟细分: "none" 未加盟 / "direct" 加盟·直推 / "nondirect" 加盟·非直推。
+    /// 单一真相源 = 后端 src/lib/customer/identity.ts (走 referrer 口径, 与图谱同源)。
+    /// 老后端不返回 → 默认 "none"。头像环 (TypedUserAvatar) 据此区分色。
+    @Default('none') String affiliation,
+    /// 归属五态 (§3.4 五态):
+    ///   "mine" 自己的客户 (静默, 不出 L2 归属 badge)
+    ///   "subordinate" 下级的客户 (走 §3.4 (b1)/(b2) 判定)
+    ///   "upline" 上级推送的客户 (Phase D 才有数据)
+    ///   "other" 他人客户 (scope 漏检告警)
+    ///   "none" 无归属
+    /// 列表默认 mine 静默, 异常态显形 (设计 §4.2 L2 五态)。
+    @Default('none') String ownership,
+    /// 客户来源 (§1 维度 6 + §5 migration 0026, 主人 2026-09-25 D5 拍「选填」):
+    ///   null / "friend" 亲友 / "referral" 转介绍 / "cold_visit" 陌生拜访 / "ground_promo" 地推
+    ///   referral 时 referrerName 必填 (后端 zod refine 校验, §5 M3, 不加 DB CHECK)
+    /// 老后端不返回 → 默认 null (= 未填写, 不报错)。
+    String? acquireSource,
+    /// 转介绍介绍人姓名 (≤ 50 字, 与后端 source_referrer_name 对齐):
+    ///   仅 acquireSource = 'referral' 时有值; 其他情况 = null
+    /// 后端 zod refine 保证 referral 时此字段非空 (否则 400)。
+    String? sourceReferrerName,
     required DateTime createdAt,
     required DateTime updatedAt,
   }) = _Customer;
