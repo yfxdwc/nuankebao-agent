@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/customer_ownership.dart';
+import '../../../core/models/customer_share.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/services/api.dart' show ReferralLookup;
 import '../../../core/theme/app_theme.dart';
@@ -68,6 +69,35 @@ class _CustomerOwnershipCardState
           content: Text(humanClaimError(e)),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 推送给下级 (Phase D §6.5): 选人 + 备注 → 推送
+  ///   语义: 只授可见性 (owner_id 不变), 被推送人列表出现「上级推送 · X」, 手机号明文 (D8)
+  Future<void> _pushShare() async {
+    final picked = await showModalBottomSheet<_PushShareInput>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _PushShareSheet(customerId: widget.customerId),
+    );
+    if (picked == null) return;
+
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(customerServiceProvider)
+          .pushShare(widget.customerId, picked.toUserId, note: picked.note);
+      ref.invalidate(customerOwnershipProvider(widget.customerId));
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text('已推送给 ${picked.toName}')),
+      );
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text(humanShareError(e))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -229,23 +259,39 @@ class _CustomerOwnershipCardState
             ),
           )
         else if (o.isMine)
-          // 已经是我的 → 唯一有意义的动作是**转出去** (离职/转岗/分工)
-          //   原来这里给的是「已经是我的客户」按钮 (点了幂等认领) —— 没意义
-          SizedBox(
-            width: double.infinity,
-            height: AppSize.controlLg,
-            child: OutlinedButton.icon(
-              onPressed: _busy ? null : _transfer,
-              icon: _busy
-                  ? SizedBox(
-                      width: AppSize.iconSm,
-                      height: AppSize.iconSm,
-                      child: const CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.swap_horiz, size: AppSize.iconLg),
-              label: const Text('转给我的同事',
-                  style: TextStyle(fontSize: AppTheme.fontMd)),
-            ),
+          // 已经是我的 → 两个有意义的动作:
+          //   ① 推送给下级 (可见性授予, **不**转移归属; Phase D §6.5 / D-PRIV-3 一期仅 Flutter)
+          //   ② 转给我的同事 (真转移归属)
+          Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                height: AppSize.controlLg,
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _pushShare,
+                  icon: _busy
+                      ? SizedBox(
+                          width: AppSize.iconSm,
+                          height: AppSize.iconSm,
+                          child: const CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.ios_share, size: AppSize.iconLg),
+                  label: const Text('推送给下级',
+                      style: TextStyle(fontSize: AppTheme.fontMd)),
+                ),
+              ),
+              const SizedBox(height: AppSpace.s8),
+              SizedBox(
+                width: double.infinity,
+                height: AppSize.controlLg,
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _transfer,
+                  icon: const Icon(Icons.swap_horiz, size: AppSize.iconLg),
+                  label: const Text('转给我的同事',
+                      style: TextStyle(fontSize: AppTheme.fontMd)),
+                ),
+              ),
+            ],
           )
         else
           Row(
@@ -452,4 +498,171 @@ String _humanTransferError(Object e) {
   }
   if (s.contains('403')) return '只有当前归属人 (或系统管理员) 能转出客户';
   return '转移失败: $e';
+}
+
+
+// ============================================
+// 「推送给下级」弹层 (Phase D §6.5; 一期仅 Flutter)
+// ============================================
+
+class _PushShareInput {
+  final String toUserId;
+  final String toName;
+  final String? note;
+  const _PushShareInput({
+    required this.toUserId,
+    required this.toName,
+    this.note,
+  });
+}
+
+class _PushShareSheet extends ConsumerStatefulWidget {
+  final String customerId;
+  const _PushShareSheet({required this.customerId});
+
+  @override
+  ConsumerState<_PushShareSheet> createState() => _PushShareSheetState();
+}
+
+class _PushShareSheetState extends ConsumerState<_PushShareSheet> {
+  List<ShareCandidate>? _items;
+  String? _selectedId;
+  Object? _error;
+  final _note = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final items =
+          await ref.read(customerServiceProvider).shareCandidates(widget.customerId);
+      if (mounted) setState(() => _items = items);
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).extension<AppThemeExt>()!;
+    final maxH = MediaQuery.of(context).size.height * 0.7;
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: AppSpace.s16,
+            right: AppSpace.s16,
+            top: AppSpace.s16,
+            bottom: AppSpace.s16 + MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('推送给下级',
+                  style: TextStyle(
+                      fontSize: AppTheme.fontLg, fontWeight: FontWeight.w600)),
+              const SizedBox(height: AppSpace.s4),
+              Text(
+                '推送只授予可见性 (归属不变): 她列表里会出现「上级推送」标识, 可以帮你跟进。',
+                style: TextStyle(
+                    fontSize: AppTheme.fontXs,
+                    color: t.textSecondary,
+                    height: 1.5),
+              ),
+              const SizedBox(height: AppSpace.s12),
+              if (_error != null)
+                Text(humanShareError(_error!),
+                    style: TextStyle(
+                        fontSize: AppTheme.fontSm, color: t.danger))
+              else if (_items == null)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpace.s20),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_items!.isEmpty)
+                Text('你的枝上暂无下级同事可推送',
+                    style: TextStyle(
+                        fontSize: AppTheme.fontSm, color: t.textSecondary))
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _items!.length,
+                    itemBuilder: (_, i) {
+                      final c = _items![i];
+                      final selected = c.userId == _selectedId;
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(c.name,
+                            style: const TextStyle(fontSize: AppTheme.fontMd)),
+                        trailing: selected
+                            ? Icon(Icons.check_circle,
+                                size: AppSize.iconLg, color: t.primary)
+                            : const Icon(Icons.circle_outlined,
+                                size: AppSize.iconLg),
+                        onTap: () => setState(() => _selectedId = c.userId),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: AppSpace.s8),
+              TextField(
+                controller: _note,
+                maxLength: 200,
+                decoration: const InputDecoration(
+                  labelText: '备注 (选填)',
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: AppSpace.s8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('取消'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.s8),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _selectedId == null
+                          ? null
+                          : () {
+                              final name = _items!
+                                  .firstWhere((e) => e.userId == _selectedId)
+                                  .name;
+                              Navigator.pop(
+                                context,
+                                _PushShareInput(
+                                  toUserId: _selectedId!,
+                                  toName: name,
+                                  note: _note.text,
+                                ),
+                              );
+                            },
+                      child: const Text('推送'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

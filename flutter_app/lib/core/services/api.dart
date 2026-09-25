@@ -11,6 +11,7 @@ import '../models/customer_insight.dart';
 import '../models/customer.dart';
 import '../models/audit_entry.dart';
 import '../models/customer_ownership.dart';
+import '../models/customer_share.dart';
 import '../models/follow_up_info.dart';
 import '../models/ai_insight.dart';
 import '../models/wellness_record.dart';
@@ -336,6 +337,49 @@ class CustomerService {
     return BindAccountResult.fromJson(res.data as Map<String, dynamic>);
   }
 
+  // ==========================================
+  // 客户推送 (Phase D §6.5; D-PRIV-3 一期仅 Flutter)
+  // ==========================================
+
+  /// GET /api/customers/[id]/share/candidates —— 候选 = 我在枝上的下层用户
+  Future<List<ShareCandidate>> shareCandidates(String customerId) async {
+    final res = await _dio.get('/customers/$customerId/share/candidates');
+    final items = (res.data as Map<String, dynamic>)['items'] as List? ?? [];
+    return items
+        .map((e) => ShareCandidate.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// POST /api/customers/[id]/share —— 推送给下级 (不转移归属)
+  Future<void> pushShare(
+    String customerId,
+    String toUserId, {
+    String? note,
+  }) async {
+    await _dio.post('/customers/$customerId/share', data: {
+      'toUserId': toUserId,
+      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+    });
+  }
+
+  /// DELETE /api/customers/[id]/share/[userId] —— 撤销 (必须填原因)
+  Future<void> revokeShare(
+    String customerId,
+    String toUserId, {
+    required String reason,
+  }) async {
+    await _dio.delete('/customers/$customerId/share/$toUserId',
+        data: {'reason': reason});
+  }
+
+  /// GET /api/customers/shares/received —— 我收到的推送 (角标/元数据, 手机号一律打码)
+  Future<List<ReceivedShare>> receivedShares() async {
+    final res = await _dio.get('/customers/shares/received');
+    final items = (res.data as Map<String, dynamic>)['items'] as List? ?? [];
+    return items
+        .map((e) => ReceivedShare.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
 }
 
 // ============================================
