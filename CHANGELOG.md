@@ -2,6 +2,37 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 客户标识体系 v1 + 安全修复 + R-9/R-10 优化 (2026-09-25/26)
+
+主人拍板: 客户类型二态 (加盟/未加盟, **直推 = 发起人指定**) · 归属扩四段 (下级的客户 / 上级推送) · 客户来源新增 · 种子退场 · D8 上级推送手机号明文 · D9 manager 与 sales 同口径。
+方案与决策: [`docs/customer-identity-system.md`](docs/customer-identity-system.md) · [`docs/adr/0019`](docs/adr/0019-rbac-scope-and-customer-share.md) · [`docs/identity-privacy-review.md`](docs/identity-privacy-review.md) · [`docs/r9-r10-optimization.md`](docs/r9-r10-optimization.md)
+
+### Added
+- **客户来源** `customer.acquire_source` + `source_referrer_name` (migration 0026): 亲友 / 转介绍 (介绍人必填) / 陌生拜访 / 地推; 仅详情「管理」区块展示 (D6)
+- **落位时可选直推者** (migration 0027 `franchisee_placement_request.referrer_fid`): 候选 = 落位后她的祖先链, 默认 = 发起人; 巡检新增「referrer 不在祖先链」例外报告
+- **上级推送机制** `customer_share` (migration 0028 + 审计触发器): S1-S7 (仅归属人可推 / 同枝下层 / 不转移归属 / 幂等 / 四方可撤销 / 扩散上限 5·100 / 禁二次转发) + 4 个 API + 候选接口 + `scripts/audit-customer-share.ts` 巡检
+- **列表性能** (migration 0029): `created_at_desc` / `name` / `(owner_id, last_interaction_at)` 三索引 + count 解耦 (仅首页精确统计)
+- Flutter 客户列表**无限滚动** (此前写死单页 50 条 —— 看不到第 51 条起的客户)
+- 归属五态 + 加盟细分 + 客户来源的 Flutter / web admin 展示 (Phase C)
+
+### Changed
+- **直推口径 supersede**: `直推 = franchisee.referrer_id = 我` (与图谱 `relation='direct'` 同源); 旧「点位父=我」口径作废
+- **列表可见集合扩四段** (`viewerCustomerScopeSql`): (a) 我的客户 (b1) 我的下层加盟节点本人 (b2) 我的下层归属的客户 (c) 上级推送; 手机号分级 mask (mine/direct_downline/upline 明文, 其余打码)
+- **manager 与 sales 同口径** (D9); 门店维度不再参与客户行级过滤
+- `GET /api/customers`: 新增 `affiliation` / `ownership` / `ownerName` / `sharedByName` / `source`; **`total` 在 `offset>0` 时可为 `null`**
+- R-10 三层「立即生效」: L1 同端 invalidate 列表+计数 / L2 `RouteObserver.didPopNext` 返回列表刷新 / L3 恢复前台刷新; 8 个客户路由统一 `Cache-Control: no-store`
+
+### Removed
+- **种子退出客户类型轴** (D3): 表单开关 / 详情 🌱 / 筛选「种子」段全部移除; `is_seed` 列灰度期保留, 30 天后单独 DROP (编号 0030)
+
+### Security
+- **R-12 系列 IDOR 修复**: `customers/[id]/follow-up-analysis` · `follow-ups` (GET 列表 / PATCH / POST 校验) · `interactions` (GET/[id]) · `wellness-records` (GET/[id], 含一处**全库可读** critical) · `customers/[id]/ownership` 全部补行级过滤 (越权 → 404); 新增 54 例 IDOR 回归测试; 审计表见 [`docs/customer-idor-audit.md`](docs/customer-idor-audit.md)
+
+### Fixed
+- `toView` 新增 ownership 形参后未接线 → 新建客户 / 详情返回的手机号被错误打码
+- 子代理测试 fixture 残留数据导致重跑撞唯一键 (三个文件已加幂等预清理)
+- 客户列表可见性 SQL 的 P0: 无节点用户 NULL 守卫 / 根用户子树三元式 / `"customer"."id"` 表限定 (与 `customer_share.id` 撞名)
+
 ## [Unreleased] — 「我的」页低频设置下沉二级「设置」页 (2026-09-25)
 
 主人 2026-09-25: 「我的页过杂 (1432 行 / 3.5 屏 / 11 区块), 中年用户滚到下面焦躁, 低频 app 设置下沉二级『设置』页; 字号保留快捷入口, 设置页也放」。

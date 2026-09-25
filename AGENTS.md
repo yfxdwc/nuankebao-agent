@@ -528,10 +528,17 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   冒烟 `scripts/smoke-bind-account.ts`
 - ✅ **客户归属 (Q11/Q12)**: `customer.owner_id` = 谁的客户列表 (migration 0020 ✅); `created_by` = 建档人(审计) —— **建档 ≠ 归属**;
   建号**不自动**归属推荐人 (§6.6 建号只建档), 推荐人在「我推荐的人」页**显式添加** (先到先得, 已有归属 → 明确报错)
-- ✅ **「我的客户」= 归属我的人 ∪ 我的直推加盟** (点位父 = 我; Q2) —— 列表 / 胶囊计数 / `/api/me` 概览 / 行级过滤
-  四处同一口径 (`src/lib/db/queries/customer-scope.ts` 单一真相源, 2026-09-22 落)
-- ✅ **客户类型** = 加盟客户 (直推, 结构口径: 点位父=我) / 普通客户 / 种子客户 (`is_seed` 人工勾选):
-  优先级 加盟 > 种子 > 普通; 种子/普通无法按「是否付费」自动派生 (ADR-0006: 全库无金额字段)
+- ✅ **「我的客户」= 归属我的人 ∪ 我的下层归属的客户 ∪ 上级推送给我的客户** (四段式; Q2 由 ADR-0019 扩围, 2026-09-25 拍) —— 列表 / 胶囊计数 / `/api/me` 概览 / 行级过滤
+  四处同一口径 (`src/lib/db/queries/customer-scope.ts::viewerCustomerScopeSql` 单一真相源)
+  ⚠ **supersede 2026-09-22 的两段式**: 四段 = (a) `owner_id`=我 (b1) 我的下层加盟节点本人档案 (c) `customer_share` 推送给我;
+  收窄开关 = 只动可见性 SQL 一处 (未来改「仅直接下级」零调用方改动); 详见 ADR-0019 + `docs/customer-identity-system.md` §3.4
+- ✅ **客户类型** = 加盟 (细分 `直推` / `非直推`) / **未加盟** (二态, 种子已退出类型轴):
+  - **直推 = `franchisee.referrer_id` = 我** (谁把她带进加盟, 落位时由发起人显式指定; 与图谱 `relation='direct'` 同源) —— supersede 旧的「直推 = 点位父=我」(ADR-0019 §2)
+  - 落位指定直推者: migration 0027 `franchisee_placement_request.referrer_fid`; 候选 = 落位后祖先链, 默认 = 发起人; 搬树 (adminReparentNode) **不**级联改 referrer
+  - ⛔ **种子退场** (主人 2026-09-25 D3): 表单开关 / 详情 🌱 / 筛选段全部移除; `is_seed` 列灰度期保留, 30 天后单独 DROP (编号 0030)
+- ✅ **归属与手机号分级** (Phase D): `mine` / `direct_downline` (我的下层加盟节点本人) / `subordinate` (下层的客户) / `upline` (上级推送) / `other` / `none`;
+  手机号**明文** = `mine` / `direct_downline` / `upline` (D8), 其余 `maskPhone` —— 单一真相源 = `docs/customer-identity-system.md` §3.4 分级表
+- ✅ **客户来源** (2026-09-25 新增): `customer.acquire_source` = 亲友 / 转介绍 (介绍人必填) / 陌生拜访 / 地推; 仅详情管理区块展示 (D6), 列表不显示
 - ✅ **图谱可见性 (Q13)**: 系统管理员 = **全森林 + 未接入**; 普通用户 = 自己所在枝的**全部下层** + **上 3 层直系**;
   多根语义见 §6.8 / ADR-0014
   (2026-09-22 落: `getUplineAncestors(fid, 3)` + `/api/franchisees/me/tree` 返回 `uplines` +

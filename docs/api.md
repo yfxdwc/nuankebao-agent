@@ -1159,6 +1159,54 @@ CLI: `npx tsx scripts/usage-report.ts 30 --events=20`
 
 ---
 
+## 18. 客户标识与推送 (Phase A–D, 2026-09-25/26)
+
+> 口径定义: [customer-identity-system.md](./customer-identity-system.md) §3.4 / §6.5 ·
+> 决策: [ADR-0019](./adr/0019-rbac-scope-and-customer-share.md) ·
+> 隐私评审: [identity-privacy-review.md](./identity-privacy-review.md)
+> **全部客户相关端点响应带 `Cache-Control: no-store`** (R-10 L3, helper `src/lib/http/no-store.ts`)。
+
+### 客户对象新增字段 (`GET /api/customers`, `GET /api/customers/[id]`)
+
+| 字段 | 取值 | 说明 |
+|---|---|---|
+| `affiliation` | `none` / `direct` / `nondirect` | 加盟细分; `direct` = 直推者 (`franchisee.referrer_id`) 是我 |
+| `ownership` | `mine` / `direct_downline` / `subordinate` / `upline` / `other` / `none` | 归属态 (四段可见集合) |
+| `ownerName` / `sharedByName` | string \| null | 「下级的客户 · X」/「上级推送 · X」用 |
+| `source` | `{ kind, referrerName }` | 客户来源: `friend` / `referral` / `cold_visit` / `ground_promo` / null |
+
+- 手机号分级 (D8): `mine` / `direct_downline` / `upline` = 明文; `subordinate` / `other` / `none` = `maskPhone`
+- 分页: `total` **在 `offset > 0` 时可为 `null`** (count 解耦, 仅首屏精确统计; 客户端应沿用上一页 total)
+- 创建/编辑入参: 新增 `acquireSource` + `sourceReferrerName` (**`acquireSource = 'referral'` 时介绍人必填**, zod refine)
+
+### 推送 (`customer_share`, migration 0028)
+
+| 端点 | 说明 |
+|---|---|
+| `POST /api/customers/[id]/share` | body `{ toUserId, note? }` (禁止传 fromUserId); 仅**归属人或 admin**; 接收人须**同枝下层**; 重复 → 409 `ALREADY_SHARED`; 超上限 → 400 `SHARE_LIMIT_EXCEEDED` (同客户 active ≤ 5, 同接收人每日 ≤ 100) |
+| `DELETE /api/customers/[id]/share/[userId]` | body `{ reason }` **必填** (写审计); **四方可撤销** = 推送人 / 接收人 / 当前归属人 / admin |
+| `GET /api/customers/[id]/shares` | 该客户当前 active 推送 (归属卡「已推送给」列表 + 撤销入口) |
+| `GET /api/customers/shares/received` | 我收到的推送 (角标/元数据; 手机号一律 mask) |
+| `GET /api/customers/[id]/share/candidates` | 推送候选人 = 我在枝上的下层用户 (只回 `userId` + `name`) |
+
+- 不变量: 推送**不写** `customer.owner_id` (不转移归属); **禁止二次转发**; 撤销 = `revoked_at` 软撤销 (禁止真删); 双方账号任一停用 → 推送失效
+
+### 落位时指定直推者 (migration 0027)
+
+| 端点 | 说明 |
+|---|---|
+| `POST /api/franchisees/placement-requests` | 新增可选 `referrerFid` (直推者); 候选 = **落位后她的祖先链** (`targetParentId` + 其上直系), 默认 = 发起人; 不在链上 → 400 |
+| `GET /api/franchisees/placement-requests/candidates?targetParentId=` | 候选直推者列表 (由近到远), 供 Flutter 选择器用 |
+
+### 相关 migration
+
+| 编号 | 内容 |
+|---|---|
+| 0026 | `customer.acquire_source` + `source_referrer_name` (客户来源) |
+| 0027 | `franchisee_placement_request.referrer_fid` (落位指定直推者) |
+| 0028 | `customer_share` 表 + `customer_share_audit` 触发器 (推送机制) |
+| 0029 | `customer` 三个列表索引 (R-9 性能) |
+
 ## 错误码
 
 | 状态 | 含义 |

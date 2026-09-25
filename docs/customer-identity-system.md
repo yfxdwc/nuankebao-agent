@@ -334,7 +334,7 @@ sourceReferrerName: text("source_referrer_name"),
 | 触发 | 动作 |
 |---|---|
 | **代码层立刻** (Phase C) | zod 不再接受 `isSeed` + API 不再返回 + Flutter 表单与详情删除种子控件 + 类型筛选只剩 `all` + `加盟` + `未加盟` |
-| **上线满 30 天** + 全量用户已升新 APK + 无老 APK 写 `isSeed` 路径残留 | 单独一条 drop migration (`drizzle/0029_drop_customer_is_seed.sql`, 编号 0028 已被 customer_share 占用) + `drizzle/down/0029_drop_customer_is_seed.down.sql` 必带 + 过 `pnpm db:compat` + `DROP COLUMN IF EXISTS customer.is_seed` |
+| **上线满 30 天** + 全量用户已升新 APK + 无老 APK 写 `isSeed` 路径残留 | 单独一条 drop migration (`drizzle/0030_drop_customer_is_seed.sql`; 编号 0026=来源 / 0027=referrer / 0028=customer_share / 0029=列表索引 已占) + `drizzle/down/0030_drop_customer_is_seed.down.sql` 必带 + 过 `pnpm db:compat` + `DROP COLUMN IF EXISTS customer.is_seed` |
 | **DROP 前 assert** | `bash scripts/audit-customer-is-seed.ts` 查 `is_seed = true` 的客户数, 主人拍「同意丢掉这些行的语义」后才能 DROP (默认 0 行, 因灰度期 API 已不接 `isSeed: true`) |
 
 **若主人要求立即 DROP** (不走 30 天灰度期): 必须主人**显式拍板**, 且：
@@ -604,9 +604,12 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 | **R-8** | **Flutter sheet 加选择控件影响点击路径** (密度棘轮) | Phase B 验收必跑 `check-ui-density.sh`;真机截图覆盖三个尺寸 (iPhone SE / 14 / Pro Max) |
 | **R-9** ★ | **列表膨胀**: Phase D 扩围 (b) 下级的客户 + (c) 上级推送的客户 后, viewer 列表候选集从 `owner_id = 我` 单集合扩到 `owner_id = 我 ∪ 同枝下层 ∪ customer_share 推送给我`,枝深的销售员可见行数显著增长 (`subordinate` 子树可能含数千客户) | (1) 收窄开关**集中在 `customer-scope.ts` 一处** (`viewerCustomerScopeSql` 单一真相源);(2) 收窄策略默认 = (b) 全下层 (与图谱同源), 提供 config flag 后续可改为「仅直接下级」,只动 (b) 子句;(3) `bash tools/check-ui-density.sh` Phase D 上线前**必跑**全路由, 列表行 ≥ 11 棘轮不破;(4) `customerTypeCounts` 缓存 (按 (a/b/c) 三段分别计数, UI 角标可用) |
 | **R-10** ★ | **推送撤销后立即不可见**: 用户期望「撤销推送 = 列表马上少一行」; 若后端 / 前端任何一层缓存 `customer_share` 结果, 撤销后用户仍能看到那行, 信任崩塌 | (1) `/api/customers` 不缓存可见集合结果 (Drizzle 直查 + revoke_at 索引);(2) 推送撤销响应立即触发客户端刷新 (Flutter `RefreshIndicator` / Web admin `router.refresh()`);(3) 集成测试断言: 推送 → 撤销 → 100ms 内列表 API 不再返回该客户;(4) `idx_customer_share_to_active` 索引 `(to_user_id, revoked_at)` 保证撤销即过滤 |
-| **R-11** ★ | **is_seed 延迟 DROP 的回滚窗口** (D3 + §5.4): 灰度期 (上线满 30 天前) 老 APK 仍写 `is_seed`, DB 列保留; 风险点 = 30 天内「想反悔恢复种子类型轴」需重新启回 `is_seed` 列, 但代码层已删 (zod 不再接受 / API 不再返回), 回滚需代码 + migration 一起 revert | (1) 灰度期内 `is_seed` 列**只读不写** (DB trigger 或 service 层 guard, 任何 INSERT/UPDATE 写 `is_seed = true` 抛 warning 写 audit, 不阻止);(2) 30 天到期由 `scripts/audit-customer-is-seed.ts` 自动检查 `is_seed = true` 的行数 (主人拍「同意丢」才能 DROP);(3) 回滚 SOP: 单独一条 `drizzle/0030_restore_customer_is_seed.sql` (additive, 无破坏; 编号 0028=customer_share / 0029=drop 已占) + `customer.ts:159-165` `resolveCustomerType` 恢复三态, 写入 `git revert` 一次性 commit;(4) 若主人要求「立即 DROP」 → 走 §5.4 显式拍板条款 (commit message 加 `[drop-is-seed-immediate]` + 写 `docs/postmortem/drop-is-seed-immediate-<date>.md`) |
+| **R-11** ★ | **is_seed 延迟 DROP 的回滚窗口** (D3 + §5.4): 灰度期 (上线满 30 天前) 老 APK 仍写 `is_seed`, DB 列保留; 风险点 = 30 天内「想反悔恢复种子类型轴」需重新启回 `is_seed` 列, 但代码层已删 (zod 不再接受 / API 不再返回), 回滚需代码 + migration 一起 revert | (1) 灰度期内 `is_seed` 列**只读不写** (DB trigger 或 service 层 guard, 任何 INSERT/UPDATE 写 `is_seed = true` 抛 warning 写 audit, 不阻止);(2) 30 天到期由 `scripts/audit-customer-is-seed.ts` 自动检查 `is_seed = true` 的行数 (主人拍「同意丢」才能 DROP);(3) 回滚 SOP: 单独一条 `drizzle/0031_restore_customer_is_seed.sql` (additive, 无破坏; 编号 0026/0027/0028/0029/0030 已占) + `customer.ts:159-165` `resolveCustomerType` 恢复三态, 写入 `git revert` 一次性 commit;(4) 若主人要求「立即 DROP」 → 走 §5.4 显式拍板条款 (commit message 加 `[drop-is-seed-immediate]` + 写 `docs/postmortem/drop-is-seed-immediate-<date>.md`) |
 
-> ⏸ **挂起项 (主人 2026-09-25 拍)**: **R-9 (列表膨胀)** 与 **R-10 (推送撤销立即生效)** 需要**优化方案**, 本任务**暂缓** —— Phase D 开工前**必须提醒主人处理**, 不得静默带过。
+> ✅ **已解决 (2026-09-25/26)**: **R-9 (列表膨胀)** 与 **R-10 (推送撤销立即生效)** 的深度优化已完成 ——
+> 方案与实施见 [`docs/r9-r10-optimization.md`](./r9-r10-optimization.md): R-9 = 三索引 (migration 0029) + count 解耦 + Flutter 无限滚动;
+> R-10 = L1 同端 invalidate / L2 `RouteObserver.didPopNext` 返回列表刷新 / L3 恢复前台刷新 + 全链路 `no-store`。
+> 本文下面 R-9 / R-10 两行的「缓解」列 = 当时的最小兜底 (仍保留), 不再是唯一手段。
 
 | # | 风险 | 缓解 |
 |---|---|---|

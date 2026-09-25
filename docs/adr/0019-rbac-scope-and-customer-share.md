@@ -174,16 +174,18 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
 
 **理由**: ADR-0015 Q8 已冻结门店维度;现有 manager 分支实际无数据 (没有 `store` / `staff` 行)。扩围后保持「我的客户」= `(a+b1+b2+c)` 一致,避免 manager 看到列表 ≠ sales 看到列表的二次割裂。
 
-### 2.6 集中收窄开关 (R-9 主人挂起项的兜底)
+### 2.6 集中收窄开关 (R-9 兜底 —— 深度优化已于 2026-09-26 完成)
 
-主文档 §9.2 R-9 标 ★ (主人 2026-09-25 显式挂起),本 ADR 落地时只做**最小兜底**:
+> ✅ **状态更新 (2026-09-26)**: R-9 / R-10 的深度优化已完成, 详见 [`docs/r9-r10-optimization.md`](../r9-r10-optimization.md)
+> (三索引 + count 解耦 + Flutter 无限滚动 / 三层「立即生效」+ 全链路 no-store)。本节四条**最小兜底仍然保留** (它们是长期机制, 不是临时措施)。
 
 1. **收窄开关集中在 `customer-scope.ts` 一处** (`viewerCustomerScopeSql` 单一真相源)
 2. **收窄策略默认 = (b) 全下层 (与图谱同源)**, 提供 `config flag` (`viewerScope.includeSubordinateSubtree: boolean`, default `true`) 后续可改为「仅直接下级」,只动 (b2) 子句
 3. **集中缓存开关** (`viewerScope.cacheEnabled: boolean`, default `false`) — 默认 no-store,任何缓存层必须能感知 `customer_share` 撤销
 4. **调用方禁止自写可见性 SQL** (§3.4 「集中点」E-1) — 包括 `/api/customers` / `/api/me` / 胶囊计数 / 行级过滤
 
-> ⏸ **R-9 优化方案 (列表膨胀的具体收窄策略)**:**待主人拍** —— 主人 2026-09-25 显式挂起,Phase D 开工前**必提醒**主人处理。
+> ✅ **R-9 优化方案已完成 (2026-09-26)**: 不需要再拍 —— 见 [`docs/r9-r10-optimization.md`](../r9-r10-optimization.md);
+> 本条降级为「历史限制说明」(当时只做最小兜底的原因)。
 
 ---
 
@@ -329,14 +331,14 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 |---|---|
 | **现象** | D3 (2026-09-25 拍) 客户类型从三态 (`franchisee` / `seed` / `normal`) 简化为二态;`is_seed` 列 DB 暂不 DROP;灰度期 30 天 |
 | **本 ADR 的处理** | (本 ADR 与 is_seed DROP 无直接耦合 — `customer_share` 表是新增,不动 `customer.is_seed` 列);仍按主文档 §5.4 / §9.2 R-11 走 |
-| **唯一相关** | 30 天后 `drizzle/0029_drop_customer_is_seed.sql` 编号已被 `customer_share` 占用 — 需改用 `0030` 或别的未占编号 (具体编号 Phase C/D 实施时确认) |
+| **唯一相关** | 30 天后 is_seed DROP 用 `0030`; 回滚用 `0031` (编号 0026=来源 / 0027=referrer / 0028=customer_share / 0029=列表索引 已占, 2026-09-26 定) |
 
 ### 5.4 实施期通用风险 (本 ADR 新增的提醒,不引入新决策)
 
 | 风险 | 缓解 |
 |---|---|
 | **R-IMPL-1** 详情单行过滤漏接 `viewerCustomerScopeSql` → 列表能看但详情 404 | §4.1.2 「详情单行过滤是本 ADR 新增的隐性要求」;Phase D 验收清单必检 |
-| **R-IMPL-2** migration 编号冲突 (0028/0029 已有占位) | Phase D 实施前先 `ls drizzle/*.sql` 确认最终编号;按 §4.2 字面 `0028_customer_share.sql` 起草,主文档 §5.4 已预留 0029 = is_seed drop |
+| **R-IMPL-2** migration 编号 (已定, 2026-09-26) | 0026=来源 / 0027=referrer / 0028=customer_share / 0029=列表索引; is_seed DROP=0030 / 回滚=0031 |
 | **R-IMPL-3** customer-share.ts 模块与 customer-scope.ts 出现循环 import | 模块边界: `customer-share.ts` 只依赖 `schema.ts` + `auth/registration.ts` (校验归属);`customer-scope.ts` 不依赖 `customer-share.ts` (只是 SQL 引用 `customer_share` 表的列名) |
 | **R-IMPL-4** 推送扩散上限 (S6) 默认值 5 / 100 拍的是否合理?无产品数据支撑 | 上线后 7 天观察期由 `scripts/audit-customer-share.ts` 跑推送异常检测 (`share_density` 统计),主人根据实测调阈值 |
 
@@ -370,7 +372,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 
 - [ ] 本 ADR (0019) 状态从 `⏳ Proposed` 改 `✅ Accepted`
 - [ ] 主文档 §8.4 Phase D 验收清单的「RBAC/隐私评审通过」勾选
-- [ ] `ls drizzle/*.sql` 确认 0028 / 0029 实际可用编号 (主文档 §5.4 / §6.5.1 已预留)
+- [x] `ls drizzle/*.sql` 编号已定: 0028=customer_share (已落) / 0029=列表索引 (已落) / 0030=is_seed drop / 0031=回滚
 - [ ] `bash tools/check-migration-compat.sh` (migration 0028 additive) — 必过
 - [ ] `pnpm type-check` — 必过 (AGENTS §3 双线同步)
 - [ ] (UI 改前)`bash tools/check-ui-density.sh` — 棘轮不破
