@@ -208,6 +208,45 @@ async function main() {
     }
   }
 
+  // ℹ️ P1-B (reviewer 第二轮, 2026-09-26): 活节点但 root_id IS NULL (无根) —
+  //   会被 Phase D 的 (b2) 子树判定**主动排除** (三元化后 path = '' 必须 sub.path <> '' 才命中),
+  //   但占位算法 + 树遍历会"看不见"它们 → 信息级清单, 提示需要 backfill 或确认无影响。
+  //   **不算 error, 不参与 --strict 失败判定** (现有所有口径都不强求 root_id NOT NULL)。
+  const orphanNodes = await db.execute<
+    { id: string; name: string; root_id: string | null } & Record<string, unknown>
+  >(sql`
+    SELECT id::text AS id, name, root_id::text AS root_id
+    FROM franchisee
+    WHERE deleted_at IS NULL AND root_id IS NULL
+    ORDER BY id
+  `);
+  if (orphanNodes.length === 0) {
+    console.log(
+      "ℹ️  无根节点 (root_id IS NULL 的活节点): 0 条 — (b2) 子树判定无遗漏风险"
+    );
+  } else {
+    console.log(
+      `ℹ️  无根节点 (root_id IS NULL 的活节点): ${orphanNodes.length} 条\n` +
+        "   ⚠️ 这些节点会被 Phase D 的 (b2) 子树判定**主动排除** (三元化后\n" +
+        "      `me.path = '' AND sub.path <> ''` 要求对方也是非根节点;\n" +
+        "      我是 root 但对方也是 root → 不算下层)。\n" +
+        "   后果 (仅 Phase D 列表扩围后生效, Phase A 尚不显眼):\n" +
+        "     · 这些节点上挂的客户**不会**被同树其他 root 的归属判定命中\n" +
+        "     · 占位算法 / 树遍历看不到它们 → 可能成为隐藏孤岛\n" +
+        "   处理路径:\n" +
+        "     ① backfill: 跑 `npx tsx scripts/audit-orphan-nodes.ts --bind` 补账号关联\n" +
+        "        再走落位算法回填 root_id + placement_path (按业务调整归属)\n" +
+        "     ② 确认无影响: 数据是历史脏值 / 不参与 Phase D 判定, 保留即可\n" +
+        "   **本巡检仅报告清单, 不自动改数据; 不参与 --strict 失败判定**"
+    );
+    for (const r of orphanNodes.slice(0, 10)) {
+      console.log(`   #${r.id} ${r.name} (root_id=${r.root_id ?? "null"})`);
+    }
+    if (orphanNodes.length > 10) {
+      console.log(`   … 其余 ${orphanNodes.length - 10} 条略`);
+    }
+  }
+
   const errors =
     bad.parentMismatch.length +
     bad.missingParent.length +

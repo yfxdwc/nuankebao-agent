@@ -36,6 +36,12 @@ import {
   referredFranchiseeSql,
 } from "./customer-scope";
 import type { CustomerIdentity } from "@/lib/customer/identity";
+import {
+  renderIdentitySelectFields,
+  identityFromFlags,
+  type IdentityFlags,
+  type ViewerContext,
+} from "@/lib/customer/identity";
 import { findActiveUserByReferralCode } from "./franchisee-account";
 import { maskPhone } from "@/lib/utils";
 import {
@@ -620,23 +626,38 @@ function buildCustomerConditions(options: ListCustomersOptions): SQL[] {
 export async function listCustomers(
   options: ListCustomersOptions = {}
 ): Promise<{ items: CustomerView[]; total: number }> {
-  const { limit = 20, offset = 0, viewerFranchiseeId, sort = "new" } = options;
+  const { limit = 20, offset = 0, viewerFranchiseeId, sort = "new", rbacCtx } = options;
   const conditions = buildCustomerConditions(options);
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  // 类型随行算: 一次 SELECT 把「是否我的直推加盟商」当计算列带回来 (不再多一次 IN 查询)
-  //   Phase A supersede: isDownline 列改用 referredFranchiseeSql (referrer 口径, §2.1)
-  const directDownline = referredFranchiseeSql(viewerFranchiseeId ?? null);
+  // ★ Phase A 收口 (reviewer 第二轮, 2026-09-26):
+  //   列表与单条 resolveCustomerIdentity **共用同一组 SQL 片段** (renderIdentitySelectFields)。
+  //   改判定逻辑 → renderIdentitySelectFields 单点改动 → 两边自动一致。
+  //   老的 isDownline 列 (referrer 口径, §2.1) 仍按 listed 走，是 affiliation 计算起点。
+  //   viewer.userId 从 rbacCtx 取 (角色真相源 = DB; 缺 rbacCtx = userId = null，
+  //   与旧 caller 保持原样 —— ownership 只返 mine/none)。
+  const viewer: ViewerContext = {
+    userId: rbacCtx?.userId ?? null,
+    franchiseeId: viewerFranchiseeId ?? null,
+    customerId: null, // excludeCustomerId 在 buildCustomerConditions 里走 selfCustomerExclusionSql 处理
+  };
+  const identityFields = renderIdentitySelectFields(viewer);
+
   const [rows, [{ count }]] = await Promise.all([
     db
       .select({
         row: customer,
-        isDownline: sql<boolean>`${directDownline}`,
-        // 会员标识: 同手机号账号的会员状态 (EXISTS 子查询, 不产生重复行)
-        // ★ ID 化 (ADR-0016 D3): 会员标识走 user.customer_id, 不再按手机号相等
-        isMember: memberExistsSql(sql`u.customer_id = ${customer.id}`),
-        // ★ 有没有账号 (ADR-0016 D8): 单一真相源 customer-scope.ts::hasAccountSql
-        hasAccount: hasAccountSql,
+        // ★ identity SQL 片段 (Phase A 收口; 与单条 resolveCustomerIdentity 同真相源)
+        isFranchisee: identityFields.isFranchisee,
+        direct: identityFields.direct,
+        ownedByMe: identityFields.ownedByMe,
+        ownedBySub: identityFields.ownedBySub,
+        ownedByUpl: identityFields.ownedByUpl,
+        ownerIdCol: identityFields.ownerId,
+        isMember: identityFields.isMember,
+        hasAccount: identityFields.hasAccount,
+        acquireSourceCol: identityFields.acquireSource,
+        sourceReferrerNameCol: identityFields.sourceReferrerName,
       })
       .from(customer)
       .where(whereClause)
@@ -656,9 +677,31 @@ export async function listCustomers(
   ]);
 
   return {
-    items: rows.map((r) =>
-      toView(r.row, r.isDownline === true, r.isMember === true, r.hasAccount === true)
-    ),
+    items: rows.map((r) => {
+      // ★ 同一行 → 同一 identityFromFlags() → 与单条 resolveCustomerIdentity 完全一致。
+      //   改变量时只动 identityFromFlags / renderIdentitySelectFields，单条 + 列表同步生效。
+      const flags: IdentityFlags = {
+        exists: true,
+        isFranchisee: r.isFranchisee === true,
+        direct: r.direct === true,
+        ownedByMe: r.ownedByMe === true,
+        ownedBySub: r.ownedBySub === true,
+        ownedByUpl: r.ownedByUpl === true,
+        // ownerIdCol 是 SQL``"customer"."owner_id"``, drizzle 推不出 string (推成 {}),
+        // 在这里明确 cast (与 PG bigint → JS bigint 的口径保持一致)
+        ownerId: r.ownerIdCol != null ? BigInt(String(r.ownerIdCol)) : null,
+        isMember: r.isMember === true,
+        hasAccount: r.hasAccount === true,
+        acquireSource: (r.acquireSourceCol ?? null) as
+          | "friend" | "referral" | "cold_visit" | "ground_promo" | null,
+        sourceReferrerName: r.sourceReferrerNameCol != null
+          ? String(r.sourceReferrerNameCol)
+          : null,
+      };
+      const identity = identityFromFlags(flags);
+      // toView 第二参 (isMyDownline) = 原始 direct 口径，与旧 listCustomers 保持一致
+      return toView(r.row, flags.direct, flags.isMember, flags.hasAccount, null, identity);
+    }),
     total: count,
   };
 }
