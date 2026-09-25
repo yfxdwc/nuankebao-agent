@@ -208,8 +208,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             },
           ),
           // 列表/图谱 切换 (Material 3 SegmentedButton)
+          // ⚠ 上下内边距别加大: AppBar 52 - 2×内边距 必须 ≥ 分段控件自然高 (AppSize.buttonMinHeight),
+          //   否则胶囊底被压扁而文字仍按自然高排版 → 文字看着不居中 (2026-09-25 主人报的这个 bug)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s8),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.s12, vertical: AppSpace.s4),
             child: SegmentedButton<_CustomerViewMode>(
               // fix-graph-ui-v3 (2026-09-17): 去 icon + 去掉 compact/shrinkWrap
               //   旧版 (icon 20 + label 14 + compact) 每个 segment 只有 63pt 宽,

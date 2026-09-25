@@ -592,6 +592,18 @@ class AppTheme {
       // ---- 分段控件 / Tab ----
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
+          // ★ 修「文字在胶囊里没有垂直居中」(2026-09-25 主人报, 客户列表右上角 列表/图谱):
+          //   根因: M3 分段控件自然高 = 48 (minimumSize 40 + tapTargetSize.padded 撑到 48),
+          //     而我们的 AppBar 只有 AppSize.appBarHeight(52) - 上下内边距 → 可用高 < 48 时
+          //     **胶囊底被压扁, 文字仍按 48 的盒子排版** → 文字相对胶囊中心偏下 (实测 2~6px,
+          //     紧凑容器才看得见; 正文场景约束宽松, delta=0 → 容易漏测).
+          //   修法: 高度**钉到令牌** (buttonMinHeight) + 不撑 tapTarget → 容器给够 40 就永不变形,
+          //     文字在 40 的盒子里居中 → 任何字号档位都居中 (test/segmented_button_center_test.dart 守).
+          alignment: Alignment.center,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const WidgetStatePropertyAll(
+            Size(0, AppSize.buttonMinHeight),
+          ),
           foregroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.selected)
                 ? t.onPrimary
