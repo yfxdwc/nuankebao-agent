@@ -2,9 +2,30 @@
 
 > **主人要** (2026-09-18): 「'我的'页中。丰富个人和系统设置信息。我没有具体要求，你根据当前项目情况做工业级完善」
 >
-> **一句话**: 「我的」页从「头像占位 + 3 个数字 + 加盟入口 + 退出」扩成
-> **个人资料 / 加盟身份 / 数据概览 / 显示与存储 / 账号与安全 / 关于与帮助** 六块,
-> 每一块都接真数据、真有行为, 不放假开关。
+> **后续拍板** (2026-09-25): 「我的页过杂 (1432 行 / 3.5 屏 / 11 区块), 中年用户滚到下面焦躁;
+> 低频 app 设置下沉二级『设置』页; **字号保留快捷入口**, 设置页也放」。
+> 本页为两个页面的设计合并。
+
+---
+
+## 0. 双重架构 (v0.1.5 + 后)
+
+```
+「我的」页 (/profile, 主页面, 高频访问, 退出/管理都从这里进入)
+  └─ 区块 1‒4 保留: 个人资料 / 我的加盟身份 / 数据概览 / 设置 (字号快速 + 更多设置入口)
+  └─ 区块 5: 账号与安全
+  └─ 退出登录 (最底)
+
+「设置」页 (/profile/settings, 二级页, 路由 push; 保留返回栈)
+  └─ 区块 1: 显示与存储 (字号 4 档 chips + 清理图片缓存)
+  └─ 区块 2: 主题配色 (换肤; ThemePickerCard)
+  └─ 区块 3: 提醒 (本地通知跟进)
+  └─ 区块 4: 关于与帮助 (当前版本 / 使用帮助 / 网络自检 / 管理员工具[仅 admin] / debug 服务地址)
+```
+
+**两页共用**: `core/widgets/font_size_picker.dart` —— 4 档 ChoiceChip **Row + Expanded 单行布局**
+(间距 `AppSpace.s8`, label 走 `FittedBox(scaleDown) + maxLines:1 + ellipsis` 兜底不裁字,
+按档位自己缩放字号保留预览, 中老年触摸区不缩)。一处改两处生效。
 
 ---
 
@@ -17,32 +38,43 @@
 | **口径要和别的页对得上** | 数据概览跟客户列表同口径; 跟列表不一致的数字 = 页面自己打自己脸 (见 §4) |
 | **中老年优先** | 行高 ≥ 64、字号 18/16、触摸区 ≥ 44、文案是大白话 (「看不清楚就调大」而不是「文字缩放」) |
 | **不编造** | 没有通知能力就不放「提醒开关」; 没有法务文本就不写「隐私政策」, 只讲事实 (数据存哪/怎么加密/谁能看) |
+| **高频留主页面, 低频下沉二级** | 个人/加盟/数据/账号 4 块在「我的」; 字号以外的系统设置 (主题/提醒/关于/调试) 进「设置」; 字号两处都给 (中年刚需) |
 
 ---
 
 ## 2. 页面结构 (从上到下)
 
+### 2.1 「我的」页 (主页面, `profile_page.dart`)
+
 | 区块 | 内容 | 数据源 |
 |---|---|---|
-| 个人资料 | 真实姓名 (加盟名优先) + 账号名 alias + 角色 + 门店 + 手机号 (默认打码 / 点 👁 看全号 / 📋 复制) + **头像 (可点, 换头像)** + 「编辑我的资料」 | `GET /api/me` |
-| 我的加盟身份 | 编号 / 位置 (A线·B线) / 层级 / 路径 / 我的上级 (可点进 `/franchisees/:id`) / 加入时间 / 状态 / 我的下线 N 人 (A线 x · B线 y) / 备注 | `GET /api/me` |
-| 数据概览 | 客户 / 待办跟进 / 本月拜访 / 本月新增客户 + 累计互动 + 「我的加盟网络」入口 | `GET /api/me` |
-| 显示与存储 | 字号 **小·标准·大·特大** (立即生效) + 清理图片缓存 | 本机 `shared_preferences` |
-| 账号与安全 | 登录手机号 (只读 + 复制) / 30 天登录有效期 / 账号编号 | `GET /api/me` |
-| 关于与帮助 | 当前版本 / 检查更新 (服务器版本 + 安装包时间·大小 + 下载 + 扫码) / 使用帮助·数据安全页 (`/profile/about`) / 网络自检 / 服务地址 (debug) | `GET /api/app-version` + `GET /api/health` |
+| 1 个人资料 | 真实姓名 (加盟名优先) + 账号名 alias + 角色 + 门店 + 手机号 (默认打码 / 点 👁 看全号 / 📋 复制) + **头像 (可点, 换头像)** + 「编辑我的资料」 | `GET /api/me` |
+| 2 我的加盟身份 | 编号 / 位置 (A线·B线) / 层级 / 路径 / 我的上级 (可点进 `/franchisees/:id`) / 加入时间 / 状态 / 我的下线 N 人 (A线 x · B线 y) / 备注 | `GET /api/me` |
+| 3 数据概览 | 客户 / 待办跟进 / 本月拜访 / 本月新增客户 + 累计互动 + 「我的加盟网络」入口 | `GET /api/me` |
+| 4 设置 (快捷) | **字号 4 档 chips (共享 `FontSizePicker`, 中年刚需不淺一层)** + 「更多设置」入口行 (跳 `/profile/settings`) | 本机 `shared_preferences` |
+| 5 账号与安全 | 登录手机号 (只读 + 复制) / 30 天登录有效期 / 账号编号 | `GET /api/me` |
 | 退出登录 | 危险操作, 二次确认 (数据不受影响) | — |
 
-### 文件位置 (都在 `flutter_app/lib/screens/`, **不是** `modules/`)
+### 2.2 「设置」页 (二级页, `settings_page.dart`, 路由 `/profile/settings`)
+
+| 区块 | 内容 | 数据源 |
+|---|---|---|
+| 1 显示与存储 | 字号 4 档 chips (与「我的」共用同一 `FontSizePicker`, 状态同步) + 清理图片缓存 | 本机 `shared_preferences` |
+| 2 主题配色 | ThemePickerCard — sage / spring / summer / autumn / winter 5 个配色 (选完立即生效) | 本机主题偏好 |
+| 3 提醒 | 每天 08:30 提醒跟进 (需要通知权限 / 不假开关 / 待办数变了重排) | `core/services/notifications/follow_up_reminder.dart` |
+| 4 关于与帮助 | 当前版本 + 检查更新 + 使用帮助 / 数据安全 (跳 `/profile/about`) + 网络自检 + 管理员工具 (仅 `role='admin'` 可见, 跳 `/profile/admin`) + debug 服务地址 | `package_info_plus` + `/api/health` + `/api/app-version` |
+
+### 文件位置 (`flutter_app/lib/`, **不是** `modules/`)
 
 | 文件 | 职责 |
 |---|---|
-| `profile_page.dart` | 主页面 (六个分区) |
-| `profile_widgets.dart` | 分区卡 / 条目 / 信息行 / 数字框 (统一行高与字号) |
-| `profile_sheets.dart` | 三个弹层: 编辑资料 / 检查更新 / 网络自检 (+ `buildDiagnosticText`) |
-| `about_page.dart` | 使用帮助 6 条 + 数据安全 5 条 + 遇到问题 (路由 `/profile/about`) |
-
-> 为什么不建 `modules/profile/`: AGENTS §4.5 明确「profile 是 web admin 扩展页, 不是 APK 模块;
-> 新建模块需主人 ask_user 拍板」。所以同伴文件放在 `lib/screens/` 同层, 不新开模块。
+| `screens/profile_page.dart` | 「我的」主页面 (5 区块, 2026-09-25 从 11 区块 ×3.5 屏 收到 5 区块 ×2 屏) |
+| `screens/settings_page.dart` | 「设置」二级页 (4 区块, 新建于 2026-09-25) |
+| `core/widgets/font_size_picker.dart` | 字号档位共享组件 (Row+Expanded 单行, 两页共用, 2026-09-25 新建) |
+| `screens/profile_widgets.dart` | 分区卡 / 条目 / 信息行 / 数字框 (统一行高与字号) |
+| `screens/profile_sheets.dart` | 多个弹层: 编辑资料 / 检查更新 / 网络自检 / 头像选择 (+ `buildDiagnosticText`) |
+| `screens/about_page.dart` | 使用帮助 6 条 + 数据安全 5 条 + 遇到问题 (路由 `/profile/about`) |
+| `screens/theme_picker_card.dart` | 主题配色选择卡 (独立 widget,「设置」页面 4 区块 2 用) |
 
 ---
 

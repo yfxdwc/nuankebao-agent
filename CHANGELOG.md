@@ -2,6 +2,34 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 「我的」页低频设置下沉二级「设置」页 (2026-09-25)
+
+主人 2026-09-25: 「我的页过杂 (1432 行 / 3.5 屏 / 11 区块), 中年用户滚到下面焦躁, 低频 app 设置下沉二级『设置』页; 字号保留快捷入口, 设置页也放」。
+
+- **新二级页**: `flutter_app/lib/screens/settings_page.dart` (路由 `/profile/settings`)
+  - 4 个区块顺序: 显示与存储 (字号 chips + 清理图片缓存) / 主题配色 / 提醒 / 关于与帮助
+  - 关于与帮助随迁项全保留: 当前版本 / 使用帮助 / 网络自检 / 管理员工具 (仅 admin 可见) / debug 服务地址
+    (reviewer P1 回归修复: 首版迁移漏了 admin 入口, 已补回并加正向测试)
+- **共享组件**: `flutter_app/lib/core/widgets/font_size_picker.dart`
+  - `FontSizePicker` (无参状态): 4 档 `ChoiceChip` **Row + Expanded 单行布局**
+    (间距 `AppSpace.s8`, label 走 `FittedBox(scaleDown) + maxLines:1 + ellipsis` 兜底不裁字,
+    按档位自己缩放字号保留预览)
+  - **「我的」页** + **设置页** 共用同一份 → 一处改两处生效
+- **「我的」页调整** (`profile_page.dart`, 1432 → ≈ 920 行)
+  - `_DisplaySettingsCard / _ReminderCard / _AboutCard / _VersionTile` 整类迁出, 删 4 个 import
+    (`flutter_cache_manager / package_info_plus / foundation.kDebugMode / theme_picker_card`)
+  - `_AccountCard` 后新增 `ProfileSection(title:'设置')`: `FontSizePicker` (共享) + `ProfileTile(icon: tune)` 跳 `/profile/settings`
+- **路由**: `app_router.dart` `/profile` 下新增 `GoRoute(path:'settings', name:'profile-settings')`
+- **测试** (改动相关 25 例全绿):
+  - `profile_page_test.dart`: 原「系统设置」用例拆分 — 「设置区: chips + 更多设置入口」/「账安 + 退出」/保留点「特大」用例;
+    新增断言「主题配色 / 关于与帮助 / 清理图片缓存」不在「我的」页出现
+  - **新建** `test/settings_page_test.dart` (5 例): 4 区块渲染 / 点特大真改 + prefs 落盘 / 共享 FontSizePicker / 关于与帮助 3 项 / 窄屏 320 + 特大字号 1.3 不溢出
+  - `chip_label_color_test.dart`: 引用切到 `FontSizePicker`, 加 2 例单行 dy 断言
+    (393/320 × 特 large fontScale: 4 个 ChoiceChip dy 相同 + 无 overflow + 4 个 label 全部可见)
+- **文档**: `docs/profile-and-settings.md` 新增「设置」页章节 + 「我的」页结构表更新 (迁走项/新入口)
+- **护栏**: `bash tools/check-ui-tokens.sh` 全部持平 (无新增硬编码; chips 间距 `AppSpace.s8` 走令牌)
+- **验证**: `flutter analyze` 0 issue
+
 ## [Unreleased] — 编辑客户页去掉「🌱 种子客户」模块 (2026-09-25)
 
 主人 2026-09-25: 「编辑客户页中不需要这个模块」(截图 = 种子客户开关那一条)。

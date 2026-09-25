@@ -29,6 +29,7 @@ import '../../screens/admin_tools_page.dart';
 import '../../screens/admin_users_page.dart';
 import '../../screens/my_referrals_page.dart';
 import '../../screens/profile_page.dart';
+import '../../screens/settings_page.dart';
 import '../../modules/wellness/screens/wellness_record_form_page.dart';
 import '../../modules/wellness/screens/wellness_record_detail_page.dart';
 import '../../modules/salon/screens/salon_list_page.dart';
@@ -229,6 +230,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'referrals',
                 name: 'profile-referrals',
                 builder: (context, state) => const MyReferralsPage(),
+              ),
+              // 设置 (字号/主题配色/提醒/关于与帮助; 「我的」页低频项下沉, 2026-09-25)
+              GoRoute(
+                path: 'settings',
+                name: 'profile-settings',
+                builder: (context, state) => const SettingsPage(),
               ),
             ],
           ),

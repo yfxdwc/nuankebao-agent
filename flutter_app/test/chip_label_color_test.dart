@@ -14,61 +14,79 @@
 //           不允许 null (null = 真机白字). 这也是"跑 UI 测试要带真主题"的示范 ——
 //           之前 profile_page_test.dart 没带 theme, 这类 bug 才漏过去.
 //
-// 注意: 本文件自己搭最小 harness (不去动 profile_page_test.dart):
-//   - 只渲染「我的」页顶部区块, viewport 够高就能看到「显示与存储」的 chip
-//   - appReleaseProvider 必须 override: 「邀请被推荐人」区块读它, 不 override 会一直
-//     AsyncLoading → 里面是 CircularProgressIndicator (无限动画) → pumpAndSettle 永不收敛
+// 2026-09-25 改动: 字号 chips 已迁到共享 FontSizePicker (lib/core/widgets/),
+//   在「我的」/「设置」两页共用。本测试改渲染 FontSizePicker 自身 (轻量),
+//   加端到端断言守护两页共用同一份组件。
+//
+// 2026-09-25 主人追加硬要求:
+//   - 4 档必须**单行** (不换行) —— Row + 4 个 Expanded 均分宽, 间距 8 token
+//   - 单行不裁字 —— FittedBox(scaleDown) + maxLines:1 + ellipsis + textAlign:center
+//   - 硬验收 393/320 × 特大字号: 4 chip dy 相同 + 无 overflow + 不裁字
+//   - 中老年触摸区不缩 (ChoiceChip Material 默认 ~48)
+//
+// 注意: 本测试不需要 stub; FontSizePicker 不打网络。Real ProviderContainer 完全可选,
+// 选 MaterialApp + AppTheme.light() 就足够反映生产渲染。
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nuankebao/core/models/me.dart';
-import 'package:nuankebao/core/providers/service_providers.dart';
 import 'package:nuankebao/core/providers/settings_provider.dart';
-import 'package:nuankebao/core/services/api.dart' show MyReferral;
 import 'package:nuankebao/core/theme/app_theme.dart';
-import 'package:nuankebao/screens/profile_page.dart';
+import 'package:nuankebao/core/theme/tokens.g.dart';
+import 'package:nuankebao/core/widgets/font_size_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<ProviderContainer> _container() async {
-  SharedPreferences.setMockInitialValues({});
-  final prefs = await SharedPreferences.getInstance();
-  final container = ProviderContainer(overrides: [
-    sharedPreferencesProvider.overrideWithValue(prefs),
-    meProfileProvider.overrideWith((ref) async => MeProfile.fromJson({
-          'user': {'id': '1', 'name': '张三', 'roleLabel': '销售员'},
-          'phone': {'full': '13800138000', 'masked': '138****8000'},
-          'stats': {'customerCount': 3},
-        })),
-    myReferralsProvider.overrideWith((ref) async => const <MyReferral>[]),
-    // 见文件头: 不 stub 这个 = 无限 spinner = 测试挂死
-    appReleaseProvider.overrideWith((ref) async => const AppRelease()),
-  ]);
-  addTearDown(container.dispose);
-  return container;
+Future<void> _pump(
+  WidgetTester tester, {
+  required double width,
+  required double fontScale,
+}) async {
+  // 393/320 两种屏宽都在硬验收里; dpr=3 模拟真机
+  tester.view.physicalSize = Size(width * 3, 800 * 3);
+  tester.view.devicePixelRatio = 3.0;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+    MaterialApp(
+      // 关键: 带真主题. 不带 = Flutter 默认样式, 测不出"主题顶掉默认色"这类 bug
+      theme: AppTheme.light(),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(fontScale)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: Padding(
+          padding: const EdgeInsets.all(AppSpace.s16),
+          child: FontSizePicker(
+            selected: AppFontSize.standard,
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// 收集 4 个 chip 的中心 y (单行 dy 断言用)
+List<double> _chipCenters(WidgetTester tester) {
+  return tester
+      .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+      .map((c) {
+        final rect = tester.getRect(find.byWidget(c));
+        return rect.center.dy;
+      })
+      .toList();
 }
 
 void main() {
-  testWidgets('字号档位 chip 的文字必须是深色 (null = 真机白字看不见)', (tester) async {
-    final container = await _container();
-    tester.view.physicalSize = const Size(393 * 3, 3400 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+  // 直接渲染 FontSizePicker (替代渲染整页 profile_page); 无 provider 依赖。
+  testWidgets('字号档位 chip 的文字必须是深色 (null = 真机白字看不见)',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await _pump(tester, width: 393, fontScale: 1.0);
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          // 关键: 带真主题. 不带 = Flutter 默认样式, 测不出"主题顶掉默认色"这类 bug
-          theme: AppTheme.light(),
-          home: const ProfilePage(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    // 页面里 ChoiceChip 只有「显示与存储」的字号档位用 (小 / 标准 / 大 / 特大)
-    expect(find.text('显示与存储'), findsOneWidget);
+    // 字号档位 4 档 (小 / 标准 / 大 / 特大) —— FontSizePicker 渲染 4 个 ChoiceChip
     final chipTexts = tester
         .widgetList<RichText>(find.descendant(
           of: find.byType(ChoiceChip),
@@ -86,5 +104,50 @@ void main() {
             '(null 或非深色 → 真机 APK 上引擎兜底成白色, 白卡片上看不见)',
       );
     }
+  });
+
+  // 主人 2026-09-25 追加硬要求: 4 chip 必须单行 (dy 相同) + 不溢出 + 不裁字
+  testWidgets('单行布局: 393 宽 × 特大字号 4 chip dy 相同 + 不溢出', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await _pump(tester, width: 393, fontScale: 1.3);
+    // 装入 padding 在外, 但本检查只关心 chip 之间的 dy 一致性
+
+    // 4 个 ChoiceChip 的中心 y 应当**完全一致** (允许 0.5 浮点抖)
+    final centers = _chipCenters(tester);
+    expect(centers.length, 4);
+    for (final c in centers) {
+      expect(c, closeTo(centers.first, 0.5),
+          reason: 'chip dy=$c 应≈ dy(0)=${centers.first}');
+    }
+
+    // 无溢出
+    expect(tester.takeException(), isNull);
+
+    // 4 档 label 文字都渲染出来 (不裁字 = 4 个 Text 都在树里, 而不是被 ellipsis 吃掉)
+    expect(find.text('小'), findsOneWidget);
+    expect(find.text('标准'), findsOneWidget);
+    expect(find.text('大'), findsOneWidget);
+    expect(find.text('特大'), findsOneWidget);
+  });
+
+  testWidgets('单行布局: 窄屏 320 × 特大字号 4 chip dy 相同 + 不溢出', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await _pump(tester, width: 320, fontScale: 1.3);
+
+    final centers = _chipCenters(tester);
+    expect(centers.length, 4);
+    for (final c in centers) {
+      expect(c, closeTo(centers.first, 0.5),
+          reason: 'chip dy=$c 应≈ dy(0)=${centers.first}');
+    }
+
+    // 窄屏最容易挤破 → 必须无 RenderFlex overflow 异常
+    expect(tester.takeException(), isNull);
+
+    // 320 宽 + 特大字号下 4 个 label 仍全部可见 (FittedBox.scaleDown 兜底)
+    expect(find.text('小'), findsOneWidget);
+    expect(find.text('标准'), findsOneWidget);
+    expect(find.text('大'), findsOneWidget);
+    expect(find.text('特大'), findsOneWidget);
   });
 }

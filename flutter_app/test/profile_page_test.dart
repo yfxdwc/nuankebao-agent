@@ -184,13 +184,11 @@ void main() {
     expect(find.text('我的加盟网络'), findsOneWidget);
   });
 
-  testWidgets('系统设置: 显示与存储 + 账号与安全 + 关于与帮助', (tester) async {
+  testWidgets('设置区: 字号快捷 chips (只显示) + 「更多设置」入口', (tester) async {
     final container = await _container(_fullProfile());
     await _pumpProfile(tester, container);
 
-    // ⚠ 这个页面比视口高很多, ListView 只构建 视口+缓存区 内的 item ——
-    //   所以下面一律用 scrollUntilVisible 显式滚到目标, 不靠"恰好落在缓存区里"。
-    //   (2026-09-23 加了「主题配色」卡后, 原先靠缓存区侥幸通过的断言就全断了)
+    // 设置区在「数据概览」之后 (按设计顺序; 中年用户刚需, 不下沉一层)
     Future<void> see(String text) async {
       await tester.scrollUntilVisible(
         find.text(text),
@@ -201,33 +199,44 @@ void main() {
       expect(find.text(text), findsOneWidget, reason: '滚到「$text」后应可见');
     }
 
-    // 显示与存储 (字号档位) —— 首屏可见
-    expect(find.text('显示与存储'), findsOneWidget);
+    // 设置区自身
+    await see('设置');
+    expect(find.text('更多设置'), findsOneWidget);
+    expect(find.text('主题配色 / 跟进提醒 / 关于与帮助'), findsOneWidget);
+
+    // 字号快捷 chips —— 4 档全部可见 (中年用户刚需, 这页不出现就不合格)
+    expect(find.text('小'), findsOneWidget);
     expect(find.text('标准'), findsOneWidget);
+    expect(find.text('大'), findsOneWidget);
+    expect(find.text('特大'), findsOneWidget);
+  });
 
-    // 主题配色 (2026-09-23 换肤入口)
-    await see('主题配色');
-    await see('养生绿');
-    await see('春 · 新芽');
+  testWidgets('账安 + 退出: 账号与安全/30天/编号  +  退出登录', (tester) async {
+    final container = await _container(_fullProfile());
+    await _pumpProfile(tester, container);
 
-    // 字号档位下半 + 清缓存
-    await see('特大');
-    await see('清理图片缓存');
+    Future<void> see(String text) async {
+      await tester.scrollUntilVisible(
+        find.text(text),
+        120,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 40,
+      );
+      expect(find.text(text), findsOneWidget, reason: '滚到「$text」后应可见');
+    }
 
-    // 账号与安全
+    // 账号与安全 (低频但保留 — 手机号/修改密码/改手机号是身份相关, 不下沉)
     await see('账号与安全');
     await see('30 天 (期间不用重复登录)');
     await see('#1 · 销售员');
 
-    // 关于与帮助
-    await see('关于与帮助');
-    // 2026-09-21 主人: 独立的「检查更新」入口已并进「当前版本」行 (点一下 = 检查更新)
-    await see('当前版本');
-    await see('使用帮助 / 数据安全');
-    await see('网络自检');
-
     // 退出登录
     await see('退出登录');
+
+    // 低频项已迁出 (在 settings_page_test.dart 里覆盖, 不在本「我的」页出现)
+    expect(find.text('主题配色'), findsNothing);
+    expect(find.text('关于与帮助'), findsNothing);
+    expect(find.text('清理图片缓存'), findsNothing);
   });
 
   testWidgets('点「特大」→ 字号设置真被改掉', (tester) async {

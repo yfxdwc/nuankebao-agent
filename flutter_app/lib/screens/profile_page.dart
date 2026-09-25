@@ -1,10 +1,9 @@
 // ============================================
-// 我的 (Profile) 页 —— 个人资料 + 加盟身份 + 数据概览 + 系统设置
+// 我的 (Profile) 页 —— 个人资料 + 加盟身份 + 数据概览 + 账户安全 + 设置入口
 // ============================================
 // 目标用户: 大健康销售/客服 (中年女性为主, 移动端)
-//   → 一屏内看全「我是谁 / 我下面有谁 / 我干了多少 / 我手机上的设置」
-//   → 每条设置都**真的有效果** (不摆假开关): 字号立即变、版本真能查、
-//     网络自检真连服务器、缓存真清、退出真退
+//   → 一屏内看全「我是谁 / 我下面有谁 / 我干了多少 / 我账户安全」
+//   → 每条设置都**真的有效果** (不摆假开关): 字号立即变、退出真退
 //
 // 数据源 (一次拉完): GET /api/me → 账号 + 加盟身份 + 门店 + 数据概览
 //   见 src/app/api/me/route.ts; 模型见 core/models/me.dart
@@ -13,18 +12,20 @@
 // 历史 (2026-09-18 主人: "丰富个人和系统设置信息"):
 //   旧版 = 头像('我' 占位) + 3 个数字 + 加盟网络入口 + 退出登录。
 //   现在: 真实姓名/角色/手机号 (可显示可复制可改) + 加盟身份明细 (编号/位置/上级/加入时间/下线数)
-//   + 数据概览 5 项 + 字号设置 + 账号与安全 (缓存/退出) + 关于与帮助 (版本/更新/自检/说明)
+//   + 数据概览 5 项 + 字号快捷入口 + 账号与安全 + 关于与帮助 (详见 settings_page.dart)
+//
+// 2026-09-25 「我的」页过杂 (原 3~3.5 屏), 主人拍:
+//   - 低频设置区块下沉到 /profile/settings (新二级「设置」页)
+//   - 字号 (中年刚需) 在「我的」保留 FontSizePicker 快捷入口 + 设置页也放
+//   - 沉走: 主题配色 / 提醒 / 关于与帮助
+//   - 保留: 显示与存储里的字号 chips + 清理图片缓存入口 (在设置页; 「我的」只剩字号 chips)
 
 import '../modules/follow_up/screens/follow_ups_page.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 
-import '../core/http/api_client.dart';
 import '../core/models/me.dart';
 import '../core/providers/auth_provider.dart';
 import '../core/providers/service_providers.dart';
@@ -32,11 +33,11 @@ import '../core/providers/settings_provider.dart';
 import '../core/telemetry/usage_providers.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/app_empty.dart';
+import '../core/widgets/font_size_picker.dart';
 import '../core/widgets/franchise_chip.dart';
 import '../core/widgets/member_avatar.dart';
 import 'profile_sheets.dart';
 import 'profile_widgets.dart';
-import 'theme_picker_card.dart';
 
 import '../core/theme/tokens.g.dart';
 import '../core/widgets/b2_no_chrome.dart';
@@ -112,6 +113,7 @@ class _ProfileBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final fontSize = ref.watch(settingsProvider).fontSize;
     return ListView(
       // AlwaysScrollable: 内容不满一屏也要能下拉刷新 (RefreshIndicator 需要可滚动)
       physics: const AlwaysScrollableScrollPhysics(),
@@ -130,16 +132,38 @@ class _ProfileBody extends ConsumerWidget {
         profileSectionGap,
         _StatsCard(profile: profile),
         profileSectionGap,
-        const _DisplaySettingsCard(),
-        profileSectionGap,
-        // 换肤入口 (主题配色) —— 令牌系统消费方, 见 core/providers/theme_provider.dart
-        const ThemePickerCard(),
-
-        const _ReminderCard(),
+        // 「设置」区: 字号快捷入口 (中年用户刚需, 不再下沉一层) + 更多设置
+        // (主题配色 / 跟进提醒 / 关于与帮助 已迁到 /profile/settings, 详见 settings_page.dart)
+        ProfileSection(
+          title: '设置',
+          icon: Icons.settings_outlined,
+          hint: '本机',
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s8),
+              child: Text(
+                '字大看不全 / 字小看不清? 选一档 (选完立即生效, 全 App 都变)',
+                style: TextStyle(
+                    fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
+              ),
+            ),
+            FontSizePicker(
+              selected: fontSize,
+              onChanged: (v) =>
+                  ref.read(settingsProvider.notifier).setFontSize(v),
+            ),
+            const SizedBox(height: AppSpace.s8),
+            ProfileTile(
+              icon: Icons.tune,
+              title: '更多设置',
+              subtitle: '主题配色 / 跟进提醒 / 关于与帮助',
+              onTap: () => context.push('/profile/settings'),
+            ),
+          ],
+        ),
         profileSectionGap,
         _AccountCard(profile: profile),
         profileSectionGap,
-        _AboutCard(profile: profile),
         const SizedBox(height: AppSpace.s20),
         const _LogoutButton(),
       ],
@@ -664,196 +688,14 @@ class _StatsCard extends StatelessWidget {
 }
 
 // ============================================
-// 4. 显示与存储 (字号 / 清缓存)
+// 4. 设置 (字号快捷入口 + 更多设置)
 // ============================================
-
-class _DisplaySettingsCard extends ConsumerStatefulWidget {
-  const _DisplaySettingsCard();
-
-  @override
-  ConsumerState<_DisplaySettingsCard> createState() =>
-      _DisplaySettingsCardState();
-}
-
-class _DisplaySettingsCardState extends ConsumerState<_DisplaySettingsCard> {
-  bool _clearing = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final fontSize = ref.watch(settingsProvider).fontSize;
-
-    return ProfileSection(
-      title: '显示与存储',
-      icon: Icons.text_fields,
-      hint: '本机设置',
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s8),
-          child: Text(
-            '字大看不全 / 字小看不清? 选一档 (选完立即生效, 全 App 都变)',
-            style: TextStyle(
-                fontSize: AppTheme.fontSm, color: AppTheme.textSecondary),
-          ),
-        ),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: AppFontSize.values.map((v) {
-            return ChoiceChip(
-              label: Text(
-                v.label,
-                style: TextStyle(
-                  // 档位名自己就体现大小 (小 < 标准 < 大 < 特大), 不让用户看倍率数字
-                  fontSize: AppTheme.fontMd +
-                      switch (v) {
-                        AppFontSize.small => -2,
-                        AppFontSize.standard => 0,
-                        AppFontSize.large => 2,
-                        AppFontSize.xlarge => 4,
-                      },
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              selected: fontSize == v,
-              onSelected: (_) =>
-                  ref.read(settingsProvider.notifier).setFontSize(v),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: AppSpace.s8),
-        ProfileTile(
-          icon: Icons.photo_library_outlined,
-          title: _clearing ? '正在清理...' : '清理图片缓存',
-          subtitle: '养生记录里的照片会临时存在手机上, 清理不影响数据',
-          color: AppTheme.accent,
-          onTap: _clearing
-              ? null
-              : () async {
-                  setState(() => _clearing = true);
-                  try {
-                    await DefaultCacheManager().emptyCache();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('图片缓存已清理',
-                            style: TextStyle(fontSize: AppTheme.fontMd)),
-                      ),
-                    );
-                  } catch (_) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('清理失败, 稍后再试',
-                            style: TextStyle(fontSize: AppTheme.fontMd)),
-                      ),
-                    );
-                  } finally {
-                    if (mounted) setState(() => _clearing = false);
-                  }
-                },
-        ),
-      ],
-    );
-  }
-}
-
-// ============================================
-// 4.5 提醒 (每日跟进本地通知; 主人 2026-09-20 拍 Q6)
-// ============================================
-// 开关语义: 开了就真排程, 关了真取消 —— 不做"假开关" (见本文件头部 §6 原则)
-//   开: 先要系统权限 (被拒 → 开关弹回 + 提示去系统设置, 不假装成功)
-//   数字: 用当前待办数 (pendingFollowUpsProvider, 免费档也有) —— 通知正文跟待办页一致
-//   保活: 待办数变了就重排 (见下面 ref.listen); 不常开 App 时数字会偏旧, 见 follow_up_reminder.dart
-
-class _ReminderCard extends ConsumerStatefulWidget {
-  const _ReminderCard();
-
-  @override
-  ConsumerState<_ReminderCard> createState() => _ReminderCardState();
-}
-
-class _ReminderCardState extends ConsumerState<_ReminderCard> {
-  bool _busy = false;
-
-  int get _dueCount => ref.read(pendingFollowUpsProvider).valueOrNull?.length ?? 0;
-
-  Future<void> _toggle(bool enabled) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    final settings = ref.read(settingsProvider.notifier);
-    final reminder = ref.read(followUpReminderProvider);
-    try {
-      if (enabled) {
-        final granted = await reminder.requestPermission();
-        if (!granted) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('没有通知权限, 请在手机「设置 → 应用 → 暖客宝 → 通知」里打开',
-                  style: TextStyle(fontSize: AppTheme.fontMd)),
-            ),
-          );
-          return; // 权限没给 → 开关保持关闭 (不假装打开)
-        }
-        await reminder.scheduleDaily(dueCount: _dueCount);
-      } else {
-        await reminder.cancel();
-      }
-      await settings.setFollowUpReminder(enabled);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('设置失败: $e',
-              style: const TextStyle(fontSize: AppTheme.fontMd)),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final on = ref.watch(settingsProvider).followUpReminder;
-
-    // 待办数变了 (比如刚完成一条) → 重排, 让通知正文跟上
-    ref.listen(pendingFollowUpsProvider, (prev, next) {
-      final n = next.valueOrNull?.length;
-      if (n == null || !ref.read(settingsProvider).followUpReminder) return;
-      ref.read(followUpReminderProvider).scheduleDaily(dueCount: n);
-    });
-
-    return ProfileSection(
-      title: '提醒',
-      icon: Icons.notifications_active_outlined,
-      hint: '本机设置',
-      children: [
-        SwitchListTile(
-          value: on,
-          onChanged: _busy ? null : _toggle,
-          contentPadding: EdgeInsets.zero,
-          secondary: Icon(
-            on ? Icons.notifications_active : Icons.notifications_off_outlined,
-            color: on ? AppTheme.primary : AppTheme.textSecondary,
-          ),
-          title: const Text(
-            '每天 08:30 提醒跟进',
-            style: TextStyle(
-                fontSize: AppTheme.fontMd, fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(
-            on
-                ? '到点提醒「今天要跟进谁」, 点开直达待办页'
-                : '打开后每天早上提醒一次, 不漏跟进',
-            style: const TextStyle(
-                fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
-          ),
-        ),
-      ],
-    );
-  }
-}
+// 「我的」页只保留字号 chips (中年刚需) + 「更多设置」入口行。低频的:
+//   - 清理图片缓存
+//   - 主题配色 (换肤)
+//   - 跟进提醒
+//   - 关于与帮助 (版本/帮助/自检/admin 工具/调试)
+//   均迁到 settings_page.dart (路由 /profile/settings)。
 
 // ============================================
 // 5. 账号与安全
@@ -919,106 +761,6 @@ class _AccountCard extends ConsumerWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ============================================
-// 6. 关于与帮助 (版本 / 更新 / 自检)
-// ============================================
-
-class _AboutCard extends ConsumerWidget {
-  final MeProfile profile;
-  const _AboutCard({required this.profile});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ProfileSection(
-      title: '关于与帮助',
-      icon: Icons.info_outline,
-      children: [
-        // 「当前版本」行可点 = 检查更新 (调 showUpdateSheet, 跟旧「检查更新」入口同一弹层)
-        // 2026-09-21 主人: 移除单独的「检查更新」入口 — 两个按钮调同一弹层 = 重复
-        const _VersionTile(),
-        ProfileTile(
-          icon: Icons.menu_book_outlined,
-          title: '使用帮助 / 数据安全',
-          subtitle: '怎么录客户、数据存在哪',
-          onTap: () => context.push('/profile/about'),
-        ),
-        ProfileTile(
-          icon: Icons.wifi_find,
-          title: '网络自检',
-          subtitle: '连不上时先点这里',
-          color: AppTheme.accent,
-          onTap: () => showDiagnosticsSheet(context, ref),
-        ),
-        // 管理员工具: 只有 admin 角色能看见 (内测人工收款核销 + 设置收款码)
-        // 客户端只是隐藏入口; 服务端每次写操作重新查 role
-        if (profile.user?.role == 'admin')
-          ProfileTile(
-            icon: Icons.admin_panel_settings_outlined,
-            title: '管理员工具',
-            subtitle: '用户管理 · 收款码设置 · 付款申请核销',
-            color: AppTheme.danger,
-            onTap: () => context.push('/profile/admin'),
-          ),
-        // 「全部用户与加盟商」入口**只放数据概览**那一处 (2026-09-21: 原来这里也有一份,
-        //   同一个页面两个入口 = 冗余; 管理员的主入口应该在最显眼的数据概览区)
-        // 服务地址: 开发/排障可见 (生产用户看到 IP 只会困惑)
-        if (kDebugMode)
-          ProfileTile(
-            icon: Icons.dns_outlined,
-            title: '服务地址 (调试)',
-            subtitle: ApiClient.baseUrl,
-            trailing: IconButton(
-              icon: const Icon(Icons.copy, size: AppSize.iconMd),
-              onPressed: () async {
-                await Clipboard.setData(
-                  ClipboardData(text: ApiClient.baseUrl),
-                );
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('已复制',
-                          style: TextStyle(fontSize: AppTheme.fontMd)),
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// 版本行 (本机版本, 点一下 = 检查更新)
-class _VersionTile extends ConsumerWidget {
-  const _VersionTile();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snap) {
-        final label = snap.hasData
-            ? 'v${snap.data!.version} (${snap.data!.buildNumber})'
-            : (snap.hasError ? '读取失败' : '读取中...');
-        return ProfileTile(
-          icon: Icons.verified_outlined,
-          title: '当前版本',
-          subtitle: '暖客宝 · 数据自托管',
-          trailing: Text(
-            label,
-            style: const TextStyle(
-              fontSize: AppTheme.fontSm,
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          onTap: () => showUpdateSheet(context, ref),
-        );
-      },
     );
   }
 }
@@ -1146,7 +888,7 @@ class _InviteCard extends ConsumerWidget {
   }
 }
 
-/// 字节数 → "22.2 MB" / "512 KB" (跟 _AboutCard 里「检查更新」按钮显示同口径)
+/// 字节数 → "22.2 MB" / "512 KB" (跟 settings_page 当前版本行的检查更新提示同口径)
 String _formatSize(int bytes) {
   if (bytes <= 0) return '—';
   if (bytes >= 1024 * 1024) {
