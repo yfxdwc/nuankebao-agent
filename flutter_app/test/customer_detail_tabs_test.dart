@@ -706,6 +706,22 @@ void main() {
       expect(find.textContaining('还没填健康信息'), findsOneWidget);
     });
 
+    testWidgets('编辑入口: 顶栏不再有全局编辑图标, 改到基础信息卡右上角',
+        (tester) async {
+      await _pumpPage(tester);
+
+      // 主人 2026-09-24: 「右上角的编辑图标需要删除……在客户基础信息卡片右上角显示编辑图标」
+      expect(find.byTooltip('编辑'), findsNothing,
+          reason: '顶栏(三个 Tab 都可见)的全局编辑图标要删掉');
+
+      // 基础信息卡在「管理」Tab → 记录 Tab 看不到
+      expect(find.byTooltip('编辑档案'), findsNothing);
+
+      await _tapTab(tester, 2); // 管理
+      expect(find.byTooltip('编辑档案'), findsOneWidget,
+          reason: '编辑入口应挂在基础信息卡右上角 (仅管理 Tab)');
+    });
+
     testWidgets('有过敏史 → 健康卡显示过敏史; 已注册 → 显示她的邀请码 (#6)',
         (tester) async {
       await _pumpPage(

@@ -187,13 +187,9 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
           orElse: () => const Text('客户详情'),
         ),
         toolbarHeight: AppSize.appBarHeight,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit, size: AppSize.iconXl),
-            tooltip: '编辑',
-            onPressed: () => context.push('/customers/$customerId/edit'),
-          ),
-        ],
+        // ⚠ 2026-09-24 主人拍: 编辑入口**不再**放顶栏 (顶栏图标在三个 Tab 都可见 =
+        //   "全局编辑页"的感觉); 改为「基础信息卡」右上角一个编辑图标
+        //   (见下方 _buildHeader —— 谁的信息在哪改, 入口就在哪)。
         // Tab 只在数据就绪后出现 (加载中/出错时没有东西可切, 显示 Tab 反而误导)
         bottom: asyncCustomer.maybeWhen(
           data: (_) => TabBar(
@@ -601,7 +597,10 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.cardPadding),
-        child: Column(
+        // Stack: 编辑图标浮在卡片右上角 (不挤占原有的居中布局)
+        child: Stack(
+          children: [
+            Column(
           children: [
             // 头像 + 右下角相机角标 (主人 2026-09-18 拍: 点它设置客户头像)
             GestureDetector(
@@ -857,6 +856,19 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
               '最后修改 ${DateFormat('yyyy-MM-dd HH:mm').format(c.updatedAt.toLocal())}',
               style: TextStyle(
                   fontSize: AppTheme.fontXs, color: context.tokens.textTertiary),
+            ),
+          ],
+        ),
+            // ★ 编辑档案入口 (2026-09-24 主人拍): 基础信息卡右上角
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                icon: const Icon(Icons.edit, size: AppSize.iconLg),
+                tooltip: '编辑档案',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => context.push('/customers/${c.id}/edit'),
+              ),
             ),
           ],
         ),
