@@ -40,6 +40,7 @@ import {
   resolveNodeAccount,
   linkAccountAndCustomer,
 } from "./franchisee-account";
+import { getUplineAncestors } from "./franchisee";
 
 /** Q3: 待确认超时 (小时) */
 export const PLACEMENT_TIMEOUT_HOURS = 72;
@@ -139,6 +140,8 @@ interface RawRequest {
   moveFid: bigint | null;
   /** promote 单: 认领的上级**已在 app 里**时的现存节点 id (null = 新建) */
   uplineFid: bigint | null;
+  /** ★ 直推者 (Phase B §6, migration 0027); null = 执行段回退到 initiatorFid (默认行为) */
+  referrerFid: bigint | null;
   targetParentFid: bigint;
   targetSide: "left" | "right";
   resultFid: bigint | null;
@@ -360,6 +363,17 @@ export interface CreatePlacementRequestInput {
   /** kind=move / unjoin: 被移动 / 被解除的节点 */
   /** unjoin: 要解除的加盟商节点 id */
   unjoinFid?: bigint;
+  /**
+   * ★ 直推者 (Phase B §6 E1, migration 0027, 主人 2026-09-25 拍):
+   *   落位发起时显式选的「直推者」(referrer), 默认 = initiatorFid (E1 默认行为)。
+   *   候选 = 落位后她的祖先链 = targetParentFid 本身 + targetParentFid 的上层直系 3 层
+   *   (与 getUplineAncestors(targetParentFid, 3) 同口径)。
+   *   - 不传 / null → 落库 NULL, 执行段回退到 initiatorFid (E1 默认)
+   *   - 显式传 → 必须在候选链里, 否则 400 (人话错误)
+   *   - admin 发起 (initiatorFid = null) → 默认走 targetParentFid (候选链首节点)
+   *   - 只对 kind='create' 生效; unjoin 不动 referrer; promote 不暴露该参数
+   */
+  referrerFid?: bigint;
 }
 
 /**
@@ -396,6 +410,50 @@ async function slotTaken(
  *   - 按 placement 口径: path + 'L.'/'R.' 且同樹 (不是 referrer_id)
  *   - 节点是软删的 / 找不到 → 视为两条都空 (调用方自己保证语义)
  */
+/**
+ * ★ 直推者候选集合 (Phase B §6 E1, 主人 2026-09-25 拍):
+ *   落位后她的「祖先链」= targetParentFid 本身 + 其上层直系 3 层
+ *   (与 src/lib/db/queries/franchisee.ts::getUplineAncestors 同口径)。
+ *
+ *   显式传的 referrerFid 必须在这个集合里 —— 否则 400 (人话错误)。
+ *
+ * - 调用方必须先在事务里加载过 parent (拿 id 用, 拿不到 referrerFid 也不必管)
+ * - 默认值口径:
+ *     · 未传 referrerFid → 默认 = initiatorFid (若她在候选集内) 否则 = targetParentFid
+ *     · admin 发起 (initiatorFid = null) → 默认 = targetParentFid (候选链首节点)
+ *
+ * 返回值: { candidateIds, defaultFid }
+ *   - candidateIds: Set<bigint> 包含 targetParentFid 本身 + 3 层祖先 (按"由近及远"顺序附加)
+ *   - defaultFid: bigint, 落库时写这一列; 若显式传了 referrerFid 且校验通过 → 写该值
+ */
+async function resolveReferrerCandidate(
+  tx: typeof db,
+  parentId: bigint,
+  explicitReferrerFid: bigint | null,
+  initiatorFid: bigint | null
+): Promise<{ candidateIds: Set<bigint>; defaultFid: bigint }> {
+  // 候选链 = parent 本身 + parent 的上层直系 3 层
+  const uplines = await getUplineAncestors(parentId, 3);
+  const candidateIds = new Set<bigint>([parentId, ...uplines.map((u) => BigInt(u.id))]);
+
+  let defaultFid: bigint;
+  if (explicitReferrerFid != null) {
+    if (!candidateIds.has(explicitReferrerFid)) {
+      throw new Error(
+        "直推者必须在落位后她的祖先链上 (目标点位父 + 其上层直系 3 层以内)",
+      );
+    }
+    defaultFid = explicitReferrerFid;
+  } else {
+    // 默认 = initiator (若在候选集) 否则 = parent 本身
+    defaultFid =
+      initiatorFid != null && candidateIds.has(initiatorFid)
+        ? initiatorFid
+        : parentId;
+  }
+  return { candidateIds, defaultFid };
+}
+
 async function freeSidesOf(
   exec: typeof db,
   node: { id: bigint; rootId: bigint | null; placementPath: string } | null
@@ -561,6 +619,8 @@ export async function createPlacementRequest(
     let unjoinNodeId: bigint | null = null;
     /** promote: 上级已在 app 里 → 直接复用他的节点 id (不新建副本) */
     let uplineFid: bigint | null = null;
+    /** ★ Phase B §6 E1: 落位发起时显式选的直推者; null = 默认 = initiatorFid */
+    let referrerFid: bigint | null = null;
 
     if (input.kind === "create") {
       // ★ P6 (ADR-0016 D1): 优先按**邀请码**找账号; 姓名/手机号直接取自账号
@@ -592,6 +652,18 @@ export async function createPlacementRequest(
         )
         .limit(1);
       if (dup) throw new Error("该手机号已经是加盟商了");
+
+      // ★ Phase B §6 E1: 直推者候选链 = parent + 其上层 3 层 (与 getUplineAncestors 同口径)
+      //   - 显式传 referrerFid 且不在链上 → 人话错误 (调用方路由会转 400)
+      //   - 未传 → 默认 = initiator (若在候选链) 否则 = parent 本身
+      //   - 发起人 admin (initiatorFid = null) → 默认走 parent 本身
+      const { defaultFid: pickedReferrer } = await resolveReferrerCandidate(
+        tx,
+        input.targetParentFid,
+        input.referrerFid ?? null,
+        initiatorFid,
+      );
+      referrerFid = pickedReferrer;
     } else if (input.kind === "promote") {
       // 向上认领上级 (主人 2026-09-21 拍 B2 + 本次补充):
       //   把现实里的**直接上级 U** 变成我上层。两种情形:
@@ -789,6 +861,8 @@ export async function createPlacementRequest(
         newNotesEncrypted,
         moveFid: unjoinNodeId,
         uplineFid,
+        // ★ Phase B §6 E1: 显式选直推者; NULL 仅出现在 unjoin/promote (那两种不暴露此参数)
+        referrerFid: input.kind === "create" ? referrerFid : null,
         targetParentFid: input.targetParentFid,
         targetSide: input.targetSide,
         expiresAt,
@@ -836,6 +910,7 @@ export async function createPlacementRequest(
           newPhoneHash: finalRow.newPhoneHash,
           moveFid: finalRow.moveFid,
           uplineFid: finalRow.uplineFid,
+          referrerFid: finalRow.referrerFid,
           targetParentFid: finalRow.targetParentFid,
           targetSide: finalRow.targetSide,
           resultFid: finalRow.resultFid,
@@ -1183,7 +1258,9 @@ async function executeRequest(tx: Tx, raw: RawRequest): Promise<ExecuteOutcome> 
         phoneHash: raw.newPhoneHash ?? `pending:${raw.id}`,
         // 推荐人 = 发起人 (设置者, 谁把她拉进来的); 点位父 = 目标父节点 (她落在谁下面)
         //   ⚠ 两者可以是两个人 (主人 2026-09-21 拍"拆栏"后各记各的)
-        referrerId: raw.initiatorFid,
+        //   ★ Phase B §6 E1 (migration 0027): 落位时显式选的直推者 (referrer_fid) 优先于发起人;
+        //     NULL 回退到 initiatorFid (默认行为)。搬树后 referrer 不在祖先链 → 不级联改 (E2, 保拆栏)。
+        referrerId: raw.referrerFid ?? raw.initiatorFid,
         placementParentId: parent.id,
         placementSide: raw.targetSide,
         placementPath: newPath,

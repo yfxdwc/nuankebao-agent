@@ -184,3 +184,98 @@ class PlacementRequest {
       ? '管理员设置, 免多方确认'
       : '$approvedCount/$requiredCount 方已确认';
 }
+
+// ============================================
+// 直推者候选 (Phase B §6 E1, docs/customer-identity-system.md)
+// GET /api/franchisees/placement-requests/candidates?targetParentId=xxx
+// 返回落位后**她的祖先链** = targetParent 本身 + 其上层直系 3 层
+// ============================================
+
+/// 单个候选直推者
+class ReferrerCandidate {
+  /// 节点 id (字符串大整数)
+  final String id;
+
+  /// 姓名 (前端直接展示)
+  final String name;
+
+  /// 该候选的绝对层号 (相对所在树根, 根=0)
+  final int depth;
+
+  /// 该候选相对 targetParent 的层数 (0 = 自己, 1 = 直接上层, 2 = 上 2 层, 3 = 上 3 层)
+  final int level;
+
+  /// 是否就是发起人 (actor.fid == this.id); 前端默认高亮「我」
+  final bool isSelf;
+
+  const ReferrerCandidate({
+    required this.id,
+    required this.name,
+    required this.depth,
+    required this.level,
+    required this.isSelf,
+  });
+
+  factory ReferrerCandidate.fromJson(Map<String, dynamic> json) {
+    return ReferrerCandidate(
+      id: (json['id'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '?',
+      depth: (json['depth'] as num?)?.toInt() ?? 0,
+      level: (json['level'] as num?)?.toInt() ?? 0,
+      isSelf: json['isSelf'] == true,
+    );
+  }
+
+  /// 人话标签 (前端展示用)
+  ///   level=0: 目标点位父 (「张姐」)
+  ///   level=1: 「张姐的直接上级 — 李总」
+  ///   level=2: 「李总的上级 — 王总」
+  String get levelLabel {
+    switch (level) {
+      case 0:
+        return '目标点位父';
+      case 1:
+        return '直接上层';
+      case 2:
+        return '上 2 层';
+      case 3:
+        return '上 3 层';
+      default:
+        return '上层 #$level';
+    }
+  }
+}
+
+/// 直推者候选响应
+class ReferrerCandidatesResponse {
+  /// targetParent 的 id (字符串)
+  final String targetParentId;
+
+  /// 候选列表 (由近到远: targetParent 自身 → 上 1 层 → 上 2 层 → 上 3 层)
+  final List<ReferrerCandidate> candidates;
+
+  /// 服务端推荐默认直推者 (发起人在链内 → 她; 否则 = targetParent)
+  final String defaultReferrerFid;
+
+  /// 发起人 (actor.fid) 是否在候选链内 (admin 也不该"自己推荐自己")
+  final bool actorInCandidates;
+
+  const ReferrerCandidatesResponse({
+    required this.targetParentId,
+    required this.candidates,
+    required this.defaultReferrerFid,
+    required this.actorInCandidates,
+  });
+
+  factory ReferrerCandidatesResponse.fromJson(Map<String, dynamic> json) {
+    final list = (json['candidates'] as List?) ?? const [];
+    return ReferrerCandidatesResponse(
+      targetParentId: (json['targetParentId'] as String?) ?? '',
+      candidates: list
+          .map((e) => ReferrerCandidate.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      defaultReferrerFid: (json['defaultReferrerFid'] as String?) ?? '',
+      actorInCandidates: json['actorInCandidates'] == true,
+    );
+  }
+}

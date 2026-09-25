@@ -1352,6 +1352,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
             side: side,
             newReferralCode: code,
             newName: name.isEmpty ? null : name,
+            // ★ Phase B §6 E1: 直推者 (本流程不用 PlacementTargetSheet → 默认 = null
+            //   → 服务端按 E1 默认 = 发起人取值)
+            // referrerFid: null,
           );
       if (!mounted) return;
       ref.invalidate(placementToConfirmCountProvider);

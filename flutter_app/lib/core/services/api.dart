@@ -586,6 +586,13 @@ class FranchiseeService {
   // ==========================================
 
   /// 发起落位/移动申请 (需要三方确认才真正生效)
+  ///
+  /// ★ Phase B §6 E1 (客户标识体系, docs/customer-identity-system.md):
+  ///   - [referrerFid]: 落位发起时显式选的直推者 (default = 发起人)
+  ///   - 不传 → 服务端默认 = 发起人 (admin 发起时回退到 targetParent 本身)
+  ///   - 候选 = 落位后她的祖先链 (targetParent + 其上层直系 3 层)
+  ///     不在链上 → 服务端 400 (人话错误)
+  ///   - unjoin 不接受此参数 (kind='unjoin' 时静默忽略)
   Future<PlacementRequest> createPlacementRequest({
     required String targetParentId,
     required String side,
@@ -595,6 +602,8 @@ class FranchiseeService {
     String? newPhone,
     String? newNotes,
     String? unjoinFid,
+    /// ★ Phase B §6 E1: 显式选的直推者 (字符串大整数 fid); 不传 = 服务端默认
+    String? referrerFid,
   }) async {
     final kind = unjoinFid != null ? 'unjoin' : 'create';
     final res = await _dio.post('/franchisees/placement-requests', data: {
@@ -606,8 +615,28 @@ class FranchiseeService {
       if (newPhone != null) 'newPhone': newPhone,
       if (newNotes != null) 'newNotes': newNotes,
       if (unjoinFid != null) 'unjoinFid': unjoinFid,
+      // ★ unjoin 静默忽略 referrerFid (后端拒收, 前端不传)
+      if (referrerFid != null && kind == 'create') 'referrerFid': referrerFid,
     });
     return PlacementRequest.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// ★ Phase B §6 E1: 落位时「直推者」候选链 (供 Flutter 选择器使用)
+  ///
+  /// GET /api/franchisees/placement-requests/candidates?targetParentId=xxx
+  /// 返回 { targetParentId, candidates: [{id,name,depth,level,isSelf}...], defaultReferrerFid, actorInCandidates }
+  ///
+  /// - candidates 由近到远: targetParent 本身 (level=0) → 上 1 层 → 上 2 层 → 上 3 层
+  /// - isSelf = 该候选是否就是发起人 (用于前端默认高亮「我」)
+  /// - defaultReferrerFid = 服务端推荐值 (发起人在链内 → 她; 否则 = targetParent)
+  Future<ReferrerCandidatesResponse> getReferrerCandidates({
+    required String targetParentId,
+  }) async {
+    final res = await _dio.get(
+      '/franchisees/placement-requests/candidates',
+      queryParameters: {'targetParentId': targetParentId},
+    );
+    return ReferrerCandidatesResponse.fromJson(res.data as Map<String, dynamic>);
   }
 
   /// 认领我的「上层点位」= 现实里的直接上级 (主人 2026-09-21 拍 B2 + 补充)

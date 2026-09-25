@@ -1426,6 +1426,8 @@ Future<void> _promoteCustomerToFranchisee(
           side: target.side,
           newReferralCode: code,
           newName: c.name,
+          // ★ Phase B §6 E1: 直推者从 PlacementTargetSheet 透传 (null = 服务端默认)
+          referrerFid: target.referrerFid,
         );
     if (!context.mounted) return;
     ref.invalidate(placementToConfirmCountProvider);

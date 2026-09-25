@@ -4,27 +4,42 @@
 // ============================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/franchisee.dart';
+import '../models/placement_request.dart';
+import '../services/api.dart';
+import '../providers/service_providers.dart';
 import '../theme/app_theme.dart';
 
 import '../theme/tokens.g.dart';
 // ============================================
 // 「发展为加盟商」选点位弹层 (主人 2026-09-18 拍 Q1)
-// 先选上级节点 → 再选 A线/B线 → 返回 PlacementTarget 供上层发起三方确认
+// 先选上级节点 → 再选 A线/B线 → 可选「直推者」 → 返回 PlacementTarget 供上层发起三方确认
 // ============================================
+// ★ Phase B §6 E1 (客户标识体系): 「直推者」在落位发起时显式选 (默认 = 发起人)
+//   - 选完点位父后, 拉 /api/franchisees/placement-requests/candidates
+//   - 候选链 = targetParent + 上层直系 3 层
+//   - 默认选项 = 服务端返回的 defaultReferrerFid (= 发起人 若在链内, 否则 = targetParent)
 
 class PlacementTarget {
   final String parentId;
   final String parentName;
   final String side; // left | right
-  const PlacementTarget(this.parentId, this.parentName, this.side);
+  /// ★ Phase B §6 E1: 显式选的直推者 (可选, null = 服务端默认 = 发起人)
+  final String? referrerFid;
+  const PlacementTarget(
+    this.parentId,
+    this.parentName,
+    this.side, {
+    this.referrerFid,
+  });
 }
 
 /// 选上级点位 (+ A线/B线) 的通用弹层
 ///   - 客户详情「发展为加盟商」: title = 发展「张三」为加盟商
 ///   - 加盟商详情「移动点位」: title = 把「李四」挪到新的点位
-class PlacementTargetSheet extends StatefulWidget {
+class PlacementTargetSheet extends ConsumerStatefulWidget {
   final FranchiseeTreeNode tree;
   final String title;
   final String hint;
@@ -35,13 +50,19 @@ class PlacementTargetSheet extends StatefulWidget {
   });
 
   @override
-  State<PlacementTargetSheet> createState() => PlacementTargetSheetState();
+  ConsumerState<PlacementTargetSheet> createState() => PlacementTargetSheetState();
 }
 
-class PlacementTargetSheetState extends State<PlacementTargetSheet> {
+class PlacementTargetSheetState extends ConsumerState<PlacementTargetSheet> {
   String _search = '';
   FranchiseeTreeNode? _picked;
   String _side = 'left';
+
+  /// ★ Phase B §6 E1: 直推者候选 (异步拉, 选中点位父后加载)
+  ReferrerCandidatesResponse? _referrerCandidates;
+  String? _referrerFid; // 选中的 referrerFid
+  bool _loadingCandidates = false;
+  String? _candidatesError;
 
   List<({FranchiseeTreeNode node, int depth})> _flatten(
     FranchiseeTreeNode root,
@@ -66,6 +87,36 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
     return hasLeft && hasRight;
   }
 
+  /// ★ Phase B §6 E1: 选了点位父后, 异步加载「直推者」候选链
+  ///
+  /// ★ 失败不影响主流程: 选不到就退回「默认 = 不传 (服务端给)」
+  Future<void> _loadReferrerCandidates(String parentId) async {
+    setState(() {
+      _loadingCandidates = true;
+      _candidatesError = null;
+      _referrerCandidates = null;
+      _referrerFid = null;
+    });
+    try {
+      // 直接用 FranchiseeService (跟其他调用一致)
+      final dio = ref.read(dioProvider);
+      final api = FranchiseeService(dio);
+      final resp = await api.getReferrerCandidates(targetParentId: parentId);
+      if (!mounted) return;
+      setState(() {
+        _referrerCandidates = resp;
+        _referrerFid = resp.defaultReferrerFid;
+        _loadingCandidates = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _candidatesError = e.toString();
+        _loadingCandidates = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final flat = _flatten(widget.tree);
@@ -83,7 +134,7 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
       builder: (context, scrollController) => Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(AppSpace.s16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(AppSpace.s16, AppSpace.s16, AppSpace.s16, AppSpace.s8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -154,14 +205,18 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
                           : '第 ${e.depth} 层 · ${e.node.placementSide == 'left' ? 'A线' : 'B线'}',
                       style: const TextStyle(fontSize: AppTheme.fontXs),
                     ),
-                    onTap: () => setState(() => _picked = e.node),
+                    onTap: () {
+                      setState(() => _picked = e.node);
+                      // ★ Phase B §6 E1: 选了点位父 → 拉直推者候选
+                      _loadReferrerCandidates(e.node.id);
+                    },
                   );
                 },
               ),
             ),
           ] else ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpace.s16, 8, 16, 0),
+              padding: const EdgeInsets.fromLTRB(AppSpace.s16, AppSpace.s8, AppSpace.s16, AppSpace.s0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -182,20 +237,34 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
                     showSelectedIcon: false,
                     onSelectionChanged: (v) => setState(() => _side = v.first),
                   ),
+                  // ★ Phase B §6 E1: 直推者选择区
+                  const SizedBox(height: AppSpace.s16),
+                  _buildReferrerPicker(context),
                   const SizedBox(height: AppSpace.s16),
                   FilledButton.icon(
                     onPressed: () => Navigator.of(context).pop(
-                      PlacementTarget(_picked!.id, _picked!.name, _side),
+                      PlacementTarget(
+                        _picked!.id,
+                        _picked!.name,
+                        _side,
+                        referrerFid: _referrerFid,
+                      ),
                     ),
                     icon: const Icon(Icons.send, size: AppSize.iconMd),
                     label: const Text('提交 (走三方确认)',
                         style: TextStyle(fontSize: AppTheme.fontMd)),
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 56),
+                      minimumSize: const Size(double.infinity, AppSpace.s56),
                     ),
                   ),
                   TextButton(
-                    onPressed: () => setState(() => _picked = null),
+                    onPressed: () {
+                      setState(() {
+                        _picked = null;
+                        _referrerCandidates = null;
+                        _referrerFid = null;
+                      });
+                    },
                     child: const Text('换个上级',
                         style: TextStyle(fontSize: AppTheme.fontMd)),
                   ),
@@ -203,6 +272,198 @@ class PlacementTargetSheetState extends State<PlacementTargetSheet> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// ★ Phase B §6 E1: 直推者选择 picker UI
+  ///
+  /// - 加载中: 转圈
+  /// - 加载失败: 不显示 (默认 = 不传 referrerFid, 服务端给)
+  /// - 加载成功: 弹出底部选择器 (Bottomsheet) 让用户从「祖先链」里挑一个
+  ///   - 默认选项 = 发起人 (若有) 否则 = targetParent 本身 (服务端给)
+  Widget _buildReferrerPicker(BuildContext context) {
+    if (_loadingCandidates) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: AppSpace.s16,
+            height: AppSpace.s16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: AppSpace.s8),
+          Text(
+            '加载直推者选项…',
+            style: TextStyle(
+              fontSize: AppTheme.fontXs,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ],
+      );
+    }
+    if (_candidatesError != null) {
+      // 静默退化: 不显示选择器 (默认 = 不传, 服务端 fallback)
+      return const SizedBox.shrink();
+    }
+    final resp = _referrerCandidates;
+    if (resp == null || resp.candidates.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final pickedName = resp.candidates
+        .firstWhere(
+          (c) => c.id == _referrerFid,
+          orElse: () => resp.candidates.first,
+        )
+        .name;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.person_add_alt_1,
+                size: AppSize.iconMd, color: AppTheme.textSecondary),
+            const SizedBox(width: AppSpace.s8),
+            Text(
+              '直推者 (默认 = 发起人)',
+              style: TextStyle(
+                fontSize: AppTheme.fontXs,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.s4),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.person, size: AppSize.iconMd),
+          label: Text(
+            pickedName,
+            style: const TextStyle(fontSize: AppTheme.fontMd),
+          ),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, AppSpace.s48),
+            alignment: Alignment.centerLeft,
+          ),
+          onPressed: () async {
+            final pickedId = await showModalBottomSheet<String>(
+              context: context,
+              isScrollControlled: true,
+              builder: (ctx) => _ReferrerPickerSheet(
+                candidates: resp.candidates,
+                currentId: _referrerFid,
+              ),
+            );
+            if (pickedId != null) {
+              setState(() => _referrerFid = pickedId);
+            }
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// ★ Phase B §6 E1: 「直推者」选择底部弹层
+///   - 列表 = 候选链 (由近到远)
+///   - 每行: 姓名 + level label + 「我」徽章 (若是自己)
+///   - 当前选中高亮
+class _ReferrerPickerSheet extends StatelessWidget {
+  final List<ReferrerCandidate> candidates;
+  final String? currentId;
+  const _ReferrerPickerSheet({
+    required this.candidates,
+    required this.currentId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      builder: (ctx, scrollController) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.s16, AppSpace.s16, AppSpace.s16, AppSpace.s8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '选直推者',
+                  style: const TextStyle(
+                    fontSize: AppTheme.fontLg,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpace.s4),
+                Text(
+                  '候选 = 落位后她的祖先链 (目标点位父 + 其上层直系 3 层)',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontXs,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: scrollController,
+              itemCount: candidates.length,
+              itemBuilder: (_, i) {
+                final c = candidates[i];
+                final isSelected = c.id == currentId;
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor:
+                        isSelected ? AppTheme.primaryLight : AppTheme.bgCard,
+                    child: Text(
+                      c.name.isNotEmpty ? c.name[0] : '?',
+                      style: const TextStyle(color: AppTheme.primaryDark),
+                    ),
+                  ),
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          c.name,
+                          style: const TextStyle(
+                            fontSize: AppTheme.fontMd,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (c.isSelf) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpace.s6, vertical: AppSpace.s2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryLight,
+                            borderRadius: BorderRadius.circular(AppRadius.r8),
+                          ),
+                          child: const Text(
+                            '我',
+                            style: TextStyle(
+                              fontSize: AppTheme.fontXs,
+                              color: AppTheme.primaryDark,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  subtitle: Text(
+                    '${c.levelLabel} · 第 ${c.depth} 层',
+                    style: const TextStyle(fontSize: AppTheme.fontXs),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle, color: AppTheme.primary)
+                      : null,
+                  onTap: () => Navigator.of(ctx).pop(c.id),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

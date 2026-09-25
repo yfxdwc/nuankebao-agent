@@ -202,6 +202,14 @@ export const franchisePlacementRequest = pgTable(
     //   null = 上级不在 app 里 → 执行时才新建他的节点 (用 new_name/new_phone_*)
     uplineFid: bigint("upline_fid", { mode: "bigint" }),
 
+    // ★ 直推者 (Phase B 客户标识体系 §6, migration 0027, 主人 2026-09-25 拍 E1):
+    //   - 落位发起时显式选的直推者; NULL = 执行段回退到 initiatorFid (默认行为)
+    //   - 候选 = 落位后她的祖先链 (targetParentFid 本身 + 其上层直系 3 层,
+    //     与 src/lib/db/queries/franchisee.ts::getUplineAncestors 同口径)
+    //   - 写入时校验 (不在链上 → 400); 搬树后不在链上不级联改 (保 AGENTS §6.8 拆栏)
+    //   - 不挂审计触发器 (与 new_user_id 同口径: 结构列, 留痕靠 placement_request 自身审计)
+    referrerFid: bigint("referrer_fid", { mode: "bigint" }),
+
     // 目标点位 = 父节点 + 左/右
     //   promote: target_parent_fid = **锚点** (要被上移的现根节点 id), 不是"未来的父"
     targetParentFid: bigint("target_parent_fid", { mode: "bigint" }).notNull(),
@@ -234,6 +242,8 @@ export const franchisePlacementRequest = pgTable(
     statusIdx: index("idx_placement_status").on(table.status, table.expiresAt),
     moveFidIdx: index("idx_placement_move_fid").on(table.moveFid),
     uplineFidIdx: index("idx_placement_upline_fid").on(table.uplineFid),
+    // ★ Phase B: 直推者索引 (供巡检 / 候选校验用)
+    referrerFidIdx: index("idx_placement_referrer_fid").on(table.referrerFid),
   })
 );
 

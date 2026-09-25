@@ -53,6 +53,13 @@ export async function POST(request: NextRequest) {
     unjoinFid?: string;
     /** @deprecated 老客户端字段 (语义 = unjoin 主体); 新代码用 unjoinFid */
     moveFid?: string;
+    /**
+     * ★ Phase B §6 E1 (migration 0027): 落位发起时显式选的直推者 (大整数 fid 字符串)。
+     *   - 仅 kind='create' 生效; unjoin/promote 不传
+     *   - 必须落在落位后她的祖先链 (targetParentFid + 上层直系 3 层) → 否则 400
+     *   - 未传 → 默认 = 发起人 (admin 发起回退到 targetParentFid)
+     */
+    referrerFid?: string;
   };
   try {
     body = await request.json();
@@ -89,6 +96,21 @@ export async function POST(request: NextRequest) {
   }
   const side = body.side === "right" ? "right" : "left";
 
+  // ★ Phase B §6 E1: referrerFid 校验 (正整数; 只对 create 透传; unjoin/promote 忽略)
+  let referrerFid: bigint | undefined = undefined;
+  if (body.referrerFid != null && body.referrerFid !== "") {
+    if (!/^\d+$/.test(body.referrerFid)) {
+      return NextResponse.json({ error: "referrerFid 必须是正整数" }, { status: 400 });
+    }
+    if (kind !== "create") {
+      return NextResponse.json(
+        { error: "referrerFid 只对「创建加盟」(kind=create) 生效" },
+        { status: 400 },
+      );
+    }
+    referrerFid = BigInt(body.referrerFid);
+  }
+
   try {
     const view = await createPlacementRequest(
       {
@@ -109,6 +131,7 @@ export async function POST(request: NextRequest) {
           unjoinFidRaw && /^\d+$/.test(unjoinFidRaw)
             ? BigInt(unjoinFidRaw)
             : undefined,
+        referrerFid,
       },
       getAuditContextFromRequest(request, session)
     );
