@@ -10,9 +10,18 @@
 //
 // 结构镜像 src/app/api/wellness-records/[id]/route.ts: auth + isAuthSkipped + zod +
 //   getAuditContextFromRequest + 400/404/500 分支; params 是 Promise<{id:string}>。
+//
+// 🔒 IDOR 修复 (R-12 同源, 2026-09-25, 见 docs/customer-idor-audit.md §2):
+//   之前 GET/PATCH/DELETE 全部直接 `getInteractionById(BigInt(id))`, 任何登录者都
+//   可读 / 改 / 删全表互动记录 (interaction 没有 ACL, 挂的是 customer_id)。
+//   修法 (跟 wellness-records/[id] 同口径): 先读出记录的 customerId, 再对
+//   `customer.id` 做 `customerRbacFilter` 行级过滤 — 命中不到 → **404** (不泄漏
+//   存在性, 不外推到 403)。customerId 拿不到 (记录不存在) 也 → 404 (同样的存在性
+//   防御)。
 // ============================================
 
 import { NextRequest, NextResponse } from "next/server";
+import type { Session } from "next-auth";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { z } from "zod";
@@ -21,6 +30,8 @@ import {
   updateInteraction,
   deleteInteraction,
 } from "@/lib/db/queries/interaction";
+import { getCustomerById } from "@/lib/db/queries/customer";
+import { customerRbacFilter, getRbacContextForSession } from "@/lib/auth/rbac";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 
 const UpdateSchema = z
@@ -40,6 +51,33 @@ const UpdateSchema = z
     { message: "至少需要提供一个字段" }
   );
 
+/**
+ * IDOR 闸门: 「这条互动所在的客户必须在 viewer 可见范围内」。
+ *   命中不到 (记录不存在 OR 不在范围) 一律 404 — 不区分两者, 不暴露存在性。
+ *
+ * 为什么不改 query 函数签名加 scope:
+ *   `getInteractionById` 也被别处间接复用 (e.g. follow-up 分析), 改签名会牵动
+ *   既有调用点; route 层是 IDOR 暴露面, 把闸门装在 route 即可, 内部仍复用原函数。
+ */
+async function guardInteractionScope(
+  interactionId: bigint,
+  session: Session | null
+): Promise<{ ok: true } | { ok: false; res: NextResponse }> {
+  const item = await getInteractionById(interactionId);
+  if (!item) {
+    return { ok: false, res: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+  }
+  const rbacCtx = await getRbacContextForSession(session);
+  const visible = await getCustomerById(BigInt(item.customerId), {
+    viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
+    scope: rbacCtx ? customerRbacFilter(rbacCtx) : undefined,
+  });
+  if (!visible) {
+    return { ok: false, res: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+  }
+  return { ok: true };
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -53,6 +91,9 @@ export async function GET(
   if (!/^\d+$/.test(id)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
+
+  const guard = await guardInteractionScope(BigInt(id), session);
+  if (!guard.ok) return guard.res;
 
   const item = await getInteractionById(BigInt(id));
   if (!item) {
@@ -74,6 +115,10 @@ export async function PATCH(
   if (!/^\d+$/.test(id)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
+
+  // 先 scope check — 命中不到就连 UPDATE 都不发, 避免 race 内还改到
+  const guard = await guardInteractionScope(BigInt(id), session);
+  if (!guard.ok) return guard.res;
 
   try {
     const body = await request.json();
@@ -114,6 +159,9 @@ export async function DELETE(
   if (!/^\d+$/.test(id)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
+
+  const guard = await guardInteractionScope(BigInt(id), session);
+  if (!guard.ok) return guard.res;
 
   const ctx = getAuditContextFromRequest(request, session);
   const success = await deleteInteraction(BigInt(id), ctx);

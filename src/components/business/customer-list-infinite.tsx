@@ -66,7 +66,13 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
         limit: String(pageSize),
       });
       if (search) params.set("search", search);
-      const res = await fetch(`/api/customers?${params}`);
+      const res = await fetch(`/api/customers?${params}`, {
+        // R-10 兜底 (2026-09-25): 撤销 / 转移 / 合并 / 改归属后, 浏览器不缓存旧列表
+        //   fetch 默认会按 URL 走 disk cache (HIT 304), 导致用户看到「改了但没变」。
+        //   no-store = 不入浏览器缓存也不校验, 每次都重新打后端。
+        //   ⚠️ 不等同于 SSR 失效 (server 仍走 Next 缓存), 只兜住 client-side fetch 这一层。
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setItems((prev) => [...prev, ...data.items]);

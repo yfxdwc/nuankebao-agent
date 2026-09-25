@@ -6,6 +6,8 @@ import {
   listWellnessRecords,
   createWellnessRecord,
 } from "@/lib/db/queries/wellness-record";
+import { getCustomerById } from "@/lib/db/queries/customer";
+import { customerRbacFilter, getRbacContextForSession } from "@/lib/auth/rbac";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 
 const ConditionSchema = z.record(z.string(), z.unknown());
@@ -43,6 +45,30 @@ export async function GET(request: NextRequest) {
   const customerId = searchParams.get("customerId") ?? undefined;
   const limit = parseInt(searchParams.get("limit") ?? "20");
   const offset = parseInt(searchParams.get("offset") ?? "0");
+
+  // 🔒 IDOR 修复 (R-12 同源, 2026-09-25, 见 docs/customer-idor-audit.md §2 / §3):
+  //   之前 customerId 可选, 不传时 `listWellnessRecords({})` 无过滤返回**全库**养生
+  //   记录 (含加密的 preCondition / postCondition / processNote / customerFeedback
+  //   解密后 → 客户隐私泄漏)。这是本次审计里**最严重**的越权面。
+  //   修法: 强制要求 customerId; 再对该 customer 做 `customerRbacFilter` 行级过滤;
+  //   命中不到 → 404 (不泄漏存在性)。
+  //   ⚠️ 契约微调: 之前不传 customerId 可用 (泄漏!), 现在要求传。Flutter 侧
+  //   `WellnessRecordService.list({ customerId, limit })` 始终传 customerId,
+  //   现状 (search) 0 个调用点传 null; web admin 直接调 query 函数不走 API。
+  if (!customerId) {
+    return NextResponse.json({ error: "customerId required" }, { status: 400 });
+  }
+  if (!/^\d+$/.test(customerId)) {
+    return NextResponse.json({ error: "Invalid customerId" }, { status: 400 });
+  }
+  const rbacCtx = await getRbacContextForSession(session);
+  const visible = await getCustomerById(BigInt(customerId), {
+    viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
+    scope: rbacCtx ? customerRbacFilter(rbacCtx) : undefined,
+  });
+  if (!visible) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const result = await listWellnessRecords({ customerId, limit, offset });
   return NextResponse.json(result);

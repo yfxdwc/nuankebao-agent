@@ -5,7 +5,11 @@ import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { db } from "@/lib/db";
 import { user as userTable } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { getCustomerOwnership } from "@/lib/db/queries/customer";
+import {
+  getCustomerById,
+  getCustomerOwnership,
+} from "@/lib/db/queries/customer";
+import { customerRbacFilter, getRbacContextForSession } from "@/lib/auth/rbac";
 import { logger } from "@/lib/errors";
 
 /**
@@ -44,6 +48,20 @@ export async function GET(
       .from(userTable)
       .where(eq(userTable.id, BigInt(session.user.id)))
       .limit(1);
+
+    // R-12 同源 (2026-09-25, 见 docs/customer-idor-audit.md §2): 越权面。
+    // 之前直接 getCustomerOwnership(id, ...) → 任何登录者都能查任意客户的归属状态
+    // (拿到 ownerName + canClaim 字段 = 信息泄漏 + 抢占判断依据)。
+    // 修法: 跟 bind-account 同口径 — `getCustomerById(id, { scope })` 命中不到 → 404。
+    // ⚠️ 必须在 getCustomerOwnership 之前, 否则越权拿到 owner_name/canClaim 后才 404 已晚。
+    const rbacCtx = await getRbacContextForSession(session);
+    const visible = await getCustomerById(BigInt(id), {
+      viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
+      scope: rbacCtx ? customerRbacFilter(rbacCtx) : undefined,
+    });
+    if (!visible) {
+      return NextResponse.json({ error: "客户不存在" }, { status: 404 });
+    }
 
     const ownership = await getCustomerOwnership(
       BigInt(id),
