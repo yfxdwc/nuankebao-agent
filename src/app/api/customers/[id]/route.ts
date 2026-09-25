@@ -71,6 +71,8 @@ export async function GET(
   const customer = await getCustomerById(BigInt(id), {
     viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
     scope,
+    // Phase D (§3.4 分级表): 有 viewer 才能算 ownership → 推送来的客户明文, 其余按表 mask
+    viewerUserId: rbacCtx?.userId ?? null,
   });
   if (!customer) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -101,6 +103,7 @@ export async function PATCH(
     const customer = await updateCustomer(BigInt(id), input, ctx, {
       viewerFranchiseeId: rbacCtx?.franchiseeId ?? null,
       scope: rbacCtx ? customerRbacFilter(rbacCtx) : undefined,
+      viewerUserId: rbacCtx?.userId ?? null,
     });
 
     if (!customer) {

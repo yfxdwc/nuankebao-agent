@@ -958,8 +958,10 @@ describe("list口径 vs single口径 一致性 (防漂移回归)", () => {
     expect(sqlText).toContain("placement_path = ''");
     expect(sqlText).toContain("placement_path <> ''");
     expect(sqlText).toContain("placement_path LIKE");
-    // (4) ownedByUpl: 恒 false
-    expect(sqlText).toMatch(/,\s*false\s*,/);
+    // (4) ownedByUpl: Phase D 起 = customer_share 推送判定 (不再是恒 false)
+    expect(sqlText).toContain("customer_share");
+    expect(sqlText).toContain("cs.to_user_id");
+    expect(sqlText).toContain("cs.revoked_at IS NULL");
     // (5) ownerIdCol / acquireSourceCol / sourceReferrerNameCol: 直接读列
     expect(sqlText).toContain('"customer"."owner_id"');
     expect(sqlText).toContain('"customer"."acquire_source"');

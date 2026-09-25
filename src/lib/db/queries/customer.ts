@@ -39,6 +39,7 @@ import type { CustomerIdentity } from "@/lib/customer/identity";
 import {
   renderIdentitySelectFields,
   identityFromFlags,
+  resolveCustomerIdentity,
   type IdentityFlags,
   type ViewerContext,
 } from "@/lib/customer/identity";
@@ -557,11 +558,19 @@ export async function createCustomer(
   // 新建客户可能同时是「我的下级加盟商」(同手机号有 franchisee 记录) → 类型一次算准
   // 会员标识同理: 这个手机号可能已经是会员账号 (建号即建档, ADR-0013)
   const flags = await customerFlagsByCustomerId(row.id);
+  // ★ Phase D: 建档人 = 归属人 (ADR-0015 Q11) → ownership = "mine" → 明文
+  const identity = await resolveCustomerIdentity(row.id, {
+    userId: createdBy,
+    franchiseeId: viewerFranchiseeId,
+    customerId: null,
+  });
   return toView(
     row,
     await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.id),
     flags.isMember,
-    flags.hasAccount
+    flags.hasAccount,
+    flags.accountReferralCode,
+    identity
   );
 }
 
@@ -570,6 +579,8 @@ export async function getCustomerById(
   options?: {
     includeDeleted?: boolean;
     viewerFranchiseeId?: bigint | null;
+    /** 登录者 user.id (Phase D: 用于算 ownership → 手机号分级); null = 无 viewer 上下文 */
+    viewerUserId?: bigint | null;
     /**
      * 行级过滤 (ADR-0015 步骤 1/IDOR 修复): 不是「我的客户」→ 当不存在 (404)
      *   undefined = 不过滤 (admin / dev skip-auth 无身份)
@@ -591,12 +602,27 @@ export async function getCustomerById(
 
   if (!row) return null;
   const flags = await customerFlagsByCustomerId(row.id);
+  // ★ Phase D: 有 viewer 上下文 → 走统一真相源算 ownership (决定手机号分级);
+  //   无任何 viewer 上下文 (admin server 页面直调) → 保持 Phase D 前的明文行为
+  const viewerUserId = options?.viewerUserId ?? null;
+  const identity =
+    viewerUserId != null
+      ? await resolveCustomerIdentity(id, {
+          userId: viewerUserId,
+          franchiseeId: options?.viewerFranchiseeId ?? null,
+          customerId: null,
+        })
+      : null;
+  const forcePlaintext =
+    viewerUserId == null && options?.scope === undefined && !options?.viewerFranchiseeId;
   return toView(
     row,
     await isMyDirectDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.id),
     flags.isMember,
     flags.hasAccount,
-    flags.accountReferralCode
+    flags.accountReferralCode,
+    identity,
+    forcePlaintext
   );
 }
 
@@ -830,7 +856,12 @@ export async function updateCustomer(
   id: bigint,
   input: UpdateCustomerInput,
   ctx: AuditContext,
-  options?: { viewerFranchiseeId?: bigint | null; scope?: SQL | undefined }
+  options?: {
+    viewerFranchiseeId?: bigint | null;
+    scope?: SQL | undefined;
+    /** 登录者 user.id (Phase D: 算 ownership → 手机号分级) */
+    viewerUserId?: bigint | null;
+  }
 ): Promise<CustomerView | null> {
   const viewerFranchiseeId = options?.viewerFranchiseeId ?? null;
   const updateData: Partial<NewCustomer> = { updatedAt: new Date() };
@@ -927,11 +958,26 @@ export async function updateCustomer(
 
   if (!row) return null;
   const flags = await customerFlagsByCustomerId(row.id);
+  // ★ Phase D: 同 getCustomerById —— 有 viewer 上下文走分级, 无则保持明文
+  const updateViewerId = options?.viewerUserId ?? null;
+  const identity =
+    updateViewerId != null
+      ? await resolveCustomerIdentity(id, {
+          userId: updateViewerId,
+          franchiseeId: viewerFranchiseeId,
+          customerId: null,
+        })
+      : null;
+  const forcePlaintext =
+    updateViewerId == null && options?.scope === undefined && !viewerFranchiseeId;
   return toView(
     row,
     await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.id),
     flags.isMember,
-    flags.hasAccount
+    flags.hasAccount,
+    flags.accountReferralCode,
+    identity,
+    forcePlaintext
   );
 }
 

@@ -99,21 +99,21 @@ describe("rbac.customerRbacFilter — 行级过滤入口", () => {
     expect(filter).toBeDefined();
     const q = dialect.sqlToQuery(filter!);
     expect(q.sql).toContain("owner_id");
-    expect(q.sql).toContain("false");
+    // Phase D (D9 + §3.4 前置守卫): 无节点 → 只给 (a); 不再出现子树/推送段
+    //   (旧断言 `toContain("false")` 属两段式形状, 已过时)
+    expect(q.sql).not.toContain("placement_path");
+    expect(q.sql).not.toContain("customer_share");
     expect(q.params).toEqual([101n]);
   });
 
-  it("manager 仍按门店 (⚠ store 已冻结, ADR-0015 Q8; 无店 = 看不到任何)", () => {
+  it("manager 与 sales 同口径 (D9 2026-09-25 拍): store 维度已冻结, 无节点 → 只给 (a)", () => {
     const none = dialect.sqlToQuery(
       customerRbacFilter(ctx({ role: "manager", managedStoreIds: [] }))!
     );
-    expect(none.sql).toContain('"customer"."id" = 0');
-
-    const some = dialect.sqlToQuery(
-      customerRbacFilter(ctx({ role: "manager", managedStoreIds: [BigInt(7)] }))!
-    );
-    expect(some.sql).toContain("store_id");
-    expect(some.params).toEqual([7n]);
+    // store 不再参与行级过滤 (AGENTS §6.6.1 Q8 + ADR-0019 §2.5)
+    expect(none.sql).not.toContain("store_id");
+    expect(none.sql).toContain("owner_id");
+    expect(none.params).toEqual([101n]);
   });
 });
 
