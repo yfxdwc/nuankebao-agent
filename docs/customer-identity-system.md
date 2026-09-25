@@ -1,6 +1,6 @@
 # 客户标识体系 v1 — 暖客宝「一个人 = 多个面」在 UI 上的统一口径
 
-> **状态**: v1.2 — 2026-09-25 主人拍 D3/D4/D5/D6/D7 + D8/D9 (D8 手机号明文范围 / D9 manager 同 sales); R-12 IDOR P0 已修 (`GET /api/customers/[id]/follow-up-analysis` 加行级过滤)
+> **状态**: v1.3 — 2026-09-25 主人拍 D3-D9; R-12 系列 IDOR P0 已修 (follow-up-analysis + follow-ups + interactions/wellness-records); 2 轮 reviewer 复审 P0/P1 已消化 (b1/b2 NULL 守卫 · (c) 跨枝防护 · migration 编号修正 · S6/S7 · ownership 第 6 态)
 > **定位**: 销售员每天看的「客户列表 / 客户详情 / 加盟图谱 / 新建客户表单」四屏必须使用同一套标识口径。本文件是这一套口径的**定稿**,代码改动前必读。
 > **配套**: 术语消歧见 [`docs/adr/0015-subject-model.md`](./adr/0015-subject-model.md) ·
 > 身份锚点见 [`docs/adr/0016-identity-anchor.md`](./adr/0016-identity-anchor.md) ·
@@ -152,7 +152,7 @@ export async function resolveCustomerIdentity(
 
 > **v1.2 修订 (2026-09-25, reviewer 评审后)**: 本节 v1.1 的 (b) 子句有 **2 处阻断级错误** —— ① SQL 前缀拼接错 (`me.placement_path || sub.id`) 导致永不匹配 (placement_path 是 `'L.R.'` 形式的字母路径, 不含节点 id; 正确模式见 `src/lib/auth/rbac.ts:196`); ② 语义错 (写的是「下层的**本人档案**」, 而 D4 要的是「下层**归属的客户**」)。本版拆成 (b1) 保留 + (b2) 新增。
 >
-> **本节 supersede `myCustomerScopeSql` (`customer-scope.ts:67-82`) 现有两段式** — 在 Phase D 实施前不要动现有函数, 本文只做口径定义 + Phase D 接入点指定。
+> **本节 supersede `myCustomerScopeSql` (src/lib/db/queries/customer-scope.ts 的两段式) 现有口径** — 在 Phase D 实施前不要动现有函数, 本文只做口径定义 + Phase D 接入点指定。
 
 **口径定义** (D4 + §6.5 上级推送落地后, 列表/详情/概览/行级过滤**四处同一真相源**):
 
@@ -179,15 +179,23 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
                  WHERE cs.customer_id = customer.id
                    AND cs.to_user_id  = viewer.user_id
                    AND cs.revoked_at IS NULL
-                   AND EXISTS (SELECT 1 FROM "user" r WHERE r.id = cs.to_user_id AND r.is_active = true))
+                   AND EXISTS (SELECT 1 FROM "user" r WHERE r.id = cs.to_user_id AND r.is_active = true)
+                   -- ★ P0-B (reviewer 第二轮): 推送人必须与我在同一棵树
+                   --    否则我在被 admin 强改上层搬走后, 旧推送仍会命中 (跨枝隐私泄漏)
+                   AND ( NOT EXISTS (SELECT 1 FROM "user" f
+                                     WHERE f.id = cs.from_user_id AND f.franchisee_id IS NOT NULL)
+                         OR EXISTS (SELECT 1 FROM "user" f
+                                    JOIN franchisee ff ON ff.id = f.franchisee_id
+                                    WHERE f.id = cs.from_user_id AND ff.deleted_at IS NULL
+                                      AND ff.root_id IS NOT DISTINCT FROM me.root_id) ))
   ) : ( (a) )
 ```
 
 > **(b1) 为什么不能叫“直推加盟商”** (reviewer P1): (b1) 读的是 `placement_parent_id` = **结构口径**，而 §2.1 已拍「直推 = `referrer_id`」。为避免与 §9.1 INV-2 矛盾，全文统一称 **(b1) = 我的下层加盟节点本人档案**。
 
-> **(c) 的两个隐含条件** (评审补): ① 接收人账号必须 active (停用即失效, 与 §6.5 SHARE-4 一致); ② 接收人被搬到别的枝 → (b2)/(c) 的 `root_id` 口径会自然失效, 无需额外处理, 但要在巡检里报异常。
+> **(c) 的三个隐含条件** (评审补): ① 接收人账号必须 active (停用即失效, 与 §6.5 SHARE-4 一致); ② **推送人必须与我在同一棵树** (P0-B: 不加这条, 我被 admin 强改上层搬走后旧推送仍可见 = 跨枝泄漏; admin 无节点时豁免); ③ 推送人节点软删 (`ff.deleted_at IS NOT NULL`) 时推送失效。三者都要进巡检。
 
-**集中点**:`src/lib/db/queries/customer-scope.ts` 一处, 模块顶部注释明示"`viewerCustomerScopeSql()` 走 a+b1+b2+c 四段"。将来要收窄为「仅直接下级」时,**只动 (b2) 子句**, 调用方 (列表 / 胶囊计数 / `/api/me` 概览 / 行级过滤) 零改动。
+**集中点**:`src/lib/db/queries/customer-scope.ts` 一处 —— Phase D 落地时在该模块顶部加注释明示"`viewerCustomerScopeSql()` 走 a+b1+b2+c 四段" (现该函数尚未存在, 属 Phase D 新增)。将来要收窄为「仅直接下级」时,**只动 (b2) 子句**, 调用方 (列表 / 胶囊计数 / `/api/me` 概览 / 行级过滤) 零改动。
 
 **三段语义** (与图谱可见性同源 — `src/lib/db/queries/franchisee.ts` `getUplineAncestors(fid, 3)` + 同一枝 `placement_path` 后代):
 
@@ -223,7 +231,7 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
 
 **口径实施阶段**:
 - 当前 (Phase A/B/C): `myCustomerScopeSql` 两段式 (a+b**旧版** placement_parent_id) 维持现状, **不**扩围 (b) 子句到子树
-- **Phase D 开工前 (阻塞条件)**: ① 本节 v1.2 修订经 reviewer **复审通过**; ② D8 (手机号明文范围) + D9 (manager 口径) 两项主人拍板 — **2026-09-25 ✅ 已拍**; ③ `toView` mask 分级落地 + 回归测试; ④ R-12 P0 已修 (2026-09-25)
+- **Phase D 开工前 (阻塞条件)**: ① 本节 (v1.3) 经 reviewer **第三轮复审通过** (前两轮: 第一轮 P0 SQL 错 + 第二轮 P0 编号撞车/(c) 跨枝/文案不一致均已修); ② D8 + D9 — **2026-09-25 ✅ 已拍**; ③ `toView` mask 分级落地 + 回归测试; ④ R-12 系列 IDOR 已修 (2026-09-25)
 - Phase D 落地: (b) 子句 supersede 为 placement_path LIKE + 加 (c) `customer_share` 段 + 统一命名为 `viewerCustomerScopeSql(viewer)`, 接入 `/api/customers` 列表 / `/api/me` 概览 / 胶囊计数 / 行级过滤
 
 ---
@@ -324,7 +332,7 @@ sourceReferrerName: text("source_referrer_name"),
 | 触发 | 动作 |
 |---|---|
 | **代码层立刻** (Phase C) | zod 不再接受 `isSeed` + API 不再返回 + Flutter 表单与详情删除种子控件 + 类型筛选只剩 `all` + `加盟` + `未加盟` |
-| **上线满 30 天** + 全量用户已升新 APK + 无老 APK 写 `isSeed` 路径残留 | 单独一条 drop migration (`drizzle/0027_drop_customer_is_seed.sql`) + `drizzle/down/0027_drop_customer_is_seed.down.sql` 必带 + 过 `pnpm db:compat` + `DROP COLUMN IF EXISTS customer.is_seed` |
+| **上线满 30 天** + 全量用户已升新 APK + 无老 APK 写 `isSeed` 路径残留 | 单独一条 drop migration (`drizzle/0029_drop_customer_is_seed.sql`, 编号 0028 已被 customer_share 占用) + `drizzle/down/0029_drop_customer_is_seed.down.sql` 必带 + 过 `pnpm db:compat` + `DROP COLUMN IF EXISTS customer.is_seed` |
 | **DROP 前 assert** | `bash scripts/audit-customer-is-seed.ts` 查 `is_seed = true` 的客户数, 主人拍「同意丢掉这些行的语义」后才能 DROP (默认 0 行, 因灰度期 API 已不接 `isSeed: true`) |
 
 **若主人要求立即 DROP** (不走 30 天灰度期): 必须主人**显式拍板**, 且：
@@ -383,10 +391,10 @@ sourceReferrerName: text("source_referrer_name"),
 >
 > **拍板定位**: Phase D 实施 (与 §3.4 RBAC 扩围同步, 需独立 RBAC/隐私评审)。
 
-#### 6.5.1 表结构 (migration 0027 拟, Phase D)
+#### 6.5.1 表结构 (migration 0028 拟, Phase D)
 
 ```sql
--- drizzle/migrations/0027_customer_share.sql
+-- drizzle/migrations/0028_customer_share.sql
 CREATE TABLE customer_share (
   id           bigserial PRIMARY KEY,
   customer_id  bigint NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
@@ -406,7 +414,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
   WHERE revoked_at IS NULL;
 ```
 
-配套 `drizzle/down/0027_customer_share.down.sql` 必带 (CHARTER §3.5 + ADR-0004)。挂审计触发器 `customer_share_audit` (参照 `drizzle/audit_trigger.sql` 的 `franchisee_audit` 模式, 行 41-44 — 推送 / 撤销都要留痕, 事后能查「谁把谁推给谁」与「什么时候撤销」)。
+配套 `drizzle/down/0028_customer_share.down.sql` 必带 (CHARTER §3.5 + ADR-0004)。挂审计触发器 `customer_share_audit` (参照 `drizzle/audit_trigger.sql` 的 `franchisee_audit` 模式, 行 41-44 — 推送 / 撤销都要留痕, 事后能查「谁把谁推给谁」与「什么时候撤销」)。
 
 #### 6.5.2 方向规则 (硬约束, Phase D 实施前不变)
 
@@ -545,7 +553,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 
 | 任务 | 验收 |
 |---|---|
-| `drizzle/0027_customer_share.sql` (§6.5.1) + down.sql | `pnpm db:compat` 过; `idx_customer_share_to_active` + 部分唯一索引 `uniq_customer_share_active`; 审计触发器 `customer_share_audit` (参照 `audit_trigger.sql:41-44` `franchisee_audit` 模式) |
+| `drizzle/0028_customer_share.sql` (§6.5.1) + down.sql | `pnpm db:compat` 过; `idx_customer_share_to_active` + 部分唯一索引 `uniq_customer_share_active`; 审计触发器 `customer_share_audit` (参照 `audit_trigger.sql:41-44` `franchisee_audit` 模式) |
 | `customer-scope.ts` 新增 `viewerCustomerScopeSql(viewer)` = 三段式 (§3.4 a+b+c), supersede `myCustomerScopeSql` | 单测覆盖 5 态 + 推送存在 / 撤销 / 跨枝拒绝 (S2); 手机号分级断言 (mine 明文 / 其他 `maskPhone`) |
 | `customer-share.ts` 新模块 (S1-S5 校验): 推送人 = `owner_id` OR admin; 接收人 ∈ 同枝下层 (S2) | `tests/customer-share.test.ts` 覆盖 S1-S5 |
 | API: `POST /api/customers/[id]/share` + `DELETE /api/customers/[id]/share/[userId]` + `GET /api/customers/shares/received` | zod refine (note ≤ 200; reason 必填); 权限中间件加 S1 校验 |
@@ -594,7 +602,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 | **R-8** | **Flutter sheet 加选择控件影响点击路径** (密度棘轮) | Phase B 验收必跑 `check-ui-density.sh`;真机截图覆盖三个尺寸 (iPhone SE / 14 / Pro Max) |
 | **R-9** ★ | **列表膨胀**: Phase D 扩围 (b) 下级的客户 + (c) 上级推送的客户 后, viewer 列表候选集从 `owner_id = 我` 单集合扩到 `owner_id = 我 ∪ 同枝下层 ∪ customer_share 推送给我`,枝深的销售员可见行数显著增长 (`subordinate` 子树可能含数千客户) | (1) 收窄开关**集中在 `customer-scope.ts` 一处** (`viewerCustomerScopeSql` 单一真相源);(2) 收窄策略默认 = (b) 全下层 (与图谱同源), 提供 config flag 后续可改为「仅直接下级」,只动 (b) 子句;(3) `bash tools/check-ui-density.sh` Phase D 上线前**必跑**全路由, 列表行 ≥ 11 棘轮不破;(4) `customerTypeCounts` 缓存 (按 (a/b/c) 三段分别计数, UI 角标可用) |
 | **R-10** ★ | **推送撤销后立即不可见**: 用户期望「撤销推送 = 列表马上少一行」; 若后端 / 前端任何一层缓存 `customer_share` 结果, 撤销后用户仍能看到那行, 信任崩塌 | (1) `/api/customers` 不缓存可见集合结果 (Drizzle 直查 + revoke_at 索引);(2) 推送撤销响应立即触发客户端刷新 (Flutter `RefreshIndicator` / Web admin `router.refresh()`);(3) 集成测试断言: 推送 → 撤销 → 100ms 内列表 API 不再返回该客户;(4) `idx_customer_share_to_active` 索引 `(to_user_id, revoked_at)` 保证撤销即过滤 |
-| **R-11** ★ | **is_seed 延迟 DROP 的回滚窗口** (D3 + §5.4): 灰度期 (上线满 30 天前) 老 APK 仍写 `is_seed`, DB 列保留; 风险点 = 30 天内「想反悔恢复种子类型轴」需重新启回 `is_seed` 列, 但代码层已删 (zod 不再接受 / API 不再返回), 回滚需代码 + migration 一起 revert | (1) 灰度期内 `is_seed` 列**只读不写** (DB trigger 或 service 层 guard, 任何 INSERT/UPDATE 写 `is_seed = true` 抛 warning 写 audit, 不阻止);(2) 30 天到期由 `scripts/audit-customer-is-seed.ts` 自动检查 `is_seed = true` 的行数 (主人拍「同意丢」才能 DROP);(3) 回滚 SOP: 单独一条 `drizzle/0027_restore_customer_is_seed.sql` (additive, 无破坏) + `customer.ts:159-165` `resolveCustomerType` 恢复三态, 写入 `git revert` 一次性 commit;(4) 若主人要求「立即 DROP」 → 走 §5.4 显式拍板条款 (commit message 加 `[drop-is-seed-immediate]` + 写 `docs/postmortem/drop-is-seed-immediate-<date>.md`) |
+| **R-11** ★ | **is_seed 延迟 DROP 的回滚窗口** (D3 + §5.4): 灰度期 (上线满 30 天前) 老 APK 仍写 `is_seed`, DB 列保留; 风险点 = 30 天内「想反悔恢复种子类型轴」需重新启回 `is_seed` 列, 但代码层已删 (zod 不再接受 / API 不再返回), 回滚需代码 + migration 一起 revert | (1) 灰度期内 `is_seed` 列**只读不写** (DB trigger 或 service 层 guard, 任何 INSERT/UPDATE 写 `is_seed = true` 抛 warning 写 audit, 不阻止);(2) 30 天到期由 `scripts/audit-customer-is-seed.ts` 自动检查 `is_seed = true` 的行数 (主人拍「同意丢」才能 DROP);(3) 回滚 SOP: 单独一条 `drizzle/0030_restore_customer_is_seed.sql` (additive, 无破坏; 编号 0028=customer_share / 0029=drop 已占) + `customer.ts:159-165` `resolveCustomerType` 恢复三态, 写入 `git revert` 一次性 commit;(4) 若主人要求「立即 DROP」 → 走 §5.4 显式拍板条款 (commit message 加 `[drop-is-seed-immediate]` + 写 `docs/postmortem/drop-is-seed-immediate-<date>.md`) |
 
 > ⏸ **挂起项 (主人 2026-09-25 拍)**: **R-9 (列表膨胀)** 与 **R-10 (推送撤销立即生效)** 需要**优化方案**, 本任务**暂缓** —— Phase D 开工前**必须提醒主人处理**, 不得静默带过。
 
@@ -633,7 +641,7 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 
 **Phase D (RBAC + 上级推送, 评审后开工)**:
 - [ ] RBAC/隐私评审通过 (`docs/identity-privacy-review.md`)
-- [ ] `pnpm db:compat` 过 (migration 0027 `customer_share` additive)
+- [ ] `pnpm db:compat` 过 (migration 0028 `customer_share` additive)
 - [ ] `customer_share_audit` 触发器挂载成功 (参照 `audit_trigger.sql:41-44` `franchisee_audit` 模式)
 - [ ] `viewerCustomerScopeSql(viewer)` 三段式单测覆盖 (a 我的 / b 下级的 / c 上级推送)
 - [ ] **上级未推送时不可见** (D4 + S3 + R-10): 推送前 B 列表无 A 的客户; 推送后 B 列表立即出现; 撤销后 100ms 内 B 列表减少
