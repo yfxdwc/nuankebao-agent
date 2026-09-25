@@ -127,3 +127,13 @@ DROP TRIGGER IF EXISTS idea_audit ON idea;
 CREATE TRIGGER idea_audit
   AFTER INSERT OR UPDATE OR DELETE ON idea
   FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+-- 客户推送 (Phase D, migration 0028, ADR-0019 / 主文档 §6.5.6 SHARE-5)
+--   为什么必须挂: 推送 = **数据可见性授权**, 推过 / 撤销过都要能查到
+--   (谁的客户推给谁 / 谁撤销了 / 撤销时间), 事后权限纠纷时唯一真相是审计。
+--   不挂 deleted_at → 撤销只写 revoked_at (主文档 §3.4 E1 注); 但 update on
+--   revoked_at 字段的改写仍会被触发器抓到 (AFTER UPDATE 整行 NEW)。
+DROP TRIGGER IF EXISTS customer_share_audit ON customer_share;
+CREATE TRIGGER customer_share_audit
+  AFTER INSERT OR UPDATE OR DELETE ON customer_share
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();

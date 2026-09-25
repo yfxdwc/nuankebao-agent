@@ -61,19 +61,21 @@ export interface ViewerContext {
 }
 
 /**
- * 客户标识 (Phase A 口径, 列表/详情/概览共用)
+ * 客户标识 (Phase A + Phase D 口径, 列表/详情/概览共用)
  *
  * 字段语义:
  *   - affiliation: "none" (未加盟) / "direct" (加盟·直推 = 我的 referrer) / "nondirect" (加盟·非直推)
- *   - ownership: "mine" / "subordinate" (下级归属) / "upline" (上级归属, Phase D 后才有数据)
- *                 / "other" / "none" (无归属); §3.4 五态
+ *   - ownership: "mine" / "direct_downline" (我的下层加盟节点**本人档案**, §3.4 (b1) 第 6 态)
+ *                 / "subordinate" (我的下层归属客户, §3.4 (b2)) / "upline" (上级推送客户, §3.4 (c))
+ *                 / "other" / "none" (无归属); §3.4 六态
+ *                 优先级 mine > direct_downline > subordinate > upline > other > none
  *   - member: 该客户关联账号的会员状态 (role='admin' OR member_until > NOW())
  *   - registered: 该客户档案对应一个 app 账号吗 (EXISTS user WHERE customer_id = ...)
  *   - source: 来源 + 转介绍介绍人; kind=null 表示未填写
  */
 export interface CustomerIdentity {
   affiliation: "none" | "direct" | "nondirect";
-  ownership: "mine" | "subordinate" | "upline" | "other" | "none";
+  ownership: "mine" | "direct_downline" | "subordinate" | "upline" | "other" | "none";
   member: boolean;
   registered: boolean;
   source: { kind: AcquireSource | null; referrerName: string | null };
@@ -122,24 +124,78 @@ export function ownedBySubordinateSql(viewer: ViewerContext): SQL {
         OR
         (me.placement_path <> '' AND sub_f.placement_path LIKE (me.placement_path || '%'))
       )
-      AND ${customer.ownerId} = sub_u.id
+      AND "customer"."owner_id" = sub_u.id
   )`;
 }
 
 /**
- * 「这位客户是不是我的上级归属客户 (upline)」
+ * 「这位客户是不是我的上级归属客户 (upline)」 — Phase D 上线后由 customer_share 表供能
  *
- * Phase A 留空: 上级推送 (customer_share) 在 Phase D 才落地 (§3.4 (c) 段);
- * 没有推送表 → 本判定恒 false。Phase D 接入点 = 在此函数里追加
- * `EXISTS (SELECT 1 FROM customer_share cs WHERE cs.customer_id = customer.id
- *    AND cs.to_user_id = ${viewer.userId} AND cs.revoked_at IS NULL)`。
+ * Phase D 接入 (主文档 §3.4 (c) 字面):
+ *   - 接收人 = viewer.userId, 推送 active (cs.revoked_at IS NULL)
+ *   - 双方账号 active (SHARE-4: 一方停用 → 推送失效)
+ *   - 推送人与 viewer 同枝 (跨枝防护)
  *
  * ★ export (Phase A 收口): 与 ownedBySubordinateSql 同 — 列表与单条共用。
+ *   ⚠ 调用方 caller 需传入 viewer.userId (null 时 退化, 与其它 SQL 片段同处理)
  */
 export function ownedByUplineSql(viewer: ViewerContext): SQL {
-  // Phase A: 上级推送表尚未建 → 永远 false (B2 INV-3: viewer 无节点时也别返 null)
-  void viewer;
-  return sql`false`;
+  if (viewer.userId == null) return sql`false`;
+  // 四隐含条件 (主文档 §3.4 (c) 评审补):
+  //   ① 接收人 (viewer.userId) active
+  //   ② 推送人 active
+  //   ③ 推送人节点未软删
+  //   ④ 推送人与 viewer 同枝 — viewer 无 franchisee 时不护同枝 (推送人以 viewer 同枝为前提,
+  //     viewer 是 admin / dev 时跳过枝护)
+  //   ⑤ admin 推送 (无枝) 跳枝护
+  //   ⑥ customer.deleted_at IS NULL 在 viewerCustomerScopeSql 外层处理 (E1), 本函数专注存在性
+  return sql`EXISTS (
+    SELECT 1 FROM customer_share cs
+    WHERE cs.customer_id = "customer"."id"
+      AND cs.to_user_id = ${viewer.userId}
+      AND cs.revoked_at IS NULL
+      AND EXISTS (SELECT 1 FROM "user" r WHERE r.id = cs.to_user_id  AND r.is_active = true)
+      AND EXISTS (SELECT 1 FROM "user" f WHERE f.id = cs.from_user_id AND f.is_active = true)
+      AND (
+        NOT EXISTS (SELECT 1 FROM "user" f
+                    WHERE f.id = cs.from_user_id AND f.franchisee_id IS NOT NULL)
+        OR EXISTS (SELECT 1 FROM "user" f
+                   JOIN franchisee ff ON ff.id = f.franchisee_id
+                   WHERE f.id = cs.from_user_id AND ff.deleted_at IS NULL
+                     AND ff.root_id IS NOT DISTINCT FROM (
+                       SELECT root_id FROM franchisee WHERE id = ${viewer.franchiseeId ?? sql`NULL::bigint`} LIMIT 1
+                     ))
+      )
+  )`;
+}
+
+/**
+ * 「这位客户是不是我的直接加盟下线 (direct_downline) 本人档案」 — Phase D 第 6 态 (SHARE-7)
+ *
+ * 主文档 §3.4 (b1) 第 6 态: 这位客户是**我的下层加盟节点** (placement_parent_id = viewer.franchisee_id)
+ * 的**本人档案** — 即下层节点的 user.customer_id 对应这个 customer.id。
+ * 其 `owner_id` 可能既不是 viewer 也不是下层 (例: 被 transfer 过、不是下层归属的客户),
+ * 不加本判定会被 (b1) 命中但 ownership 落到 `other`, 触发「scope 漏检告警」。
+ *
+ * 口径 (§3.4 (b1) + §6.5.6 SHARE-7):
+ *   - f.placement_parent_id = viewer.franchisee_id
+ *   - u.customer_id = "customer"."id"
+ *   - f.deleted_at IS NULL
+ *   - u.is_active = true (本人在册)
+ *
+ * ★ 与 `directDownlineFranchiseeSql` 同口径 (单一真相源, Phase A 收口防漂移)。
+ *   viewer.franchiseeId = null → 退化。
+ */
+export function ownedByDirectDownlineSql(viewer: ViewerContext): SQL {
+  if (viewer.franchiseeId == null) return sql`false`;
+  return sql`EXISTS (
+    SELECT 1 FROM franchisee f
+    JOIN "user" u ON u.franchisee_id = f.id
+    WHERE f.deleted_at IS NULL
+      AND f.placement_parent_id = ${viewer.franchiseeId}
+      AND u.customer_id = "customer"."id"
+      AND u.is_active = true
+  )`;
 }
 
 /**
@@ -151,7 +207,7 @@ export function ownedByUplineSql(viewer: ViewerContext): SQL {
  */
 export function ownedByMeSql(viewer: ViewerContext): SQL {
   if (viewer.userId == null) return sql`false`;
-  return sql`(${customer.ownerId} = ${viewer.userId})`;
+  return sql`("customer"."owner_id" = ${viewer.userId})`;
 }
 
 /**
@@ -175,12 +231,13 @@ export function isFranchiseeSql(): SQL<boolean> {
  *  - isFranchisee: 任一 active 加盟节点对应这位客户 (维度 1)
  *  - ownedByMe: owner_id = viewer.userId (维度 5 'mine')
  *  - ownedBySub: owner_id = 某位下层 user.id (维度 5 'subordinate')
- *  - ownedByUpl: 上级推送 (Phase A 留空恒 false; Phase D 接入)
+ *  - ownedByUpl: 上级推送 (§3.4 (c), Phase D 接入 customer_share)
+ *  - ownedByDirectDownline: 我的下层加盟节点本身 = viewer 下线 (Phase D 第 6 态 SHARE-7)
  *  - isMember: memberExistsSql (维度 3)
  *  - hasAccount: hasAccountSql (维度 4)
  *  - acquireSource / sourceReferrerName: 直接读列 (维度 6)
  *
- * ★ Phase A 收口 (reviewer 第二轮): 同一组 SQL 片段同时被单条 resolveCustomerIdentity
+ * ★ Phase A + D 收口 (reviewer 第二轮): 同一组 SQL 片段同时被单条 resolveCustomerIdentity
  *   与列表 listCustomers 复用。SQL 编排集中在 renderIdentitySelectFields(); 改变量时
  *   两边自动一致 —— 禁止在 customer.ts 另写一套。
  */
@@ -197,6 +254,7 @@ async function loadIdentityRow(
     owned_by_me: boolean;
     owned_by_sub: boolean;
     owned_by_upl: boolean;
+    owned_by_direct_downline: boolean;
     owner_id: string | null;
     is_member: boolean;
     has_account: boolean;
@@ -204,16 +262,17 @@ async function loadIdentityRow(
     source_referrer_name: string | null;
   }>(sql`
     SELECT
-      ${fields.isFranchisee} AS is_franchisee,
-      ${fields.direct}      AS direct,
-      ${fields.ownedByMe}   AS owned_by_me,
-      ${fields.ownedBySub}  AS owned_by_sub,
-      ${fields.ownedByUpl}  AS owned_by_upl,
-      ${fields.ownerId}     AS owner_id,
-      ${fields.isMember}    AS is_member,
-      ${fields.hasAccount}  AS has_account,
-      ${fields.acquireSource} AS acquire_source,
-      ${fields.sourceReferrerName} AS source_referrer_name
+      ${fields.isFranchisee}             AS is_franchisee,
+      ${fields.direct}                  AS direct,
+      ${fields.ownedByMe}               AS owned_by_me,
+      ${fields.ownedBySub}              AS owned_by_sub,
+      ${fields.ownedByUpl}              AS owned_by_upl,
+      ${fields.ownedByDirectDownline}  AS owned_by_direct_downline,
+      ${fields.ownerId}                 AS owner_id,
+      ${fields.isMember}                AS is_member,
+      ${fields.hasAccount}              AS has_account,
+      ${fields.acquireSource}           AS acquire_source,
+      ${fields.sourceReferrerName}      AS source_referrer_name
     FROM "customer"
     WHERE "customer"."id" = ${customerId} AND "customer"."deleted_at" IS NULL
     LIMIT 1
@@ -227,6 +286,7 @@ async function loadIdentityRow(
     ownedByMe: r.owned_by_me === true,
     ownedBySub: r.owned_by_sub === true,
     ownedByUpl: r.owned_by_upl === true,
+    ownedByDirectDownline: r.owned_by_direct_downline === true,
     ownerId: r.owner_id != null ? BigInt(r.owner_id) : null,
     isMember: r.is_member === true,
     hasAccount: r.has_account === true,
@@ -250,6 +310,7 @@ export interface IdentityFlags {
   ownedByMe: boolean;
   ownedBySub: boolean;
   ownedByUpl: boolean;
+  ownedByDirectDownline: boolean;
   ownerId: bigint | null;
   isMember: boolean;
   hasAccount: boolean;
@@ -258,7 +319,7 @@ export interface IdentityFlags {
 }
 
 /**
- * 渲染身份 SELECT 字段 (10 个标量 / 布尔表达式)。
+ * 渲染身份 SELECT 字段 (11 个标量 / 布尔表达式)。
  *
  * ★ 单一真相源: 改其中任何一个片段, **单条 / 列表**都会同步变化。
  *   - `isFranchisee` 走 isFranchiseeSql() (本文件 §6 维度 1)
@@ -266,6 +327,7 @@ export interface IdentityFlags {
  *   - `ownedByMe`    走 ownedByMeSql() (本文件 §5)
  *   - `ownedBySub`   走 ownedBySubordinateSql() (本文件 §2, ★ P1-A 修复后)
  *   - `ownedByUpl`   走 ownedByUplineSql() (本文件 §3, Phase D 接入 customer_share)
+ *   - `ownedByDirectDownline` 走 ownedByDirectDownlineSql() (本文件 §3.5, 第 6 态 SHARE-7)
  *   - `ownerId`      直接读 "customer"."owner_id" 列
  *   - `isMember`     走 memberExistsSql (billing/member-flag)
  *   - `hasAccount`   走 hasAccountSql (customer-scope)
@@ -280,6 +342,7 @@ export function renderIdentitySelectFields(viewer: ViewerContext): {
   ownedByMe: SQL;
   ownedBySub: SQL;
   ownedByUpl: SQL;
+  ownedByDirectDownline: SQL;
   ownerId: SQL;
   isMember: SQL<boolean>;
   hasAccount: SQL<boolean>;
@@ -292,6 +355,7 @@ export function renderIdentitySelectFields(viewer: ViewerContext): {
     ownedByMe: ownedByMeSql(viewer),
     ownedBySub: ownedBySubordinateSql(viewer),
     ownedByUpl: ownedByUplineSql(viewer),
+    ownedByDirectDownline: ownedByDirectDownlineSql(viewer),
     ownerId: sql`"customer"."owner_id"`,
     isMember: memberExistsSql(sql`u.customer_id = "customer"."id"`),
     hasAccount: hasAccountSql as SQL<boolean>,
@@ -303,17 +367,20 @@ export function renderIdentitySelectFields(viewer: ViewerContext): {
 /**
  * 把判定标志映射成 CustomerIdentity (纯函数; 单条 / 列表共用)。
  *
- * 优先级 (与设计文档 §3.4 一致):
+ * 优先级 (与设计文档 §3.4 + §6.5.6 SHARE-7 一致, Phase D 第 6 态):
  *   affiliation:
  *     !isFranchisee → 'none'
  *     isFranchisee && direct  → 'direct'
  *     isFranchisee && !direct → 'nondirect' (在我的可见树内但不是我的直推)
  *   ownership (B2 INV-3: viewer 无节点时只可能 none/mine):
- *     ownedByMe  → 'mine'
- *     ownedBySub → 'subordinate' (下层 user 归属)
- *     ownedByUpl → 'upline' (上级推送, Phase A 留空)
- *     ownerId 有值但都不是 → 'other' (scope 漏检告警用)
- *     ownerId IS NULL → 'none'
+ *     mine > direct_downline > subordinate > upline > other > none
+ *     mine              我的归属客户 (a)
+ *     direct_downline   我的下层加盟节点本人档案 (b1, Phase D 第 6 态 SHARE-7:
+ *                      b1 命中时 覆写  不得落 other — 否则误报 scope 漏检)
+ *     subordinate       我的下层归属客户 (b2, 同枝下层 user 归属)
+ *     upline            上级推送客户 (c, Phase D customer_share)
+ *     other             ownerId 有值但都不是 (scope 漏检告警用)
+ *     none              ownerId IS NULL
  *
  * ★ export: 测试 / listCustomers / resolveCustomerIdentity 三处共用, 防漂移。
  */
@@ -330,6 +397,10 @@ export function identityFromFlags(flags: IdentityFlags): CustomerIdentity {
   let ownership: CustomerIdentity["ownership"];
   if (flags.ownedByMe) {
     ownership = "mine";
+  } else if (flags.ownedByDirectDownline) {
+    // ★ Phase D (b1) 第 6 态: 下层加盟节点本人档案命中时 覆写  | (SHARE-7)
+    //   不能落到 other — 不然误报 scope 漏检
+    ownership = "direct_downline";
   } else if (flags.ownedBySub) {
     ownership = "subordinate";
   } else if (flags.ownedByUpl) {

@@ -1537,3 +1537,66 @@ export const idea = pgTable(
 export type Idea = typeof idea.$inferSelect;
 export type NewIdea = typeof idea.$inferInsert;
 export type IdeaStatus = (typeof ideaStatusEnum.enumValues)[number];
+
+// ============================================
+// 客户推送 (Phase D, migration 0028, ADR-0019 / 主文档 §6.5)
+// ============================================
+// 主人 2026-09-25 拍 (D4 配套 D8: 上级推送即授权跟进 = 明文, 不是打码):
+//   归属人显式推送客户档案给枝内下层用户 → 该用户**列表可见**这条客户档案 (但不动
+//   owner_id; 推送 ≠ 归属, S3)。「推送」是可见性授权的独立机制, 不复用归属 (Q11)。
+//
+// 字段语义 (§6.5.1 / §6.5.6 字面):
+//   - from_user_id = 推送人快照 = 推送时该客户归属人 (S1; 归属 transfer 后不改写, SHARE-6)
+//   - to_user_id   = 接收人 = 推送者所在枝的下层用户 (S2 同 root_id + placement_path 前缀 + 非自己)
+//   - revoked_at IS NULL = 有效; 撤销只 UPDATE 不真 DELETE (主文档 §3.4 E1 注 + §6.5.6 SHARE-4)
+//   - revoked_by  = 撤销人 (推送人 / 接收人 / 当前 owner / admin 四方都能撤, S5)
+//   - note (≤200字, zod 校验) + reason (撤销原因, admin / 当前 owner 撤销必填)
+// 索引: 2 普通 (to_active / customer_active) + 1 部分唯一 (S4) + 1 active-only 计数 (S6)
+// 挂审计触发器 customer_share_audit (SHARE-5, 见 drizzle/audit_trigger.sql)
+export const customerShare = pgTable(
+  "customer_share",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    customerId: bigint("customer_id", { mode: "bigint" })
+      .notNull()
+      .references(() => customer.id, { onDelete: "cascade" }),
+    fromUserId: bigint("from_user_id", { mode: "bigint" })
+      .notNull()
+      .references(() => user.id),
+    toUserId: bigint("to_user_id", { mode: "bigint" })
+      .notNull()
+      .references(() => user.id),
+    note: text("note"),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW()`),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedBy: bigint("revoked_by", { mode: "bigint" }).references(
+      () => user.id,
+    ),
+  },
+  (table) => ({
+    // §3.4 (c) / R-10: 可见集查询 + 撤销即过滤
+    toActiveIdx: index("idx_customer_share_to_active").on(
+      table.toUserId,
+      table.revokedAt,
+    ),
+    // S6 计数: 「同客户 active 推送数」走这个, 不必带 revokedAt
+    customerActiveIdx: index("idx_customer_share_customer_active").on(
+      table.customerId,
+      table.revokedAt,
+    ),
+    // 计数 path-only (重复索引, 仅 OR-reader 用; 与上面 customer_active 配合时可选)
+    customerActiveOnlyIdx: index("idx_customer_share_customer_active_only")
+      .on(table.customerId)
+      .where(sql`revoked_at IS NULL`),
+    // S4 部分唯一: 同一 (customer, to_user) 仅一条 active (revoked_at IS NULL)
+    uniqActive: uniqueIndex("uniq_customer_share_active")
+      .on(table.customerId, table.toUserId)
+      .where(sql`revoked_at IS NULL`),
+  }),
+);
+
+export type CustomerShare = typeof customerShare.$inferSelect;
+export type NewCustomerShare = typeof customerShare.$inferInsert;

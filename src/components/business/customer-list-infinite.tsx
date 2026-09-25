@@ -12,7 +12,7 @@ import { Phone, Loader2 } from "lucide-react";
  *   none        : 无归属 (谁都不在管)
  *   other       : 他人客户 (scope 漏检告警用)
  */
-type Ownership = "mine" | "subordinate" | "upline" | "other" | "none";
+type Ownership = "mine" | "direct_downline" | "subordinate" | "upline" | "other" | "none";
 
 interface CustomerView {
   id: string;
@@ -73,6 +73,15 @@ function ownershipBadge(
         label: "他人客户",
         // warning = 兜底告警色 (scope 漏检才出现)
         className: "bg-warning-light text-warning",
+      };
+    case "direct_downline":
+      // Phase D §3.4 第 6 态 (SHARE-7): 我自己是我的下层加盟节点的本人档案 (主人)
+      //   — 静默, 不该出现 (在列表中本身份是被当作客户在归自己)。
+      //   但理论上如果这名下层节点的 owner_id 不归我 (被 transfer 过) ，会触发。
+      //   本分支按设计为下属上加「我的加盟下线」 badge, 以避免和其他 5 态漏检告警混淆。
+      return {
+        label: ownerName ? `我的加盟下线 · ${ownerName}` : "我的加盟下线",
+        className: "bg-brand-light text-brand",
       };
   }
 }

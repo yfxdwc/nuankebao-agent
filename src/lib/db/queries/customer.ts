@@ -111,11 +111,17 @@ export interface CustomerView {
    */
   affiliation: "none" | "direct" | "nondirect";
   /**
-   * ★ 归属五态 (Phase A §1 维度 5 + §3.4 五态); 现阶段列表可见集合未扩围,
-   *   但本字段提供「标注能力」(下级/上级归属 = 现在还看不到但存在)。Phase D 扩围后
-   *   自动生效。唯一真相源 = identity.ts::resolveCustomerIdentity。
+   * ★ 归属六态 (Phase A + Phase D §1 维度 5 + §3.4 + §6.5.6 SHARE-7):
+   *   mine              — 我的归属客户 (a)
+   *   direct_downline   — 我的下层加盟节点本人档案 (b1, 第 6 态)
+   *   subordinate       — 我的下层归属客户 (b2)
+   *   upline            — 上级推送客户 (c, Phase D)
+   *   other             — 他人客户 (scope 漏检告警用)
+   *   none              — 无归属
+   * 唯一真相源 = identity.ts::resolveCustomerIdentity + §3.4 手机号分级表 (mine /
+   *   direct_downline / upline_shared 明文; subordinate / other / none 走 maskPhone)
    */
-  ownership: "mine" | "subordinate" | "upline" | "other" | "none";
+  ownership: "mine" | "direct_downline" | "subordinate" | "upline" | "other" | "none";
   /**
    * ★ 客户来源 (Phase A §1 维度 6, migration 0026): 用于详情页管理区块
    *   (D6: 列表不显示)。结构 = { kind, referrerName } 与 identity.ts 对齐。
@@ -200,18 +206,59 @@ export function resolveCustomerType(
   return row.isSeed ? "seed" : "normal";
 }
 
+/**
+ * ★ 手机号 mask 分级 (D8, 主文档 §3.4 手机号分级表 — 唯一真相源)
+ *
+ *   明文例外: mine / direct_downline / upline_shared  (推送即授权跟进, D8 拍)
+ *   mask:      subordinate / other / none
+ *
+ * 输入参数 `forcePlaintext` 覆盖用于: 详情 / 详情来源管理 Tab / 创建后立即查等
+ *   需要全面详情的场景。默认 false (遵守 §3.4 表)。
+ * 测试锁住: maskPhone 输出永不等于输入 (tests/customer-toview-mask.test.ts)
+ */
+function viewPhone(
+  decrypted: string,
+  ownership: CustomerView["ownership"],
+  forcePlaintext = false,
+): string {
+  if (forcePlaintext) return decrypted;
+  // §3.4 手机号分级: 明文 = mine / direct_downline / upline_shared
+  // D8 拍「upline_shared」明文; 但本函数参数使用 ownership 枚举 - upline_shared 在
+  // ownership 里存为 "upline" (与 §3.4 一脉: upline = 「上级推送的客户」)
+  if (
+    ownership === "mine" ||
+    ownership === "direct_downline" ||
+    ownership === "upline"
+  ) {
+    return decrypted;
+  }
+  // subordinate / other / none 走 maskPhone (§3.4)
+  return maskPhone(decrypted);
+}
+
 function toView(
   row: Customer,
   isMyDownline: boolean = false,
   isMember: boolean = false,
   hasAccount: boolean = false,
   accountReferralCode: string | null = null,
-  identity?: Pick<CustomerIdentity, "affiliation" | "ownership" | "source"> | null
+  identity?: Pick<CustomerIdentity, "affiliation" | "ownership" | "source"> | null,
+  /**
+   * ★ 详情页 / 例外场景需要明文手机号 (如: 编辑资料 / 详情管理卡)
+   *   此时 ownership = subordinate 也返回明文 — 跳过 maskPhone (决定于调用方语义)
+   *   默认 false (默认遵守 §3.4 手机号分级表)
+   */
+  forcePhonePlaintext: boolean = false,
 ): CustomerView {
+  const ownership =
+    identity?.ownership ??
+    (isMyDownline ? "direct_downline" : "none");
+  const decryptedPhone = decryptField(row.phoneEncrypted);
   return {
     id: row.id.toString(),
     name: row.name,
-    phone: decryptField(row.phoneEncrypted),
+    // ★ Phase D (D8): 手机号按 §3.4 分级表 mask; mine / direct_downline / upline 明文
+    phone: viewPhone(decryptedPhone, ownership, forcePhonePlaintext),
     gender: row.gender,
     birthYear: row.birthYear,
     birthMonth: row.birthMonth,
@@ -237,12 +284,12 @@ function toView(
     isMember,
     hasAccount,
     accountReferralCode,
-    // ★ Phase A: 6 维标识 (与 identity.ts 同步); 未传 identity → 走默认推导
+    // ★ Phase A + D: 6 维标识 (与 identity.ts 同步); 未传 identity → 走默认推导
     //   affiliation: 推导起点 = isMyDownline (referrer 口径, §2.1 supersede)
     //   ownership:   默认 "none"; Phase D 接入 customer_share 后才有 "upline"
     affiliation:
       identity?.affiliation ?? (isMyDownline ? "direct" : "none"),
-    ownership: identity?.ownership ?? "none",
+    ownership,
     source: identity?.source ?? {
       kind: (row.acquireSource ?? null) as
         | "friend"
@@ -647,12 +694,13 @@ export async function listCustomers(
     db
       .select({
         row: customer,
-        // ★ identity SQL 片段 (Phase A 收口; 与单条 resolveCustomerIdentity 同真相源)
+        // ★ identity SQL 片段 (Phase A + D 收口; 与单条 resolveCustomerIdentity 同真相源)
         isFranchisee: identityFields.isFranchisee,
         direct: identityFields.direct,
         ownedByMe: identityFields.ownedByMe,
         ownedBySub: identityFields.ownedBySub,
         ownedByUpl: identityFields.ownedByUpl,
+        ownedByDirectDownline: identityFields.ownedByDirectDownline,
         ownerIdCol: identityFields.ownerId,
         isMember: identityFields.isMember,
         hasAccount: identityFields.hasAccount,
@@ -687,6 +735,7 @@ export async function listCustomers(
         ownedByMe: r.ownedByMe === true,
         ownedBySub: r.ownedBySub === true,
         ownedByUpl: r.ownedByUpl === true,
+        ownedByDirectDownline: r.ownedByDirectDownline === true,
         // ownerIdCol 是 SQL``"customer"."owner_id"``, drizzle 推不出 string (推成 {}),
         // 在这里明确 cast (与 PG bigint → JS bigint 的口径保持一致)
         ownerId: r.ownerIdCol != null ? BigInt(String(r.ownerIdCol)) : null,

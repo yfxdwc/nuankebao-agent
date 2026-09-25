@@ -31,7 +31,7 @@ type Gender = "F" | "M" | "U" | null | undefined;
  *   none        : 无归属
  *   other       : 他人客户 (scope 漏检告警)
  */
-type Ownership = "mine" | "subordinate" | "upline" | "other" | "none";
+type Ownership = "mine" | "direct_downline" | "subordinate" | "upline" | "other" | "none";
 
 /** 客户来源 (Phase A migration 0026; Phase C §1 维度 6). */
 type AcquireSource = "friend" | "referral" | "cold_visit" | "ground_promo" | null;
@@ -95,6 +95,10 @@ function ownershipBadgeLabel(
         label: "他人客户",
         className: "bg-warning-light text-warning",
       };
+    case "direct_downline":
+      // Phase D §3.4 第 6 态: 这位客户本身就是我的下层加盟节点
+      //   (归属在别处, 不是我的下级归属)—— 静默 (与 mine 一致), 详情页不显示
+      return null;
   }
 }
 

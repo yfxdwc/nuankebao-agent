@@ -15,7 +15,7 @@
 import { db } from "@/lib/db";
 import { user, storeStaff, customer, franchisee } from "@/lib/db/schema";
 import { eq, inArray, or, and, isNull, sql } from "drizzle-orm";
-import { myCustomerScopeSql } from "@/lib/db/queries/customer-scope";
+import { viewerCustomerScopeSql } from "@/lib/db/queries/customer-scope";
 import { isAuthSkipped } from "./skip-auth";
 
 export type UserRole = "admin" | "manager" | "sales";
@@ -109,27 +109,21 @@ export async function getRbacContextForSession(
 /**
  * 返回 customer 表的查询过滤条件
  * - admin: 无过滤 (全网)
- * - manager: store_id IN managed_store_ids (⚠ store 冻结 —— 见下方注释)
- * - sales: 「我的客户」= 归属我 ∪ 我的直推加盟 (ADR-0015 Q2; 口径唯一真相源
- *          = queries/customer-scope.ts, 与列表 / 计数 / 概览共用)
+ * - manager / sales: 四段式可见集 (a + b1 + b2 + c), 与列表 / 计数 / /api/me 共用
+ *   (D9 拍 manager 与 sales 同口径, 2026-09-25; ADR-0019 RBAC-4)
+ *   store 维度冻结后, 现 manager 现实中无店 → 但**不在 manager 上加门店过滤**,
+ *   与 sales 共用 viewerCustomerScopeSql 入口——避免「manager 看到的列表 ≠ sales 看到的列表」。
  */
 export function customerRbacFilter(ctx: RbacContext) {
   if (ctx.role === "admin") return undefined;
 
-  if (ctx.role === "manager") {
-    // ⚠ store / staff 已冻结 (ADR-0015 Q8, 0 行): 本分支保留旧行为
-    //   (无店 → 看不到任何), "manager 视角" 待 Phase 3 多店台账重新定义。
-    //   现网无 manager 账号, 不影响实际行为。
-    if (ctx.managedStoreIds.length === 0) return eq(customer.id, sql`0`);
-    return inArray(customer.storeId, ctx.managedStoreIds);
-  }
-
-  // sales (主人 2026-09-22 拍「全按建议」):
-  //   旧口径 created_by = 我 OR store_id = 我的店 已废 ——
-  //     created_by → owner_id (ADR-0015 Q11: 建档 ≠ 归属)
-  //     store_id   → 直推加盟 (Q8 门店维度冻结; 结构口径 = 点位父, AGENTS §6.8)
-  return myCustomerScopeSql({
-    ownerUserId: ctx.userId,
+  // sales / manager 都走四段式 (主文档 §3.4 + ADR-0019 §2.5)
+  //   - manager 无 franchisee (Q8 冻结) → ctx.franchiseeId 多半 null → 四段退化为仅 (a)
+  //   - sales 有 franchisee → (a) + (b1) + (b2) + (c) 发挥完整可见集
+  //   - (c) 推送权限 ‑manager 在将来 phase 3 多店台账重新定义时再看 (本阶段无影响)
+  // 集中点 (E1): 调用方禁止拼可见集 SQL, 必须统一调 customer-scope.ts
+  return viewerCustomerScopeSql({
+    userId: ctx.userId,
     franchiseeId: ctx.franchiseeId,
   });
 }
