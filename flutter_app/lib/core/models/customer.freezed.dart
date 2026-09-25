@@ -69,7 +69,32 @@ mixin _$Customer {
   /// ★ 她的邀请码 (2026-09-24 管理 Tab 建议 #6): 有账号才有; 没有账号 = null。
   ///   管理 Tab「app 身份」卡直接显示 + 一键复制 (拉她进沙龙 / 核对身份用)。
   ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
-  String? get accountReferralCode => throw _privateConstructorUsedError;
+  String? get accountReferralCode =>
+      throw _privateConstructorUsedError; // ─── Phase A/C 客户标识体系 v1 (§1 维度 1/5/6, docs/customer-identity-system.md) ───
+  /// 加盟细分: "none" 未加盟 / "direct" 加盟·直推 / "nondirect" 加盟·非直推。
+  /// 单一真相源 = 后端 src/lib/customer/identity.ts (走 referrer 口径, 与图谱同源)。
+  /// 老后端不返回 → 默认 "none"。头像环 (TypedUserAvatar) 据此区分色。
+  String get affiliation => throw _privateConstructorUsedError;
+
+  /// 归属五态 (§3.4 五态):
+  ///   "mine" 自己的客户 (静默, 不出 L2 归属 badge)
+  ///   "subordinate" 下级的客户 (走 §3.4 (b1)/(b2) 判定)
+  ///   "upline" 上级推送的客户 (Phase D 才有数据)
+  ///   "other" 他人客户 (scope 漏检告警)
+  ///   "none" 无归属
+  /// 列表默认 mine 静默, 异常态显形 (设计 §4.2 L2 五态)。
+  String get ownership => throw _privateConstructorUsedError;
+
+  /// 客户来源 (§1 维度 6 + §5 migration 0026, 主人 2026-09-25 D5 拍「选填」):
+  ///   null / "friend" 亲友 / "referral" 转介绍 / "cold_visit" 陌生拜访 / "ground_promo" 地推
+  ///   referral 时 referrerName 必填 (后端 zod refine 校验, §5 M3, 不加 DB CHECK)
+  /// 老后端不返回 → 默认 null (= 未填写, 不报错)。
+  String? get acquireSource => throw _privateConstructorUsedError;
+
+  /// 转介绍介绍人姓名 (≤ 50 字, 与后端 source_referrer_name 对齐):
+  ///   仅 acquireSource = 'referral' 时有值; 其他情况 = null
+  /// 后端 zod refine 保证 referral 时此字段非空 (否则 400)。
+  String? get sourceReferrerName => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get updatedAt => throw _privateConstructorUsedError;
 
@@ -108,6 +133,10 @@ abstract class $CustomerCopyWith<$Res> {
       String customerType,
       bool hasAccount,
       String? accountReferralCode,
+      String affiliation,
+      String ownership,
+      String? acquireSource,
+      String? sourceReferrerName,
       DateTime createdAt,
       DateTime updatedAt});
 }
@@ -553,22 +582,35 @@ class _$CustomerImpl implements _Customer {
   ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
   @override
   final String? accountReferralCode;
-
-  /// 加盟细分 (Phase A §1 维度 1+2; 默认 "none" 老后端兼容)
+// ─── Phase A/C 客户标识体系 v1 (§1 维度 1/5/6, docs/customer-identity-system.md) ───
+  /// 加盟细分: "none" 未加盟 / "direct" 加盟·直推 / "nondirect" 加盟·非直推。
+  /// 单一真相源 = 后端 src/lib/customer/identity.ts (走 referrer 口径, 与图谱同源)。
+  /// 老后端不返回 → 默认 "none"。头像环 (TypedUserAvatar) 据此区分色。
   @override
   @JsonKey()
   final String affiliation;
 
-  /// 归属五态 (Phase A §1 维度 5 + §3.4 五态; 默认 "none")
+  /// 归属五态 (§3.4 五态):
+  ///   "mine" 自己的客户 (静默, 不出 L2 归属 badge)
+  ///   "subordinate" 下级的客户 (走 §3.4 (b1)/(b2) 判定)
+  ///   "upline" 上级推送的客户 (Phase D 才有数据)
+  ///   "other" 他人客户 (scope 漏检告警)
+  ///   "none" 无归属
+  /// 列表默认 mine 静默, 异常态显形 (设计 §4.2 L2 五态)。
   @override
   @JsonKey()
   final String ownership;
 
-  /// 客户来源 (Phase A §1 维度 6 + §5 migration 0026)
+  /// 客户来源 (§1 维度 6 + §5 migration 0026, 主人 2026-09-25 D5 拍「选填」):
+  ///   null / "friend" 亲友 / "referral" 转介绍 / "cold_visit" 陌生拜访 / "ground_promo" 地推
+  ///   referral 时 referrerName 必填 (后端 zod refine 校验, §5 M3, 不加 DB CHECK)
+  /// 老后端不返回 → 默认 null (= 未填写, 不报错)。
   @override
   final String? acquireSource;
 
-  /// 转介绍介绍人姓名 (referral 时后端 zod refine 必填)
+  /// 转介绍介绍人姓名 (≤ 50 字, 与后端 source_referrer_name 对齐):
+  ///   仅 acquireSource = 'referral' 时有值; 其他情况 = null
+  /// 后端 zod refine 保证 referral 时此字段非空 (否则 400)。
   @override
   final String? sourceReferrerName;
   @override
@@ -777,24 +819,34 @@ abstract class _Customer implements Customer {
   ///   管理 Tab「app 身份」卡直接显示 + 一键复制 (拉她进沙龙 / 核对身份用)。
   ///   老后端不返回该字段 → null (卡上不显示那行, 不崩)
   @override
-  String? get accountReferralCode;
-
-  // ─── Phase A/C 客户标识体系 v1 (§1 维度 1/5/6, docs/customer-identity-system.md) ───
-  /// 加盟细分: "none" 未加盟 / "direct" 加盟·直推 / "nondirect" 加盟·非直推
+  String?
+      get accountReferralCode; // ─── Phase A/C 客户标识体系 v1 (§1 维度 1/5/6, docs/customer-identity-system.md) ───
+  /// 加盟细分: "none" 未加盟 / "direct" 加盟·直推 / "nondirect" 加盟·非直推。
+  /// 单一真相源 = 后端 src/lib/customer/identity.ts (走 referrer 口径, 与图谱同源)。
+  /// 老后端不返回 → 默认 "none"。头像环 (TypedUserAvatar) 据此区分色。
   @override
-  @JsonKey()
   String get affiliation;
 
-  /// 归属五态 (§3.4 五态)
+  /// 归属五态 (§3.4 五态):
+  ///   "mine" 自己的客户 (静默, 不出 L2 归属 badge)
+  ///   "subordinate" 下级的客户 (走 §3.4 (b1)/(b2) 判定)
+  ///   "upline" 上级推送的客户 (Phase D 才有数据)
+  ///   "other" 他人客户 (scope 漏检告警)
+  ///   "none" 无归属
+  /// 列表默认 mine 静默, 异常态显形 (设计 §4.2 L2 五态)。
   @override
-  @JsonKey()
   String get ownership;
 
-  /// 客户来源 (§1 维度 6 + §5 migration 0026)
+  /// 客户来源 (§1 维度 6 + §5 migration 0026, 主人 2026-09-25 D5 拍「选填」):
+  ///   null / "friend" 亲友 / "referral" 转介绍 / "cold_visit" 陌生拜访 / "ground_promo" 地推
+  ///   referral 时 referrerName 必填 (后端 zod refine 校验, §5 M3, 不加 DB CHECK)
+  /// 老后端不返回 → 默认 null (= 未填写, 不报错)。
   @override
   String? get acquireSource;
 
-  /// 转介绍介绍人姓名 (referral 时必填, 后端 zod refine 保证)
+  /// 转介绍介绍人姓名 (≤ 50 字, 与后端 source_referrer_name 对齐):
+  ///   仅 acquireSource = 'referral' 时有值; 其他情况 = null
+  /// 后端 zod refine 保证 referral 时此字段非空 (否则 400)。
   @override
   String? get sourceReferrerName;
   @override

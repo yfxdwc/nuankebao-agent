@@ -50,6 +50,7 @@ import '../../../core/theme/theme_ext.dart';
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/utils/birthday.dart';
 import '../../../core/widgets/app_empty.dart';
+import '../../../core/widgets/app_badge.dart';
 import '../../../core/widgets/franchise_chip.dart';
 import '../../../core/widgets/placement_target_sheet.dart';
 import '../../../core/widgets/user_avatar.dart';
@@ -851,6 +852,12 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
                 ),
               ),
             ],
+            // ★ Phase C §1 维度 6 + §4.2 L4 (D6 拍「详情仅管理 Tab 的档案卡显示」):
+            //   档案卡走中性 badge (AppBadge tone=neutral, 不另新增色) + 可选「介绍人: XXX」;
+            //   跟 web admin 「客户来源: XXX」同口径。遵约束: 不新增 Card, 不涨行高,
+            //   跟原有的「最后修改」小字同一条信息密度。
+            const SizedBox(height: AppSpace.s12),
+            _buildSourceRow(c),
             const SizedBox(height: AppSpace.s8),
             Text(
               '最后修改 ${DateFormat('yyyy-MM-dd HH:mm').format(c.updatedAt.toLocal())}',
@@ -1280,6 +1287,43 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     );
   }
 
+  /// 客户来源行 (Phase C §1 维度 6 + §4.2 L4, D6 拍「仅详情管理 Tab 的档案卡」)
+  ///
+  ///   来源 = 4 个枚举 + 未填写; null → "未填写" (后端默认)。
+  ///   「转介绍」(referral) → 多出「介绍人: XXX」一行 (后端 zod refine 保证非空)。
+  ///   不新增 Card / 不加饱和色: 走现有 AppBadge tone=neutral + 一行文字, 跟备注/最后修改
+  ///   同信息密度; 遵约束行高不变。
+  Widget _buildSourceRow(Customer c) {
+    final source = c.acquireSource;
+    final referrer = (c.sourceReferrerName ?? '').trim();
+    final label = _acquireSourceLabel(source);
+    final isReferral = source == 'referral' && referrer.isNotEmpty;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const Text('客户来源',
+            style: TextStyle(
+                fontSize: AppTheme.fontSm,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary)),
+        const SizedBox(width: AppSpace.s8),
+        AppBadge(label: label, tone: AppBadgeTone.neutral),
+        if (isReferral) ...[
+          const SizedBox(width: AppSpace.s8),
+          Expanded(
+            child: Text(
+              '介绍人: $referrer',
+              style: const TextStyle(
+                  fontSize: AppTheme.fontSm, color: AppTheme.textPrimary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildSectionTitle(String title) {
     final t = context.tokens;
     return Padding(
@@ -1306,6 +1350,26 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
 // ============================================
 // 顶层方法 (被 CustomerDetailPage 用, 放本文件内)
 // ============================================
+
+/// 客户来源枚举 → 中文短词 (Phase C §1 维度 6 与 web admin 同口径):
+///   null / 未下发 → "未填写"
+///   friend / referral / cold_visit / ground_promo → 亲友 / 转介绍 / 陌生拜访 / 地推
+String _acquireSourceLabel(String? source) {
+  switch (source) {
+    case 'friend':
+      return '亲友';
+    case 'referral':
+      return '转介绍';
+    case 'cold_visit':
+      return '陌生拜访';
+    case 'ground_promo':
+      return '地推';
+    case null:
+    case '':
+    default:
+      return '未填写';
+  }
+}
 
 /// 客户类型切换: 普通 ↔ 种子 (主人 2026-09-18: 详情页直接切, 不用进编辑表单)
 Future<void> _setCustomerSeed(

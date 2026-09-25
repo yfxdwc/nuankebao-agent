@@ -45,7 +45,7 @@ enum _GraphFilter { none, direct, downline, upline, aLine, bLine }
 // CustomersListPage (主页: 客户列表 / 图谱)
 // ============================================
 
-enum _CustomerFilter { all, franchisee, normal, seed }
+enum _CustomerFilter { all, franchisee, unaffiliated }
 
 class CustomersListPage extends ConsumerStatefulWidget {
   const CustomersListPage({super.key});
@@ -273,10 +273,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
               },
             ),
           ),
-          // 筛选 (胶囊按键, 主人 2026-09-18 拍): 全部 / 加盟 / 普通 / 种子
-          // 4 段平分整行宽, 选中 = 主题色实心; 跟图谱筛选 (全部/A线/B线/直推) 视觉一致
+          // 筛选 (胶囊按键, 主人 2026-09-18 拍): 全部 / 加盟 / 未加盟
+          // 3 段平分整行宽, 选中 = 主题色实心; 跟图谱筛选 (全部/A线/B线/直推) 视觉一致
           // 2026-09-18 追加: 胶囊上显示数量 (跟图谱筛选同风格), 数量走 /api/customers/stats
-          //   口径: 加盟 = 我的下级加盟商 (跟图谱 tab 同口径), 三类互斥穷尽 → 相加 = 全部
+          //   口径: 加盟 = 我的下级加盟商 (跟图谱 tab 同口径), 二态互斥穷尽 → 相加 = 全部
+          //
+          // Phase C D3 (§5.4 种子退场): 「种子」从类型轴退场, 类型筛选简化为三态 → 二态
+          // (全部 / 加盟 / 未加盟); 后端 legacy 'seed' 分支保留不动 (D3 §5.4 不丢存量) —
+          // 类型下拉给用户的是 UI 口径, 后端兼容老数据是数据层职责, 两者解耦。
           if (_viewMode == _CustomerViewMode.list)
             Padding(
               padding: const EdgeInsets.fromLTRB(AppSpace.s16, 0, 16, 8),
@@ -291,17 +295,13 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                     label: _capsuleLabel('🤝 加盟', 'franchisee', typeCounts),
                   ),
                   ButtonSegment(
-                    value: _CustomerFilter.normal,
-                    label: _capsuleLabel('👤 普通', 'normal', typeCounts),
-                  ),
-                  ButtonSegment(
-                    value: _CustomerFilter.seed,
-                    label: _capsuleLabel('🌱 种子', 'seed', typeCounts),
+                    value: _CustomerFilter.unaffiliated,
+                    label: _capsuleLabel('未加盟', 'normal', typeCounts),
                   ),
                 ],
                 selected: {_filter},
                 showSelectedIcon: false,
-                expandedInsets: EdgeInsets.zero, // 4 段平分整行宽
+                expandedInsets: EdgeInsets.zero, // 3 段平分整行宽
                 onSelectionChanged: (s) => setState(() => _filter = s.first),
               ),
             ),
@@ -1893,16 +1893,17 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   }
 
   /// 胶囊筛选 → 后端 type 参数 (all 不发)
+  ///
+  /// Phase C D3: 「未加盟」段走后端 'normal' (后端 legacy seed 分支保留;
+  /// UI 三态 → 二态, 数据层不变, 这是设计 §5.4 明确分离的两件事)。
   String get _filterToApi {
     switch (_filter) {
       case _CustomerFilter.all:
         return 'all';
       case _CustomerFilter.franchisee:
         return 'franchisee';
-      case _CustomerFilter.normal:
+      case _CustomerFilter.unaffiliated:
         return 'normal';
-      case _CustomerFilter.seed:
-        return 'seed';
     }
   }
 
@@ -1913,10 +1914,8 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         return '';
       case _CustomerFilter.franchisee:
         return '加盟';
-      case _CustomerFilter.normal:
-        return '普通';
-      case _CustomerFilter.seed:
-        return '种子';
+      case _CustomerFilter.unaffiliated:
+        return '未加盟';
     }
   }
 }

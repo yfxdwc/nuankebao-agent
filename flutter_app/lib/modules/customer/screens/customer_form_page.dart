@@ -73,9 +73,13 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   /// 自定义标签上限: 6 个汉字 (主人 2026-09-18 拍)
   static const int _maxTagLength = 6;
 
-  /// 种子客户 (潜在客户开关, 主人 2026-09-18 拍 — 显式勾选)
-  /// 注意: 已加盟客户 (同手机号有加盟商记录) 后端会优先显示「加盟」, 这个开关就不生效
-  bool _isSeed = false;
+  /// 客户来源 (Phase C §1 维度 6 + §5 migration 0026, 主人 2026-09-25 D5 拍「选填」):
+  ///   null / 'friend' 亲友 / 'referral' 转介绍 / 'cold_visit' 陌生拜访 / 'ground_promo' 地推
+  ///   referral 时 _sourceReferrerName 必填 (后端 zod refine 校验, §5 M3, 不加 DB CHECK)
+  String? _acquireSource;
+  /// 转介绍介绍人姓名 (≤ 50 字, 与后端 source_referrer_name 对齐):
+  ///   仅 acquireSource = 'referral' 时有值; 其他情况 = null
+  final _sourceReferrerController = TextEditingController();
 
   bool _loading = false;
 
@@ -104,7 +108,9 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       _birthdayRemindDays = c.birthdayRemindDays;
       _healthTags.clear();
       _healthTags.addAll(c.healthTags);
-      _isSeed = c.isSeed;
+      // Phase C D6: 来源字段; 老后端不返回 → 默认 null = 未填写
+      _acquireSource = c.acquireSource;
+      _sourceReferrerController.text = c.sourceReferrerName ?? '';
     });
   }
 
@@ -117,6 +123,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     _diseaseController.dispose();
     _allergyController.dispose();
     _customTagController.dispose();
+    _sourceReferrerController.dispose();
     super.dispose();
   }
 
@@ -324,8 +331,14 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
         'diseaseHistory': _diseaseController.text,
         'allergyHistory': _allergyController.text,
         if (_notesController.text.isNotEmpty) 'notes': _notesController.text,
-        // 种子客户开关 (后端算进 customerType: 加盟 > 种子 > 普通)
-        'isSeed': _isSeed,
+        // ★ Phase C §1 维度 6 + D5 (主人 2026-09-25 拍「选填」):
+        //   _acquireSource = null → 不传 acquireSource 字段 (后端默认 null = 未填写);
+        //   否则发 4 个枚举之一; 'referral' 时同时必填介绍人 (前端兇底 + 后端 zod refine 兇底)。
+        if (_acquireSource != null) ...{
+          'acquireSource': _acquireSource,
+          if (_acquireSource == 'referral')
+            'sourceReferrerName': _sourceReferrerController.text.trim(),
+        },
       };
       if (widget.customerId != null) {
         await ref.read(customerServiceProvider).update(widget.customerId!, data);
@@ -488,6 +501,81 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ],
               ],
             ),
+            const SizedBox(height: AppSpace.s12),
+            // ===== 客户来源 (Phase C §1 维度 6 + §4.2 L4, D5 + D6 插入位置)
+            //   设计拍: 姓名/性别/手机 与 生日 之间; 选填; 选「转介绍」时介绍人必填。
+            //   4 个枚举 + 「未填写」(下拉以 value '' 表示, 不发字段)。
+            //   后端 zod refine 校验 referral 时介绍人必填 (§5 M3, 不加 DB CHECK)。
+            //   遵约束: 不新增 Card, 走现有 InputDecoration 控件; 不涨行高。
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _acquireSource ?? '',
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: '客户来源',
+                      helperText: '选填；选「转介绍」时介绍人必填',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: '',
+                        child: Text('未填写',
+                            style: TextStyle(fontSize: AppTheme.fontMd)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'friend',
+                        child: Text('亲友',
+                            style: TextStyle(fontSize: AppTheme.fontMd)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'referral',
+                        child: Text('转介绍',
+                            style: TextStyle(fontSize: AppTheme.fontMd)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'cold_visit',
+                        child: Text('陌生拜访',
+                            style: TextStyle(fontSize: AppTheme.fontMd)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'ground_promo',
+                        child: Text('地推',
+                            style: TextStyle(fontSize: AppTheme.fontMd)),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() {
+                      // '' = 未填写 (null), 避免发字段; 其他为 4 个枚举
+                      _acquireSource = (v == null || v.isEmpty) ? null : v;
+                      // 切走「转介绍」→ 清空介绍人 (避免误带旧名字)
+                      if (_acquireSource != 'referral') {
+                        _sourceReferrerController.clear();
+                      }
+                    }),
+                  ),
+                ),
+              ],
+            ),
+            // 转介绍 → 介绍人必填 (前端兇底 + 后端 zod refine 兑底)
+            if (_acquireSource == 'referral') ...[
+              const SizedBox(height: AppSpace.s8),
+              TextFormField(
+                controller: _sourceReferrerController,
+                style: const TextStyle(fontSize: AppTheme.fontMd),
+                maxLength: 50,
+                decoration: const InputDecoration(
+                  labelText: '介绍人 *',
+                  hintText: '例: 张姐 / 李姐',
+                  counterText: '',
+                ),
+                validator: (v) {
+                  if (_acquireSource != 'referral') return null;
+                  final t = (v ?? '').trim();
+                  if (t.isEmpty) return '转介绍请填介绍人';
+                  return null;
+                },
+              ),
+            ],
             const SizedBox(height: AppSpace.s12),
             // ===== 生日 (主人 2026-09-18: 年月日可选填 + 农历/阳历 + 生日提醒) =====
             // 2026-09-25: 历法收进标题行 (省一整行)
@@ -685,35 +773,6 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 hintText: '例: 青霉素过敏 / 对薰衣草精油过敏 / 皮肤敏感',
               ),
             ),
-            const SizedBox(height: AppSpace.s12),
-            // ★ 种子客户开关 (2026-09-25 主人: 「编辑客户页中不需要这个模块」)
-            //   **只在新建时**出现 —— 编辑时客户类型在详情页「管理」Tab 的
-            //   「客户类型」卡里改 (普通 / 🌱 种子), 这里再来一个是重复模块。
-            if (widget.customerId == null) ...[
-              const SizedBox(height: AppSpace.s12),
-              Container(
-                decoration: BoxDecoration(
-                  color: _isSeed ? AppTheme.accent.withOpacity(0.12) : Colors.white,
-                  border: Border.all(
-                    color: _isSeed ? AppTheme.accent : AppColors.border,
-                    width: _isSeed ? 2 : 1,
-                  ),
-                  borderRadius: BorderRadius.circular(AppRadius.r12),
-                ),
-                child: SwitchListTile(
-                  value: _isSeed,
-                  onChanged: (v) => setState(() => _isSeed = v),
-                  activeColor: AppTheme.accent,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppSpace.s12, vertical: AppSpace.s4),
-                  title: const Text('🌱 种子客户', style: TextStyle(fontSize: AppTheme.fontMd)),
-                  subtitle: const Text(
-                    '还没体验过/刚加好友的潜在客户。勾上后客户列表可用「种子」筛出',
-                    style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
-                  ),
-                ),
-              ),
-            ],
             const SizedBox(height: AppSpace.s12),
             TextFormField(
               controller: _notesController,

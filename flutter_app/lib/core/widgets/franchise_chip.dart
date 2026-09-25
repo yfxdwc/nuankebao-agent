@@ -11,7 +11,9 @@ import '../theme/tokens.g.dart';
 class FranchiseChip extends StatelessWidget {
   /// 'franchisee' = 紫色"加盟"
   /// 'normal' = 绿色"普通"
-  /// 'seed' = 暖橙"种子" (潜在客户, 显式勾选; 主人 2026-09-18)
+  ///
+  /// Phase C D3 (§5.4 种子退场): 客户类型三态 → 二态; 灰度期老 APK 仍可能下发
+  /// customerType='seed', 本组件**不**新增第三种文案, 兜底渲染为「未加盟」普通。
   final String type;
   final double fontSize;
 
@@ -25,10 +27,10 @@ class FranchiseChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, color) = switch (type) {
       // 类别图标统一语汇 (主人 2026-09-19 拍: 重新设计, 要贴合类别名 + 高级简洁):
-      //   🤝 加盟 = 正式加入合作网络 / 🌱 种子 = 还在萌芽的潜在客户 / 👤 普通 = 普通客户
+      //   🤝 加盟 = 正式加入合作网络 / 👤 普通 = 普通客户
       //   (旧版 🟣/🟢 只是"一个颜色圆", 不贴合类别名)
+      //   'seed' / 未知值 一律按「未加盟」兜底 —— 设计 §4.2 L1 二态
       'franchisee' => ('🤝 加盟', AppTheme.franchisee),
-      'seed' => ('🌱 种子', AppTheme.accent),
       _ => ('👤 普通', AppTheme.primary),
     };
     return Container(
