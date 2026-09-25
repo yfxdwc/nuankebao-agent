@@ -13,6 +13,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-nuankebao}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nuankebao_password}
       POSTGRES_DB: ${POSTGRES_DB:-nuankebao}
+      # 2026-09-25 timezone 切换: 与 prod 保持一致
+      TZ: Asia/Shanghai
     ports:
       - "5432:5432"
     volumes:
@@ -38,6 +40,12 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       AUTH_URL: ${AUTH_URL:-http://localhost:3003}
       NODE_ENV: production
+      # 2026-09-25 timezone 切换: 显式注入 TZ; dev web 同为 Alpine, 需挂 zoneinfo
+      TZ: Asia/Shanghai
+    volumes:
+      # 2026-09-25 timezone 切换: dev web (Alpine) 同 prod 挂 host zoneinfo + /etc/localtime
+      - /etc/localtime:/etc/localtime:ro
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
     ports:
       - "${APP_PORT:-3003}:3000"
 
