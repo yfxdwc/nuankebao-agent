@@ -75,7 +75,30 @@ async function upsertUser(name: string, phone: string): Promise<bigint> {
   return row.id;
 }
 
+/// 本文件造过的沙龙标题 (用于清理 —— 有些用例自己 createSalon, 不走 beforeAll 那个 id)
+const TEST_SALON_TITLES_SQL = sql`(title = '测试养生沙龙' OR title LIKE '计数-%')`;
+
+/// 清理本文件造的所有沙龙 (含子表) —— beforeAll 预清 (扫历史泄漏) + afterAll 收尾都用它。
+///   背景 (2026-09-26 定位): 旧 afterAll 只删 `beforeAll` 那一个 `salonId`,
+///   而「计数-*」用例另建的沙龙从未被删 → 每跑一次漏一个; 累积 60 个后,
+///   `listSalons(role:'invited', limit:50)` 的首页被残留占满, 新沙龙被挤出 → 断言假失败。
+async function purgeTestSalons(): Promise<void> {
+  const ids = (
+    await db.execute<{ id: string }>(
+      sql`SELECT id::text AS id FROM salon WHERE ${TEST_SALON_TITLES_SQL}`
+    )
+  ).map((r) => BigInt(r.id));
+  if (ids.length === 0) return;
+  await db.delete(salonActivity).where(inArray(salonActivity.salonId, ids));
+  await db.delete(salonAttachment).where(inArray(salonAttachment.salonId, ids));
+  await db.delete(salonGuest).where(inArray(salonGuest.salonId, ids));
+  await db.delete(salonQuota).where(inArray(salonQuota.salonId, ids));
+  await db.delete(salonInvitation).where(inArray(salonInvitation.salonId, ids));
+  await db.delete(salon).where(inArray(salon.id, ids));
+}
+
 beforeAll(async () => {
+  await purgeTestSalons(); // ★ 幂等预清理: 历史泄漏 / 上次中断残留 → 防累积
   organizerId = await upsertUser("测试主理人", ORGANIZER_PHONE);
   inviteeId = await upsertUser("测试受邀者", INVITEE_PHONE);
 
@@ -104,14 +127,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (salonId) {
-    await db.delete(salonActivity).where(eq(salonActivity.salonId, salonId));
-    await db.delete(salonAttachment).where(eq(salonAttachment.salonId, salonId));
-    await db.delete(salonGuest).where(eq(salonGuest.salonId, salonId));
-    await db.delete(salonQuota).where(eq(salonQuota.salonId, salonId));
-    await db.delete(salonInvitation).where(eq(salonInvitation.salonId, salonId));
-    await db.delete(salon).where(eq(salon.id, salonId));
-  }
+  // ★ 全量清理 (不再只删 salonId): 「计数-*」用例另建的沙龙也要删, 否则每次跑漏一个
+  await purgeTestSalons();
   await db
     .delete(user)
     .where(inArray(user.phoneHash, [ORGANIZER_PHONE, INVITEE_PHONE].map(hashForLookup)));
