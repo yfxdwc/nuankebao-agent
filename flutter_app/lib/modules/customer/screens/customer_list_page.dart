@@ -16,6 +16,7 @@
 // ============================================
 
 import 'dart:async';
+import '../../../core/router/route_observer.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,7 +55,44 @@ class CustomersListPage extends ConsumerStatefulWidget {
   ConsumerState<CustomersListPage> createState() => _CustomersListPageState();
 }
 
-class _CustomersListPageState extends ConsumerState<CustomersListPage> {
+class _CustomersListPageState extends ConsumerState<CustomersListPage>
+    with WidgetsBindingObserver, RouteAware {
+  /// 客户列表分页 (R-9, 2026-09-26) ——
+  ///   之前 `customersProvider` 写死 `limit:50, offset:0` (单页 50 条),
+  ///   Phase D 扩围后 viewer 候选集从 `owner_id=我` 单集合扩到
+  ///   `owner_id=我 ∪ 同枝下层 ∪ customer_share 推送给我` (R-9 风险表),
+  ///   枝深的销售员可见行数显著增长, 50 条不够。
+  ///
+  ///   设计 (docs/r9-r10-optimization.md §2.2):
+  ///   - `pageSize` = 50 (与现状一致, 不引入新尺寸)
+  ///   - hasMore 判定: items.length >= 50 (取到了满页 → 可能还有; 否则最后一页)
+  ///   - offset 累加: += items.length (不是 += limit, 最后一页可能不满)
+  ///   - family key (search/type/sort) 变化 → 自动重置分页
+  static const int _pageSize = 50;
+
+  /// 累计加载的 items (不再依赖 firstPageAsync.result.items, 因为后续页是 page=2/3/...)
+  List<CustomerWithFollowUp> _accumulatedItems = const [];
+  int _offset = 0;
+  bool _hasMore = false;
+  bool _loadingMore = false;
+  Object? _loadMoreError;
+
+  /// 是否首屏 (用于 hasMore 判定 — 首屏总 total 是准的, 后续页 total 可能被解耦为 null)
+  ///   首屏: _hasMore = items.length < result.total (后端准)
+  ///   后续: _hasMore = items.length == _pageSize (拿满页才试下一页)
+  ///   ⭐ 设计跟 web admin 一致 (customer-list-infinite.tsx:128): 首屏 SSR total = 准,
+  ///   后续页 total 可能被解耦 (R-9 count 解耦优化) → 靠满页检测。
+  bool _isFirstPage = true;
+
+  /// 上次 build 时的 query (用于检测 query 变化 → 重置分页)
+  CustomerListQuery? _lastQuery;
+
+  /// 列表 ScrollController (滚到底触发 loadMore)
+  final ScrollController _listScrollController = ScrollController();
+
+  /// 滚动到距底部 200px 时触发 loadMore (与 web admin rootMargin=200px 一致)
+  static const double _loadMoreThreshold = 200;
+
   /// 图谱初始取层数 (载荷旋钮, **不是** 层级上限 —— ADR-0011: 层级不限)
   ///   其余层级走懒加载: 用户选中某节点 → 点「展开下级」才拉一级 (GET :id/children)
   static const int _graphInitialDepth = 2;
@@ -131,8 +169,21 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
   _GraphFilter _graphFilter = _GraphFilter.none;
 
   @override
+  void initState() {
+    super.initState();
+    // R-10 L3 (2026-09-26): 监听 AppLifecycleState.resumed → 恢复前台刷一次列表
+    //   (跨端无实时通道, 靠恢复前台触发 invalidate)
+    WidgetsBinding.instance.addObserver(this);
+    // R-9 (2026-09-26): 滚到底自动加载下一页 (与 web admin IntersectionObserver 同语义)
+    _listScrollController.addListener(_onListScroll);
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // R-10 L2: 订阅路由 (从详情页返回 → didPopNext 刷新列表)
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
     // URL ?view=graph → 默认进入图谱 tab (供 /franchise-tree redirect 使用)
     if (!_viewModeInitialized) {
       final viewParam = GoRouterState.of(context).uri.queryParameters['view'];
@@ -143,8 +194,83 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     }
   }
 
+  /// R-10 L3 (2026-09-26): 恢复前台 → invalidate 列表 (跨端无实时通道)
+  ///
+  /// 注意: 只刷一次, 避免 build 循环; didChangeAppLifecycleState 只在状态**变化**时
+  ///   触发, 不会对初始 resumed 重复触发。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      ref.invalidate(customersProvider);
+      ref.invalidate(customerTypeCountsProvider);
+    }
+  }
+
+  /// R-10 L2 (2026-09-26): 从详情页返回 → 详情页可能已推送/撤销/改归属/编辑
+  ///   → 列表必须重拉, 否则用户看到旧行 (设计 docs/r9-r10-optimization.md §5.1)。
+  ///   只 invalidate 列表与胶囊计数 (详情/归属 provider 由详情页自己管)。
+  @override
+  void didPopNext() {
+    ref.invalidate(customersProvider);
+    ref.invalidate(customerTypeCountsProvider);
+  }
+
+  /// R-9 (2026-09-26): 列表滚到底 → 触发加载下一页
+  void _onListScroll() {
+    if (!_listScrollController.hasClients) return;
+    final pos = _listScrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - _loadMoreThreshold) {
+      // loadMore 内部有去重 (hasMore / loading 检查), 不会重复触发
+      _loadMore();
+    }
+  }
+
+  /// R-9 (2026-09-26): 加载下一页
+  ///
+  /// 设计:
+  ///   - offset = _offset (= 已加载 items 数, 不是 limit × 页数; 最后一页可能不满)
+  ///   - limit  = _pageSize (50, 与现状一致)
+  ///   - 成功: append → _accumulatedItems, _offset += items.length
+  ///   - hasMore: items.length == pageSize (满页 → 可能还有, 否则最后一页)
+  ///   - 失败: setState _loadMoreError, 底部显示重试按钮 (不刷已加载内容)
+  Future<void> _loadMore() async {
+    final query = _lastQuery;
+    if (query == null || !_hasMore || _loadingMore) return;
+    setState(() {
+      _loadingMore = true;
+      _loadMoreError = null;
+    });
+    try {
+      final result = await ref.read(customerServiceProvider).list(
+        search: query.search,
+        type: query.type,
+        sort: query.sort,
+        limit: _pageSize,
+        offset: _offset,
+      );
+      if (!mounted) return;
+      setState(() {
+        _accumulatedItems = [..._accumulatedItems, ...result.items];
+        _offset += result.items.length;
+        // 后续页: total 可能被解耦, 用满页检测
+        _hasMore = result.items.length == _pageSize;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadMoreError = e;
+      });
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
   @override
   void dispose() {
+    routeObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
+    _listScrollController.removeListener(_onListScroll);
+    _listScrollController.dispose();
     _searchTrackTimer?.cancel();
     _searchController.dispose();
     _graphTransformController.dispose();
@@ -160,7 +286,49 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       // 排序 = 内部规则 (主人 2026-09-21): 固定紧急度, 用户不选
       sort: _sortRule,
     );
+
+    // R-9 (2026-09-26): family key (search/type/sort) 变化 → 重置分页状态
+    //   重要: 这句在 ref.watch 之前, 确保 _lastQuery 在 listener 注册前就更新
+    //   (否则新 query 的 firstPageAsync 拿到后, listener 会重写 _accumulatedItems)
+    if (_lastQuery != query) {
+      _lastQuery = query;
+      _accumulatedItems = const [];
+      _offset = 0;
+      _hasMore = false;
+      _loadingMore = false;
+      _loadMoreError = null;
+      _isFirstPage = true; // family key 变化 → 重置为首屏
+    }
+
     final asyncCustomers = ref.watch(customersProvider(query));
+
+    // R-9 (2026-09-26): 监听首页数据变化 → 同步进 _accumulatedItems
+    //   - 首次拉取完成 → 填充首页数据 + 设 _hasMore
+    //   - 用户下拉刷新 (ref.invalidate(customersProvider)) → 重新填充, 分页状态重置
+    //   - family key 变化时上面已重置状态, 本 listener 负责填首屏数据
+    ref.listen<AsyncValue<CustomerListResult>>(
+      customersProvider(query),
+      (prev, next) {
+        next.whenData((result) {
+          if (!mounted) return;
+          setState(() {
+            _accumulatedItems = result.items;
+            _offset = result.items.length;
+            // hasMore 判定 (复刻 web admin + 后端 count 解耦语义):
+            //   首屏: 后端 total 准 → items.length < total → 还有
+            //   后续: total 可能被解耦 (= items.length), 不能信; 靠满页检测
+            if (_isFirstPage) {
+              _hasMore = result.items.length < result.total;
+              _isFirstPage = false;
+            } else {
+              _hasMore = result.items.length == _pageSize;
+            }
+            _loadMoreError = null;
+          });
+        });
+      },
+    );
+
     // 胶囊数量 (跟当前搜索词联动; 加载中 = 不显示数字, 不闪 0)
     final typeCounts = ref
         .watch(customerTypeCountsProvider(_search.isEmpty ? null : _search))
@@ -430,7 +598,10 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
         onRetry: () => ref.invalidate(customersProvider),
       ),
       data: (result) {
-        final customers = result.items;
+        // R-9 (2026-09-26): 用累计的 _accumulatedItems 代替 result.items
+        //   - 首屏: _accumulatedItems === result.items (ref.listen 同步过)
+        //   - 后续页: _accumulatedItems = 之前页 + 新加载的
+        final customers = _accumulatedItems;
         if (customers.isEmpty) {
           final filtered = _filter != _CustomerFilter.all;
           return AppEmptyState(
@@ -448,6 +619,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           );
         }
         // 分组 (主人 2026-09-20 拍 P1): 仅紧急度排序下按分档分组; 表头可折叠 (休眠池默认折叠)
+        //   R-9 (2026-09-26): 在 _accumulatedItems 上重算分组计数 (后续页进来后, 调档计数也要变)
         final display = <Object>[];
         if (result.sort == 'urgency') {
           final counts = <String, int>{};
@@ -472,11 +644,25 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
           display.addAll(customers);
         }
 
+        // R-9 (2026-09-26): 底部预留 1 行空间, hasMore=true 时显示加载行; hasMore=false 时显示「已加载完」
+        //   - hasMore=true + loading=true → 转圈
+        //   - hasMore=true + loadMoreError != null → 错误 + 重试按钮
+        //   - hasMore=false → 「— 共 N 位客户，已加载完毕 —」(与 web admin 一致)
+        //   ⚠ 不加 Card, 不加饱和色 (任务纪律)
+
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(customersProvider),
+          onRefresh: () async {
+            ref.invalidate(customersProvider);
+            ref.invalidate(customerTypeCountsProvider);
+          },
           child: ListView.builder(
-            itemCount: display.length,
+            controller: _listScrollController,
+            // +1 给底部加载行 (仅在有数据时显示; 空状态走 AppEmptyState 不进这里)
+            itemCount: display.length + 1,
             itemBuilder: (context, i) {
+              if (i == display.length) {
+                return _buildListFooter(result);
+              }
               final item = display[i];
               if (item is GroupHeaderData) {
                 return _buildGroupHeader(item.level, item.label, item.count);
@@ -492,13 +678,82 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                 followUp: row.followUp,
                 // 会员标识 = 后端算好的 isMember (同手机号账号的会员状态)
                 isMember: row.isMember,
-                onTap: () => context.push('/customers/${c.id}'),
+                // R-10 L2 (2026-09-26): 从详情页返回 → invalidate 列表 (用户可能改了归属/标签/档案)
+                onTap: () async {
+                  await context.push('/customers/${c.id}');
+                  if (!mounted) return;
+                  ref.invalidate(customersProvider);
+                  ref.invalidate(customerTypeCountsProvider);
+                },
               );
             },
           ),
         );
       },
     );
+  }
+
+  /// R-9 (2026-09-26): 列表底部加载状态行 (加载中 / 出错重试 / 已加载完毕)
+  ///
+  /// 复刻 web admin (src/components/business/customer-list-infinite.tsx):
+  ///   - loading → 转圈 + 「加载更多…」
+  ///   - error   → 「加载失败」+ 「重试」按钮
+  ///   - !hasMore → 「— 共 N 位客户, 已加载完毕 —」(N 走 result.total; 后端
+  ///               已迁移到 count 解耦, 后续页 total 可能为 null → 退回到 items.length)
+  Widget _buildListFooter(CustomerListResult result) {
+    if (_loadMoreError != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.s16),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '加载更多失败',
+                style: TextStyle(
+                  fontSize: AppTheme.fontSm,
+                  color: AppTheme.danger,
+                ),
+              ),
+              const SizedBox(height: AppSpace.s4),
+              TextButton(
+                onPressed: _loadingMore ? null : _loadMore,
+                child: const Text('重试', style: TextStyle(fontSize: AppTheme.fontSm)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_loadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpace.s16),
+        child: Center(
+          child: SizedBox(
+            width: AppSize.iconMd,
+            height: AppSize.iconMd,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    if (!_hasMore) {
+      final total = result.total > 0 ? result.total : _accumulatedItems.length;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.s16),
+        child: Center(
+          child: Text(
+            '— 共 $total 位客户，已加载完毕 —',
+            style: TextStyle(
+              fontSize: AppTheme.fontXs,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ),
+      );
+    }
+    // hasMore=true + 不在加载中: 留空行但保留 hit area (滚动依然能触发)
+    return const SizedBox(height: AppSpace.s16);
   }
 
   /// 图谱最上方「上层点位」链 (ADR-0015 Q13, 主人 2026-09-22 拍「上行最多 3 层直系」)

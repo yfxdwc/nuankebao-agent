@@ -382,6 +382,12 @@ class CustomerService {
   }
 
   /// GET /api/customers/shares/received —— 我收到的推送 (角标/元数据, 手机号一律打码)
+  ///
+  /// ⚠ **死代码** (R-10 优化, 2026-09-26 主人拍「保留 + Phase E 接入」, docs/r9-r10-optimization.md §5.3):
+  ///   本方法 Flutter 端**无任何调用方** (grep 全仓 `receivedShares()` 仅此一处定义);
+  ///   后端单测齐全 (`tests/customer-share.test.ts:550-609`)。
+  ///   主人拍板: 不删 (删了 = 删测试覆盖 + 路由签名变了以后接 UI 要重做),
+  ///   保留方法定义, 后续 Phase E 接入「上级推送列表」时直接使用。
   Future<List<ReceivedShare>> receivedShares() async {
     final res = await _dio.get('/customers/shares/received');
     final items = (res.data as Map<String, dynamic>)['items'] as List? ?? [];

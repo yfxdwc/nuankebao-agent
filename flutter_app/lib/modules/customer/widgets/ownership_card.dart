@@ -93,6 +93,11 @@ class _CustomerOwnershipCardState
           .read(customerServiceProvider)
           .pushShare(widget.customerId, picked.toUserId, note: picked.note);
       ref.invalidate(customerOwnershipProvider(widget.customerId));
+      // R-10 L1 (2026-09-26): 推送后被推送人列表里要出现这位客户 (归属态可能变 'upline');
+      //   推送不改变归属人, 所以 customerTypeCountsProvider 的 `franchisee/normal` 计数**不变**,
+      //   但列表数据本身变了 → 刷 customersProvider (列表行级过滤走 owner_id,
+      //   被推送人不影响此人的列表, 但**推送人**的列表行级与计数都按 viewer 口径过滤 → 安全刷一次)
+      ref.invalidate(customersProvider);
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(content: Text('已推送给 ${picked.toName}')),
@@ -122,6 +127,11 @@ class _CustomerOwnershipCardState
             reason: reason.trim(),
           );
       ref.invalidate(customerOwnershipProvider(widget.customerId));
+      // R-10 L1 (2026-09-26): 撤销推送后被推送人列表里这位客户**马上消失** (信任崩塌点)。
+      //   跟后端 idx_customer_share_to_active 索引协同保证"立即过滤";
+      //   客户端必须 invalidate 列表 + 计数, 否则用户看到的是缓存的旧数据。
+      ref.invalidate(customersProvider);
+      ref.invalidate(customerTypeCountsProvider);
       if (mounted) {
         setState(() {
           _sharesFuture =

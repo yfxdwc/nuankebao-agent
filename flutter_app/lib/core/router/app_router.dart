@@ -8,6 +8,7 @@
 // ============================================
 
 import 'package:flutter/material.dart';
+import 'route_observer.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -39,6 +40,7 @@ import '../../modules/salon/screens/salon_manage_page.dart';
 import '../../modules/salon/screens/salon_guests_page.dart';
 
 import '../theme/tokens.g.dart';
+
 /// 未登录也能访问的公开路由 (改这里 = 改鉴权门 → 必须同步改 test/app_router_test.dart)
 ///
 /// 2026-09-21 修 bug: 加上 `/register` 时**漏了这个白名单** → redirect 把未登录用户
@@ -66,7 +68,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: '/login',
-    observers: [UsageNavigatorObserver(telemetry)],
+    observers: [UsageNavigatorObserver(telemetry), routeObserver],
     // fix-route (2026-09-17): 未知路由兜底 — 以前直接抛 GoException 红屏,
     // 现在给一个「页面不存在 + 回客户页」的友好页 (缺路由时不再吓到主人/销售)
     errorBuilder: (context, state) => Scaffold(
