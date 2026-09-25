@@ -158,8 +158,11 @@ export async function resolveCustomerIdentity(
 
 ```
 listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
+  -- ★ v1.3 前置硬守卫 (reviewer P0): viewer.franchisee_id IS NULL → 只允许 (a)
+  --   否则 `f.placement_parent_id = NULL` 会命中所有根节点 → 未加盟 viewer 看到全部根节点档案
+  viewer.franchisee_id IS NOT NULL ? (
   (a)  customer.owner_id = viewer.user_id                     — 我的客户
-  ∨ (b1) EXISTS (                                             — 我的直推加盟商本人档案 [保留旧口径]
+  ∨ (b1) EXISTS (                                             — 我的下层加盟节点本人档案 [结构口径, 保留]
         SELECT 1 FROM franchisee f
         JOIN "user" u ON u.franchisee_id = f.id
         WHERE f.deleted_at IS NULL AND f.placement_parent_id = viewer.franchisee_id
@@ -170,13 +173,17 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
         WHERE sub.deleted_at IS NULL
           AND sub.id <> viewer.franchisee_id                  -- 排除自己
           AND sub.root_id IS NOT DISTINCT FROM me.root_id     -- 同树 (多根防护)
-          AND sub.placement_path LIKE (me.placement_path || '%'))
+          AND (me.placement_path = '' AND sub.placement_path <> ''
+               OR me.placement_path <> '' AND sub.placement_path LIKE me.placement_path || '%'))
   ∨ (c)  EXISTS (SELECT 1 FROM customer_share cs              — 上级推送的客户
                  WHERE cs.customer_id = customer.id
                    AND cs.to_user_id  = viewer.user_id
                    AND cs.revoked_at IS NULL
                    AND EXISTS (SELECT 1 FROM "user" r WHERE r.id = cs.to_user_id AND r.is_active = true))
+  ) : ( (a) )
 ```
+
+> **(b1) 为什么不能叫“直推加盟商”** (reviewer P1): (b1) 读的是 `placement_parent_id` = **结构口径**，而 §2.1 已拍「直推 = `referrer_id`」。为避免与 §9.1 INV-2 矛盾，全文统一称 **(b1) = 我的下层加盟节点本人档案**。
 
 > **(c) 的两个隐含条件** (评审补): ① 接收人账号必须 active (停用即失效, 与 §6.5 SHARE-4 一致); ② 接收人被搬到别的枝 → (b2)/(c) 的 `root_id` 口径会自然失效, 无需额外处理, 但要在巡检里报异常。
 
@@ -187,7 +194,7 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
 | 段 | 名字 | 真相源 | 取值 |
 |---|---|---|---|
 | (a) | 我的客户 | `customer.owner_id` (列) | 单值等式,O(log n) 索引 |
-| (b1) | 我的直推加盟商**本人档案** | `franchisee.placement_parent_id = 我` + `user.customer_id` | **现状保留** (AGENTS §6.6.1 Q2 原文口径) |
+| (b1) | 我的下层加盟节点**本人档案** | `franchisee.placement_parent_id = 我` + `user.customer_id` | **现状保留** (结构口径; §6.6.1 Q2 原文); ⚠ 已要求前置 NULL 守卫 |
 | (b2) | 我的下层**归属的客户** | `customer.owner_id IN (下层 user.id)` | **新增**;同树 + 排除自己 + `placement_path` 前缀 |
 | (c) | 上级推送的客户 | `customer_share` 表 (`to_user_id` + `revoked_at IS NULL` + 接收人 active) | 推送存在性;`owner_id` 不变 |
 
@@ -202,7 +209,11 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
 | `other` 他人客户 | **maskPhone** (理论上不出现在列表中, 若出现 = scope 漏检告警) |
 | `none` 无归属 | **maskPhone** (兜底: 无归属 ≠ 全可见) |
 
-> ⚠ **现有实现未接分级** (评审阻断项): `toView` (`src/lib/db/queries/customer.ts:177`) 目前**无条件** `decryptField(row.phoneEncrypted)` → 一旦 Phase D 扩围 (b2)/(c), 别人的客户手机号会以明文下发。**Phase D 必做**: `toView` 增 `ownership` 形参 + 5 处调用方 (create/get/list/update/claim) 全部传值。
+> ⚠ **E1 的落实是调用方义务** (reviewer P1): 本节四段 SQL **不重复写** `customer.deleted_at IS NULL` —— 由可见性封装函数 `viewerCustomerScopeSql` 在外层统一加，调用方禁止裸拼。同理 `customer_share` **不挂 `deleted_at`**，撤销只走 `revoked_at`。
+
+> ⚠ **ownership 需补第 6 态** (reviewer P1): `(b1)` 命中的行，其 `owner_id` 可能既不是我也不是下层 (例: 归属被 transfer 过)，会被误标成 `other` 并触发「scope 漏检告警」。Phase D 需在 `identity.ts` 的 ownership 枚举里加 **`direct_downline`** (命中 (b1) 时强制覆写)，UI 文案「我的下层加盟节点 · X」。
+
+> ⚠ **Phase D 开工前必查**: `franchisee.root_id IS NULL` 的老存量节点会被 `(b2)` 的 `IS NOT DISTINCT FROM` 排除 → 先跑 `npx tsx scripts/audit-placement-integrity.ts --strict` 看 NULL root_id 数量，多则先补 backfill (reviewer 无法确认存量规模)。
 
 **三条边界** (与 §3.3 B1/B2 一脉相承, 不重复):
 
@@ -405,7 +416,9 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 | **S2** | 接收人 `to_user_id` **必须是推送者所在枝的下层用户** (与 §3.4 (b) 同口径: 同 `root_id` + `placement_path` 前缀 + 后代) | 防止「跨枝推送」造成隐私泄漏; admin 不受此限 (admin 全森林) |
 | **S3** | 推送 ≠ 转移归属 (`customer.owner_id` **不变**); 「先到先得」归属规则**不受推送影响** | 推送只授可见性, 不授归属; 客户详情 / 概览 / 跟进口径以 `owner_id` 为准 |
 | **S4** | 同 (customer, to_user) **仅一条 active 推送** (部分唯一索引); 重复推送 → 409 `ALREADY_SHARED` | 幂等 + 业务语义清晰 |
-| **S5** | 接收人可撤销自己收到的推送 (`revoked_at = NOW()`, `revoked_by = to_user_id`); 推送人可撤销自己发出的推送; admin 全权撤销 | 三方都能撤回, 不锁死 |
+| **S5** | 接收人可撤销自己收到的推送 (`revoked_at = NOW()`, `revoked_by = to_user_id`); 推送人可撤销自己发出的推送; **当前归属人 `customer.owner_id` 也可撤销** (归属 transfer 后旧 from_user_id 代表不了新 owner, reviewer P1); admin 全权撤销 | 四方都能撤回, 不锁死 |
+| **S6** | **扩散上限** (reviewer P1 + D8 明文风险): 同一客户 active 推送数 ≤ 5 (可配); 同一接收人每日收到 ≤ 100 条; 超限 → 400 `SHARE_LIMIT_EXCEEDED` | D8 拍「推送给我的客户 = 明文」→ 不限扩散 = 手机号无限扩散 |
+| **S7** | **禁止二次转发**: 被推送人不能把收到的客户再推给她的下层 (避免控制链稀释 + 明文扩散) | 审计链清晰; 若实际需要 (大区经理代推) 由主人再拍 |
 
 #### 6.5.3 与其它口径的关系
 
@@ -444,6 +457,8 @@ CREATE UNIQUE INDEX uniq_customer_share_active
 | **SHARE-3** | 被推送人看到的是**同一份客户档案**, 不是副本 (无 `customer_copy` 表) |
 | **SHARE-4** | 推送 `to_user_id` 停用 → 列表不可见 (`to_user_id` 走 `EXISTS user active`) |
 | **SHARE-5** | `customer_share` 表必挂审计触发器 (`customer_share_audit`), 与 `franchisee_audit` 同模式 |
+| **SHARE-6** | `customer.owner_id` 被 transfer 后, 该客户的 active 推送**保留** (推送是独立可见性授权, 与归属无关); 新 owner 可撤销 (S5 已含) |
+| **SHARE-7** | `(b1)` 命中的客户其 ownership 必须是 `direct_downline` (不得落 `other`), 否则误报 scope 漏检 |
 
 ---
 
