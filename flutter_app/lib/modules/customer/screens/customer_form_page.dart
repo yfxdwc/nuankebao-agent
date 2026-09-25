@@ -686,29 +686,34 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               ),
             ),
             const SizedBox(height: AppSpace.s12),
-            // 种子客户开关 (潜在客户, 胶囊筛选「种子」命中这里)
-            Container(
-              decoration: BoxDecoration(
-                color: _isSeed ? AppTheme.accent.withOpacity(0.12) : Colors.white,
-                border: Border.all(
-                  color: _isSeed ? AppTheme.accent : AppColors.border,
-                  width: _isSeed ? 2 : 1,
+            // ★ 种子客户开关 (2026-09-25 主人: 「编辑客户页中不需要这个模块」)
+            //   **只在新建时**出现 —— 编辑时客户类型在详情页「管理」Tab 的
+            //   「客户类型」卡里改 (普通 / 🌱 种子), 这里再来一个是重复模块。
+            if (widget.customerId == null) ...[
+              const SizedBox(height: AppSpace.s12),
+              Container(
+                decoration: BoxDecoration(
+                  color: _isSeed ? AppTheme.accent.withOpacity(0.12) : Colors.white,
+                  border: Border.all(
+                    color: _isSeed ? AppTheme.accent : AppColors.border,
+                    width: _isSeed ? 2 : 1,
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.r12),
                 ),
-                borderRadius: BorderRadius.circular(AppRadius.r12),
-              ),
-              child: SwitchListTile(
-                value: _isSeed,
-                onChanged: (v) => setState(() => _isSeed = v),
-                activeColor: AppTheme.accent,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpace.s12, vertical: AppSpace.s4),
-                title: const Text('🌱 种子客户', style: TextStyle(fontSize: AppTheme.fontMd)),
-                subtitle: const Text(
-                  '还没体验过/刚加好友的潜在客户。勾上后客户列表可用「种子」筛出',
-                  style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+                child: SwitchListTile(
+                  value: _isSeed,
+                  onChanged: (v) => setState(() => _isSeed = v),
+                  activeColor: AppTheme.accent,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.s12, vertical: AppSpace.s4),
+                  title: const Text('🌱 种子客户', style: TextStyle(fontSize: AppTheme.fontMd)),
+                  subtitle: const Text(
+                    '还没体验过/刚加好友的潜在客户。勾上后客户列表可用「种子」筛出',
+                    style: TextStyle(fontSize: AppTheme.fontXs, color: AppTheme.textSecondary),
+                  ),
                 ),
               ),
-            ),
+            ],
             const SizedBox(height: AppSpace.s12),
             TextFormField(
               controller: _notesController,

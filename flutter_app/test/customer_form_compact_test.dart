@@ -17,8 +17,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:dio/dio.dart';
+import 'package:nuankebao/core/models/customer.dart';
+import 'package:nuankebao/core/providers/service_providers.dart';
+import 'package:nuankebao/core/services/api.dart';
 import 'package:nuankebao/core/theme/app_theme.dart';
 import 'package:nuankebao/modules/customer/screens/customer_form_page.dart';
+
+/// 编辑模式要 getById (表单 initState 就会拉档案)
+class _FakeCustomerService extends CustomerService {
+  _FakeCustomerService() : super(Dio());
+
+  @override
+  Future<Customer> getById(String id) async => Customer(
+        id: id,
+        name: '演示-蒋金娣',
+        phone: '13800001111',
+        createdAt: DateTime(2026, 9, 1),
+        updatedAt: DateTime(2026, 9, 1),
+      );
+}
 
 Future<void> _pump(WidgetTester tester, {Size? surface}) async {
   if (surface != null) {
@@ -99,4 +117,40 @@ void main() {
     expect((after.top - before.top).abs(), lessThan(0.5),
         reason: '滚动时保存键不能跟着走');
   });
+
+  testWidgets('④-a 新建: 有「🌱 种子客户」模块 (刚加好友的潜在客户直接标上)',
+      (tester) async {
+    // ⚠ 视口调高: 该模块在表单靠下, 默认 600 高时 ListView 还没构建到它
+    await tester.binding.setSurfaceSize(const Size(900, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pump(tester);
+    expect(find.textContaining('种子客户'), findsOneWidget);
+  });
+
+  testWidgets('④-b 编辑: 没有「种子客户」模块 (客户类型去管理 Tab 改)',
+      (tester) async {
+    // 主人 2026-09-25: 「编辑客户页中不需要这个模块」
+    await tester.binding.setSurfaceSize(const Size(900, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        customerServiceProvider.overrideWithValue(_FakeCustomerService()),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: const CustomerFormPage(customerId: '1'),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('种子客户'), findsNothing,
+        reason: '编辑页不该再有这个重复模块');
+    // 顺带: 编辑模式该有的东西还在
+    expect(find.text('保存修改'), findsOneWidget);
+    expect(find.textContaining('推荐码'), findsNothing,
+        reason: '推荐码本来就只在新建时出现');
+  });
+
 }
