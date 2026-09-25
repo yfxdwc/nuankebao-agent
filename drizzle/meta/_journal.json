@@ -183,6 +183,13 @@
       "when": 1790432400000,
       "tag": "0025_idea",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790518800000,
+      "tag": "0026_customer_acquire_source",
+      "breakpoints": true
     }
   ]
 }

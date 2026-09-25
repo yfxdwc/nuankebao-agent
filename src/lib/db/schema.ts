@@ -430,6 +430,16 @@ export const customer = pgTable(
 
     isSeed: boolean("is_seed").notNull().default(false),
 
+    // ★ 客户来源 (Phase A 客户标识体系 §5, migration 0026, 主人 2026-09-25 D5+D6+D7 拍):
+    //   - nullable: 灰度期老 APK INSERT 不带此列也能跑 (§5 M1, 不加 DEFAULT / NOT NULL)
+    //   - enum 在应用层 zod 校验 (DB 不加 CHECK, §5 M3; 与 referral_reward.source 同名规避, §5 M2)
+    //   - 转介绍介绍人姓名仅当 acquire_source='referral' 时应用层 zod refine 必填
+    //   - 索引 idx_customer_acquire_source (低基数加速"按来源筛选")
+    acquireSource: text("acquire_source", {
+      enum: ["friend", "referral", "cold_visit", "ground_promo"],
+    }),
+    sourceReferrerName: text("source_referrer_name"),
+
     // 跟进紧急度用 (主人 2026-09-20 拍: 客户列表按跟进紧急度排序 / 推荐标签):
     //   冗余列 —— 排序与分页必须在 SQL 层做, 不能拉全表到内存算 MAX(interaction.created_at)
     //   写路径统一维护 (POST /api/interactions / POST /api/wellness-records),
@@ -474,6 +484,8 @@ export const customer = pgTable(
     lastVisitIdx: index("idx_customer_last_visit").on(table.lastVisitAt),
     // 客户图谱: 推荐人索引 (查"我推荐了谁"用)
     referrerIdx: index("idx_customer_referrer").on(table.referrerId),
+    // ★ Phase A: 按来源筛选 (低基数, migration 0026 配套索引)
+    acquireSourceIdx: index("idx_customer_acquire_source").on(table.acquireSource),
   })
 );
 

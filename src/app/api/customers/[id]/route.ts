@@ -34,6 +34,24 @@ const UpdateCustomerSchema = z.object({
   isSeed: z.boolean().optional(),
   // 客户头像: 传 null = 恢复默认首字 (白名单校验在 query 层)
   avatar: z.string().max(300).nullable().optional(),
+  // ★ Phase A §5: 来源 (nullable, 四值枚举; 详情页管理区块使用, D6 列表不显示)
+  acquireSource: z
+    .enum(["friend", "referral", "cold_visit", "ground_promo"])
+    .nullable()
+    .optional(),
+  // 转介绍介绍人姓名; referral 时必填 (同 POST 路由 superRefine, §5 M3)
+  sourceReferrerName: z.string().max(50).nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (
+    data.acquireSource === "referral" &&
+    (data.sourceReferrerName == null || data.sourceReferrerName.trim().length === 0)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["sourceReferrerName"],
+      message: "转介绍必填介绍人姓名",
+    });
+  }
 });
 
 export async function GET(

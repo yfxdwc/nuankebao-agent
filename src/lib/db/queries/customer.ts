@@ -30,7 +30,12 @@ import {
 import { withAuditContext, type AuditContext } from "@/lib/audit/context";
 import { parseAvatarValue, readAvatarValue } from "@/lib/avatar";
 import { customerRbacFilter, type RbacContext } from "@/lib/auth/rbac";
-import { directDownlineFranchiseeSql, hasAccountSql } from "./customer-scope";
+import {
+  directDownlineFranchiseeSql,
+  hasAccountSql,
+  referredFranchiseeSql,
+} from "./customer-scope";
+import type { CustomerIdentity } from "@/lib/customer/identity";
 import { findActiveUserByReferralCode } from "./franchisee-account";
 import { maskPhone } from "@/lib/utils";
 import {
@@ -91,6 +96,26 @@ export interface CustomerView {
    *   口径 = **ID** (user.customer_id), 不按手机号相等猜。
    */
   hasAccount: boolean;
+  /**
+   * ★ 加盟细分 (Phase A §1 维度 2 + §2.1 supersede): 单一字段表达
+   *   "none" / "direct" / "nondirect", 取代旧 customerType 三态里的 "加盟" 概念。
+   *   旧字段 `customerType` (CustomerType enum) **保留透出** 灰度期老 APK 仍依赖;
+   *   新代码请用 affiliation (CustomerIdentity 同步推算后填回)。
+   *   唯一真相源 = src/lib/customer/identity.ts::resolveCustomerIdentity
+   */
+  affiliation: "none" | "direct" | "nondirect";
+  /**
+   * ★ 归属五态 (Phase A §1 维度 5 + §3.4 五态); 现阶段列表可见集合未扩围,
+   *   但本字段提供「标注能力」(下级/上级归属 = 现在还看不到但存在)。Phase D 扩围后
+   *   自动生效。唯一真相源 = identity.ts::resolveCustomerIdentity。
+   */
+  ownership: "mine" | "subordinate" | "upline" | "other" | "none";
+  /**
+   * ★ 客户来源 (Phase A §1 维度 6, migration 0026): 用于详情页管理区块
+   *   (D6: 列表不显示)。结构 = { kind, referrerName } 与 identity.ts 对齐。
+   *   老 APK 不带来源 → kind = null (= 未填写, 不报错)。
+   */
+  source: { kind: "friend" | "referral" | "cold_visit" | "ground_promo" | null; referrerName: string | null };
   /** 上次联系 (互动记录; 跟进紧急度用, 主人 2026-09-20) */
   lastInteractionAt: Date | null;
   /** 上次到店 (养生记录; 跟进紧急度用) */
@@ -100,19 +125,23 @@ export interface CustomerView {
 }
 
 // ============================================
-// 客户类型 (主人 2026-09-18 拍 混合方案 C; 2026-09-22 主人改「加盟」口径)
+// 客户类型 (主人 2026-09-18 拍 混合方案 C; 2026-09-22 主人改「加盟」口径;
+// 2026-09-25 主人再改「直推」口径 — supersede 旧的 placement 口径, 与图谱同真相源)
 // ============================================
 //
-//   - `franchisee` 加盟: **派生** — franchisee 表存在同 phone_hash 记录,
-//                        **且她是我的「直推」加盟商 (点位父 = 我, 第 1 层)**
-//                        (主人 2026-09-22: 「列表页加盟客户 = 只算我直推的」)
+//   - `franchisee` 加盟: **派生** — franchisee 表存在对应账号指向的节点,
+//                        **且她的直推者 (referrer_id) = 我** (Phase A supersede, §2.1)
+//                        (主人 2026-09-25: 「直推 = 谁把她带进加盟的人」)
 //   - `seed`       种子: **显式** — `customer.is_seed = true` (潜在客户开关, 表单可勾)
+//                   @legacy — Phase C 后种子从类型轴退出, 类型枚举 → 二态 (franchisee|unaffiliated);
+//                            灰度期老 APK 仍会传 seed, 本分支暂留兼容, API 保留透出
 //   - `normal`     普通: 其余 (默认)
 //
-// ⚠ 与图谱 tab **故意不同口径** (主人 2026-09-22 拍):
-//   - 图谱 = 我的**整个** placement 子树 (含下级的下级, 「客户的客户也能看到」)
-//   - 列表「加盟」= 只要**直推** (点位父 = 我) → 列表 ⊆ 图谱, 数量天然更少
-//   直推是**结构口径** (`placement_parent_id`, 拆栏见 AGENTS §6.8), **不是** referrer_id.
+// ⚠ 与图谱 tab 现在**统一口径** (主人 2026-09-25 §2.1 拍 supersede):
+//   - 图谱 = 「直推 = f.referrer_id = ctx.rootId」 (classifyRelation 一直就这么读)
+//   - 列表「加盟」= 「直推」= f.referrer_id = 我 ← supersede 后两处同真相源
+//   直推是**推荐人口径** (`referrer_id`, 拆栏见 AGENTS §6.8) — 不再读 placement_parent_id;
+//   `placement_parent_id` 仍属于「点位父 / 结构」语义, 跟「直推」是两件事 (I-2 不变量)。
 //
 // 优先级: 加盟 > 种子 > 普通 (已加盟的即使误标种子也显示「加盟」)
 //   - 未加盟 viewer (viewerFranchiseeId = null) → 无直推 → 加盟恒 0, 种子/普通照常
@@ -129,38 +158,39 @@ export const CUSTOMER_TYPES: readonly CustomerType[] = [
   "normal",
 ];
 
-// 直推加盟判定 (myDirectDownlineFranchiseeSql) 的**定义**已移到
-//   queries/customer-scope.ts (单一真相源): rbac.ts (行级过滤) 要用同一口径,
+// 直推加盟判定 (referrer 口径) 的**定义**已移到
+//   queries/customer-scope.ts (单一真相源, Phase A supersede): rbac.ts (行级过滤) 要用同一口径,
 //   而 customer.ts ↔ rbac.ts 不能互相 import。
-//   口径: 直推 = 点位父 (placement_parent_id) = 我; 与图谱(整个子树)故意不同;
-//         null → 永远 false。
+//   口径: 直推 = f.referrer_id = 我 (supersede 旧 placement_parent_id);
+//         null → 永远 false (B2 INV-3)。
 //   本文件 re-export 旧名字 (tests/customer-type.test.ts 在用)。
 export {
   directDownlineFranchiseeSql as myDirectDownlineFranchiseeSql,
 } from "./customer-scope";
 
-/** 单条判定 (create / get / update 用, 避免为一行拉整个列表) */
+/** 单条判定 (create / get / update 用, 避免为一行拉整个列表) — Phase A supersede:
+ *  直推口径改为 referrer_id (与图谱同真相源, §2.1); 签名保留 (向后兼容老调用方)。 */
 async function isMyDirectDownlineFranchisee(
   viewerFranchiseeId: bigint | null,
-  phoneHash: string
+  customerId: bigint
 ): Promise<boolean> {
   if (viewerFranchiseeId === null) return false;
-  const existsSql = sql`EXISTS (
-    SELECT 1 FROM ${franchisee}
-    WHERE ${franchisee.deletedAt} IS NULL
-      AND ${franchisee.phoneHash} = ${phoneHash}
-      AND ${franchisee.placementParentId} = ${viewerFranchiseeId}
-  )`;
-  const rows = await db.execute<{ d: boolean }>(sql`SELECT ${existsSql} AS d`);
+  // ★ supersede: 改用 referredFranchiseeSql 一次性渲染 (referrer 口径, ID 连接, B1 INV-4)
+  const rows = await db.execute<{ d: boolean }>(
+    sql`SELECT ${referredFranchiseeSql(viewerFranchiseeId)} AS d
+        FROM "customer" WHERE id = ${customerId} AND deleted_at IS NULL`
+  );
   return rows[0]?.d === true;
 }
 
-/** 类型判定 (纯函数, 单测用) */
+/** 类型判定 (纯函数, 单测用) — Phase A supersede:
+ *  第二个形参语义从「点位父是我」改为「直推者是我」(f.referrer_id = 我)。
+ *  函数签名 (返回枚举) 不变; 老调用方继续工作, 但解读必须按 referrer 口径理解。 */
 export function resolveCustomerType(
   row: { isSeed: boolean },
-  isMyDirectDownlineFranchisee: boolean
+  isReferredByMe: boolean
 ): CustomerType {
-  if (isMyDirectDownlineFranchisee) return "franchisee";
+  if (isReferredByMe) return "franchisee";
   return row.isSeed ? "seed" : "normal";
 }
 
@@ -169,7 +199,8 @@ function toView(
   isMyDownline: boolean = false,
   isMember: boolean = false,
   hasAccount: boolean = false,
-  accountReferralCode: string | null = null
+  accountReferralCode: string | null = null,
+  identity?: Pick<CustomerIdentity, "affiliation" | "ownership" | "source"> | null
 ): CustomerView {
   return {
     id: row.id.toString(),
@@ -195,10 +226,26 @@ function toView(
     // 读侧兜底: 库里万一有脏值 → null (跟 user 头像同一套 readAvatarValue)
     avatar: readAvatarValue(row.avatar),
     isSeed: row.isSeed,
+    // @legacy — 灰度期老 APK 依赖; Phase C 后随种子退出一起重命名为 "franchisee"|"unaffiliated"
     customerType: resolveCustomerType(row, isMyDownline),
     isMember,
     hasAccount,
     accountReferralCode,
+    // ★ Phase A: 6 维标识 (与 identity.ts 同步); 未传 identity → 走默认推导
+    //   affiliation: 推导起点 = isMyDownline (referrer 口径, §2.1 supersede)
+    //   ownership:   默认 "none"; Phase D 接入 customer_share 后才有 "upline"
+    affiliation:
+      identity?.affiliation ?? (isMyDownline ? "direct" : "none"),
+    ownership: identity?.ownership ?? "none",
+    source: identity?.source ?? {
+      kind: (row.acquireSource ?? null) as
+        | "friend"
+        | "referral"
+        | "cold_visit"
+        | "ground_promo"
+        | null,
+      referrerName: row.sourceReferrerName ?? null,
+    },
     lastInteractionAt: row.lastInteractionAt ?? null,
     lastVisitAt: row.lastVisitAt ?? null,
     createdAt: row.createdAt,
@@ -227,6 +274,14 @@ export interface CreateCustomerInput {
   avatar?: string | null;
   /** 种子客户 (潜在客户开关, 主人 2026-09-18). 缺省 false */
   isSeed?: boolean;
+  /**
+   * ★ 客户来源 (Phase A §5, migration 0026; 主人 2026-09-25 D5 拍「选填」):
+   *   friend / referral / cold_visit / ground_promo; null = 未填写
+   *   转介绍时 sourceReferrerName 必填 (zod refine 负责, DB 不加 CHECK, §5 M3)
+   */
+  acquireSource?: "friend" | "referral" | "cold_visit" | "ground_promo" | null;
+  /** 转介绍介绍人姓名 (仅 acquire_source = referral 时必填; ≤ 50 字) */
+  sourceReferrerName?: string | null;
 }
 
 export interface UpdateCustomerInput {
@@ -248,6 +303,13 @@ export interface UpdateCustomerInput {
   isSeed?: boolean;
   /** 客户头像: 传 null = 恢复默认首字 */
   avatar?: string | null;
+  /**
+   * ★ 客户来源 (Phase A §5); 显式传 null = 清空 (与 birthMonth 同口径)
+   *   详情见 CreateCustomerInput.acquireSource
+   */
+  acquireSource?: "friend" | "referral" | "cold_visit" | "ground_promo" | null;
+  /** 转介绍介绍人姓名; 显式传 null = 清空 */
+  sourceReferrerName?: string | null;
 }
 
 export interface ListCustomersOptions {
@@ -427,6 +489,9 @@ export async function createCustomer(
     notesEncrypted: input.notes ? encryptField(input.notes) : null,
     avatar: parseAvatarForWrite(input.avatar),
     isSeed: input.isSeed ?? false,
+    // ★ Phase A §5: 来源 (nullable, 应用层 zod refine 校验 referral 时介绍人必填)
+    acquireSource: input.acquireSource ?? null,
+    sourceReferrerName: input.sourceReferrerName ?? null,
     // 归属 = 建档人 (ADR-0015 Q11): 手工新建的客户 = 归我
     //   (建号/导入/落位建档不自动归属 —— 见 registration.ts / signup.ts 的 ownerId: null)
     ownerId: createdBy,
@@ -441,7 +506,7 @@ export async function createCustomer(
   const flags = await customerFlagsByCustomerId(row.id);
   return toView(
     row,
-    await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
+    await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.id),
     flags.isMember,
     flags.hasAccount
   );
@@ -475,7 +540,7 @@ export async function getCustomerById(
   const flags = await customerFlagsByCustomerId(row.id);
   return toView(
     row,
-    await isMyDirectDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.phoneHash),
+    await isMyDirectDownlineFranchisee(options?.viewerFranchiseeId ?? null, row.id),
     flags.isMember,
     flags.hasAccount,
     flags.accountReferralCode
@@ -522,18 +587,24 @@ function buildCustomerConditions(options: ListCustomersOptions): SQL[] {
       )!
     );
   }
-  // 客户类型筛选 (胶囊按键, 主人 2026-09-18 拍) — 跟 resolveCustomerType 严格对齐:
-  //   加盟 = 我的**直推**加盟商 (点位父 = 我; 主人 2026-09-22 拍, 不再算整个子树);
-  //   种子 = is_seed 且非加盟; 普通 = 其余
+  // 客户类型筛选 (胶囊按键, 主人 2026-09-18 拍; 2026-09-25 主人再改「直推」口径) —
+  //   跟 resolveCustomerType 严格对齐:
+  //   加盟 = 我的**直推**加盟商 (f.referrer_id = 我; Phase A supersede, 与图谱同真相源);
+  //   种子 = is_seed 且非加盟 (@legacy: Phase C 后种子从类型轴退出; 灰度期老 APK 仍会传)
+  //   普通 = 其余
   // 存量老客户端不传 type → 不筛 (跟改动前完全一致)
   if (type && type !== "all") {
-    const directDownline = directDownlineFranchiseeSql(viewerFranchiseeId ?? null);
+    // Phase A supersede: 加盟口径改为 referrer (referredFranchiseeSql);
+    //   seed/normal 仍以「非加盟」为补集, 逻辑不变 (走同一条口径)
+    const referredByMe = referredFranchiseeSql(viewerFranchiseeId ?? null);
     if (type === "franchisee") {
-      conditions.push(directDownline);
+      conditions.push(referredByMe);
     } else if (type === "seed") {
-      conditions.push(eq(customer.isSeed, true), not(directDownline));
+      // @legacy — 灰度期保留, Phase C 后随种子退出一起删
+      conditions.push(eq(customer.isSeed, true), not(referredByMe));
     } else if (type === "normal") {
-      conditions.push(eq(customer.isSeed, false), not(directDownline));
+      // @legacy — 同上, 灰度期保留
+      conditions.push(eq(customer.isSeed, false), not(referredByMe));
     }
   }
   // W5 RBAC: 行级 store_id 过滤 (Q1-A + Q4-A)
@@ -554,7 +625,8 @@ export async function listCustomers(
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   // 类型随行算: 一次 SELECT 把「是否我的直推加盟商」当计算列带回来 (不再多一次 IN 查询)
-  const directDownline = directDownlineFranchiseeSql(viewerFranchiseeId ?? null);
+  //   Phase A supersede: isDownline 列改用 referredFranchiseeSql (referrer 口径, §2.1)
+  const directDownline = referredFranchiseeSql(viewerFranchiseeId ?? null);
   const [rows, [{ count }]] = await Promise.all([
     db
       .select({
@@ -644,7 +716,9 @@ export async function customerTypeCounts(options: {
     rbacCtx: options.rbacCtx,
   });
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-  const directDownline = directDownlineFranchiseeSql(options.viewerFranchiseeId ?? null);
+  // Phase A supersede (§2.1): 计数口径同步切到 referrer 口径 (与列表同真相源);
+  //   seed / normal 仍以「非加盟」为补集, 逻辑不变
+  const directDownline = referredFranchiseeSql(options.viewerFranchiseeId ?? null);
 
   const [row] = await db
     .select({
@@ -731,6 +805,18 @@ export async function updateCustomer(
   if (input.avatar !== undefined) {
     updateData.avatar = parseAvatarForWrite(input.avatar);
   }
+  // ★ Phase A §5: 来源 (显式 null = 清空, 与 birthdayRemindDays 同口径)
+  if (input.acquireSource !== undefined) {
+    updateData.acquireSource = input.acquireSource;
+  }
+  if (input.sourceReferrerName !== undefined) {
+    // 长度限制路由层 zod 负责; 这里再加一道 ≥ 50 字护栏 (防恶意 DB 写入)
+    const trimmed = input.sourceReferrerName?.trim() ?? null;
+    updateData.sourceReferrerName =
+      trimmed && trimmed.length > 0
+        ? trimmed.slice(0, 50)
+        : null;
+  }
 
   const [row] = await withAuditContext(ctx, async (tx) => {
     return await tx
@@ -751,7 +837,7 @@ export async function updateCustomer(
   const flags = await customerFlagsByCustomerId(row.id);
   return toView(
     row,
-    await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.phoneHash),
+    await isMyDirectDownlineFranchisee(viewerFranchiseeId, row.id),
     flags.isMember,
     flags.hasAccount
   );
@@ -830,7 +916,7 @@ export async function claimCustomerOwnership(
     const flags = await customerFlagsByCustomerId(r.id);
     return toView(
       r,
-      await isMyDirectDownlineFranchisee(viewerFranchiseeId, r.phoneHash),
+      await isMyDirectDownlineFranchisee(viewerFranchiseeId, r.id),
       flags.isMember,
       flags.hasAccount
     );

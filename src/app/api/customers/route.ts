@@ -43,6 +43,26 @@ const CreateCustomerSchema = z.object({
   avatar: z.string().max(300).nullable().optional(),
   // 种子客户 (潜在客户开关, 主人 2026-09-18). 缺省 false (老客户端不发也能跑)
   isSeed: z.boolean().optional(),
+  // ★ Phase A §5: 来源 (nullable, 四值枚举; 主人 2026-09-25 D5 拍「选填」)
+  acquireSource: z
+    .enum(["friend", "referral", "cold_visit", "ground_promo"])
+    .nullable()
+    .optional(),
+  // ★ 转介绍介绍人姓名 (≤ 50 字, 与 DB 列类型保持);
+  //   上面带 superRefine 在 referral 时必填
+  sourceReferrerName: z.string().max(50).nullable().optional(),
+}).superRefine((data, ctx) => {
+  // D5: 「acquireSource === referral 时 sourceReferrerName 必填」(应用层校验, 不加 DB CHECK, §5 M3)
+  if (
+    data.acquireSource === "referral" &&
+    (data.sourceReferrerName == null || data.sourceReferrerName.trim().length === 0)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["sourceReferrerName"],
+      message: "转介绍必填介绍人姓名",
+    });
+  }
 });
 
 // 列表类型筛选 (胶囊按键: 全部/加盟/普通/种子)
