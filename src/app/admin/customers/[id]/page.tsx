@@ -65,6 +65,9 @@ export default async function CustomerDetailPage({
           diseaseHistory: customer.diseaseHistory,
           notes: customer.notes,
           createdAt: customer.createdAt,
+          // ★ Phase C: 归属 + 来源 (D6: 详情页档案/管理区显示)
+          ownership: customer.ownership,
+          source: customer.source,
         }}
         wellnessRecords={{
           items: wellnessRecords.items.map((r) => ({

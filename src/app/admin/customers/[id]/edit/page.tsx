@@ -41,6 +41,9 @@ export default async function EditCustomerPage({
           healthTags: customer.healthTags,
           diseaseHistory: customer.diseaseHistory ?? undefined,
           notes: customer.notes ?? undefined,
+          // ★ Phase C: 来源 + 转介绍介绍人 (详情页可编辑)
+          acquireSource: customer.source?.kind ?? null,
+          sourceReferrerName: customer.source?.referrerName ?? null,
         }}
       />
     </div>

@@ -10,6 +10,21 @@ import { Select } from "@/components/ui/select";
 import { Section } from "@/components/ui/section";
 import { cn } from "@/lib/utils";
 
+/**
+ * 客户来源 (Phase A migration 0026 + Phase C §1 维度 6).
+ *   null = 未填写 (老 APK / 老 web admin 默认).
+ *   referral 时 sourceReferrerName 必填 (后端 zod refine 校验, §5 M3).
+ */
+type AcquireSource = "friend" | "referral" | "cold_visit" | "ground_promo" | null;
+
+/** 与后端 src/lib/db/queries/customer.ts::CustomerView.source 保持一致 */
+const ACQUIRE_SOURCE_OPTIONS: { value: NonNullable<AcquireSource>; label: string }[] = [
+  { value: "friend", label: "亲友" },
+  { value: "referral", label: "转介绍" },
+  { value: "cold_visit", label: "陌生拜访" },
+  { value: "ground_promo", label: "地推" },
+];
+
 interface CustomerFormProps {
   initial?: {
     id?: string;
@@ -20,6 +35,12 @@ interface CustomerFormProps {
     healthTags?: string[];
     diseaseHistory?: string;
     notes?: string;
+    /**
+     * ★ Phase C: 来源 + 转介绍介绍人 (后端 zod refine 校验 referral 必填).
+     *   老表单不传 → 默认 null = 未填写 (向后兼容).
+     */
+    acquireSource?: AcquireSource;
+    sourceReferrerName?: string | null;
   };
   mode: "create" | "edit";
 }
@@ -42,6 +63,9 @@ export function CustomerForm({ initial, mode }: CustomerFormProps) {
     healthTags: initial?.healthTags ?? [],
     diseaseHistory: initial?.diseaseHistory ?? "",
     notes: initial?.notes ?? "",
+    // ★ Phase C: 来源 (D5 拍"选填"; 转介绍时介绍人必填, zod refine 校验)
+    acquireSource: (initial?.acquireSource ?? null) as AcquireSource,
+    sourceReferrerName: initial?.sourceReferrerName ?? "",
   });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -50,7 +74,7 @@ export function CustomerForm({ initial, mode }: CustomerFormProps) {
     setError(null);
 
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         name: form.name,
         phone: form.phone,
         gender: form.gender,
@@ -59,6 +83,22 @@ export function CustomerForm({ initial, mode }: CustomerFormProps) {
         diseaseHistory: form.diseaseHistory || undefined,
         notes: form.notes || undefined,
       };
+      // ★ Phase C: 来源走 4 个固定值 + 未填写 (null). 转介绍 → 介绍人必填
+      //   (后端 zod refine 已经会报 400, 这里前端再兜一道防止错误发送)
+      if (form.acquireSource) {
+        payload.acquireSource = form.acquireSource;
+        if (form.acquireSource === "referral") {
+          const referrer = form.sourceReferrerName.trim();
+          if (!referrer) {
+            setError("转介绍必填介绍人姓名");
+            setLoading(false);
+            return;
+          }
+          payload.sourceReferrerName = referrer;
+        }
+      } else {
+        // 未填写: 不传 acquireSource 字段, 让后端默认 null
+      }
 
       const url =
         mode === "create"
@@ -154,6 +194,62 @@ export function CustomerForm({ initial, mode }: CustomerFormProps) {
         </div>
       </Section>
 
+      {/* ★ Phase C: 客户来源 (D5 + §4.2 L4)
+          位置 = 姓名/性别/手机 与 生日 之间 (设计文档)
+          - 下拉 4 个枚举 + 未填写 (option value="" = 未填写, 不发字段)
+          - 选"转介绍"时展开"介绍人"必填输入
+          - 后端 zod refine 校验 referral 时 sourceReferrerName 必填 (§5 M3)
+          - 老表单不传 acquireSource → 默认 null = 未填写 (向后兼容) */}
+      <Section title="客户来源" description="选填；选「转介绍」时介绍人必填">
+        <div className="grid gap-section-y sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="acquireSource">来源</Label>
+            <Select
+              id="acquireSource"
+              value={form.acquireSource ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm({
+                  ...form,
+                  // 空串 = 未填写; 其他为 4 个枚举
+                  acquireSource: v === "" ? null : (v as NonNullable<AcquireSource>),
+                  // 切走"转介绍" → 清空介绍人 (避免误带)
+                  sourceReferrerName:
+                    v === "referral" ? form.sourceReferrerName : "",
+                });
+              }}
+            >
+              <option value="">未填写</option>
+              {ACQUIRE_SOURCE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {/* 转介绍 → 介绍人必填 (zod refine 校验, 前端再兜一道)
+              与下拉同列占位, 但要时只展开一行 (col-span 2 跨满) */}
+          {form.acquireSource === "referral" && (
+            <div className="space-y-2 sm:col-span-1">
+              <Label htmlFor="sourceReferrerName">
+                介绍人 <span className="text-danger">*</span>
+              </Label>
+              <Input
+                id="sourceReferrerName"
+                required
+                maxLength={50}
+                className="min-h-control"
+                value={form.sourceReferrerName}
+                onChange={(e) =>
+                  setForm({ ...form, sourceReferrerName: e.target.value })
+                }
+                placeholder="如: 张三 / 李姐"
+              />
+            </div>
+          )}
+        </div>
+      </Section>
+
       <Section title="健康标签" description="多选">
         <div className="flex flex-wrap gap-2">
           {HEALTH_TAG_OPTIONS.map((tag) => (
@@ -212,7 +308,17 @@ export function CustomerForm({ initial, mode }: CustomerFormProps) {
         >
           取消
         </Button>
-        <Button type="submit" disabled={loading || !form.name || form.phone.length !== 11}>
+        <Button
+          type="submit"
+          disabled={
+            loading ||
+            !form.name ||
+            form.phone.length !== 11 ||
+            // 转介绍 → 介绍人必填 (前端兜一道 + 后端 zod refine 兑底)
+            (form.acquireSource === "referral" &&
+              form.sourceReferrerName.trim().length === 0)
+          }
+        >
           {loading ? "保存中..." : mode === "create" ? "创建客户" : "保存修改"}
         </Button>
       </div>

@@ -23,6 +23,19 @@ import { cn } from "@/lib/utils";
 
 type Gender = "F" | "M" | "U" | null | undefined;
 
+/**
+ * 归属五态 (Phase C §3.4 / 客户标识体系 v1) — 与 list 同一口径.
+ *   mine        : 静默 (不出标签, 不与"我的客户"同色铺满)
+ *   subordinate : 别人的客户 (我的下层 user 归属; 详情页 Phase D 后才有 ownerName)
+ *   upline      : 上级推送的客户 (Phase D 落地)
+ *   none        : 无归属
+ *   other       : 他人客户 (scope 漏检告警)
+ */
+type Ownership = "mine" | "subordinate" | "upline" | "other" | "none";
+
+/** 客户来源 (Phase A migration 0026; Phase C §1 维度 6). */
+type AcquireSource = "friend" | "referral" | "cold_visit" | "ground_promo" | null;
+
 interface CustomerLite {
   id: string;
   name: string;
@@ -33,6 +46,69 @@ interface CustomerLite {
   diseaseHistory: string | null;
   notes: string | null;
   createdAt: Date | string;
+  /**
+   * ★ 归属五态 (Phase C); 老后端不返回 → 详情页 ownerName 兜底 "" 不显示 .
+   *   单一真相源 = src/lib/customer/identity.ts.
+   */
+  ownership?: Ownership;
+  /**
+   * ★ 客户来源 (Phase C §1 维度 6 + §4.2 L4, D6).
+   *   null / undefined = 未填写 → 显示"未填写".
+   *   referral 时 referrerName 必填 (后端 zod refine 校验, §5 M3).
+   */
+  source?: { kind: AcquireSource; referrerName: string | null };
+}
+
+/**
+ * 归属 badge 文案 (Phase C §4.2, 详情页用 — 与列表同一口径)
+ *   mine       → null (静默)
+ *   subordinate → "下级的客户 · X"
+ *   upline     → "上级推送 · X"
+ *   none       → "无归属"
+ *   other      → "他人客户"
+ */
+function ownershipBadgeLabel(
+  o: Ownership | undefined,
+  ownerName?: string | null
+): { label: string; className: string } | null {
+  switch (o) {
+    case "mine":
+    case undefined:
+      return null;
+    case "subordinate":
+      return {
+        label: ownerName ? `下级的客户 · ${ownerName}` : "下级的客户",
+        className: "bg-info-light text-info",
+      };
+    case "upline":
+      return {
+        label: ownerName ? `上级推送 · ${ownerName}` : "上级推送",
+        className: "bg-brand-light text-brand",
+      };
+    case "none":
+      return {
+        label: "无归属",
+        className: "bg-surface-subtle text-content-secondary",
+      };
+    case "other":
+      return {
+        label: "他人客户",
+        className: "bg-warning-light text-warning",
+      };
+  }
+}
+
+/** 来源短词 (Phase C §1 维度 6); null → 未填写. */
+const ACQUIRE_SOURCE_LABELS: Record<Exclude<AcquireSource, null>, string> = {
+  friend: "亲友",
+  referral: "转介绍",
+  cold_visit: "陌生拜访",
+  ground_promo: "地推",
+};
+
+function acquireSourceLabel(s: AcquireSource | undefined): string {
+  if (!s) return "未填写";
+  return ACQUIRE_SOURCE_LABELS[s];
 }
 
 interface WellnessRecordLite {
@@ -137,6 +213,16 @@ export function CustomerDetailTabs({
 }
 
 function ProfileTab({ customer }: { customer: CustomerLite }) {
+  // ★ 归属 badge (Phase C §4.2 L2 五态, 与列表同口径)
+  //   详情页 = 老板视角: "她的客户归谁管"比列表更重要 —— 总是显示 (mine 也加个静默标也行,
+  //   但设计拍"默认静默、异常态显形", mine 也按静默, 避免同色铺满).
+  //   详情页现不传 ownerName (Phase D 后端 src/view/[id] 接入 identity.ts 后带).
+  const own = ownershipBadgeLabel(customer.ownership);
+  // ★ 来源 (Phase C §1 维度 6 + D6): 仅在详情页"档案/管理区"显示,
+  //   列表**不**显示 (D6 硬约束); referral 时展开介绍人 (zod refine 校验)
+  const src = customer.source;
+  const sourceKind = src?.kind ?? null;
+  const referrerName = src?.referrerName ?? null;
   return (
     <div className="space-y-section-y">
       {/* 基本信息 (Section, 无 Card 边框) */}
@@ -153,6 +239,15 @@ function ProfileTab({ customer }: { customer: CustomerLite }) {
               <span className="text-caption text-content-tertiary">
                 {customer.gender === "F" ? "女" : customer.gender === "M" ? "男" : "-"}
               </span>
+              {/* 归属 badge (五态; mine 静默) */}
+              {own && (
+                <span
+                  data-testid="ownership-badge"
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-caption font-medium shrink-0 ${own.className}`}
+                >
+                  {own.label}
+                </span>
+              )}
             </div>
             <p className="text-caption text-content-secondary mt-0.5 tabular-nums">
               注册于 {formatDate(customer.createdAt)}
@@ -170,6 +265,23 @@ function ProfileTab({ customer }: { customer: CustomerLite }) {
             <div className="text-body-lg">
               <span className="text-content-secondary">出生年: </span>
               <span className="tabular-nums">{customer.birthYear}</span>
+            </div>
+          )}
+        </div>
+        {/* ★ 客户来源行 (Phase C §4.2 L4, D6).
+            详情页"档案/管理区"显示; 列表不显示.
+            referral 时展开"介绍人: XXX". */}
+        <div className="grid gap-2 sm:grid-cols-2 pt-section-y border-t border-divider">
+          <div className="text-body-lg">
+            <span className="text-content-secondary">客户来源: </span>
+            <span className="text-content-primary">{acquireSourceLabel(sourceKind)}</span>
+          </div>
+          {sourceKind === "referral" && (
+            <div className="text-body-lg">
+              <span className="text-content-secondary">介绍人: </span>
+              <span className="text-content-primary">
+                {referrerName?.trim() ? referrerName : "—"}
+              </span>
             </div>
           )}
         </div>
