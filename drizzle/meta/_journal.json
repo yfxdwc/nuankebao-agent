@@ -204,6 +204,13 @@
       "when": 1790691600000,
       "tag": "0028_customer_share",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790778000000,
+      "tag": "0029_customer_list_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { customerRbacFilter, getRbacContextForSession } from "@/lib/auth/rbac";
@@ -12,6 +12,7 @@ import {
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 import { hasFeatureAccess } from "@/lib/billing/guard";
 import { FEATURES } from "@/lib/billing/features";
+import { noStoreJson } from "@/lib/http/no-store";
 
 const UpdateCustomerSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -60,7 +61,7 @@ export async function GET(
 ) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
@@ -75,12 +76,12 @@ export async function GET(
     viewerUserId: rbacCtx?.userId ?? null,
   });
   if (!customer) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return noStoreJson({ error: "Not found" }, { status: 404 });
   }
 
   // ADR-0012: 非会员看不到生日提醒设置 (数据仍在, 续费即恢复)
   const reminderOn = await hasFeatureAccess(session?.user?.id, FEATURES.CRM_BIRTHDAY_REMINDER);
-  return NextResponse.json(reminderOn ? customer : { ...customer, birthdayRemindDays: null });
+  return noStoreJson(reminderOn ? customer : { ...customer, birthdayRemindDays: null });
 }
 
 export async function PATCH(
@@ -89,7 +90,7 @@ export async function PATCH(
 ) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -107,17 +108,17 @@ export async function PATCH(
     });
 
     if (!customer) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return noStoreJson({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json(customer);
+    return noStoreJson(customer);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+      return noStoreJson({ error: "Invalid input", details: error.errors }, { status: 400 });
     }
     // ★ 同号提醒 (ADR-0016 D5, 主人 2026-09-22 拍): 手机号已有档案 → 409 + 结构化提示
     //   (前端据此弹"用已有档案/加为我的客户", 不静默建第二条、也不炸 500)
     if (error instanceof CustomerPhoneExistsError) {
-      return NextResponse.json(
+      return noStoreJson(
         {
           error: error.message,
           code: "PHONE_EXISTS",
@@ -134,10 +135,10 @@ export async function PATCH(
 
     // 头像白名单等业务校验错误 → 400 (把原因透给客户端, 不吞成 500)
     if (error instanceof Error && error.message.startsWith("头像值不合法")) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return noStoreJson({ error: error.message }, { status: 400 });
     }
     console.error("[PATCH /api/customers/[id]]", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return noStoreJson({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -147,7 +148,7 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
@@ -161,7 +162,7 @@ export async function DELETE(
   );
 
   if (!success) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return noStoreJson({ error: "Not found" }, { status: 404 });
   }
-  return NextResponse.json({ success: true });
+  return noStoreJson({ success: true });
 }

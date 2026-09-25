@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { customerRbacFilter, getRbacContextForSession } from "@/lib/auth/rbac";
 import { getCustomerById, getCustomerOwnership } from "@/lib/db/queries/customer";
 import { listSharesOfCustomer } from "@/lib/db/queries/customer-share";
+import { noStoreJson } from "@/lib/http/no-store";
 
 /**
  * GET /api/customers/[id]/shares
@@ -19,12 +20,12 @@ export async function GET(
 ) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
   if (!/^\d+$/.test(id)) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    return noStoreJson({ error: "Invalid id" }, { status: 400 });
   }
 
   const rbacCtx = await getRbacContextForSession(session);
@@ -36,7 +37,7 @@ export async function GET(
     viewerUserId: rbacCtx?.userId ?? null,
   });
   if (!customer) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return noStoreJson({ error: "Not found" }, { status: 404 });
   }
 
   const isAdmin = rbacCtx?.role === "admin";
@@ -45,12 +46,12 @@ export async function GET(
       ? await getCustomerOwnership(customerId, rbacCtx.userId, null)
       : null;
   if (!isAdmin && !(ownership?.isMine ?? false)) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return noStoreJson({ error: "Not found" }, { status: 404 });
   }
 
   const items = await listSharesOfCustomer(
     customerId,
     isAdmin ? null : (ownership?.ownerId != null ? BigInt(ownership.ownerId) : null)
   );
-  return NextResponse.json({ items });
+  return noStoreJson({ items });
 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { resolveViewerCustomerId, resolveViewerFranchiseeId } from "@/lib/auth/viewer";
@@ -19,6 +19,7 @@ import {
   summarizeFollowUp,
 } from "@/lib/follow-up/attach";
 import { batchRepurchaseWindows } from "@/lib/follow-up/repurchase";
+import { noStoreJson } from "@/lib/http/no-store";
 
 const CreateCustomerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -77,7 +78,7 @@ const SORT_SAFETY_LIMIT = 2000;
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
   const rawSort = searchParams.get("sort") ?? undefined;
   const parsedSort = SortSchema.safeParse(rawSort);
   if (rawSort !== undefined && !parsedSort.success) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Invalid sort", expected: ["urgency", "recent", "new", "name"] },
       { status: 400 }
     );
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
   const rawType = searchParams.get("type") ?? undefined;
   const parsedType = CustomerTypeSchema.safeParse(rawType);
   if (rawType !== undefined && !parsedType.success) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Invalid type", expected: ["all", "franchisee", "seed", "normal"] },
       { status: 400 }
     );
@@ -140,11 +141,17 @@ export async function GET(request: NextRequest) {
 
   // 1) 取数据: 紧急度排序要在"命中全集"上排序再切片 (见 attach.ts 规模说明)
   const needAll = effectiveSort === "urgency";
+  // ★ R-9 count 解耦 (2026-09-26):
+  //   首页 (offset === 0) → includeTotal = true, 保留 count(*) 给前端 (PageHeader 总数 + hasMore 初始)
+  //   后续页 (offset > 0) → includeTotal = false, 跳过 count 避免每页全表扫
+  //   urgency 排序 → includeTotal = false (后续 sortByUrgency 在内存里会按 items.length 重算,
+  //                       既然 SQL 那边没法用, 这个 total 也没意义, 与 count(*) 解耦一起减负担)
   const result = await listCustomers({
     ...listOptions,
     sort: effectiveSort,
     limit: needAll ? SORT_SAFETY_LIMIT : limit,
     offset: needAll ? 0 : offset,
+    includeTotal: needAll ? false : offset === 0,
   });
 
   // 2) 会员: 批量算复购窗口 (一次 SQL; 非会员不传 → 天然不参与, 不浪费查询)
@@ -183,9 +190,9 @@ export async function GET(request: NextRequest) {
   // ADR-0012: 生日提醒是会员功能 —— 非会员读出来 birthdayRemindDays = null (提醒自然不触发),
   // 底层数据保留 (续费后设置自动回来)。放在 route 层而不是 query 层: 不动被 web admin 复用的查询
   if (!birthdayReminderOn) {
-    return NextResponse.json(stripBirthdayReminderFromList(payload));
+    return noStoreJson(stripBirthdayReminderFromList(payload));
   }
-  return NextResponse.json(payload);
+  return noStoreJson(payload);
 
   // ADR-0012: 生日提醒是会员功能 —— 非会员读出来 birthdayRemindDays = null (提醒自然不触发),
   // 底层数据保留 (续费后设置自动回来)。放在 route 层而不是 query 层: 不动被 web admin 复用的查询
@@ -195,7 +202,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -211,15 +218,15 @@ export async function POST(request: NextRequest) {
       await resolveViewerFranchiseeId(session?.user?.id)
     );
 
-    return NextResponse.json(customer, { status: 201 });
+    return noStoreJson(customer, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+      return noStoreJson({ error: "Invalid input", details: error.errors }, { status: 400 });
     }
     // ★ 同号提醒 (ADR-0016 D5, 主人 2026-09-22 拍): 手机号已有档案 → 409 + 结构化提示
     //   (前端据此弹"用已有档案/加为我的客户", 不静默建第二条、也不炸 500)
     if (error instanceof CustomerPhoneExistsError) {
-      return NextResponse.json(
+      return noStoreJson(
         {
           error: error.message,
           code: "PHONE_EXISTS",
@@ -234,6 +241,6 @@ export async function POST(request: NextRequest) {
       );
     }
     console.error("[POST /api/customers]", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return noStoreJson({ error: "Internal server error" }, { status: 500 });
   }
 }

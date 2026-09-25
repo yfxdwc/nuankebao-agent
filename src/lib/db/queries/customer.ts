@@ -380,6 +380,22 @@ export interface ListCustomersOptions {
   limit?: number;
   offset?: number;
   includeDeleted?: boolean;
+  /**
+   * R-9 count 解耦 (2026-09-26 拍): 是否跑全表 count(*) 查询。
+   *
+   * 默认 = true (保持兼容, 既有调用方不变)。
+   *
+   * 设为 false → 跳过 count, total 由调用方根据 items.length + offset 推导
+   * (见 listCustomers 返回值说明)。这是 R-9 第二条优化: 后续页不查全表,
+   * 走「最后页 items.length < limit → 终止 / 否则保留上一页 total」的轻量语义。
+   *
+   * 使用建议:
+   *   - 列表首页 (offset === 0): true (返回 total 给前端初始计数/hasMore 判定)
+   *   - 列表后续页 (offset > 0): false (避免每页都跑 count, 大表是 O(N))
+   *   - SSR 一次性取 (web admin /admin/customers): true (要 PageHeader 总数)
+   *   - 单条详情侧栏计数: true (走 customerTypeCounts, 不在本函数)
+   */
+  includeTotal?: boolean;
   /** 客户类型筛选 (all / 缺省 = 不筛) */
   type?: CustomerTypeFilter;
   /**
@@ -707,8 +723,16 @@ function buildCustomerConditions(options: ListCustomersOptions): SQL[] {
 
 export async function listCustomers(
   options: ListCustomersOptions = {}
-): Promise<{ items: CustomerView[]; total: number }> {
-  const { limit = 20, offset = 0, viewerFranchiseeId, sort = "new", rbacCtx } = options;
+): Promise<{ items: CustomerView[]; total: number | null }> {
+  const {
+    limit = 20,
+    offset = 0,
+    viewerFranchiseeId,
+    sort = "new",
+    rbacCtx,
+    // 默认 true 保持兼容 (既有调用方不变)。R-9 后续页调用方传 false 跳过 count(*)
+    includeTotal = true,
+  } = options;
   const conditions = buildCustomerConditions(options);
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -725,41 +749,98 @@ export async function listCustomers(
   };
   const identityFields = renderIdentitySelectFields(viewer);
 
-  const [rows, [{ count }]] = await Promise.all([
-    db
-      .select({
-        row: customer,
-        // ★ identity SQL 片段 (Phase A + D 收口; 与单条 resolveCustomerIdentity 同真相源)
-        isFranchisee: identityFields.isFranchisee,
-        direct: identityFields.direct,
-        ownedByMe: identityFields.ownedByMe,
-        ownedBySub: identityFields.ownedBySub,
-        ownedByUpl: identityFields.ownedByUpl,
-        ownedByDirectDownline: identityFields.ownedByDirectDownline,
-        ownerIdCol: identityFields.ownerId,
-        isMember: identityFields.isMember,
-        hasAccount: identityFields.hasAccount,
-        acquireSourceCol: identityFields.acquireSource,
-        sourceReferrerNameCol: identityFields.sourceReferrerName,
-        ownerNameCol: identityFields.ownerName,
-        sharedByNameCol: identityFields.sharedByName,
-      })
-      .from(customer)
-      .where(whereClause)
-      .orderBy(
-        // urgency: 调用方随后内存排序, 这里按「越久没联系越前」取候选集 (NULLS FIRST = 从没联系)
-        sort === "urgency"
-          ? sql`${customer.lastInteractionAt} ASC NULLS FIRST`
-          : sort === "recent"
-            ? sql`${customer.lastInteractionAt} DESC NULLS LAST`
-            : sort === "name"
-              ? customer.name
-              : desc(customer.createdAt)
-      )
-      .limit(limit)
-      .offset(offset),
-    db.select({ count: sql<number>`count(*)::int` }).from(customer).where(whereClause),
-  ]);
+  // ★ R-9 count 解耦 (2026-09-26):
+  //   includeTotal = false → 跳过全表 count, 后续页只走 scan + slice。
+  //   返回 total 的语义:
+  //     - includeTotal = true: total = 全表 count (首页 / SSR 一次取专用)
+  //     - includeTotal = false + items.length < limit: total = items.length + offset (最后一页, 终止)
+  //     - includeTotal = false + items.length === limit: total = null (可能还有下一页; client 保留上一页 total)
+  //   这么走的目的是: 客户列表拥有 1k+ 行时, 后续页 count(*) 会严重抖。
+  //   本改变不影响 data 行 → 纯性能优化。
+  const rowsP = db
+    .select({
+      row: customer,
+      // ★ identity SQL 片段 (Phase A + D 收口; 与单条 resolveCustomerIdentity 同真相源)
+      isFranchisee: identityFields.isFranchisee,
+      direct: identityFields.direct,
+      ownedByMe: identityFields.ownedByMe,
+      ownedBySub: identityFields.ownedBySub,
+      ownedByUpl: identityFields.ownedByUpl,
+      ownedByDirectDownline: identityFields.ownedByDirectDownline,
+      ownerIdCol: identityFields.ownerId,
+      isMember: identityFields.isMember,
+      hasAccount: identityFields.hasAccount,
+      acquireSourceCol: identityFields.acquireSource,
+      sourceReferrerNameCol: identityFields.sourceReferrerName,
+      ownerNameCol: identityFields.ownerName,
+      sharedByNameCol: identityFields.sharedByName,
+    })
+    .from(customer)
+    .where(whereClause)
+    .orderBy(
+      // urgency: 调用方随后内存排序, 这里按「越久没联系越前」取候选集 (NULLS FIRST = 从没联系)
+      sort === "urgency"
+        ? sql`${customer.lastInteractionAt} ASC NULLS FIRST`
+        : sort === "recent"
+          ? sql`${customer.lastInteractionAt} DESC NULLS LAST`
+          : sort === "name"
+            ? customer.name
+            : desc(customer.createdAt)
+    )
+    .limit(limit)
+    .offset(offset);
+
+  if (includeTotal) {
+    const [rows, [{ count }]] = await Promise.all([
+      rowsP,
+      db.select({ count: sql<number>`count(*)::int` }).from(customer).where(whereClause),
+    ]);
+    return mapListRows(rows, count, limit, offset);
+  }
+
+  // includeTotal = false: 只查数据, total 交给 mapListRows 推算
+  const rows = await rowsP;
+  return mapListRows(rows, null, limit, offset);
+}
+
+/**
+ * 列表行 + total 收口 (R-9 count 解耦的内部收口, 纯函数, 不查 DB):
+ *   - count != null: total = count 实际值 (走全表 COUNT)
+ *   - count == null + items.length < limit: total = items.length + offset (最后一页, 终止)
+ *   - count == null + items.length === limit: total = null (可能还有, client 保留上一值)
+ */
+function mapListRows(
+  rows: Array<{
+    row: typeof customer.$inferSelect;
+    isFranchisee: unknown;
+    direct: unknown;
+    ownedByMe: unknown;
+    ownedBySub: unknown;
+    ownedByUpl: unknown;
+    ownedByDirectDownline: unknown;
+    ownerIdCol: unknown;
+    isMember: unknown;
+    hasAccount: unknown;
+    acquireSourceCol: unknown;
+    sourceReferrerNameCol: unknown;
+    ownerNameCol: unknown;
+    sharedByNameCol: unknown;
+  }>,
+  count: number | null,
+  limit: number,
+  offset: number,
+): { items: CustomerView[]; total: number | null } {
+  // 推导 total (R-9 收口): 不跑 count 的页, 最后一行根据 items 是否填满推 final / unknown
+  let total: number | null;
+  if (count != null) {
+    total = count;
+  } else if (rows.length < limit) {
+    // 最后一页 (不满 limit): 终止, total = items.length + offset = 真实数
+    total = rows.length + offset;
+  } else {
+    // 可能还有下一页: 不给 final 值, client 保留上一页 total
+    total = null;
+  }
 
   return {
     items: rows.map((r) => {
@@ -790,7 +871,7 @@ export async function listCustomers(
       // toView 第二参 (isMyDownline) = 原始 direct 口径，与旧 listCustomers 保持一致
       return toView(r.row, flags.direct, flags.isMember, flags.hasAccount, null, identity);
     }),
-    total: count,
+    total,
   };
 }
 

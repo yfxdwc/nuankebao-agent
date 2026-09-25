@@ -8,13 +8,19 @@
 //   - 所有手机号一律 mask (不论归属如何) — 角标**不是客户档案详情**, 不能透露完整信息
 //   - 详情路径才进 viewerCustomerScopeSql → 解密 + ownership 分级明文/maskPhone;
 //     此处直接给 mask, 不让 client 拿到明文
+//
+// ★ 状态 (2026-09-26 R-10 优化复盘): Flutter / web admin 均**未接入 UI**;
+//   receivedShares() 方法定义在 flutter_app/lib/core/services/api.dart:385
+//   但无任何调用方。主人拍「保留 + Phase E 接入」 (R-10 文档 §5.3)。
+//   本路由暂为「接口在, UI 缺」状态; 后续接「上级推送」列表页时使用。
 // ============================================
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { listReceivedShares } from "@/lib/db/queries/customer-share";
 import { logger } from "@/lib/errors";
+import { noStoreJson } from "@/lib/http/no-store";
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 200;
@@ -22,10 +28,10 @@ const MAX_LIMIT = 200;
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "需要登录" }, { status: 401 });
+    return noStoreJson({ error: "需要登录" }, { status: 401 });
   }
 
   try {
@@ -36,13 +42,13 @@ export async function GET(request: NextRequest) {
       : Math.max(1, Math.min(rawLimit, MAX_LIMIT));
 
     const items = await listReceivedShares(BigInt(session.user.id), { limit });
-    return NextResponse.json({
+    return noStoreJson({
       items,
       total: items.length,
       limit,
     });
   } catch (e) {
     logger.error("GET /api/customers/shares/received failed", {}, e);
-    return NextResponse.json({ error: "服务器内部错误" }, { status: 500 });
+    return noStoreJson({ error: "服务器内部错误" }, { status: 500 });
   }
 }

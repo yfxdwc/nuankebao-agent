@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { getRbacContextForSession } from "@/lib/auth/rbac";
@@ -6,6 +6,7 @@ import { getCustomerById, getCustomerOwnership } from "@/lib/db/queries/customer
 import { customerRbacFilter } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { noStoreJson } from "@/lib/http/no-store";
 
 /**
  * GET /api/customers/[id]/share/candidates
@@ -26,12 +27,12 @@ export async function GET(
 ) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
   if (!/^\d+$/.test(id)) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    return noStoreJson({ error: "Invalid id" }, { status: 400 });
   }
 
   const rbacCtx = await getRbacContextForSession(session);
@@ -44,7 +45,7 @@ export async function GET(
     viewerUserId: rbacCtx?.userId ?? null,
   });
   if (!customer) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return noStoreJson({ error: "Not found" }, { status: 404 });
   }
   const isAdmin = rbacCtx?.role === "admin";
   // 归属权判定走唯一真相源 getCustomerOwnership (别自己比 owner_id —— 口径会漂)
@@ -53,7 +54,7 @@ export async function GET(
       ? await getCustomerOwnership(customerId, rbacCtx.userId, null)
       : null;
   if (!isAdmin && !(ownership?.isMine ?? false)) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return noStoreJson({ error: "Not found" }, { status: 404 });
   }
 
   // admin: 全森林 (与 S1/S2 的 admin 豁免一致); 普通用户: 我的枝的下层 (排除自己)
@@ -82,7 +83,7 @@ export async function GET(
         LIMIT 200
       `);
 
-  return NextResponse.json({
+  return noStoreJson({
     items: rows.map((r) => ({ userId: r.user_id, name: r.name })),
   });
 }

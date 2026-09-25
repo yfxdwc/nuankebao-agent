@@ -11,17 +11,18 @@
 //
 // 边界: RBAC 与列表**同一口径** (ADR-0015 步骤 1): 归属我 ∪ 我的直推加盟
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAuthSkipped } from "@/lib/auth/skip-auth";
 import { customerTypeCounts } from "@/lib/db/queries/customer";
 import { getRbacContextForSession } from "@/lib/auth/rbac";
 import { resolveViewerCustomerId } from "@/lib/auth/viewer";
+import { noStoreJson } from "@/lib/http/no-store";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -38,5 +39,5 @@ export async function GET(request: NextRequest) {
     rbacCtx,
   });
 
-  return NextResponse.json(counts);
+  return noStoreJson(counts);
 }

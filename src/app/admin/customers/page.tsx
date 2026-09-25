@@ -16,6 +16,8 @@ export default async function CustomersPage({
   const { search } = await searchParams;
 
   // SSR 首屏: 取第一页 (20 条, 满足初始滚动可见)
+  //   R-9 第二条: 首页 includeTotal=true 保留, 后续页交给 client + includeTotal=false
+  //   SSR 这里要拿 total 给 PageHeader 标题 (e.g. "共 87 位客户"), 所以走默认 includeTotal=true
   const { items, total } = await listCustomers({ search, limit: PAGE_SIZE, offset: 0 });
 
   // 序列化为可序列化的 plain object (Date → ISO string)
@@ -29,14 +31,17 @@ export default async function CustomersPage({
     <div className="space-y-section-y">
       <PageHeader
         title="客户管理"
-        description={`共 ${total} 位客户`}
+        // R-9: SSR 首屏 total 必为非 null (includeTotal=true), 但加个兜底防退化
+        description={`共 ${total ?? items.length} 位客户`}
       />
 
       <CustomerSearch initial={search ?? ""} />
 
       <CustomerListInfinite
         initial={initial}
-        initialTotal={total}
+        // SSR 首屏 total 必为非 null (includeTotal=true); 但接口类型变了
+        //   以 null 兜底防退化 (SSR 这里传 0 比传 null 更安全)
+        initialTotal={total ?? initial.length}
         pageSize={PAGE_SIZE}
         search={search ?? ""}
       />

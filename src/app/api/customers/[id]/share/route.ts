@@ -8,7 +8,7 @@
 //   - 错误码 4xx 跟既有 route 语义对齐: 400 / 401 / 403 / 404 / 409
 // ============================================
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 
@@ -26,6 +26,7 @@ import {
 } from "@/lib/db/queries/customer-share";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 import { logger } from "@/lib/errors";
+import { noStoreJson } from "@/lib/http/no-store";
 
 const BodySchema = z.object({
   /** 接收人 user.id (走 picker 后填) */
@@ -54,26 +55,26 @@ export async function POST(
 ) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "需要登录" }, { status: 401 });
+    return noStoreJson({ error: "需要登录" }, { status: 401 });
   }
 
   const { id } = await params;
   if (!/^\d+$/.test(id)) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    return noStoreJson({ error: "Invalid id" }, { status: 400 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return noStoreJson({ error: "Invalid JSON body" }, { status: 400 });
   }
   const parsed = BodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "参数错误", details: parsed.error.errors },
       { status: 400 },
     );
@@ -94,7 +95,7 @@ export async function POST(
       scope,
     });
     if (!customerRow) {
-      return NextResponse.json({ error: "客户档案不存在或你看不到它" }, { status: 404 });
+      return noStoreJson({ error: "客户档案不存在或你看不到它" }, { status: 404 });
     }
     // 主动校验 admin (DB 真相源): 老 session 没 role 时拿 DB
     const actorAdmin = rbacCtx?.role === "admin";
@@ -106,7 +107,7 @@ export async function POST(
         .where(eq(customer.id, customerId))
         .limit(1);
       if (!cRow || cRow.ownerId !== fromUserId) {
-        return NextResponse.json(
+        return noStoreJson(
           { error: FAILURE_MESSAGE.NOT_OWNER },
           { status: 403 },
         );
@@ -126,7 +127,7 @@ export async function POST(
     );
 
     if (!result.ok) {
-      return NextResponse.json(
+      return noStoreJson(
         {
           error: FAILURE_MESSAGE[result.code],
           code: result.code,
@@ -136,10 +137,10 @@ export async function POST(
       );
     }
 
-    return NextResponse.json(result.row, { status: 201 });
+    return noStoreJson(result.row, { status: 201 });
   } catch (e) {
     logger.error("POST /api/customers/[id]/share failed", { id }, e);
-    return NextResponse.json({ error: "服务器内部错误" }, { status: 500 });
+    return noStoreJson({ error: "服务器内部错误" }, { status: 500 });
   }
 }
 

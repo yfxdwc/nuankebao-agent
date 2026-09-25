@@ -146,7 +146,10 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
       const data = await res.json();
       setItems((prev) => [...prev, ...data.items]);
       setOffset((prev) => prev + data.items.length);
-      setTotal(data.total);
+      // ★ R-9 count 解耦: 后续页 total 可能为 null (服务端不跑 count)。
+      //   null → 保留上一页 total (SSR initialTotal), 不要丢。
+      //   number → 最后一页 final 值 (items.length + offset) 或第一次精确 count, 都用服务端给的。
+      setTotal((prev) => (data.total == null ? prev : data.total));
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {

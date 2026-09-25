@@ -8,7 +8,7 @@
 //   - 幂等: 重复撤销 200 alreadyRevoked (不返 404)
 // ============================================
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/db/queries/customer-share";
 import { getAuditContextFromRequest } from "@/lib/audit/context";
 import { logger } from "@/lib/errors";
+import { noStoreJson } from "@/lib/http/no-store";
 
 const BodySchema = z.object({
   /** 撤销原因 (≤ 200 字; admin / 当前 owner 撤销必填, 走 audit) */
@@ -39,27 +40,27 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!isAuthSkipped() && !session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
   }
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "需要登录" }, { status: 401 });
+    return noStoreJson({ error: "需要登录" }, { status: 401 });
   }
 
   const { id, userId } = await params;
   if (!/^\d+$/.test(id) || !/^\d+$/.test(userId)) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    return noStoreJson({ error: "Invalid id" }, { status: 400 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return noStoreJson({ error: "Invalid JSON body" }, { status: 400 });
   }
   // body 缺省按 {} 处理 (推送人/接收人撤销时 reason 可选)
   const parsed = BodySchema.safeParse(body ?? {});
   if (!parsed.success) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "撤销原因格式错误", details: parsed.error.errors },
       { status: 400 },
     );
@@ -82,7 +83,7 @@ export async function DELETE(
     );
 
     if (!result.ok) {
-      return NextResponse.json(
+      return noStoreJson(
         {
           error: FAILURE_MESSAGE[result.code],
           code: result.code,
@@ -92,10 +93,10 @@ export async function DELETE(
     }
 
     // 主文档 §6.5.4: 撤销 200 (幂等: alreadyRevoked 也返 200)
-    return NextResponse.json({ revoked: true, alreadyRevoked: result.alreadyRevoked });
+    return noStoreJson({ revoked: true, alreadyRevoked: result.alreadyRevoked });
   } catch (e) {
     logger.error("DELETE /api/customers/[id]/share/[userId] failed", { id, userId }, e);
-    return NextResponse.json({ error: "服务器内部错误" }, { status: 500 });
+    return noStoreJson({ error: "服务器内部错误" }, { status: 500 });
   }
 }
 
