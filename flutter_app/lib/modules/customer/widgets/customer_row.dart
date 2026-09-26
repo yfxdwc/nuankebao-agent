@@ -110,6 +110,26 @@ class CustomerRow extends StatelessWidget {
     }
   }
 
+  /// 身份图标条 (客户名**之前**) —— 多维度用图标表示, **只显示「真」状态**:
+  ///   🤝 加盟 (affiliation != none) · 👑 会员 (isMember) · 📱 已注册 (hasAccount)
+  ///   未加盟 / 免费 / 未注册 → **不显示** 对应图标 (主人 2026-09-26 拍)
+  ///
+  /// 为什么不把「归属」也做成图标: 归属要表达「谁的」(上级推送 · 张三 / 下级的客户 · 张三),
+  /// 纯图标丢了主语 → 仍留在尾部 AppBadge (带姓名)。
+  List<Widget> get _identityIcons {
+    final glyphs = <String>[
+      if (customer.affiliation != 'none' && customer.affiliation.isNotEmpty) '🤝',
+      if (isMember) '👑',
+      if (customer.hasAccount) '📱',
+    ];
+    return <Widget>[
+      for (final g in glyphs) ...[
+        Text(g, style: const TextStyle(fontSize: AppType.sm)),
+        const SizedBox(width: AppSpace.s2),
+      ],
+    ];
+  }
+
   static const Color _levelP2 = AppColors.memberGoldLight;
   static const Color _levelP4 = AppColors.avatarSlotNeutral;
 
@@ -160,6 +180,8 @@ class CustomerRow extends StatelessWidget {
         final nameMax = constraints.maxWidth * 0.50;
         return Row(
           children: [
+            // ★ 身份图标条 (只显示真状态): 🤝 加盟 / 👑 会员 / 📱 已注册
+            ..._identityIcons,
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: nameMax),
               child: Text(
@@ -284,8 +306,9 @@ class CustomerRow extends StatelessWidget {
         customerType: _type,
         size: AppTheme.avatarMd,
         showLoadingIndicator: false,
-        // 会员 = 金环 + 右上角 👑 (客户类型角标仍在右下角, 互不遮挡)
+        // 会员 = 金环 (保留); 角标交给名字前的图标条 → 同一维度不双重编码 (2026-09-26)
         isMember: isMember,
+        showBadges: false,
       ),
       title: _buildTitle(),
       subtitle: _buildSubtitle(f, isFranchisee, barColor),
@@ -339,27 +362,7 @@ class CustomerRow extends StatelessWidget {
         ),
         const SizedBox(width: AppSpace.s6),
       ],
-      // ★ 已注册用户标记 (ADR-0016 D8, 主人 2026-09-22 拍「UI 上要有区别」)
-      //   true = 她是 app 用户 (有账号) / 不显示 = 凭空建档的客户
-      if (customer.hasAccount) ...[
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: AppSpace.s4),
-          decoration: BoxDecoration(
-            color: AppTheme.primaryLight,
-            borderRadius: BorderRadius.circular(AppRadius.r12),
-          ),
-          child: const Text(
-            '已注册',
-            style: TextStyle(
-              // ⚠ 主题里必须显式给 color (AGENTS §5: 不给 = 真机白字)
-              color: AppTheme.primaryDark,
-              fontSize: AppType.xs,
-              fontWeight: AppWeight.semibold,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpace.s6),
-      ],
+      // 「已注册」标记已改为**名字前的 📱 图标** (2026-09-26 拍: 多维度图标化)
     ];
   }
 }

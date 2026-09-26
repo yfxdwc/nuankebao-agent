@@ -29,6 +29,14 @@ interface CustomerView {
    *   注: listCustomers 暂未传 identity (Phase D 后会接上), 但 UI 五态全量渲染.
    */
   ownership?: Ownership;
+  /** 归属人姓名 (「下级的客户 · X」; Phase D 后端返回) */
+  ownerName?: string | null;
+  /** 上级推送人姓名 (「上级推送 · X」; 仅 ownership = upline 有值) */
+  sharedByName?: string | null;
+  /** ★ 身份图标条数据源 (2026-09-26): 加盟细分 / 会员 / 已注册 */
+  affiliation?: string | null;
+  isMember?: boolean;
+  hasAccount?: boolean;
   createdAt: string;  // serialized from server
   updatedAt: string;
 }
@@ -84,6 +92,25 @@ function ownershipBadge(
         className: "bg-brand-light text-brand",
       };
   }
+}
+
+/**
+ * 身份图标条 (名字**之前**, 2026-09-26 主人拍): 多维度用图标表示, **只显示「真」状态** ——
+ *   🤝 加盟 (affiliation != none) · 👑 会员 (isMember) · 📱 已注册 (hasAccount)
+ *   未加盟 / 免费 / 未注册 → 不渲染对应图标。
+ * 归属类 (下级的客户 / 上级推送) 仍走行内 badge —— 它要带「谁」的名字, 纯图标表达不了。
+ * 只用 emoji + 现有语义类, 不引入新调色板类 (§4.3 硬约束)。
+ */
+function identityIcons(c: {
+  affiliation?: string | null;
+  isMember?: boolean;
+  hasAccount?: boolean;
+}): string[] {
+  return [
+    c.affiliation && c.affiliation !== "none" ? "🤝" : null,
+    c.isMember ? "👑" : null,
+    c.hasAccount ? "📱" : null,
+  ].filter((v): v is string => v != null);
 }
 
 interface Props {
@@ -213,6 +240,16 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
+                      {/* 身份图标条 (只显示真状态) — 与 Flutter 同口径/同顺序 */}
+                      {identityIcons(customer).map((g) => (
+                        <span
+                          key={g}
+                          className="text-body-md leading-none shrink-0"
+                          aria-hidden="true"
+                        >
+                          {g}
+                        </span>
+                      ))}
                       <h3 className="font-medium text-body-lg text-content-primary truncate leading-tight">
                         {customer.name}
                       </h3>

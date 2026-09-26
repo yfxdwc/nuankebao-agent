@@ -44,6 +44,11 @@ class TypedUserAvatar extends StatelessWidget {
   ///     非会员 → 类型环照旧, 无 👑
   final bool isMember;
 
+  /// 是否画角标 (右下 emoji + 右上 👑); 默认 true。
+  ///   客户列表行传 false: 2006-09-26 起「加盟/会员/已注册」改成**客户名前的图标条**
+  ///   (customer_row.dart `_identityIcons`), 头像只保留环色 → 同一维度不双重编码。
+  final bool showBadges;
+
   const TypedUserAvatar({
     super.key,
     required this.avatarUrl,
@@ -52,6 +57,7 @@ class TypedUserAvatar extends StatelessWidget {
     this.size = AppTheme.avatarMd,
     this.showLoadingIndicator = false,
     this.isMember = false,
+    this.showBadges = true,
   });
 
   /// 类型 → (环/徽章颜色, 角标 emoji, 无障碍文案)
@@ -108,7 +114,7 @@ class TypedUserAvatar extends StatelessWidget {
               ),
             ),
             // 右下角类型徽章 (白描边 → 压住照片也看得清)
-            if (showBadge)
+            if (showBadge && showBadges)
               Positioned(
                 right: -1,
                 bottom: -1,
@@ -132,7 +138,7 @@ class TypedUserAvatar extends StatelessWidget {
                 ),
               ),
             // 右上角 👑 会员角标 (客户类型角标固定在右下角 → 两角各一个, 不重叠)
-            if (showCrown)
+            if (showCrown && showBadges)
               Positioned(
                 right: -1,
                 top: -1,
