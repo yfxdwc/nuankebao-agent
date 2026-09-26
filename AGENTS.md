@@ -454,6 +454,27 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
   **可复用手法（定位此类问题）**: ① 复制测试文件加探针，打印「直查 SQL 命中数」vs「函数返回集」——
   两者不一致 = 问题在查询之后的组装/分页；② 打印返回集的 id 列表 → 发现全是历史数据 → 反查标题定位到泄漏源；
   ③ 给 `afterAll` 加探针，证明它只删了自己那一个。同根: §5 「单点问题修一处后必全仓扫一遍」。
+-
+
+- ❌ **migration 路径先 `ls drizzle/` 验证再写 filter (2026-09-26 二次踩坑, 强化上条)** — 上条「git log --diff-filter 路径模式歧义」提到了 filter 写法, 但**更前置的问题 = 路径本身想当然**:
+  - **默认假设** = migrations 在 `drizzle/migrations/` 子目录 (Django/Rails/Many ORM 的常见布局)
+  - **本项目实际** = `drizzle/*.sql` (顶层, 跟 `drizzle.config.ts` 同级); `drizzle/down/*.sql` 才是回滚文件 (不进 migrate runner)
+  - **两次踩坑** (2026-09-24 漏 0024/0025, 2026-09-26 又差点漏 0026/0029): 都先写错 `'drizzle/migrations/*.sql'`, 靠 `ls drizzle/*.sql` + `comm` 双轨兜住, 不是 filter 本身
+  - **修法 = 扫 migration 之前必先 `ls` + `git ls-tree -r` 看真实布局**, 不要凭 ORM 经验硬写:
+    ```
+    # 看本机真实路径 (30 秒)
+    ls drizzle/*.sql | head
+    ls drizzle/        # 看子目录结构 (down/ metadata/ 等)
+
+    # 看 origin 上的完整布局
+    git ls-tree -r origin/main --name-only | grep '^drizzle/'
+    ```
+  - **正确 filter 姿势**:
+    - `'drizzle/*.sql'` ← 本项目主文件
+    - `'drizzle/down/*.sql'` ← 回滚文件 (不入 migrate runner, 但 git 跟踪)
+    - 不存在 `drizzle/migrations/`
+  - **终极修法 (待做, 候选)**: `deploy/prod-deploy.sh` 头部加 echo `📁 drizzle files: $(ls drizzle/*.sql | wc -l) 个 up + $(ls drizzle/down/*.sql 2>/dev/null | wc -l) 个 down`, 主家 deploy 前**看一眼就知道这次会 apply 几个**, 不用事后 `db:migrate` 输出惊觉。
+  - 同根: §5 「git log --diff-filter 扫新增文件」 (filter 写法) + §5 「dev db 不该当 prod 的真相源」 (想当然连 db) —— 都是「**命令写得自信 ≠ 命令写得对**」。
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
 > **历史**:
