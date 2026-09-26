@@ -1174,6 +1174,11 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
     return e.toString();
   }
 
+  /// 加盟状态卡 (2026-09-25 主人两次拍板):
+  ///   ① 「客户类型」→「加盟状态」, 胶囊 普通/🌱种子 → 普通/加盟, 删整行「发展为加盟商」
+  ///   ② 「区块的右上角图标可以删掉。把普通/加盟键移动到区块右上角 (与标题同一行)」
+  ///   ⇒ 标题行 = 图标 + 「加盟状态」 + [普通│加盟]; 类型徽章 (FranchiseChip) 不再需要
+  ///     (选中态本身就是状态显示)。
   Widget _buildTypeCard(BuildContext context, WidgetRef ref, Customer c) {
     final isFranchisee = c.customerType == 'franchisee';
     return B2NoChrome(
@@ -1188,54 +1193,55 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
                 const Icon(Icons.badge_outlined,
                     size: AppSize.iconMd, color: AppTheme.primaryDark),
                 const SizedBox(width: AppSpace.s6),
-                // 2026-09-25 主人: 「客户类型区块改为'加盟状态'」
-                const Text(
-                  '加盟状态',
-                  style: TextStyle(
-                    fontSize: AppTheme.fontMd,
-                    fontWeight: FontWeight.w600,
+                const Expanded(
+                  child: Text(
+                    '加盟状态',
+                    style: TextStyle(
+                      fontSize: AppTheme.fontMd,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                FranchiseChip(type: c.customerType),
+                // 普通 / 加盟 两档 (右上角, 与标题同一行)
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                        value: 'normal',
+                        label: Text('普通',
+                            style: TextStyle(fontSize: AppTheme.fontSm))),
+                    ButtonSegment(
+                        value: 'franchisee',
+                        label: Text('加盟',
+                            style: TextStyle(fontSize: AppTheme.fontSm))),
+                  ],
+                  selected: {isFranchisee ? 'franchisee' : 'normal'},
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    minimumSize: WidgetStatePropertyAll(Size(0, AppSize.controlLg)),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  // 已是加盟商 → **只显示状态** (退出要走「解除加盟」, 不能在这里切)
+                  onSelectionChanged: isFranchisee
+                      ? null
+                      : (v) {
+                          if (v.first == 'franchisee') {
+                            _promoteCustomerToFranchisee(context, ref, c);
+                          }
+                        },
+                ),
               ],
             ),
-            const SizedBox(height: AppSpace.s10),
-            if (isFranchisee)
-              const Text(
-                '加盟客户: 状态由加盟关系决定, 不能在这里切换;\n要退出加盟请到加盟商详情页走「解除加盟」(需三方确认)',
-                style: TextStyle(
-                  fontSize: AppTheme.fontXs,
-                  color: AppTheme.textSecondary,
-                ),
-              )
-            else ...[
-              // 2026-09-25 主人: 「普通/种子胶囊按键改为'普通/加盟'胶囊按键。
-              //   删除整行的那个'发展为加盟商'的按键」
-              //   ⇒ 入口收进这颗胶囊: 选「加盟」= 直接进加盟落位流程 (三方确认),
-              //     不再是"整行大按钮"; 选中态本身就是**状态显示** (普通)。
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'normal', label: Text('普通')),
-                  ButtonSegment(value: 'franchisee', label: Text('加盟')),
-                ],
-                selected: const {'normal'},
-                showSelectedIcon: false,
-                onSelectionChanged: (v) {
-                  if (v.first == 'franchisee') {
-                    _promoteCustomerToFranchisee(context, ref, c);
-                  }
-                },
+            const SizedBox(height: AppSpace.s6),
+            Text(
+              isFranchisee
+                  ? '状态由加盟关系决定, 不能在这里切换; 要退出加盟请到加盟商详情页走「解除加盟」(需三方确认)'
+                  : '变成加盟商: 选「加盟」→ 走加盟落位 (需三方确认: 你 + 她本人 + 目标上级)',
+              style: const TextStyle(
+                fontSize: AppTheme.fontXs,
+                color: AppTheme.textSecondary,
               ),
-              const SizedBox(height: AppSpace.s6),
-              const Text(
-                '变成加盟商: 选「加盟」→ 走加盟落位 (需三方确认: 你 + 她本人 + 目标上级)',
-                style: TextStyle(
-                  fontSize: AppTheme.fontXs,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
+            ),
           ],
         ),
       ),

@@ -48,6 +48,7 @@ import 'package:nuankebao/core/providers/settings_provider.dart';
 import 'package:nuankebao/core/services/api.dart';
 import 'package:nuankebao/core/theme/app_theme.dart';
 import 'package:nuankebao/core/theme/tokens.g.dart';
+import 'package:nuankebao/core/widgets/franchise_chip.dart';
 import 'package:nuankebao/modules/customer/screens/customer_detail_page.dart';
 import 'package:nuankebao/modules/customer/widgets/customer_activity_cards.dart';
 import 'package:nuankebao/modules/customer/widgets/customer_insight_actions.dart';
@@ -737,6 +738,22 @@ void main() {
       expect(find.textContaining('🌱 种子'), findsNothing, reason: '种子不再是这一轴的值');
       // 整行按钮已删 (入口收进「加盟」胶囊)
       expect(find.text('发展为加盟商'), findsNothing);
+
+      // 2026-09-25 第二次拍板: 「区块的右上角图标可以删掉。把普通/加盟键移动到
+      //   区块右上角 (与标题「加盟状态」同一行)」
+      final titleRect = tester.getRect(find.text('加盟状态'));
+      final normalRect = tester.getRect(find.text('普通'));
+      final frRect = tester.getRect(find.text('加盟'));
+      // 同一行 (垂直中心对齐)
+      expect((normalRect.center.dy - titleRect.center.dy).abs(), lessThan(6.0),
+          reason: '普通/加盟 要和标题同一行');
+      expect((frRect.center.dy - titleRect.center.dy).abs(), lessThan(6.0));
+      // 在标题**右侧**
+      expect(normalRect.left, greaterThan(titleRect.right),
+          reason: '胶囊要在标题右侧 (区块右上角)');
+      // 类型徽章 (FranchiseChip) 从这张卡删掉了 —— 页面里只剩头部那一个
+      expect(find.byType(FranchiseChip), findsOneWidget,
+          reason: '加盟状态卡不再挂类型徽章 (选中态即状态显示)');
     });
 
     testWidgets('有过敏史 → 健康卡显示过敏史; 已注册 → 显示她的邀请码 (#6)',
