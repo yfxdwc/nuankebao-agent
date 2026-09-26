@@ -297,7 +297,7 @@ void main() {
     expect(find.textContaining('账号资料还没建全'), findsOneWidget);
   });
 
-  testWidgets('换头像: 入口可见 + 候选头像弹层能出 8 个候选', (tester) async {
+  testWidgets('换头像: 点头像出候选弹层 (8 个候选); 重复的显式按钮已删', (tester) async {
     // bySemanticsLabel 需要语义树 (widget 测试默认不开, 跟线上不同)。
     // ⚠ 必须在测试体内 dispose: addTearDown 跑在框架的"检查语义句柄是否释放"之后
     final semantics = tester.ensureSemantics();
@@ -305,12 +305,12 @@ void main() {
     final container = await _container(_fullProfile());
     await _pumpProfile(tester, container);
 
-    // 入口 (头像本身可点 + 一个显式按钮)
-    expect(find.text('换头像'), findsOneWidget);
+    // 入口只有头像本身 (2026-09-25 主人: 与点头像重复的「换头像」按钮已删)
+    expect(find.text('换头像'), findsNothing);
     // 用正则: InkWell/按钮的语义会跟父节点合并, 精确匹配容易假失败
     expect(find.bySemanticsLabel(RegExp('我的头像')), findsWidgets);
 
-    await tester.tap(find.text('换头像'));
+    await tester.tap(find.bySemanticsLabel(RegExp('我的头像')).first);
     await tester.pumpAndSettle();
 
     expect(find.text('换个头像'), findsOneWidget);

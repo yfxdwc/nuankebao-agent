@@ -201,6 +201,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
         child: Column(
           children: [
             // 头像可点: 换头像 (上传照片 / 挑候选) —— 角标用相机小圆点提示"这个能点"
+            // 2026-09-25 主人: 删掉了下方重复的「换头像」TextButton (点头像已能换)
             Semantics(
               label: '我的头像, 点击可更换',
               button: true,
@@ -244,23 +245,7 @@ class _HeaderCardState extends ConsumerState<_HeaderCard> {
                 ),
               ),
             ),
-            const SizedBox(height: AppSpace.s6),
-            TextButton.icon(
-              onPressed: () => showAvatarPickerSheet(
-                context,
-                ref,
-                currentAvatarUrl: p.user?.avatarUrl,
-                name: name,
-              ),
-              icon: const Icon(Icons.face_retouching_natural, size: AppSize.iconMd),
-              label: const Text('换头像',
-                  style: TextStyle(fontSize: AppTheme.fontSm)),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.primaryDark,
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-            const SizedBox(height: AppSpace.s6),
+            const SizedBox(height: AppSpace.s10),
             Text(
               name,
               textAlign: TextAlign.center,
