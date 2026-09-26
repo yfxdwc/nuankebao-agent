@@ -57,12 +57,16 @@ void main() {
     await _pump(tester, surface: const Size(390, 844));
 
     final name = find.widgetWithText(TextFormField, '姓名 *');
-    final gender = find.byType(DropdownButtonFormField<String>);
+    // ⚠ 表单现在有 **两个** DropdownButtonFormField: 性别 (本行) + 客户来源 (Phase C 新增, 在生日前)
+    //   → 取 .first = 性别 (布局上第一个), 本用例只关心第一行
+    final gender = find.byType(DropdownButtonFormField<String>).first;
     final phone = find.widgetWithText(TextFormField, '手机号 *');
 
     expect(name, findsOneWidget);
     expect(gender, findsOneWidget);
     expect(phone, findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<String>), findsNWidgets(2),
+        reason: '性别 + 客户来源 = 2 个下拉');
 
     final nameRect = tester.getRect(name);
     final genderRect = tester.getRect(gender);
@@ -118,14 +122,17 @@ void main() {
         reason: '滚动时保存键不能跟着走');
   });
 
-  testWidgets('④-a 新建: 有「🌱 种子客户」模块 (刚加好友的潜在客户直接标上)',
+  testWidgets('④-a 新建: **没有**「🌱 种子客户」模块 (2026-09-25 D3 种子退出类型轴), 但有「客户来源」',
       (tester) async {
-    // ⚠ 视口调高: 该模块在表单靠下, 默认 600 高时 ListView 还没构建到它
+    // ⚠ 视口调高: 这些模块在表单靠下, 默认 600 高时 ListView 还没构建到它
     await tester.binding.setSurfaceSize(const Size(900, 2400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await _pump(tester);
-    expect(find.textContaining('种子客户'), findsOneWidget);
+    // 种子已退出客户类型轴 (主人 D3): 新建页也不再出现
+    expect(find.textContaining('种子客户'), findsNothing);
+    // 取而代之的是 Phase C 新增的「客户来源」(§1 维度 6, D6)
+    expect(find.textContaining('客户来源'), findsOneWidget);
   });
 
   testWidgets('④-b 编辑: 没有「种子客户」模块 (客户类型去管理 Tab 改)',

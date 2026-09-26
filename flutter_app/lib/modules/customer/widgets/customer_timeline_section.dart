@@ -46,10 +46,17 @@ class CustomerTimelineSection extends ConsumerStatefulWidget {
   ///   (具体跳到哪个 Tab 由调用方决定, 本 widget 不持有 tab controller)
   final VoidCallback? onViewTrends;
 
+  /// 「今天」的可注入锚点 (默认 null = 真实 DateTime.now())。
+  ///   为什么可注入 (2026-09-26): 分组 (今天/昨天/本周/本月/更早) 与相对时间标签都依赖
+  ///   「今天」; widget test 用固定日期时, 若不注入就永远跟着真实日期漂移
+  ///   (fixture 写死 2026-09-24 → 日期一过, 6 个用例全变成「更早」而假失败)。
+  final DateTime? now;
+
   const CustomerTimelineSection({
     super.key,
     required this.customerId,
     this.onViewTrends,
+    this.now,
   });
 
   @override
@@ -461,7 +468,7 @@ class _CustomerTimelineSectionState
 
     // ⑨ 日期分组: 把 timeline 按 today/yesterday/thisWeek/thisMonth/earlier 切片
     //   单测覆盖在 record_format_test; 这里只组装 UI
-    final groups = _groupTimeline(timeline);
+    final groups = _groupTimeline(timeline, now: widget.now);
 
     // 列表 — 行 + 分组头 + 行内错误 (单边) + 单边 loading 小字 + 加载更多 footer
     return Column(
@@ -719,8 +726,8 @@ class _CustomerTimelineSectionState
         final parts = bodyPartNames(dict, w.bodyPartIds).take(2).toList();
         final delta = metricDeltaSummary(w);
         // ⑥ 下次建议日期提示 (逾期片段染 AppColors.warning)
-        final advice = adviceHint(w);
-        final isOverdue = adviceOverdue(w);
+        final advice = adviceHint(w, now: widget.now);
+        final isOverdue = adviceOverdue(w, now: widget.now);
 
         // 主副文拼接: 「MM-dd · 部位(≤2) · 疼痛 8→3 ↓5 · 建议 09-30 · 已过 3 天」
         //   —— 用 join(' · ') 拼一个**基础串**, 但已过 N 天要变红 → 单独 build。
@@ -858,7 +865,7 @@ class _CustomerTimelineSectionState
       ..sort((a, b) => (DateTime.tryParse(b.serviceDate) ?? b.createdAt)
           .compareTo(DateTime.tryParse(a.serviceDate) ?? a.createdAt));
     final last = sorted.first.serviceDate;
-    final relLabel = relativeDayLabel(last);
+    final relLabel = relativeDayLabel(last, now: widget.now);
     final lastDisplay = relLabel.isEmpty ? last : relLabel;
 
     final parts = <String>['共 ${records.length} 次', '最近一次 $lastDisplay'];
@@ -1012,12 +1019,12 @@ class _GroupedRows {
 }
 
 /// ⑨ 按日期分组 (按桶顺序 today→...→earlier; 桶内保持原时间倒序)
-List<_GroupedRows> _groupTimeline(List<_TimelineRow> rows) {
+List<_GroupedRows> _groupTimeline(List<_TimelineRow> rows, {DateTime? now}) {
   final grouped = <TimelineBucket, List<_TimelineRow>>{
     for (final b in kBucketOrderDesc) b: <_TimelineRow>[],
   };
   for (final r in rows) {
-    grouped[bucketOf(r.dateYmd)]!.add(r);
+    grouped[bucketOf(r.dateYmd, now: now)]!.add(r);
   }
   return <_GroupedRows>[
     for (final b in kBucketOrderDesc)

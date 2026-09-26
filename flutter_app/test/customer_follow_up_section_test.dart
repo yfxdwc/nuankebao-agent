@@ -62,6 +62,14 @@ Widget _wrap({required Widget child, required FollowUpService fake}) {
 DateTime _local(int y, int m, int d, [int h = 9, int min = 0]) =>
     DateTime(y, m, d, h, min);
 
+/// 相对「今天」的日期 (2026-09-26 修): 旧 fixture 把「今天」写死成 2026-09-24,
+/// 而组件 (`customer_activity_cards.dart`) 判「今天到期 / 已过期」用的是**真实 now** →
+/// 日期一漂移，标签全变「已过期」→ 用例假失败。
+DateTime _day(int dayOffset, [int h = 9, int min = 0]) {
+  final n = DateTime.now();
+  return DateTime(n.year, n.month, n.day + dayOffset, h, min);
+}
+
 /// 泵 + 等到 ConsumerStatefulWidget 走完首帧。
 Future<void> _pumpUntilSettled(WidgetTester tester) async {
   await tester.pump();
@@ -107,9 +115,9 @@ void main() {
   testWidgets(
     'dueAt=今天 (now=同一天晚些时候) → 显示「今天到期」, 且**不**含「已过期」',
     (tester) async {
-      // 锚 now = 今天 20:00; dueAt = 今天 08:00 → 今天到期
-      final now = _local(2026, 9, 24, 20, 0);
-      final dueAt = _local(2026, 9, 24, 8, 0);
+      // dueAt = 今天 08:00 (相对今天) → 今天到期
+      final now = DateTime.now();
+      final dueAt = _day(0, 8);
       final fake = _FakeFollowUpService([
         FollowUpTask(
           id: 't-today',
@@ -138,9 +146,8 @@ void main() {
   testWidgets(
     'dueAt=明天 → 显示「明天到期」',
     (tester) async {
-      final now = _local(2026, 9, 24, 9, 0);
-      final tomorrow = now.add(const Duration(days: 1));
-      final dueAt = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 9, 0);
+      final now = DateTime.now();
+      final dueAt = _day(1, 9);
       final fake = _FakeFollowUpService([
         FollowUpTask(
           id: 't-tmr',
@@ -196,10 +203,9 @@ void main() {
   testWidgets(
     '列表同时含「逾期」和「今天」 → 各自走不同分支 (回归: 不会再都被标「已过期」)',
     (tester) async {
-      final now = _local(2026, 9, 24, 20, 0);
-      final yesterday = now.subtract(const Duration(days: 1));
-      final dueOverdue = DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59);
-      final dueToday = _local(2026, 9, 24, 8, 0);
+      final now = DateTime.now();
+      final dueOverdue = _day(-1, 23, 59);
+      final dueToday = _day(0, 8);
       final fake = _FakeFollowUpService([
         FollowUpTask(
           id: 't1',

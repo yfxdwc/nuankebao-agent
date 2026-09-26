@@ -181,6 +181,7 @@ Future<void> _pumpSection(
           body: CustomerTimelineSection(
             customerId: '798',
             onViewTrends: onViewTrends,
+            now: _now, // 固定「今天」→ 分组/相对时间断言不随真实日期漂移
           ),
         ),
       ),
@@ -379,7 +380,7 @@ void main() {
           child: MaterialApp(
             theme: AppTheme.light(AppThemes.sage),
             home: Scaffold(
-              body: CustomerTimelineSection(customerId: '798'),
+              body: CustomerTimelineSection(customerId: '798', now: _now),
             ),
           ),
         ),

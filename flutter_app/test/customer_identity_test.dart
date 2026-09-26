@@ -10,17 +10,25 @@ import 'package:nuankebao/core/services/api.dart' show BindAccountResult;
 import 'package:nuankebao/core/theme/app_theme.dart';
 import 'package:nuankebao/modules/customer/widgets/customer_row.dart';
 
-Customer _customer({required bool hasAccount}) => Customer.fromJson({
+Customer _customer({
+  required bool hasAccount,
+  String affiliation = 'none',
+  String ownership = 'none',
+}) =>
+    Customer.fromJson({
       'id': '1',
       'name': '演示-李桂芳',
       'phone': '13800001111',
       'customerType': 'normal',
       'hasAccount': hasAccount,
+      'affiliation': affiliation,
+      'ownership': ownership,
       'createdAt': '2026-09-22T00:00:00.000Z',
       'updatedAt': '2026-09-22T00:00:00.000Z',
     });
 
-Future<void> _pumpRow(WidgetTester tester, Customer c) async {
+Future<void> _pumpRow(WidgetTester tester, Customer c,
+    {bool isMember = false}) async {
   tester.view.physicalSize = const Size(393 * 3, 400 * 3);
   tester.view.devicePixelRatio = 3.0;
   addTearDown(tester.view.reset);
@@ -29,7 +37,7 @@ Future<void> _pumpRow(WidgetTester tester, Customer c) async {
       // 带真主题 (AGENTS §5: 不带主题测不出"主题把默认样式顶掉"这类 bug)
       theme: AppTheme.light(),
       home: Scaffold(
-        body: CustomerRow(customer: c, onTap: () {}),
+        body: CustomerRow(customer: c, isMember: isMember, onTap: () {}),
       ),
     ),
   );
@@ -37,17 +45,41 @@ Future<void> _pumpRow(WidgetTester tester, Customer c) async {
 }
 
 void main() {
-  group('客户列表行 — 「已注册」标 (ADR-0016 D8)', () {
-    testWidgets('已绑定账号的客户 → 显示「已注册」', (tester) async {
+  group('客户列表行 — 身份图标条 (2026-09-26 拍: 多维度图标化, 名字前, 只显示真状态)', () {
+    testWidgets('已注册 (hasAccount) → 名字前有 📱 图标; 未注册 → 没有', (tester) async {
       await _pumpRow(tester, _customer(hasAccount: true));
-      expect(find.text('已注册'), findsOneWidget);
+      expect(find.text('📱'), findsOneWidget);
       expect(find.text('演示-李桂芳'), findsOneWidget);
+
+      await _pumpRow(tester, _customer(hasAccount: false));
+      expect(find.text('📱'), findsNothing);
     });
 
-    testWidgets('凭空建档的客户 → 不显示「已注册」', (tester) async {
-      await _pumpRow(tester, _customer(hasAccount: false));
-      expect(find.text('已注册'), findsNothing);
-      expect(find.text('演示-李桂芳'), findsOneWidget);
+    testWidgets('加盟 (affiliation != none) → 🤝; 未加盟 → 不显示 🤝', (tester) async {
+      await _pumpRow(tester, _customer(hasAccount: false, affiliation: 'direct'));
+      expect(find.text('🤝'), findsOneWidget);
+
+      await _pumpRow(tester, _customer(hasAccount: false, affiliation: 'none'));
+      expect(find.text('🤝'), findsNothing);
+    });
+
+    testWidgets('会员 (isMember) → 👑; 非会员 → 不显示 👑', (tester) async {
+      await _pumpRow(tester, _customer(hasAccount: false), isMember: true);
+      expect(find.text('👑'), findsOneWidget);
+
+      await _pumpRow(tester, _customer(hasAccount: false), isMember: false);
+      expect(find.text('👑'), findsNothing);
+    });
+
+    testWidgets('三个维度同时为真 → 三个图标都在 (顺序 🤝 👑 📱)', (tester) async {
+      await _pumpRow(
+        tester,
+        _customer(hasAccount: true, affiliation: 'direct'),
+        isMember: true,
+      );
+      for (final g in ['🤝', '👑', '📱']) {
+        expect(find.text(g), findsOneWidget, reason: '缺少图标 $g');
+      }
     });
   });
 
