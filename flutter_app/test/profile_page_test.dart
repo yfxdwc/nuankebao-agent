@@ -211,7 +211,8 @@ void main() {
     expect(find.text('特大'), findsOneWidget);
   });
 
-  testWidgets('账安 + 退出: 账号与安全/30天/编号  +  退出登录', (tester) async {
+  testWidgets('账号与安全: 30天/编号; 底部是版本升级入口 (退出登录已下沉设置页)',
+      (tester) async {
     final container = await _container(_fullProfile());
     await _pumpProfile(tester, container);
 
@@ -230,8 +231,15 @@ void main() {
     await see('30 天 (期间不用重复登录)');
     await see('#1 · 销售员');
 
-    // 退出登录
-    await see('退出登录');
+    // 底部: 版本升级入口 (退出登录已下沉 /profile/settings 底部)
+    await tester.scrollUntilVisible(
+      find.textContaining('检查更新'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 40,
+    );
+    expect(find.textContaining('检查更新'), findsOneWidget);
+    expect(find.text('退出登录'), findsNothing);
 
     // 低频项已迁出 (在 settings_page_test.dart 里覆盖, 不在本「我的」页出现)
     expect(find.text('主题配色'), findsNothing);
@@ -469,6 +477,6 @@ void main() {
 
     // 溢出会让 test framework 直接 fail (RenderFlex overflowed 是异常)
     expect(tester.takeException(), isNull);
-    expect(find.text('退出登录'), findsOneWidget); // 滚到底了, 整页都构建过
+    expect(find.textContaining('检查更新'), findsOneWidget); // 滚到底了, 整页都构建过
   });
 }

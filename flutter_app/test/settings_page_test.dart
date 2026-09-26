@@ -96,7 +96,7 @@ Future<void> _pumpSettings(
 }
 
 void main() {
-  testWidgets('4 个区块都渲染 (显示与存储 + 主题配色 + 提醒 + 关于与帮助)',
+  testWidgets('区块都渲染 (显示与存储 + 主题配色 + 提醒 + 关于与帮助 + 退出登录)',
       (tester) async {
     final container = await _container(_profileWithRole());
     await _pumpSettings(tester, container);
@@ -122,9 +122,12 @@ void main() {
 
     // 关于与帮助
     expect(find.text('关于与帮助'), findsOneWidget);
-    expect(find.text('当前版本'), findsOneWidget);
     expect(find.text('使用帮助 / 数据安全'), findsOneWidget);
     expect(find.text('网络自检'), findsOneWidget);
+
+    // 退出登录 (2026-09-25 从「我的」页迁入); 当前版本入口已移到「我的」页底部
+    expect(find.text('退出登录'), findsOneWidget);
+    expect(find.text('当前版本'), findsNothing);
 
     // debug-only 项不在 release build 出现; 测试是 debug, 但 profile 没带 admin 角色 →
     //   kDebugMode=true 会渲染「服务地址 (调试)」; role=sales 没 admin tool 入口
@@ -186,9 +189,21 @@ void main() {
     // /api/health (真实 dio 调用), 我们不点, 只断言行渲染
     expect(find.text('网络自检'), findsOneWidget);
 
-    // 当前版本: 看 PackageInfo.fromPlatform(); widget test 里 PackageInfo 在
-    // testing 模式下会让数据稳定返回 → 显示稳定版本, 这里只断言行标题
-    expect(find.text('当前版本'), findsOneWidget);
+    // 当前版本已移到「我的」页底部 (版本升级入口); 本页不再有该行
+    expect(find.text('当前版本'), findsNothing);
+  });
+
+  testWidgets('退出登录: 二次确认弹层能开能取消 (取消 = 不退出)', (tester) async {
+    final container = await _container(_profileWithRole());
+    await _pumpSettings(tester, container);
+
+    await tester.tap(find.text('退出登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('确定退出?'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('确定退出?'), findsNothing);
   });
 
   testWidgets('窄屏 320 + 特大字号 1.3: 滚完整页不溢出', (tester) async {

@@ -25,12 +25,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/models/me.dart';
-import '../core/providers/auth_provider.dart';
 import '../core/providers/service_providers.dart';
 import '../core/providers/settings_provider.dart';
-import '../core/telemetry/usage_providers.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/app_empty.dart';
 import '../core/widgets/font_size_picker.dart';
@@ -165,7 +164,9 @@ class _ProfileBody extends ConsumerWidget {
         _AccountCard(profile: profile),
         profileSectionGap,
         const SizedBox(height: AppSpace.s20),
-        const _LogoutButton(),
+        // 版本升级入口 (2026-09-25 主人: 「我的」页底部只留轻量版本入口;
+        //   大红「退出登录」已下沉到 /profile/settings 底部)
+        const _VersionEntry(),
       ],
     );
   }
@@ -886,56 +887,36 @@ String _formatSize(int bytes) {
 }
 
 // ============================================
-// 7. 退出登录 (页面最底部, 危险操作)
+// 7. 版本升级入口 (页面最底部, 轻量)
 // ============================================
+// 2026-09-25 主人: 退出登录太重 (大红按钮) → 下沉 /profile/settings 底部;
+//   本页底部改为「本机版本 + 检查更新」轻入口 (与旧「当前版本」行同一弹层)。
 
-class _LogoutButton extends ConsumerWidget {
-  const _LogoutButton();
+class _VersionEntry extends ConsumerWidget {
+  const _VersionEntry();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SizedBox(
-      width: double.infinity,
-      height: AppTheme.buttonLgHeight,
-      child: OutlinedButton.icon(
-        onPressed: () => _confirmLogout(context, ref),
-        icon: const Icon(Icons.logout, size: AppSize.iconLg),
-        label: const Text('退出登录', style: TextStyle(fontSize: AppTheme.fontMd)),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppTheme.danger,
-          side: const BorderSide(color: AppTheme.danger, width: AppSpace.s2),
-        ),
-      ),
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snap) {
+        final version = snap.hasData
+            ? 'v${snap.data!.version} (${snap.data!.buildNumber})'
+            : null;
+        return TextButton.icon(
+          onPressed: () => showUpdateSheet(context, ref),
+          icon: const Icon(Icons.system_update_alt, size: AppSize.iconSm),
+          label: Text(
+            version == null ? '检查更新' : '暖客宝 $version · 检查更新',
+            style: const TextStyle(fontSize: AppTheme.fontSm),
+          ),
+          style: TextButton.styleFrom(
+            foregroundColor: AppTheme.textSecondary,
+            visualDensity: VisualDensity.compact,
+          ),
+        );
+      },
     );
-  }
-
-  void _confirmLogout(BuildContext context, WidgetRef ref) {
-    showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('确定退出?'),
-        content: const Text('退出后需要重新用手机号登录 (数据不受影响)'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child:
-                const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-            child:
-                const Text('退出', style: TextStyle(fontSize: AppTheme.fontMd)),
-          ),
-        ],
-      ),
-    ).then((ok) async {
-      if (ok != true) return;
-      await ref.read(authProvider.notifier).logout();
-      ref.read(usageServiceProvider).track('logout');
-      if (!context.mounted) return;
-      context.go('/login');
-    });
   }
 }
 

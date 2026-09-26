@@ -9,7 +9,8 @@
 //   1. 显示与存储 (字号 chips + 清理图片缓存) —— 共享 FontSizePicker
 //   2. 主题配色 (换肤) —— ThemePickerCard
 //   3. 提醒 (本地通知跟进) —— _ReminderCard
-//   4. 关于与帮助 (版本/帮助/自检/admin/调试服务地址) —— _AboutCard + _VersionTile
+//   4. 关于与帮助 (帮助/自检/admin/调试服务地址) —— _AboutSection
+//   5. 退出登录 (最底, 危险操作二次确认; 2026-09-25 从「我的」页迁入)
 //
 // 视觉与「我的」页一致 (ProfileSection / ProfileTile / B2NoChrome),
 // 行为完全沿用迁出前的实现, 不重写逻辑 —— 见 profile_page.dart 历史注释。
@@ -20,11 +21,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/http/api_client.dart';
+import '../core/providers/auth_provider.dart';
 import '../core/providers/service_providers.dart';
 import '../core/providers/settings_provider.dart';
+import '../core/telemetry/usage_providers.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/font_size_picker.dart';
 import '../modules/follow_up/screens/follow_ups_page.dart';
@@ -54,6 +56,7 @@ class SettingsPage extends StatelessWidget {
           profileSectionGap,
           _AboutSection(),
           profileSectionGap,
+          const _LogoutButton(),
         ],
       ),
     );
@@ -251,7 +254,6 @@ class _AboutSection extends ConsumerWidget {
       title: '关于与帮助',
       icon: Icons.info_outline,
       children: [
-        const _VersionTile(),
         ProfileTile(
           icon: Icons.menu_book_outlined,
           title: '使用帮助 / 数据安全',
@@ -303,32 +305,53 @@ class _AboutSection extends ConsumerWidget {
   }
 }
 
-/// 版本行 (本机版本, 点一下 = 检查更新)
-class _VersionTile extends ConsumerWidget {
-  const _VersionTile();
+/// 退出登录 (2026-09-25 从「我的」页迁入; 危险操作 = 二次确认, 数据不受影响)
+class _LogoutButton extends ConsumerWidget {
+  const _LogoutButton();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snap) {
-        final label = snap.hasData
-            ? 'v${snap.data!.version} (${snap.data!.buildNumber})'
-            : (snap.hasError ? '读取失败' : '读取中...');
-        return ProfileTile(
-          icon: Icons.verified_outlined,
-          title: '当前版本',
-          subtitle: '暖客宝 · 数据自托管',
-          trailing: Text(
-            label,
-            style: const TextStyle(
-              fontSize: AppTheme.fontSm,
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          onTap: () => showUpdateSheet(context, ref),
-        );
-      },
+    return SizedBox(
+      width: double.infinity,
+      height: AppTheme.buttonLgHeight,
+      child: OutlinedButton.icon(
+        onPressed: () => _confirmLogout(context, ref),
+        icon: const Icon(Icons.logout, size: AppSize.iconLg),
+        label: const Text('退出登录', style: TextStyle(fontSize: AppTheme.fontMd)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.danger,
+          side: const BorderSide(color: AppTheme.danger, width: AppSpace.s2),
+        ),
+      ),
     );
+  }
+
+  void _confirmLogout(BuildContext context, WidgetRef ref) {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确定退出?'),
+        content: const Text('退出后需要重新用手机号登录 (数据不受影响)'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child:
+                const Text('取消', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            child:
+                const Text('退出', style: TextStyle(fontSize: AppTheme.fontMd)),
+          ),
+        ],
+      ),
+    ).then((ok) async {
+      if (ok != true) return;
+      await ref.read(authProvider.notifier).logout();
+      ref.read(usageServiceProvider).track('logout');
+      if (!context.mounted) return;
+      context.go('/login');
+    });
   }
 }

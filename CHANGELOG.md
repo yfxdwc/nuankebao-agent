@@ -2,6 +2,18 @@
 
 所有 暖客宝 重要变更记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] — 「我的」页退出登录下沉设置页 + 底部改版本升级入口 (2026-09-25)
+
+主人 2026-09-25: 「退出登录太重了，可以收入更多设置中。在我的主页面底部显示版本升级入口」。
+
+- `profile_page.dart`: 删大红 `_LogoutButton` → 底部换轻量 `_VersionEntry`
+  (本机版本 + 点一下 = 检查更新 `showUpdateSheet`); import 同步 (删 auth/usage, 加 `package_info_plus`)
+- `settings_page.dart`: 底部新增「退出登录」(整类迁入, 行为不变: 二次确认 + 审计 usage 事件);
+  「关于与帮助」里的「当前版本」行移除 (版本入口只在「我的」页底部, 避免双入口)
+- 测试: profile 17 例 / settings 7 例 —— 断言更新 (我的页: 版本入口 + 无退出登录; 设置页: 退出登录 + 无当前版本)
+  + 新增「退出登录二次确认能开能取消」1 例
+- 文档: `docs/profile-and-settings.md` 两页结构/表格同步
+
 ## [Unreleased] — 管理 Tab「客户类型」→「加盟状态」(普通/加盟) (2026-09-25)
 
 主人 2026-09-25: 「客户类型区块改为'加盟状态'，普通/种子胶囊按键改为'普通/加盟'胶囊按键。
