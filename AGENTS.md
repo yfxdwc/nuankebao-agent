@@ -427,6 +427,17 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
     - ✅ 「audit (db = dev/.env.local) 报 3 个 phone drift, prod psql 直查: 0 条」 → 主家一眼看懂
   - **终极修法 (待做)**: `scripts/audit-*.ts` 启动时 echo 当前 DATABASE_URL host, 主家第一时间知道连的是哪个。同根: §5 「apk-download 公开」—— "看起来保护了" ≠ 真的保护了; "看起来通过了" ≠ 真的覆盖全。
 
+- ❌ **用 `git checkout -- public/app/` 清理构建产物 churn → 把预览回滚成仓库里的旧 bundle (2026-09-26 主人报「今天的成果都被丢了」)** —
+  `public/app/` 是 **git 跟踪的** (冻结预览框架, AGENTS §9) → `git checkout -- public/app/`
+  拿的是**仓库里那份旧 bundle**, 不是「还原到沙箱」：刚 `build-flutter-web.sh` 出的新包**被静默覆盖**。
+  本次连重建 3 次、被自己回滚 3 次 → 主人看到的预览停留在几天前 (看着像“成果丢了”)。
+  **征兆 (一眼定位)**: `md5sum flutter_app/build/web/main.dart.js public/app/main.dart.js` **不一致**
+  (前者是新构建、后者是退回的旧版); 或 `grep -cF 'u4e0a\u7ea7\u63a8\u9001' public/app/main.dart.js` = 0。
+  **正确做法 (AGENTS §5 原那么)**: 构建产物**不 stage** —— 提交时只用 `git add <具体源文件路径>`,
+  `public/app/**` 留在 working dir **未提交** (docker build 拷 working dir 进镜像, 不跟踪也照部署);
+  若不小心 stage 了就 `git restore --staged public/app/`。**永远不要 `checkout` / `stash` 这九个冻结路径**。
+  同根: §5 「pre-commit freeze hook 阻断 ≠ 默认 --no-verify 绕过」。
+
 - ❌ **测试 `afterAll` 只删 `beforeAll` 建的那一个 id → 用例内另建的数据全泄漏 (2026-09-26 salon 假失败, 累积 60 次后爆破)** —
   `tests/salon.test.ts` 有 16 处 `createSalon`，其中「计数-*」类用例在 `it()` 里另建沙龙，
   但 `afterAll` 只删 `beforeAll` 那个 `salonId` → **每跑一次漏一个**。60 次之后：
