@@ -1188,8 +1188,9 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
                 const Icon(Icons.badge_outlined,
                     size: AppSize.iconMd, color: AppTheme.primaryDark),
                 const SizedBox(width: AppSpace.s6),
+                // 2026-09-25 主人: 「客户类型区块改为'加盟状态'」
                 const Text(
-                  '客户类型',
+                  '加盟状态',
                   style: TextStyle(
                     fontSize: AppTheme.fontMd,
                     fontWeight: FontWeight.w600,
@@ -1202,52 +1203,36 @@ class CustomerDetailPageState extends ConsumerState<CustomerDetailPage>
             const SizedBox(height: AppSpace.s10),
             if (isFranchisee)
               const Text(
-                '加盟客户：类型由加盟关系决定，不能在这里切换；\n要退出加盟请到加盟商详情页走「解除加盟」(需三方确认)',
+                '加盟客户: 状态由加盟关系决定, 不能在这里切换;\n要退出加盟请到加盟商详情页走「解除加盟」(需三方确认)',
                 style: TextStyle(
                   fontSize: AppTheme.fontXs,
                   color: AppTheme.textSecondary,
                 ),
               )
             else ...[
+              // 2026-09-25 主人: 「普通/种子胶囊按键改为'普通/加盟'胶囊按键。
+              //   删除整行的那个'发展为加盟商'的按键」
+              //   ⇒ 入口收进这颗胶囊: 选「加盟」= 直接进加盟落位流程 (三方确认),
+              //     不再是"整行大按钮"; 选中态本身就是**状态显示** (普通)。
               SegmentedButton<String>(
                 segments: const [
                   ButtonSegment(value: 'normal', label: Text('普通')),
-                  ButtonSegment(value: 'seed', label: Text('🌱 种子')),
+                  ButtonSegment(value: 'franchisee', label: Text('加盟')),
                 ],
-                selected: {c.isSeed ? 'seed' : 'normal'},
+                selected: const {'normal'},
                 showSelectedIcon: false,
-                onSelectionChanged: (v) =>
-                    _setCustomerSeed(context, ref, c, v.first == 'seed'),
+                onSelectionChanged: (v) {
+                  if (v.first == 'franchisee') {
+                    _promoteCustomerToFranchisee(context, ref, c);
+                  }
+                },
               ),
               const SizedBox(height: AppSpace.s6),
               const Text(
-                '种子 = 还没体验过 / 刚加好友的潜在客户；选「种子」后可用列表顶部「🌱 种子」筛出来',
+                '变成加盟商: 选「加盟」→ 走加盟落位 (需三方确认: 你 + 她本人 + 目标上级)',
                 style: TextStyle(
                   fontSize: AppTheme.fontXs,
                   color: AppTheme.textSecondary,
-                ),
-              ),
-              const Divider(height: AppSpace.s20),
-              const Text(
-                '要变成加盟商？走加盟落位（需三方确认）',
-                style: TextStyle(
-                  fontSize: AppTheme.fontXs,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(height: AppSpace.s8),
-              // 发展客户为加盟商 (主人 2026-09-19: 入口迁到「客户类型」区块里)
-              //   走三方确认的落位流程 (我 + 客户本人 + 目标上级), 通过后自动成为加盟商
-              FilledButton.icon(
-                onPressed: () =>
-                    _promoteCustomerToFranchisee(context, ref, c),
-                icon: const Icon(Icons.person_add_alt_1, size: AppSize.iconLg),
-                label: const Text(
-                  '发展为加盟商',
-                  style: TextStyle(fontSize: AppTheme.fontMd),
-                ),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
                 ),
               ),
             ],
@@ -1371,35 +1356,6 @@ String _acquireSourceLabel(String? source) {
   }
 }
 
-/// 客户类型切换: 普通 ↔ 种子 (主人 2026-09-18: 详情页直接切, 不用进编辑表单)
-Future<void> _setCustomerSeed(
-  BuildContext context,
-  WidgetRef ref,
-  Customer c,
-  bool seed,
-) async {
-  if (c.isSeed == seed) return;
-  try {
-    await ref.read(customerServiceProvider).update(c.id, {'isSeed': seed});
-    ref.invalidate(customerDetailProvider(c.id));
-    ref.invalidate(customersProvider);
-    ref.invalidate(customerTypeCountsProvider);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          seed ? '已标记为 🌱 种子客户' : '已改为普通客户',
-          style: const TextStyle(fontSize: AppTheme.fontMd),
-        ),
-      ),
-    );
-  } catch (e) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('修改失败: $e')),
-    );
-  }
-}
 
 Future<void> _promoteCustomerToFranchisee(
   BuildContext context,

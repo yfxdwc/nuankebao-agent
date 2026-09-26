@@ -380,7 +380,7 @@ void main() {
           reason: '管理 Tab 不该显示「现在该做」(主人 2026-09-24 拍)');
       expect(find.textContaining('现在该做').hitTestable(), findsNothing);
       // 管理 Tab 该有的内容还在 (证明不是整页空了)
-      expect(find.textContaining('客户类型'), findsWidgets);
+      expect(find.textContaining('加盟状态'), findsWidgets);
     },
   );
 
@@ -720,6 +720,23 @@ void main() {
       await _tapTab(tester, 2); // 管理
       expect(find.byTooltip('编辑档案'), findsOneWidget,
           reason: '编辑入口应挂在基础信息卡右上角 (仅管理 Tab)');
+    });
+
+    testWidgets('「加盟状态」卡: 普通/加盟 胶囊 + 不再有整行「发展为加盟商」按钮',
+        (tester) async {
+      // 主人 2026-09-25: 「客户类型区块改为'加盟状态'，普通/种子胶囊按键改为
+      //   '普通/加盟'胶囊按键。删除整行的那个'发展为加盟商'的按键」
+      await _pumpPage(tester);
+      await _tapTab(tester, 2); // 管理
+
+      expect(find.text('加盟状态'), findsOneWidget);
+      expect(find.text('客户类型'), findsNothing, reason: '区块已改名');
+      // 两档胶囊
+      expect(find.text('普通'), findsOneWidget);
+      expect(find.text('加盟'), findsOneWidget);
+      expect(find.textContaining('🌱 种子'), findsNothing, reason: '种子不再是这一轴的值');
+      // 整行按钮已删 (入口收进「加盟」胶囊)
+      expect(find.text('发展为加盟商'), findsNothing);
     });
 
     testWidgets('有过敏史 → 健康卡显示过敏史; 已注册 → 显示她的邀请码 (#6)',
