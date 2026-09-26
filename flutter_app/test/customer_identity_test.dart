@@ -71,6 +71,31 @@ void main() {
       expect(find.text('👑'), findsNothing);
     });
 
+    testWidgets('归属类: 上级推送 → 📩 (长按可看「是谁」); 下级的客户 → 👥', (tester) async {
+      await _pumpRow(
+        tester,
+        _customer(hasAccount: false, ownership: 'upline', ),
+      );
+      expect(find.text('📩'), findsOneWidget);
+      expect(find.text('👥'), findsNothing);
+
+      await _pumpRow(tester, _customer(hasAccount: false, ownership: 'subordinate'));
+      expect(find.text('👥'), findsOneWidget);
+      expect(find.text('📩'), findsNothing);
+    });
+
+    testWidgets('归属类改成图标后: 名字旁不再有文字徽章, 「是谁」在 tooltip; 无归属仍用文字',
+        (tester) async {
+      await _pumpRow(tester, _customer(hasAccount: false, ownership: 'upline'));
+      // 「是谁」放到长按 tooltip (Tooltip 内容不常驻 → 用 byTooltip 找)
+      expect(find.byTooltip('上级推送'), findsOneWidget);
+      expect(find.textContaining('上级推送'), findsNothing,
+          reason: '不再占名字旁宽度 (旧文字徽章已移除)');
+
+      await _pumpRow(tester, _customer(hasAccount: false, ownership: 'none'));
+      expect(find.text('无归属'), findsOneWidget, reason: '无归属是「需要文字」的告警态');
+    });
+
     testWidgets('三个维度同时为真 → 三个图标都在 (顺序 🤝 👑 📱)', (tester) async {
       await _pumpRow(
         tester,

@@ -58,18 +58,10 @@ function ownershipBadge(
     case undefined:
       return null;
     case "subordinate":
-      // ownerName 拿到才显示 "· X"; 拿不到 (list 暂不带) 只显示前缀
-      return {
-        label: ownerName ? `下级的客户 · ${ownerName}` : "下级的客户",
-        // info-light / info = 现有语义类 (Tailwind 调色板起新色禁止, 这里 §8)
-        className: "bg-info-light text-info",
-      };
     case "upline":
-      return {
-        label: ownerName ? `上级推送 · ${ownerName}` : "上级推送",
-        // brand-light / brand (推送 = 归属人授权, 走品牌色)
-        className: "bg-brand-light text-brand",
-      };
+      // 已改为**名字前的 👥 / 📩 图标** (2026-09-26 主人拍): 「是谁」在图标 title (hover)
+      //   ⚠ 必须显式 return null —— 删掉分支会让这两个态**穿透到 none** 显示「无归属」
+      return null;
     case "none":
       return {
         label: "无归属",
@@ -105,12 +97,28 @@ function identityIcons(c: {
   affiliation?: string | null;
   isMember?: boolean;
   hasAccount?: boolean;
-}): string[] {
-  return [
-    c.affiliation && c.affiliation !== "none" ? "🤝" : null,
-    c.isMember ? "👑" : null,
-    c.hasAccount ? "📱" : null,
-  ].filter((v): v is string => v != null);
+  ownership?: Ownership;
+  ownerName?: string | null;
+  sharedByName?: string | null;
+}): { glyph: string; title: string }[] {
+  const out: { glyph: string; title: string }[] = [];
+  if (c.affiliation && c.affiliation !== "none") out.push({ glyph: "🤝", title: "加盟" });
+  if (c.isMember) out.push({ glyph: "👑", title: "会员" });
+  if (c.hasAccount) out.push({ glyph: "📱", title: "已注册" });
+  // 归属类 (2026-09-26 主人拍): 图标省宽度, 「是谁」放 title (hover 可见)
+  if (c.ownership === "upline") {
+    out.push({
+      glyph: "📩",
+      title: c.sharedByName ? `上级推送 · ${c.sharedByName}` : "上级推送",
+    });
+  }
+  if (c.ownership === "subordinate") {
+    out.push({
+      glyph: "👥",
+      title: c.ownerName ? `下级的客户 · ${c.ownerName}` : "下级的客户",
+    });
+  }
+  return out;
 }
 
 interface Props {
@@ -241,13 +249,14 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
                       {/* 身份图标条 (只显示真状态) — 与 Flutter 同口径/同顺序 */}
-                      {identityIcons(customer).map((g) => (
+                      {identityIcons(customer).map(({ glyph, title }) => (
                         <span
-                          key={g}
-                          className="text-body-md leading-none shrink-0"
-                          aria-hidden="true"
+                          key={glyph}
+                          title={title}
+                          className="text-body-md leading-none shrink-0 cursor-default"
                         >
-                          {g}
+                          <span className="sr-only">{title}</span>
+                          {glyph}
                         </span>
                       ))}
                       <h3 className="font-medium text-body-lg text-content-primary truncate leading-tight">

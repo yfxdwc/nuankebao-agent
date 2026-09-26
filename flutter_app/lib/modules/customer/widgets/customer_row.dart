@@ -76,31 +76,19 @@ class CustomerRow extends StatelessWidget {
     return 'normal'; // seed/normal/未知 一律按未加盟走
   }
 
-  /// 归属五态 (Phase C §3.4): 默认 mine 静默, 异常态显形 (设计 §4.2 L2)
-  ///   'mine'         → null (静默, 不出 badge)
-  ///   'subordinate'  → 「下级的客户 · 张三」(ownerName, Phase D 后端已带)
-  ///   'upline'       → 「上级推送 · 张三」(sharedByName, Phase D 后端已带)
-  ///   'none'         → 「无归属」
+  /// 归属五态 (Phase C §3.4): 默认 mine 静默。
+  ///   2026-09-26 主人拍「归属类维度也做成图标」→ `subordinate` / `upline` 改为
+  ///   名字前的 👥 / 📩 (见 `_identityIcons`, 长按可看「是谁」);
+  ///   本 getter 只保留「需要文字说清」的两个告警态。
+  ///   'mine'         → null (静默, 默认态)
+  ///   'none'         → 「无归属」(要显形: 鼓励认领)
   ///   'other'        → 「他人客户」(scope 漏检告警兜底)
-  /// 老后端不返回 ownership → 默认 'none' (异常态显形, 与设计文档一致)
   (String, AppBadgeTone)? get _ownershipBadge {
     final o = customer.ownership;
     switch (o) {
       case 'mine':
       case '':
         return null; // 默认静默
-      case 'subordinate':
-        final n = customer.ownerName;
-        return (
-          n == null || n.isEmpty ? '下级的客户' : '下级的客户 · $n',
-          AppBadgeTone.info,
-        );
-      case 'upline':
-        final n = customer.sharedByName;
-        return (
-          n == null || n.isEmpty ? '上级推送' : '上级推送 · $n',
-          AppBadgeTone.brand,
-        );
       case 'none':
         return ('无归属', AppBadgeTone.neutral);
       case 'other':
@@ -114,17 +102,31 @@ class CustomerRow extends StatelessWidget {
   ///   🤝 加盟 (affiliation != none) · 👑 会员 (isMember) · 📱 已注册 (hasAccount)
   ///   未加盟 / 免费 / 未注册 → **不显示** 对应图标 (主人 2026-09-26 拍)
   ///
-  /// 为什么不把「归属」也做成图标: 归属要表达「谁的」(上级推送 · 张三 / 下级的客户 · 张三),
-  /// 纯图标丢了主语 → 仍留在尾部 AppBadge (带姓名)。
+  /// 顺序: 🤝 加盟 → 👑 会员 → 📱 已注册 → 📩 上级推送 → 👥 下级的客户
+  /// 归属类图标 (2026-09-26 主人拍): 图标省宽度, 「是谁」放在长按 tooltip 里
+  /// (「上级推送 · 张三」/「下级的客户 · 张三」), 详情页归属卡仍有完整文案。
   List<Widget> get _identityIcons {
-    final glyphs = <String>[
-      if (customer.affiliation != 'none' && customer.affiliation.isNotEmpty) '🤝',
-      if (isMember) '👑',
-      if (customer.hasAccount) '📱',
+    final owner = customer.ownerName ?? '';
+    final sharer = customer.sharedByName ?? '';
+    final glyphs = <(String, String?)>[
+      if (customer.affiliation != 'none' && customer.affiliation.isNotEmpty)
+        ('🤝', '加盟'),
+      if (isMember) ('👑', '会员'),
+      if (customer.hasAccount) ('📱', '已注册'),
+      if (customer.ownership == 'upline')
+        ('📩', sharer.isEmpty ? '上级推送' : '上级推送 · $sharer'),
+      if (customer.ownership == 'subordinate')
+        ('👥', owner.isEmpty ? '下级的客户' : '下级的客户 · $owner'),
     ];
     return <Widget>[
-      for (final g in glyphs) ...[
-        Text(g, style: const TextStyle(fontSize: AppType.sm)),
+      for (final (g, tip) in glyphs) ...[
+        if (tip == null)
+          Text(g, style: const TextStyle(fontSize: AppType.sm))
+        else
+          Tooltip(
+            message: tip,
+            child: Text(g, style: const TextStyle(fontSize: AppType.sm)),
+          ),
         const SizedBox(width: AppSpace.s2),
       ],
     ];
