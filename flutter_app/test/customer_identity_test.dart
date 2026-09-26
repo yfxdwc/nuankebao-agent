@@ -62,12 +62,25 @@ void main() {
       expect(find.byIcon(Icons.handshake_outlined), findsNothing);
     });
 
-    testWidgets('会员 → Icons.workspace_premium; 非会员 → 不显示', (tester) async {
-      await _pumpRow(tester, _customer(hasAccount: false), isMember: true);
-      expect(find.byIcon(Icons.workspace_premium), findsOneWidget);
-
-      await _pumpRow(tester, _customer(hasAccount: false), isMember: false);
+    testWidgets('★ 账号维度递进: 会员标**替换**注册标 (不是并列两个)', (tester) async {
+      // 已注册 + 非会员 → 注册标
+      await _pumpRow(tester,
+          _customer(hasAccount: true), isMember: false);
+      expect(find.byIcon(Icons.verified), findsOneWidget);
       expect(find.byIcon(Icons.workspace_premium), findsNothing);
+
+      // 已注册 + 充值会员 → 只剩会员标 (替换掉注册标)
+      await _pumpRow(tester,
+          _customer(hasAccount: true), isMember: true);
+      expect(find.byIcon(Icons.workspace_premium), findsOneWidget);
+      expect(find.byIcon(Icons.verified), findsNothing,
+          reason: '会员是顶格状态 → 注册标要被替换, 不能并列');
+
+      // 未注册 → 两个都不显示
+      await _pumpRow(tester,
+          _customer(hasAccount: false), isMember: false);
+      expect(find.byIcon(Icons.workspace_premium), findsNothing);
+      expect(find.byIcon(Icons.verified), findsNothing);
     });
 
     testWidgets('归属类: 上级推送 → Icons.move_to_inbox; 下级的客户 → Icons.groups_outlined',
@@ -105,12 +118,13 @@ void main() {
       );
       for (final ic in [
         Icons.handshake_outlined,
-        Icons.workspace_premium,
-        Icons.verified,
+        Icons.workspace_premium, // 会员 (替换注册标)
         Icons.move_to_inbox,
       ]) {
         expect(find.byIcon(ic), findsOneWidget, reason: '缺少图标 $ic');
       }
+      expect(find.byIcon(Icons.verified), findsNothing,
+          reason: '会员时不该同时出现注册标');
 
       await _pumpRow(tester, _customer(hasAccount: false, affiliation: 'none'));
       for (final ic in [

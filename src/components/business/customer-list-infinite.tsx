@@ -115,10 +115,11 @@ function identityIcons(c: {
   if (c.affiliation && c.affiliation !== "none") {
     out.push({ Icon: Handshake, title: "加盟", className: "text-brand" });
   }
+  // ★ 账号维度 = 一个维度的递进 (主人 2026-09-26 指出): 未注册→无图标;
+  //   已注册(非会员)→注册标; 充值会员→**会员标替换注册标** (会员 ⊆ 已注册, 不是两个标签)
   if (c.isMember) {
     out.push({ Icon: Crown, title: "会员", className: "text-warning" });
-  }
-  if (c.hasAccount) {
+  } else if (c.hasAccount) {
     out.push({ Icon: BadgeCheck, title: "已注册", className: "text-info" });
   }
   if (c.ownership === "upline") {

@@ -111,9 +111,12 @@ class CustomerRow extends StatelessWidget {
     final entries = <(IconData, Color, String)>[
       if (customer.affiliation != 'none' && customer.affiliation.isNotEmpty)
         (Icons.handshake_outlined, AppTheme.franchisee, '加盟'),
+      // ★ 账号维度 = **一个维度的递进** (主人 2026-09-26 指出):
+      //   未注册 → 无图标; 已注册 (非会员) → 注册标; 充值会员 → **会员标替换注册标**
+      //   (两个图标并列是错的: 会员 ⊆ 已注册, 不是两个独立标签)
       if (isMember)
-        (Icons.workspace_premium, AppColors.memberGold, '会员'),
-      if (customer.hasAccount)
+        (Icons.workspace_premium, AppColors.memberGold, '会员')
+      else if (customer.hasAccount)
         (Icons.verified, AppTheme.primary, '已注册'),
       if (customer.ownership == 'upline')
         (

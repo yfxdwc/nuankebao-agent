@@ -246,11 +246,28 @@ listVisibleFor(viewer) =            -- me = viewer 的 franchisee 行
 
 | 层 | 内容 | 组件 (B 档) | 颜色 tone | 展示位置 |
 |---|---|---|---|---|
-| **L1 身份** | 加盟·直推 = 实紫环 / 加盟·非直推 = 浅紫环 / 未加盟 = 无环 / 会员 = 金环 + 👑 | `TypedUserAvatar` (`customer_row.dart:258`) | brand (实/浅) / gold / 无 | 头像 (44pt,行首);详情类型卡出全称 `加盟·直推` / `加盟·非直推` |
+| **L1 身份** | 加盟·直推 = 实紫环 / 加盟·非直推 = 浅紫环 / 未加盟 = 无环 / 会员 = 金环 + 👑 (列表行已改为名下图标签, 见 §4.1.1) | `TypedUserAvatar` (`customer_row.dart:258`) | brand (实/浅) / gold / 无 | 头像 (44pt,行首);详情类型卡出全称 `加盟·直推` / `加盟·非直推` |
 | **L2 归属** | "我的客户" / "无归属" / "下级的客户 · X" / "上级推送 · X" / "他人客户" | `AppBadge` (B0a,`tone ∈ {neutral, info, brand}`) | brand / neutral / info | 客户详情「归属卡」+ 列表行**仅无归属 / 下级的客户 / 上级推送 显形**(自己的客户静默, 避免同色铺满) |
 | **L3 行动** | 左色条 (`p0-p4` 仅会员) + 推荐标签 ≤2 + 🎂 生日 | `Stack` 套色条 + `_FollowUpTagChip` + 🎂 Container | danger / accent / primary | 列表行 (主文尾部 / 第二行 / 头像左侧) |
 | **L4 来源** | "亲友" / "转介绍" / "陌生拜访" / "地推" 短词 badge | `AppBadge` `tone=neutral` | neutral (浅灰底) | **仅客户详情「管理 Tab 的档案卡」**; 列表行 + 详情其它区块**不显示** (D6) |
 | **L5 树内关系** | "直推" / "下级引荐" / "上级引荐" (B3 硬约束: 与 L1 细分同源, 只是图谱视角) | `TreeNode.relation` 字段 (`franchisee.ts:407`) | brand (直推) / neutral (其他) | **仅图谱画节点标注**;列表/详情不出这三个词 (用 L1 的 `加盟·直推` 文案) |
+
+### 4.1.1 身份图标条 (2026-09-26 主人拍, 列表行专用)
+
+> 位置: **客户名下面那一行** (左对齐) · 形式: **彩色图标** (Flutter `Icons.*` + 主题色 token; web `lucide` + 语义色类)
+> 规则: **只显示「真」状态** —— 假状态一律不渲染图标。
+
+| 图标 | 显示条件 | 颜色 |
+|---|---|---|
+| 🤝 `handshake_outlined` | 加盟 (`affiliation != none`) | 紫 `franchisee` |
+| 👑 `workspace_premium` | **会员** (`isMember`) | 金 `memberGold` |
+| ✅ `verified` | **已注册且非会员** (`hasAccount && !isMember`) | 绿 `primary` |
+| 📩 `move_to_inbox` | 上级推送 (`ownership = upline`) | 橙 `accent` |
+| 👥 `groups_outlined` | 下级的客户 (`ownership = subordinate`) | 蓝紫 `franchiseeA` |
+
+⚠ **「已注册 / 会员」是同一维度的递进, 不是两个独立标签** (主人 2026-09-26 纠正):
+`未注册` → 无图标; `已注册 (免费)` → 注册标; `充值会员` → **会员标替换注册标**
+(会员 ⊆ 已注册 → 并列显示两个是错的)。「是谁」(上级推送 · 张三) 放长按 tooltip / hover title。
 
 ### 4.2 展示位映射表 (Flutter + Web admin)
 
