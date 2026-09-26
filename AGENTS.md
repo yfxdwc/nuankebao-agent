@@ -426,6 +426,23 @@ nuankebao-agent/                              ← v0.1.3 底座 + 模块化插�
     - ❌ 「audit 报 3 个 phone drift」 → 主家不知道是 dev 还是 prod
     - ✅ 「audit (db = dev/.env.local) 报 3 个 phone drift, prod psql 直查: 0 条」 → 主家一眼看懂
   - **终极修法 (待做)**: `scripts/audit-*.ts` 启动时 echo 当前 DATABASE_URL host, 主家第一时间知道连的是哪个。同根: §5 「apk-download 公开」—— "看起来保护了" ≠ 真的保护了; "看起来通过了" ≠ 真的覆盖全。
+
+- ❌ **测试 `afterAll` 只删 `beforeAll` 建的那一个 id → 用例内另建的数据全泄漏 (2026-09-26 salon 假失败, 累积 60 次后爆破)** —
+  `tests/salon.test.ts` 有 16 处 `createSalon`，其中「计数-*」类用例在 `it()` 里另建沙龙，
+  但 `afterAll` 只删 `beforeAll` 那个 `salonId` → **每跑一次漏一个**。60 次之后：
+  这些残留的 `start_at` 比新沙龙更晚（`now+4天` vs `now+1天`），而 `listSalons` 默认 `limit=50` +
+  `ORDER BY start_at DESC` → **首页 50 条全被残留占满，新沙龙被挤出** → 断言
+  `invited.items.some(id === salonId)` 稳定失败（看着像产品 bug，实际是测试卫生问题）。
+  **修法 (两个方向都要堵)**:
+  1. **按模式批量清理 + 预清理（幂等）** —— 新增 `purgeTestSalons()`（按标题模式批量删含子表），
+     `beforeAll` 先跑一遍（自动扫掉历史泄漏），`afterAll` 再跑一遍（防本轮泄漏）。参照实现：`tests/salon.test.ts`。
+  2. **单例删除是反模式** —— 只要用例里可能再建数据，就不能只删一个静态 id。
+  **同类风险扫描（2026-09-26）**: `tests/customer-audit.test.ts` / `tests/integration.test.ts` /
+  `tests/integration-extra.test.ts` 都是「用例内建数据、靠 `Date.now()` 唯一手机号避开撞键」→
+  当前不会失败但**行数无界累积**；同根隐患 = 有序列表 + limit 断言（早晚会咬）。
+  **可复用手法（定位此类问题）**: ① 复制测试文件加探针，打印「直查 SQL 命中数」vs「函数返回集」——
+  两者不一致 = 问题在查询之后的组装/分页；② 打印返回集的 id 列表 → 发现全是历史数据 → 反查标题定位到泄漏源；
+  ③ 给 `afterAll` 加探针，证明它只删了自己那一个。同根: §5 「单点问题修一处后必全仓扫一遍」。
 ## §6. 命名一致性 (全 nuankebao 化, 2026-09-07) (CHARTER §3.4 改名红线)
 
 > **历史**:

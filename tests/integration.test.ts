@@ -13,6 +13,22 @@ beforeAll(async () => {
   await db.execute(sql`TRUNCATE customer, follow_up_task, interaction, wellness_record CASCADE`);
 });
 
+/// 本文件运行起点 —— 用于收尾时精准清掉**本次**产生的审计行
+///   (audit_log 无 FK, TRUNCATE 不会清它 → 历史累积 20154 行, 2026-09-26 定位)
+const RUN_START_ISO = new Date().toISOString(); // Date 对象不能当参数传 (postgres.js 只收字符串)
+
+afterAll(async () => {
+  // ★ 收尾 (与 beforeAll 同口径): 不留数据给下一个测试文件 / 下次运行
+  await db.execute(sql`TRUNCATE customer, follow_up_task, interaction, wellness_record CASCADE`);
+  // audit_log 单独按「本次运行时间窗 + 本次涉及的表」清 (不误删别的文件/历史数据)
+  await db.execute(sql`
+    DELETE FROM audit_log
+    WHERE created_at >= ${RUN_START_ISO}::timestamptz
+      AND table_name IN ('customer', 'follow_up_task', 'interaction', 'wellness_record')
+  `);
+});
+
+
 describe("crypto/field integration", () => {
   it("encrypted fields roundtrip through DB", async () => {
     const phone = "13800138000";
