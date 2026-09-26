@@ -130,16 +130,21 @@ void main() {
   });
 
   group('CustomerRow (客户列表行)', () {
-    testWidgets('会员客户 → 头像上有 👑', (tester) async {
+    // 2026-09-26 v2 (主人拍): 列表行的会员标识**不再挂头像角标** (不双重编码),
+    //   改为「客户名下面」的彩色图标条 → Icons.workspace_premium
+    //   (头像角标仍用于其他屏 — 见本文件上方 TypedUserAvatar/MemberAvatar 用例)
+    testWidgets('会员客户 → 名字下面有 Icons.workspace_premium', (tester) async {
       await _pump(tester,
           CustomerRow(customer: _customer(), isMember: true, onTap: () {}));
-      expect(find.text('👑'), findsOneWidget);
+      expect(find.byIcon(Icons.workspace_premium), findsOneWidget);
       expect(find.text('王女士'), findsOneWidget);
+      // 头像上不再有 👑 角标 (职责交给图标条)
+      expect(find.text('👑'), findsNothing);
     });
 
-    testWidgets('非会员客户 → 没有 👑 (老后端不返回 isMember 也是这样)', (tester) async {
+    testWidgets('非会员客户 → 没有会员图标 (老后端不返回 isMember 也是这样)', (tester) async {
       await _pump(tester, CustomerRow(customer: _customer(), onTap: () {}));
-      expect(find.text('👑'), findsNothing);
+      expect(find.byIcon(Icons.workspace_premium), findsNothing);
     });
   });
 

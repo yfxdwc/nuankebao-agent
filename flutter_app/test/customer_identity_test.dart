@@ -45,65 +45,82 @@ Future<void> _pumpRow(WidgetTester tester, Customer c,
 }
 
 void main() {
-  group('客户列表行 — 身份图标条 (2026-09-26 拍: 多维度图标化, 名字前, 只显示真状态)', () {
-    testWidgets('已注册 (hasAccount) → 名字前有 📱 图标; 未注册 → 没有', (tester) async {
+  group('客户列表行 — 身份图标条 (v2: 名字**下面** + 彩色 Material 图标, 只显示真状态)', () {
+    testWidgets('已注册 → Icons.verified; 未注册 → 没有', (tester) async {
       await _pumpRow(tester, _customer(hasAccount: true));
-      expect(find.text('📱'), findsOneWidget);
-      expect(find.text('演示-李桂芳'), findsOneWidget);
+      expect(find.byIcon(Icons.verified), findsOneWidget);
 
       await _pumpRow(tester, _customer(hasAccount: false));
-      expect(find.text('📱'), findsNothing);
+      expect(find.byIcon(Icons.verified), findsNothing);
     });
 
-    testWidgets('加盟 (affiliation != none) → 🤝; 未加盟 → 不显示 🤝', (tester) async {
+    testWidgets('加盟 → Icons.handshake_outlined; 未加盟 → 不显示', (tester) async {
       await _pumpRow(tester, _customer(hasAccount: false, affiliation: 'direct'));
-      expect(find.text('🤝'), findsOneWidget);
+      expect(find.byIcon(Icons.handshake_outlined), findsOneWidget);
 
       await _pumpRow(tester, _customer(hasAccount: false, affiliation: 'none'));
-      expect(find.text('🤝'), findsNothing);
+      expect(find.byIcon(Icons.handshake_outlined), findsNothing);
     });
 
-    testWidgets('会员 (isMember) → 👑; 非会员 → 不显示 👑', (tester) async {
+    testWidgets('会员 → Icons.workspace_premium; 非会员 → 不显示', (tester) async {
       await _pumpRow(tester, _customer(hasAccount: false), isMember: true);
-      expect(find.text('👑'), findsOneWidget);
+      expect(find.byIcon(Icons.workspace_premium), findsOneWidget);
 
       await _pumpRow(tester, _customer(hasAccount: false), isMember: false);
-      expect(find.text('👑'), findsNothing);
+      expect(find.byIcon(Icons.workspace_premium), findsNothing);
     });
 
-    testWidgets('归属类: 上级推送 → 📩 (长按可看「是谁」); 下级的客户 → 👥', (tester) async {
-      await _pumpRow(
-        tester,
-        _customer(hasAccount: false, ownership: 'upline', ),
-      );
-      expect(find.text('📩'), findsOneWidget);
-      expect(find.text('👥'), findsNothing);
-
-      await _pumpRow(tester, _customer(hasAccount: false, ownership: 'subordinate'));
-      expect(find.text('👥'), findsOneWidget);
-      expect(find.text('📩'), findsNothing);
-    });
-
-    testWidgets('归属类改成图标后: 名字旁不再有文字徽章, 「是谁」在 tooltip; 无归属仍用文字',
+    testWidgets('归属类: 上级推送 → Icons.move_to_inbox; 下级的客户 → Icons.groups_outlined',
         (tester) async {
       await _pumpRow(tester, _customer(hasAccount: false, ownership: 'upline'));
-      // 「是谁」放到长按 tooltip (Tooltip 内容不常驻 → 用 byTooltip 找)
-      expect(find.byTooltip('上级推送'), findsOneWidget);
-      expect(find.textContaining('上级推送'), findsNothing,
-          reason: '不再占名字旁宽度 (旧文字徽章已移除)');
+      expect(find.byIcon(Icons.move_to_inbox), findsOneWidget);
+      expect(find.byTooltip('上级推送'), findsOneWidget, reason: '「是谁」在长按 tooltip');
+      expect(find.byIcon(Icons.groups_outlined), findsNothing);
 
-      await _pumpRow(tester, _customer(hasAccount: false, ownership: 'none'));
-      expect(find.text('无归属'), findsOneWidget, reason: '无归属是「需要文字」的告警态');
+      await _pumpRow(tester, _customer(hasAccount: false, ownership: 'subordinate'));
+      expect(find.byIcon(Icons.groups_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.move_to_inbox), findsNothing);
     });
 
-    testWidgets('三个维度同时为真 → 三个图标都在 (顺序 🤝 👑 📱)', (tester) async {
+    testWidgets('★ 位置: 图标在**客户名下面** (不在名字前面)', (tester) async {
       await _pumpRow(
         tester,
         _customer(hasAccount: true, affiliation: 'direct'),
         isMember: true,
       );
-      for (final g in ['🤝', '👑', '📱']) {
-        expect(find.text(g), findsOneWidget, reason: '缺少图标 $g');
+      final nameRect = tester.getRect(find.text('演示-李桂芳'));
+      // 用**第一个**图标断言左对齐 (第 3 个图标本来就该往右偏两个图标宽度)
+      final firstIcon = tester.getRect(find.byIcon(Icons.handshake_outlined));
+      expect(firstIcon.top, greaterThanOrEqualTo(nameRect.bottom - 1),
+          reason: '图标要在名字下方那一行');
+      expect(firstIcon.left, lessThan(nameRect.left + 1),
+          reason: '图标条与名字左对齐 (不是名字右侧)');
+    });
+
+    testWidgets('真状态全为真 → 5 个图标都在; 全为假 → 一个都没有', (tester) async {
+      await _pumpRow(
+        tester,
+        _customer(hasAccount: true, affiliation: 'direct', ownership: 'upline'),
+        isMember: true,
+      );
+      for (final ic in [
+        Icons.handshake_outlined,
+        Icons.workspace_premium,
+        Icons.verified,
+        Icons.move_to_inbox,
+      ]) {
+        expect(find.byIcon(ic), findsOneWidget, reason: '缺少图标 $ic');
+      }
+
+      await _pumpRow(tester, _customer(hasAccount: false, affiliation: 'none'));
+      for (final ic in [
+        Icons.handshake_outlined,
+        Icons.workspace_premium,
+        Icons.verified,
+        Icons.move_to_inbox,
+        Icons.groups_outlined,
+      ]) {
+        expect(find.byIcon(ic), findsNothing, reason: '$ic 不该出现 (真状态全为假)');
       }
     });
   });

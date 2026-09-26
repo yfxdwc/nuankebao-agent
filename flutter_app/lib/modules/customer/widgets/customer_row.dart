@@ -98,36 +98,43 @@ class CustomerRow extends StatelessWidget {
     }
   }
 
-  /// 身份图标条 (客户名**之前**) —— 多维度用图标表示, **只显示「真」状态**:
-  ///   🤝 加盟 (affiliation != none) · 👑 会员 (isMember) · 📱 已注册 (hasAccount)
-  ///   未加盟 / 免费 / 未注册 → **不显示** 对应图标 (主人 2026-09-26 拍)
-  ///
-  /// 顺序: 🤝 加盟 → 👑 会员 → 📱 已注册 → 📩 上级推送 → 👥 下级的客户
-  /// 归属类图标 (2026-09-26 主人拍): 图标省宽度, 「是谁」放在长按 tooltip 里
-  /// (「上级推送 · 张三」/「下级的客户 · 张三」), 详情页归属卡仍有完整文案。
-  List<Widget> get _identityIcons {
+  /// 身份图标条 (2026-09-26 主人拍 v2: **挪到客户名下面** + **彩色图标**) ——
+  ///   加盟 🤝→Icons.handshake / 会员 👑→Icons.workspace_premium / 已注册 📱→Icons.verified
+  ///   上级推送 📩→Icons.move_to_inbox / 下级的客户 👥→Icons.groups
+  ///   **只显示「真」状态** (未加盟 / 免费 / 未注册 → 不渲染对应图标)。
+  ///   为什么换掉 emoji: Flutter web (CanvasKit) 上 emoji 渲染不出彩色 (主人 2026-09-26 报),
+  ///   改用 Material 图标 + 主题色 token (不新增硬编码色值)。
+  ///   「是谁」(上级推送 · 张三 / 下级的客户 · 张三) 放在长按 tooltip 里。
+  List<Widget> get _identityIconStrip {
     final owner = customer.ownerName ?? '';
     final sharer = customer.sharedByName ?? '';
-    final glyphs = <(String, String?)>[
+    final entries = <(IconData, Color, String)>[
       if (customer.affiliation != 'none' && customer.affiliation.isNotEmpty)
-        ('🤝', '加盟'),
-      if (isMember) ('👑', '会员'),
-      if (customer.hasAccount) ('📱', '已注册'),
+        (Icons.handshake_outlined, AppTheme.franchisee, '加盟'),
+      if (isMember)
+        (Icons.workspace_premium, AppColors.memberGold, '会员'),
+      if (customer.hasAccount)
+        (Icons.verified, AppTheme.primary, '已注册'),
       if (customer.ownership == 'upline')
-        ('📩', sharer.isEmpty ? '上级推送' : '上级推送 · $sharer'),
+        (
+          Icons.move_to_inbox,
+          AppTheme.accent,
+          sharer.isEmpty ? '上级推送' : '上级推送 · $sharer',
+        ),
       if (customer.ownership == 'subordinate')
-        ('👥', owner.isEmpty ? '下级的客户' : '下级的客户 · $owner'),
+        (
+          Icons.groups_outlined,
+          AppTheme.franchiseeA,
+          owner.isEmpty ? '下级的客户' : '下级的客户 · $owner',
+        ),
     ];
     return <Widget>[
-      for (final (g, tip) in glyphs) ...[
-        if (tip == null)
-          Text(g, style: const TextStyle(fontSize: AppType.sm))
-        else
-          Tooltip(
-            message: tip,
-            child: Text(g, style: const TextStyle(fontSize: AppType.sm)),
-          ),
-        const SizedBox(width: AppSpace.s2),
+      for (final (icon, color, tip) in entries) ...[
+        Tooltip(
+          message: tip,
+          child: Icon(icon, size: AppSize.iconSm, color: color),
+        ),
+        const SizedBox(width: AppSpace.s4),
       ],
     ];
   }
@@ -182,8 +189,6 @@ class CustomerRow extends StatelessWidget {
         final nameMax = constraints.maxWidth * 0.50;
         return Row(
           children: [
-            // ★ 身份图标条 (只显示真状态): 🤝 加盟 / 👑 会员 / 📱 已注册
-            ..._identityIcons,
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: nameMax),
               child: Text(
@@ -223,6 +228,26 @@ class CustomerRow extends StatelessWidget {
 
   /// 副文 (第二行): 跟进信息 / 上级加盟人 / 上次到店
   Widget? _buildSubtitle(FollowUpInfo? f, bool isFranchiseeType, Color? barColor) {
+    final icons = _identityIconStrip;
+    final line = _subtitleLine(f, isFranchiseeType, barColor);
+    if (icons.isEmpty) return line;
+    // 名字下面这一行 = 身份图标条 (+ 原有副文案)
+    //   ⚠ 包 SizedBox(width: infinity): 父容器 (AppListRow 的 subtitle 槽) 会**居中**子节点,
+    //   不撑满就会让图标条跑偏到名字右侧下方 (widget test 的位置断言抓到的)
+    return SizedBox(
+      width: double.infinity,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: <Widget>[
+          ...icons,
+          if (line != null) Expanded(child: line),
+        ],
+      ),
+    );
+  }
+
+  /// 副文案本体 (原 _buildSubtitle 的三个分支); 图标条由 _buildSubtitle 拼在它前面
+  Widget? _subtitleLine(FollowUpInfo? f, bool isFranchiseeType, Color? barColor) {
     if (f?.contactLine != null) {
       return Text(
         f!.contactLine!,

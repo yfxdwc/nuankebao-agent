@@ -2,7 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { Phone, Loader2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Phone,
+  Loader2,
+  Handshake,
+  Crown,
+  BadgeCheck,
+  Inbox,
+  Users,
+} from "lucide-react";
 
 /**
  * 归属五态 (Phase C §3.4 / 客户标识体系 v1).
@@ -100,22 +109,30 @@ function identityIcons(c: {
   ownership?: Ownership;
   ownerName?: string | null;
   sharedByName?: string | null;
-}): { glyph: string; title: string }[] {
-  const out: { glyph: string; title: string }[] = [];
-  if (c.affiliation && c.affiliation !== "none") out.push({ glyph: "🤝", title: "加盟" });
-  if (c.isMember) out.push({ glyph: "👑", title: "会员" });
-  if (c.hasAccount) out.push({ glyph: "📱", title: "已注册" });
-  // 归属类 (2026-09-26 主人拍): 图标省宽度, 「是谁」放 title (hover 可见)
+}): { Icon: LucideIcon; title: string; className: string }[] {
+  const out: { Icon: LucideIcon; title: string; className: string }[] = [];
+  // 只显示「真」状态; className 用**现有语义色类** (不引入新调色板类, 设计硬约束 §4.3)
+  if (c.affiliation && c.affiliation !== "none") {
+    out.push({ Icon: Handshake, title: "加盟", className: "text-brand" });
+  }
+  if (c.isMember) {
+    out.push({ Icon: Crown, title: "会员", className: "text-warning" });
+  }
+  if (c.hasAccount) {
+    out.push({ Icon: BadgeCheck, title: "已注册", className: "text-info" });
+  }
   if (c.ownership === "upline") {
     out.push({
-      glyph: "📩",
+      Icon: Inbox,
       title: c.sharedByName ? `上级推送 · ${c.sharedByName}` : "上级推送",
+      className: "text-brand",
     });
   }
   if (c.ownership === "subordinate") {
     out.push({
-      glyph: "👥",
+      Icon: Users,
       title: c.ownerName ? `下级的客户 · ${c.ownerName}` : "下级的客户",
+      className: "text-info",
     });
   }
   return out;
@@ -248,17 +265,6 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
-                      {/* 身份图标条 (只显示真状态) — 与 Flutter 同口径/同顺序 */}
-                      {identityIcons(customer).map(({ glyph, title }) => (
-                        <span
-                          key={glyph}
-                          title={title}
-                          className="text-body-md leading-none shrink-0 cursor-default"
-                        >
-                          <span className="sr-only">{title}</span>
-                          {glyph}
-                        </span>
-                      ))}
                       <h3 className="font-medium text-body-lg text-content-primary truncate leading-tight">
                         {customer.name}
                       </h3>
@@ -284,6 +290,12 @@ export function CustomerListInfinite({ initial, initialTotal, pageSize, search }
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 text-caption text-content-secondary">
+                    {/* 身份图标条 (2026-09-26 v2: 名字**下面** + 彩色 lucide 图标; 只显示真状态) */}
+                    {identityIcons(customer).map(({ Icon: Ic, title, className }) => (
+                      <span key={title} title={title} className="shrink-0 cursor-default">
+                        <Ic className={`h-3.5 w-3.5 ${className}`} aria-label={title} />
+                      </span>
+                    ))}
                     <Phone className="h-3 w-3 shrink-0" />
                     <span className="truncate tabular-nums">
                       {customer.phone.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2")}
