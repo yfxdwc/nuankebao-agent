@@ -51,7 +51,15 @@
 - 测试: `profile_page_test.dart` 改为「点头像打开候选弹层」+ 断言旧按钮 `findsNothing`
 - 文档: `docs/user-manual.md` 「换个头像」步骤同步 (去掉"或点下面的「换头像」")
 
-## [Unreleased] — 客户标识体系 v1 + 安全修复 + R-9/R-10 优化 (2026-09-25/26)
+## [Unreleased] — public/app 停止跟踪 (预览框架) + 客户标识体系 v1 + 安全修复 + R-9/R-10 优化 (2026-09-25/26)
+
+### Changed (2026-09-26, 主人拍「方案 C」)
+- **`public/app/` (Flutter web 编译产物) 不再被 git 跟踪**: `git rm -r --cached public/app` + `.gitignore`
+  * 原因: 产物被跟踪 + `git checkout -- public/app/` 清理 churn = 把刚 build 的新包覆盖回仓库旧 bundle
+    (主人 2026-09-26 报「今天的成果都被丢了」的根因; 记为 AGENTS §5 反模式 + §9.7)
+  * 部署不受影响 (docker `COPY . .` 走 working dir); 预览仍在: `bash tools/build-flutter-web.sh --auto`
+  * 本次 commit 用 `--no-verify` bypass 预览护栏 (改的正是 §9 冻结路径, 主人已拍板; 按 §9.3 记入本 CHANGELOG)
+
 
 主人拍板: 客户类型二态 (加盟/未加盟, **直推 = 发起人指定**) · 归属扩四段 (下级的客户 / 上级推送) · 客户来源新增 · 种子退场 · D8 上级推送手机号明文 · D9 manager 与 sales 同口径。
 方案与决策: [`docs/customer-identity-system.md`](docs/customer-identity-system.md) · [`docs/adr/0019`](docs/adr/0019-rbac-scope-and-customer-share.md) · [`docs/identity-privacy-review.md`](docs/identity-privacy-review.md) · [`docs/r9-r10-optimization.md`](docs/r9-r10-optimization.md)

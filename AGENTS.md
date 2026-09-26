@@ -837,7 +837,7 @@ bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached +
   tools/install-dev-app-proxy.sh   ← dev-app-proxy.py 一键安装 (systemd user)
   tools/install-flutter-dev-tunnel.sh  ← cloudflared path rule 安装
   tools/start-flutter-dev.sh       ← Flutter web dev server 启动器 (后台/前台/stop/status)
-  public/app/                      ← Flutter web 编译产物 (git tracked)
+  public/app/                      ← Flutter web 编译产物 (**2026-09-26 起 git 不再跟踪**, 见 §9.7)
 
 不在冻结清单的相邻文件:
   ❌ flutter_app/lib/**           (业务源码, 改业务 ≠ 改 preview)
@@ -847,6 +847,20 @@ bash scripts/task-snapshot.sh rollback <tag-or-prefix>  # ⚠️ HEAD detached +
   ❌ docs/dev-modules/flutter-preview.md (治理文档, 可演进)
   ❌ tests/preview-framework-snapshot.test.ts + e2e/preview-smoke.spec.ts (测试自身)
 ```
+
+### §9.7 public/app/ 不再被 git 跟踪 (2026-09-26 主人拍「方案 C」)
+
+> **背景**: `public/app/` 是 Flutter web **编译产物**。它被 git 跟踪期间出过一次事故 ——
+> 提交前用 `git checkout -- public/app/` 清理产物 churn, 会把刚 build 的新包**覆盖回仓库里的旧 bundle**
+> (主人 2026-09-26 报「今天的成果都被丢了」)。详见 §5 对应反模式条目。
+
+- ✅ **已执行**: `git rm -r --cached public/app` (35 个文件从索引移除, **working dir 保留**) + `.gitignore` 加 `public/app/`
+- ✅ **部署不受影响**: `docker/Dockerfile` 用 `COPY . .` 从 working dir 拷 (`.dockerignore` 不排除 `public/`); `deploy/prod-deploy.sh` 同机构建
+- ✅ **重新生成**: `bash tools/build-flutter-web.sh --auto` (或常驻 `nuankebao-flutter-web-watch.service` 自动重建)
+- ⚠ **仍然不要** `checkout` / `stash` / `git clean` 这几个路径 (clean 会**删掉**未跟踪的产物)
+- ⚠ **仍受 §9.2 冻结护栏保护**: `public/app/**` 仍在 guard 的 9 路径清单里 → 任何提交若 stage 了它会被拦;
+  现在正常情况下**不会**再 stage (已被 ignore)
+- 📌 **prod 若是全新 `git clone` 部署** (非本机 working dir): 需要先跑一次 `build-flutter-web.sh` 才有 `/app` 预览资源
 
 ### §9.2 违规 = 立即阻断
 

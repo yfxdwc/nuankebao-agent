@@ -130,3 +130,10 @@ public/payment/*.png
 public/payment/*.jpg
 public/payment/*.jpeg
 public/payment/*.webp
+
+# public/app/ = Flutter web **编译产物** (预览框架用), 2026-09-26 主人拍板「方案 C」不再跟踪
+#   为什么: 它是 build 输出, 被 git 跟踪过一次的代价 = `git checkout -- public/app/`
+#   会把刚 build 的新包覆盖回仓库里的旧 bundle (2026-09-26 主人报「成果丢了」的根因)。
+#   部署不受影响: docker/Dockerfile `COPY . .` 从 working dir 拷 (deploy/prod-deploy.sh 同机构建)。
+#   重新生成: bash tools/build-flutter-web.sh --auto  (或常驻 nuankebao-flutter-web-watch.service)
+public/app/
